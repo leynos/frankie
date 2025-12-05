@@ -754,6 +754,32 @@ The application operates within the following technical boundaries:
 - **Compliance Requirements**: Intellectual property protection in
   exports
 
+**Export format specification**: Comment exports must follow a stable
+XML-wrapped Markdown structure to preserve location, context, and
+comment metadata. The diff context is embedded as fenced Markdown inside
+the XML payload:
+
+```xml
+<comment index="1">
+  <location>path/to/file.py:168</location>
+  <code-context>
+```diff
++line added
+-line removed
+ line unchanged
+```
+  </code-context>
+
+  <contributor>someuser</contributor>
+  <comment-url>https://github.com/owner/repo/pull/400#discussion_r2592557280
+  </comment-url>
+
+  <issue-to-address>
+    Comment text (rendered in markdown with details tags collapsed).
+  </issue-to-address>
+</comment>
+```
+
 ### 2.2.3 Ai Integration Requirements
 
 | Requirement ID | Description              | Acceptance Criteria                                      | Priority    | Complexity |
@@ -2194,7 +2220,9 @@ filtering capabilities, and review comment retrieval with structured metadata.
 
 **Data Persistence Requirements**: Caches GitHub API responses in SQLite with
 configurable TTL, stores authentication tokens securely, and maintains
-repository metadata for offline access.
+repository metadata for offline access. The SQLite database file must reside
+under `$XDG_DATA_HOME` using `directories::ProjectDirs` resolution to follow
+platform-specific data placement conventions.
 
 **Scaling Considerations**: Implements pagination support with rate limiting
 awareness, as GitHub API provides 5,000 requests/hour for authenticated users.
