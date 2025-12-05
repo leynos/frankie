@@ -212,6 +212,149 @@ emphasizes:
   author login, comment bodies) are parsed to keep fixtures small and
   deterministic.
 
+#### GitHub intake class diagram
+
+```mermaid
+classDiagram
+    class RepositoryOwner {
+        -value: String
+        +new(value: &str) Result_RepositoryOwner_IntakeError
+        +as_str() &str
+    }
+
+    class RepositoryName {
+        -value: String
+        +new(value: &str) Result_RepositoryName_IntakeError
+        +as_str() &str
+    }
+
+    class PullRequestNumber {
+        -value: u64
+        +new(value: u64) Result_PullRequestNumber_IntakeError
+        +get() u64
+    }
+
+    class PersonalAccessToken {
+        -value: String
+        +new(token: String) Result_PersonalAccessToken_IntakeError
+        +value() &str
+    }
+
+    class PullRequestLocator {
+        -api_base: Url
+        -owner: RepositoryOwner
+        -repository: RepositoryName
+        -number: PullRequestNumber
+        +parse(input: &str) Result_PullRequestLocator_IntakeError
+        +api_base() &Url
+        +owner() &RepositoryOwner
+        +repository() &RepositoryName
+        +number() PullRequestNumber
+        +pull_request_path() String
+        +comments_path() String
+    }
+
+    class PullRequestMetadata {
+        +number: u64
+        +title: Option_String
+        +state: Option_String
+        +html_url: Option_String
+        +author: Option_String
+    }
+
+    class PullRequestComment {
+        +id: u64
+        +body: Option_String
+        +author: Option_String
+    }
+
+    class PullRequestDetails {
+        +metadata: PullRequestMetadata
+        +comments: Vec_PullRequestComment
+    }
+
+    class ApiUser {
+        +login: Option_String
+    }
+
+    class ApiPullRequest {
+        +number: u64
+        +title: Option_String
+        +state: Option_String
+        +html_url: Option_String
+        +user: Option_ApiUser
+    }
+
+    class ApiComment {
+        +id: u64
+        +body: Option_String
+        +user: Option_ApiUser
+    }
+
+    class PullRequestGateway {
+        <<interface>>
+        +pull_request(locator: &PullRequestLocator) Result_PullRequestMetadata_IntakeError
+        +pull_request_comments(locator: &PullRequestLocator) Result_Vec_PullRequestComment_IntakeError
+    }
+
+    class OctocrabGateway {
+        -client: Octocrab
+        +new(client: Octocrab) OctocrabGateway
+        +for_token(token: &PersonalAccessToken, locator: &PullRequestLocator) Result_OctocrabGateway_IntakeError
+        +pull_request(locator: &PullRequestLocator) Result_PullRequestMetadata_IntakeError
+        +pull_request_comments(locator: &PullRequestLocator) Result_Vec_PullRequestComment_IntakeError
+    }
+
+    class PullRequestIntake~Gateway~ {
+        -client: &Gateway
+        +new(client: &Gateway) PullRequestIntake_Gateway
+        +load(locator: &PullRequestLocator) Result_PullRequestDetails_IntakeError
+    }
+
+    class IntakeError {
+        <<enum>>
+        +MissingPullRequestUrl
+        +InvalidArgument
+        +InvalidUrl
+        +MissingPathSegments
+        +InvalidPullRequestNumber
+        +MissingToken
+        +Authentication
+        +Api
+        +Network
+    }
+
+    class FrankieLibFacade {
+        +PullRequestLocator
+        +PullRequestIntake
+        +OctocrabGateway
+        +PersonalAccessToken
+        +PullRequestDetails
+        +IntakeError
+    }
+
+    ApiUser --> ApiPullRequest
+    ApiUser --> ApiComment
+    ApiPullRequest ..> PullRequestMetadata : converts_to
+    ApiComment ..> PullRequestComment : converts_to
+
+    PullRequestLocator --> RepositoryOwner
+    PullRequestLocator --> RepositoryName
+    PullRequestLocator --> PullRequestNumber
+
+    OctocrabGateway ..|> PullRequestGateway
+
+    PullRequestIntake --> PullRequestGateway : uses
+    PullRequestIntake --> PullRequestDetails
+
+    FrankieLibFacade ..> PullRequestLocator
+    FrankieLibFacade ..> PullRequestIntake
+    FrankieLibFacade ..> OctocrabGateway
+    FrankieLibFacade ..> PersonalAccessToken
+    FrankieLibFacade ..> PullRequestDetails
+    FrankieLibFacade ..> IntakeError
+```
+
 ## 1.3 Scope
 
 ### 1.3.1 In-scope

@@ -44,7 +44,11 @@ fn parses_standard_github_url() -> Result<(), IntakeError> {
 #[rstest]
 fn parses_enterprise_url() -> Result<(), IntakeError> {
     let locator = PullRequestLocator::parse("https://ghe.example.com/foo/bar/pull/7")?;
-    ensure_eq(&locator.api_base().as_str(), &"https://ghe.example.com/api/v3", "enterprise api base")?;
+    ensure_eq(
+        &locator.api_base().as_str(),
+        &"https://ghe.example.com/api/v3",
+        "enterprise api base",
+    )?;
     Ok(())
 }
 

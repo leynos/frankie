@@ -6,7 +6,7 @@ use frankie::{
 };
 use rstest::fixture;
 use rstest_bdd::Slot;
-use rstest_bdd_macros::{given, scenario, then, when, ScenarioState};
+use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde_json::json;
 use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path};
@@ -86,8 +86,8 @@ fn seed_successful_server(
             runtime.block_on(
                 Mock::given(method("GET"))
                     .and(path(comments_path))
-                .respond_with(ResponseTemplate::new(200).set_body_json(comments))
-                .mount(server),
+                    .respond_with(ResponseTemplate::new(200).set_body_json(comments))
+                    .mount(server),
             );
         })
         .ok_or_else(|| IntakeError::Api {
@@ -140,11 +140,10 @@ fn remember_token(intake_state: &IntakeState, token: String) {
 fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), IntakeError> {
     let runtime = build_runtime()?;
 
-    let server_url =
-        intake_state
-            .server
-            .with_ref(MockServer::uri)
-            .ok_or_else(|| IntakeError::InvalidUrl("mock server URL missing".to_owned()))?;
+    let server_url = intake_state
+        .server
+        .with_ref(MockServer::uri)
+        .ok_or_else(|| IntakeError::InvalidUrl("mock server URL missing".to_owned()))?;
 
     let cleaned_pr_url = pr_url.trim_matches('"');
 
@@ -155,16 +154,13 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), I
     } else {
         cleaned_pr_url.replace("SERVER", &server_url)
     };
-    let locator =
-        PullRequestLocator::parse(&resolved_url).map_err(|error| IntakeError::InvalidUrl(
-            format!("{resolved_url}: {error}"),
-        ))?;
+    let locator = PullRequestLocator::parse(&resolved_url)
+        .map_err(|error| IntakeError::InvalidUrl(format!("{resolved_url}: {error}")))?;
 
     let locator_clone = locator.clone();
 
     let result = runtime.block_on(async move {
-        let token_value =
-            intake_state.token.get().ok_or(IntakeError::MissingToken)?;
+        let token_value = intake_state.token.get().ok_or(IntakeError::MissingToken)?;
         let token = PersonalAccessToken::new(token_value)?;
 
         let gateway = OctocrabGateway::for_token(&token, &locator_clone)?;

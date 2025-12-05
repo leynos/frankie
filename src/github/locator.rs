@@ -122,13 +122,11 @@ impl PullRequestLocator {
 
         segments.truncate(4);
 
-        let (owner_segment, repository_segment, marker, number_segment) =
-            match segments.as_slice() {
-                [owner, repository, marker, number, ..] => {
-                    (*owner, *repository, *marker, *number)
-                }
-                _ => return Err(IntakeError::MissingPathSegments),
-            };
+        let (owner_segment, repository_segment, marker, number_segment) = match segments.as_slice()
+        {
+            [owner, repository, marker, number, ..] => (*owner, *repository, *marker, *number),
+            _ => return Err(IntakeError::MissingPathSegments),
+        };
 
         if marker != "pull" {
             return Err(IntakeError::MissingPathSegments);
