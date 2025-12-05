@@ -564,25 +564,29 @@ Best practices for writing effective scenarios include:
   and contribute to the feature files.
 
 - **Use placeholders for dynamic values.** Pattern strings may include
-  `format!`-style placeholders such as `{count:u32}`. Type hints narrow the
+`format!`-style placeholders such as `{count:u32}`. Type hints narrow the
   match. Numeric hints support all Rust primitives (`u8..u128`, `i8..i128`,
   `usize`, `isize`, `f32`, `f64`). Floating-point hints accept integers,
   decimal forms with optional leading or trailing digits, scientific notation
   (for example, `1e3`, `-1E-9`), and the special values `NaN`, `inf`, and
   `Infinity` (matched case-insensitively). Matching is anchored: the entire
   step text must match the pattern; partial matches do not succeed. Escape and
-  placeholder rules:\n+\n+  - Literal braces: use `{{` and `}}`.\n+  - Single
-  backslash: use `\\` to match one backslash.\n+  - Trailing backslashes or any
-  backslash escape are treated literally (for\n+    example, `\\d` matches the
-  two-character sequence `\\d`).\n+\n+  Nested\n+  braces inside placeholders
-  are not supported. Placeholders follow `{name[:type]}`; `name` must start
-  with a letter or underscore and may contain letters, digits, or underscores
-  (`[A-Za-z_][A-Za-z0-9_]*`). Whitespace within the type hint is ignored (for
-  example, `{count: u32}` and `{count:u32}` are both accepted), but whitespace
-  is not allowed between the name and the colon. Prefer the compact form
-  `{count:u32}` in new code. When a pattern contains no placeholders, the step
-  text must match exactly. Unknown type hints are treated as generic
-  placeholders and capture any non-newline text greedily.
+  placeholder rules:
+
+  - Literal braces: use `{{` and `}}`.
+  - Single backslash: use `\\` to match one backslash.
+  - Trailing backslashes or any backslash escape are treated literally (for
+    example, `\\d` matches the two-character sequence `\\d`).
+
+  Nested braces inside placeholders are not supported. Placeholders follow
+  `{name[:type]}`; `name` must start with a letter or underscore and may
+  contain letters, digits, or underscores (`[A-Za-z_][A-Za-z0-9_]*`).
+  Whitespace within the type hint is ignored (for example, `{count: u32}` and
+  `{count:u32}` are both accepted), but whitespace is not allowed between the
+  name and the colon. Prefer the compact form `{count:u32}` in new code. When a
+  pattern contains no placeholders, the step text must match exactly. Unknown
+  type hints are treated as generic placeholders and capture any non-newline
+  text greedily.
 
 ## Data tables and Docstrings
 

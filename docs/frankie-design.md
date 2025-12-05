@@ -191,7 +191,26 @@ emphasizes:
 - **Context Switch Reduction**: Measured decrease in tool transitions
   during code review workflows
 - **Error Rate**: Frequency of failed GitHub API calls or AI service
+- **Error Rate**: Frequency of failed GitHub API calls or AI service
   integrations
+
+### 1.2.4 GitHub intake implementation (December 2025)
+
+- Pull request intake uses Octocrab with the base URI derived from the PR URL.
+  Requests against `github.com` are routed to `https://api.github.com`; all
+  other hosts use `<host>/api/v3` so GitHub Enterprise and wiremock stubs share
+  the same code path.
+- A thin `PullRequestGateway` trait wraps Octocrab and is mocked in unit tests.
+  Behavioural coverage uses `wiremock` plus `rstest-bdd` scenarios to verify
+  success and authentication failure paths without calling the live API.
+- Authentication errors are normalised: HTTP 401/403 responses surface as a
+  dedicated `Authentication` error with the GitHub message preserved. Other API
+  or transport failures are mapped into user-readable variants so the CLI can
+  print a precise failure reason.
+- Intake requests fetch pull request metadata and the associated issue comments
+  via the REST API. Only the minimal fields needed by the CLI (title, state,
+  author login, comment bodies) are parsed to keep fixtures small and
+  deterministic.
 
 ## 1.3 Scope
 
@@ -756,14 +775,17 @@ The application operates within the following technical boundaries:
 
 **Export format specification**: Comment exports must follow a stable XML
 export structure to preserve location, context, and comment metadata. The diff
-context is embedded as plain diff lines inside a CDATA block in the XML payload:
+context is embedded as fenced Markdown inside a CDATA block so diff markers stay
+intact while remaining valid XML:
 
 ```xml
 <comment index="1">
   <location>path/to/file.py:168</location>
   <code-context><![CDATA[
 ```diff
-+line added -line removed line unchanged
++line added
+-line removed
+ line unchanged
 ```]]></code-context>
   <contributor>someuser</contributor>
   <comment-url>https://github.com/owner/repo/pull/400#discussion_r2592557280

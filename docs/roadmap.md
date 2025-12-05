@@ -21,7 +21,7 @@ support later workflow features.
 
 ### Step: GitHub and repository intake
 
-- [ ] Provide PR URL intake using octocrab with token validation and explicit
+- [x] Provide PR URL intake using octocrab with token validation and explicit
       error surfacing; acceptance: opening a valid PR URL loads metadata and
       comments, invalid tokens return a user-readable failure message, and
       integration tests cover success and auth error paths.

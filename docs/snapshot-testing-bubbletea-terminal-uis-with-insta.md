@@ -749,14 +749,6 @@ Combined with rstest-bdd, test code can read almost like a specification of the
 UI’s behaviour. This not only helps catch bugs but also serves as documentation
 for how the TUI is supposed to react to input.
 
-In summary: leverage insta to assert a Bubbletea app’s text-based UI just as a
-data structure would be asserted. The benefits include quick diffing and an
-approval workflow, with the rich context of seeing terminal UI content. When a
-test fails, the change in the UI is immediately visible. Combined with
-rstest-bdd, test code can read almost like a specification of the UI’s
-behaviour. This aids in catching bugs and serves as documentation for how the
-TUI is expected to react to input.
-
 [^1]: Ratatui snapshot testing note on colour handling:
       <https://ratatui.rs/recipes/testing/snapshots/#:~:text=Note>
 [^2]: Ratatui snapshot recipe examples showing line-by-line snapshots:
