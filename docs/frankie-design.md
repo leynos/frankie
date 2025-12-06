@@ -758,23 +758,18 @@ The application operates within the following technical boundaries:
 export structure to preserve location, context, and comment metadata. The diff
 context is embedded as plain diff lines inside a CDATA block in the XML payload:
 
-```xml
-<comment index="1">
-  <location>path/to/file.py:168</location>
-  <code-context><![CDATA[
-+line added
--line removed
- line unchanged
-  ]]></code-context>
-
-  <contributor>someuser</contributor>
-  <comment-url>https://github.com/owner/repo/pull/400#discussion_r2592557280</comment-url>
-
-  <issue-to-address>
+```yaml
+comment:
+  index: 1
+  location: path/to/file.py:168
+  code_context: |
+    +line added
+    -line removed
+     line unchanged
+  contributor: someuser
+  comment_url: https://github.com/owner/repo/pull/400#discussion_r2592557280
+  issue_to_address: >
     Comment text (rendered in markdown with details tags collapsed).
-  </issue-to-address>
-</comment>
-
 ```
 
 ### 2.2.3 Ai Integration Requirements
