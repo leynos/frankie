@@ -570,10 +570,11 @@ Best practices for writing effective scenarios include:
   decimal forms with optional leading or trailing digits, scientific notation
   (for example, `1e3`, `-1E-9`), and the special values `NaN`, `inf`, and
   `Infinity` (matched case-insensitively). Matching is anchored: the entire
-  step text must match the pattern; partial matches do not succeed. Escape
-  literal braces with `{{` and `}}`. Use `\` to match a single backslash. A
-  trailing `\` or any other backslash escape is treated literally, so `\d`
-  matches the two-character sequence `\d`. Nested braces inside placeholders
+  step text must match the pattern; partial matches do not succeed. Escape and
+  placeholder rules:\n+\n+  - Literal braces: use `{{` and `}}`.\n+  - Single
+  backslash: use `\\` to match one backslash.\n+  - Trailing backslashes or any
+  backslash escape are treated literally (for\n+    example, `\\d` matches the
+  two-character sequence `\\d`).\n+\n+  Nested\n+  braces inside placeholders
   are not supported. Placeholders follow `{name[:type]}`; `name` must start
   with a letter or underscore and may contain letters, digits, or underscores
   (`[A-Za-z_][A-Za-z0-9_]*`). Whitespace within the type hint is ignored (for
