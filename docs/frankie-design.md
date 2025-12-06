@@ -754,10 +754,9 @@ The application operates within the following technical boundaries:
 - **Compliance Requirements**: Intellectual property protection in
   exports
 
-**Export format specification**: Comment exports must follow a stable
-XML-wrapped Markdown structure to preserve location, context, and comment
-metadata. The diff context is embedded as plain diff lines inside a CDATA block
-in the XML payload:
+**Export format specification**: Comment exports must follow a stable XML
+export structure to preserve location, context, and comment metadata. The diff
+context is embedded as plain diff lines inside a CDATA block in the XML payload:
 
 ```xml
 <comment index="1">

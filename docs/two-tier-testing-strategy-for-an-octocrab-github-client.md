@@ -16,11 +16,10 @@ employed for speed and confidence:
 
 - **Behavioural Integration Tests (Tier 2)** – Higher-level tests that verify
   end-to-end behaviour by exercising actual HTTP calls **against a stubbed
-  API**. We use **Wiremock** (via the Rust `wiremock` crate) to run a local
-  HTTP server that mimics GitHub’s REST endpoints. Octocrab is configured to
-  point at this mock server for the test, so the client code thinks it’s
-  talking to GitHub. These tests run in the Rust integration test suite (files
-  under `tests/`
+  API**. **Wiremock** (via the Rust `wiremock` crate) runs a local HTTP server
+  that mimics GitHub’s REST endpoints. Octocrab is configured to point at this
+  mock server for the test, so the client code thinks it’s talking to GitHub.
+  These tests run in the Rust integration test suite (files under `tests/`
   directory)([1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32)).
    They are slower but give confidence that the client’s requests and
   Octocrab’s parsing logic work correctly against real HTTP interactions.
@@ -317,7 +316,7 @@ seamlessly([2](https://github.com/leynos/rstest-bdd#:~:text=%60rstest,fixture%20
 - **Behaviour-Driven Scenarios:** The `rstest-bdd` crate allows writing tests in
   a Gherkin-style Given/When/Then format using attributes. Human-readable
   scenarios can correspond to integration tests. For example, a feature file
-  might be used or the macros can be applied directly:
+  might be used, or the macros can be applied directly:
 
 ```rust
 use rstest_bdd::{given, when, then, scenario};
@@ -429,7 +428,7 @@ behaviour across many tests is required (e.g., every test needs the
 or a fixture that mounts certain default stubs. Be cautious: tests running in
 parallel should not share a server or mutable state without synchronization.
 Using fixtures that spawn fresh servers per test and mount only the stubs
-needed for that test scenario is usually the safest route (as shown above).
+needed for that specific scenario is usually the safest route (as shown above).
 
 Finally, remember that **unit tests and integration tests complement each
 other**. Unit tests using mocks will cover logic quickly (e.g., how the code
@@ -450,7 +449,7 @@ and BDD-style clarity, yields a robust test suite:
   client is supposed to work.
 
 By following this strategy, the Octocrab-based application is thoroughly tested
-at both the small scale and large scale. Pain points are mocked for speed, and
+at both the small-scale and large-scale. Pain points are mocked for speed, and
 the real world is simulated for accuracy – all within the comfort of
 `cargo test` (no external dependencies or actual API calls needed).
 

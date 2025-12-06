@@ -84,11 +84,11 @@ default, snapshot files (with extension `.snap`) will be saved under a
 `snapshots/` directory next to your test file.
 
 Because bubbletea-rs UIs often include ANSI colour/style codes (via the
-Lipgloss styling library), decide how you want to handle them in snapshots. The
-insta crate will capture the raw string including any escape sequences. This is
-fine (it actually lets you detect styling changes), but it can make the
-snapshot hard to read. If you prefer to strip ANSI codes for clarity, you can
-use insta’s filter feature to remove them. For example, before asserting, add a
+Lipgloss styling library), a conscious choice is needed for how they are
+handled in snapshots. The insta crate captures the raw string including any
+escape sequences. This is fine (it actually helps detect styling changes), but
+it can reduce snapshot legibility. To strip ANSI codes for clarity, insta’s
+filter feature can be used to remove them. For example, before asserting, add a
 filter to delete ANSI escape sequences:
 
 ```rust
@@ -107,8 +107,8 @@ support doesn’t yet handle colour, effectively ignoring colour in
 comparisons.[^1] If colours are not critical to the test, the view can also be
 run with a “no-colour” setting (e.g., set the `NO_COLOR` env variable or
 configure Lipgloss to disable colour) so that the output is plain text. This is
-optional – just be consistent with whatever choice you make so your snapshots
-remain comparable.
+optional – just be consistent with whatever choice is made so snapshots remain
+comparable.
 
 Finally, when writing snapshot tests for TUIs, it’s crucial to **fix the
 terminal dimensions** during tests. The rendered output of many TUIs depends on
@@ -122,7 +122,7 @@ size ensures reproducible results across different environments.
 > **Note:** If your tests are in an async context (for example, using
 > `#[tokio::test]` because your update may require a runtime), make sure to
 > enable the appropriate feature in rstest-bdd (such as
-> `rstest-bdd-macros/tokio`). This will allow scenario tests to run in a Tokio
+> `rstest-bdd-macros/tokio`). This allows scenario tests to run in a Tokio
 > context as needed. Many Bubbletea commands are async, but if we’re not
 > actually running the `Program`, you might not need a full async test – often,
 > you can call your model’s update and view in a normal sync test since they
@@ -219,7 +219,7 @@ do this:
   TUI displays a live clock or progress percentage, you might choose not to
   snapshot that portion. Design your view to omit or zero-out such info when a
   debug/test flag is set. This is more of a last resort, as it changes the
-  behavior under test; but it can be acceptable if those elements don’t affect
+  behaviour under test; but it can be acceptable if those elements don’t affect
   the rest of the layout and you verify them via other means.
 
 By preparing your model state carefully and cleaning any dynamic data, you
@@ -607,7 +607,7 @@ snapshot tests for verifying the *presentation* of that state.
 Snapshot testing Bubbletea UIs does come with some challenges, but they can be
 managed:
 
-- **Timing-dependent behavior:** If your UI has animations or time-driven
+- **Timing-dependent behaviour:** If the UI has animations or time-driven
   changes (spinners, clocks, auto-refresh lists, etc.), ensure your test either
   freezes time or captures a specific moment. For example, if an animated
   spinner advances every 200ms via a tick `Msg`, you can decide to test it at
@@ -733,40 +733,39 @@ stores snapshots as plain text, they work well for this purpose.
 
 Snapshot testing a Bubbletea-rs application with insta allows verification of
 terminal UI output with confidence and ease. By capturing the full-screen state
-after a series of simulated inputs, you create a robust regression test that
-will flag any unintended UI change. We covered how to set up a stable test
+after a series of simulated inputs, a robust regression test is created that
+flags any unintended UI change. The guide covers how to set up a stable test
 environment (fixed terminal size, controlled inputs), how to integrate with
 rstest’s powerful fixture and BDD syntax for clarity, and how to handle tricky
 dynamic aspects via insta’s redactions/filters. The result is a suite of tests
-that act as a safety net for your TUI: refactor the code fearlessly, and let
-the snapshots tell you if anything looks different.
+that act as a safety net for the TUI: refactor the code fearlessly, and let the
+snapshots indicate whether anything looks different.
 
 Keep in mind that snapshot tests are most effective when you curate them –
 focus on key states of the UI (no need to snapshot every single possible screen
 if it’s not necessary), and keep dynamic data in check. When used
-appropriately, they can be **“golden files”** for your project’s behavior,
-giving you quick feedback on changes. As you maintain your app, update the
-snapshots intentionally when you change the UI, and ensure they remain
-up-to-date with the expected output.
+appropriately, they can be **“golden files”** for a project’s behaviour, giving
+you quick feedback on changes. As you maintain your app, update the snapshots
+intentionally when you change the UI, and ensure they remain up-to-date with
+the expected output.
 
 By addressing determinism (for example, seeding randoms and fixing timestamps)
-and isolating each test scenario, you also ensure that tests run reliably in CI
-and don’t produce flaky failures. Each test is effectively reproducing a user’s
-journey in a controlled way. This approach is reminiscent of end-to-end tests
-but executed at the program logic level, which is why it strikes a good balance
-between coverage and maintainability.
+and isolating each test scenario, tests run reliably in CI and avoid flaky
+failures. Each test effectively reproduces a user’s journey in a controlled
+way. This approach is reminiscent of end-to-end tests but executed at the
+program logic level, striking a good balance between coverage and
+maintainability.
 
-In summary, for an experienced Rust developer: *leverage insta to assert your
-Bubbletea app’s text-based UI just as you would assert a data structure*. You
-get the benefits of quick diffing and approval workflow, with the rich semantic
-context of seeing your terminal UI’s content. When a test fails, you’ll
-immediately *see* what changed in the UI, which is incredibly valuable.
-Combined with rstest-bdd, your test code can read almost like a specification
-of the UI’s behavior. This not only helps catch bugs but also serves as
-documentation for how the TUI is supposed to react to input.
+In summary: *leverage insta to assert a Bubbletea app’s text-based UI just as a
+data structure would be asserted*. The benefits include quick diffing and
+approval workflow, with the rich semantic context of seeing terminal UI
+content. When a test fails, the change in the UI is immediately visible.
+Combined with rstest-bdd, test code can read almost like a specification of the
+UI’s behaviour. This not only helps catch bugs but also serves as documentation
+for how the TUI is supposed to react to input.
 
-Happy testing, and enjoy the confidence that comes from knowing your terminal
-interface is thoroughly checked by your automated tests!
+Happy testing, and enjoy the confidence that comes from knowing the terminal
+interface is thoroughly checked by automated tests!
 
 [^1]: Ratatui snapshot testing note on colour handling:
       <https://ratatui.rs/recipes/testing/snapshots/#:~:text=Note>
