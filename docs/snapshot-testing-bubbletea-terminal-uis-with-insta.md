@@ -3,36 +3,36 @@
 ## Introduction to Snapshot Testing TUIs
 
 Snapshot testing is a powerful technique to catch unintended UI changes by
-comparing the current output of your program to a stored reference (the
+comparing the current output of a program to a stored reference (the
 “snapshot”). In the context of terminal UIs (TUIs) built with **bubbletea-rs**,
 snapshots can ensure that refactors or feature changes don’t unintentionally
-alter your interface. Bubbletea’s architecture follows an Elm-like
+alter the interface. Bubbletea’s architecture follows an Elm-like
 Model-View-Update pattern, so the UI is a deterministic function of the state.
 This determinism makes it feasible to capture the rendered screen content and
 use it as a golden reference. Instead of writing fragile assertions against
-specific text or layout, you capture the whole TUI output once and then simply
-check that future test runs produce the same output. This guide will walk
+specific text or layout, the whole TUI output is captured once and then checked
+to ensure future test runs produce the same output. This guide will walk
 through setting up snapshot tests for bubbletea-rs using the **insta** crate,
 including simulating user input (keypresses), structuring tests with **rstest**
 and **rstest-bdd**, and dealing with common challenges like dynamic output and
 terminal sizing.
 
 **Why snapshot-test a TUI?**  Traditional assertions are tedious for TUIs –
-you’d have to check every piece of text, whitespace, or color manually.
+every piece of text, whitespace, or color would need to be checked manually.
 Snapshot tests (also called golden file tests) capture the entire screen output
-and let you review differences when they occur. This is invaluable for catching
-regressions: a small change in your `View` implementation (say, a missing
-character or a layout shift) will cause the snapshot to differ, alerting you to
-inspect the change. For complex interactive TUIs, snapshot tests provide broad
-coverage with minimal boilerplate. The trade-off is that *any* intentional UI
-change will also break the test – so you’ll need to update the snapshot files
-when you accept those changes. As a result, snapshot tests are most useful when
-your UI layout is relatively stable or when you’re doing large refactors and
-want to ensure the output stays consistent (or changes only in expected ways).
+and allow differences to be reviewed when they occur. This is invaluable for
+catching regressions: a small change in the `View` implementation (say, a
+missing character or a layout shift) will cause the snapshot to differ,
+prompting a closer look. For complex interactive TUIs, snapshot tests provide
+broad coverage with minimal boilerplate. The trade-off is that *any*
+intentional UI change will also break the test – the snapshot files must be
+updated when those changes are accepted. As a result, snapshot tests are most
+useful when the UI layout is relatively stable or when large refactors are in
+progress and output stability matters.
 
 ## Test Strategy: Model vs. End-to-End
 
-There are multiple levels at which you can test a Bubbletea TUI. In increasing
+Multiple levels exist at which a Bubbletea TUI can be tested. In increasing
 order of scope: (1) drive only the update logic (simulate messages and inspect
 model state), (2) mix update calls with some direct model manipulation, (3)
 test just the view output given a known model state, or (4) treat the entire
@@ -131,11 +131,11 @@ size ensures reproducible results across different environments.
 
 ## Capturing Bubbletea TUI Output
 
-In bubbletea-rs, your Model’s `view()` method returns a `String` representing
-the entire screen contents (including newlines and any ANSI styling). This
-makes capturing output straightforward: **we can call `model.view()` directly
-in a test to get the draw output**. The key is to ensure the model is in the
-desired state first. A typical snapshot test will look like:
+In bubbletea-rs, a model’s `view()` method returns a `String` representing the
+entire screen contents (including newlines and any ANSI styling). This makes
+capturing output straightforward: calling `model.view()` directly in a test to
+get the draw output**. The key is to ensure the model is in the desired state
+first. A typical snapshot test will look like:
 
 ```rust
 #[test]
@@ -192,7 +192,7 @@ Let’s break that down:
    It’s a good idea to commit these `.snap` files to your VCS, as they
   represent the expected output.
 
-**Tip:** If your model’s view output contains non-deterministic elements (for
+**Tip:** If the model’s view output contains non-deterministic elements (for
 example, a timestamp, a random number, or an ID that changes each run), you
 must **stabilize** those for the snapshot to be useful. There are a few ways to
 do this:
@@ -314,8 +314,8 @@ that the input was handled (for example, the new item “hello” appears in a
 list). Remember to also simulate special keys like Enter, Tab, etc., as needed
 by your UI flow.
 
-By combining sequences of inputs, you can script any user journey and assert
-the final screen. If intermediate screens are also important, you can take
+By combining sequences of inputs, test code can script any user journey and the
+final screen. If intermediate screens are also important, you can take
 snapshots at multiple points – though that often means splitting into multiple
 tests (one per significant step) or using multiple assertions in one test with
 distinct names. Insta allows multiple snapshots in one test function if you
@@ -692,10 +692,10 @@ assertions would be laborious.
 
 ## Running the Tests and Interpreting Results
 
-Once you have your snapshot tests written, run them with `cargo test`. The
-first run (or whenever you add new tests) will create initial `.snap` files.
-Inspect them to ensure they contain what you expect (you can open them in any
-text editor – they show the captured screen content). If a test fails due to a
+Once snapshot tests have been written, run them with `cargo test`. The first
+run (or whenever you add new tests) will create initial `.snap` files. Inspect
+them to ensure they contain what you expect (you can open them in any text
+editor – they show the captured screen content). If a test fails due to a
 snapshot mismatch, use `cargo insta review` to see the differences side by
 side. You can run `cargo insta review --accept` (or press the accept key in
 interactive mode) to accept new snapshots if the change is intended. Committing
@@ -725,7 +725,7 @@ change and the new snapshot will have the `|`. The snapshot review diff is
 essentially a visual review of your TUI, which is quite fitting – it’s almost
 like *looking at the UI* side-by-side before and after.
 
-As a rule of thumb, treat your snapshots as living documentation of your TUI.
+As a rule of thumb, snapshots can serve as living documentation of the TUI.
 Reading through a `.snap` file should give a reasonable picture of what the
 screen looks like (even though color codes and some alignment might be harder
 to grok in raw text). Some developers even include representative snapshot
