@@ -42,11 +42,11 @@ program, sending actual keystrokes, and capturing screen bytes – but this can
 be complex and flaky (timing issues, external terminal dependencies, etc.).
 Instead, a pragmatic approach is to **simulate user interactions at the message
 level and snapshot the view’s output**. This corresponds to a middle ground
-between integration and unit testing. We let the Bubbletea **update loop**
-apply messages to the model (just as it would at runtime), but a real terminal
-UI or asynchronous event loop is not executed. Exercising the update logic and
-then calling the model’s `view()` method yields a deterministic snapshot of the
-TUI after a sequence of inputs. This approach provides confidence that the UI
+between integration and unit testing. The Bubbletea **update loop** applies
+messages to the model (just as it would at runtime), but a real terminal UI or
+asynchronous event loop is not executed. Exercising the update logic and then
+calling the model’s `view()` method yields a deterministic snapshot of the TUI
+after a sequence of inputs. This approach provides confidence that the UI
 reacts correctly to events (almost like an end-to-end test) while still running
 fully in-memory and under controlled conditions, making it easier to enforce
 determinism and test isolation.
@@ -140,7 +140,7 @@ first. A typical snapshot test will look like:
 ```rust
 #[test]
 fn main_menu_initial_render() {
-    let mut model = MyAppModel::new(); // Create the model (initial state)
+    let mut model = MyAppModel::new(); // Construct the model (initial state)
     model.update(WindowSizeMsg { width: 80, height: 24 }); // Simulate a terminal size of 80x24
     let output = model.view();
     insta::assert_snapshot!(output);
@@ -173,8 +173,8 @@ The steps are:
   draw to the terminal at that moment. It may include multiple lines,
   box-drawing characters, etc., exactly as a user would see. If the application
   uses multiple frames (for animation) or alternate screens, note that `view()`
-  is usually just the latest frame. A common pattern is to write one snapshot
-  per test scenario, so choose the point in the interaction to capture (often
+  is usually just the latest frame. Typically, a single snapshot is written for
+  each test scenario, so choose the point in the interaction to capture (often
   the end state or an important intermediate state).
 
 - **Assert snapshot:** Use `insta::assert_snapshot!` to compare the output
@@ -386,10 +386,10 @@ like `left_keybinds__left_arrow_output.snap` and
 respective key. This pattern keeps the test code concise while covering
 multiple inputs.
 
-**Behavior-Driven (Given-When-Then) Scenarios:** Rstest-bdd builds on fixtures
+**Behaviour-Driven (Given-When-Then) Scenarios:** Rstest-bdd builds on fixtures
 and enables more narrative tests. Under the hood, it uses Gherkin-style
 *.feature* files and binds steps to Rust functions. A separate feature file is
-optional; the macros can define steps directly. For example, imagine a feature
+optional; the macros can define steps directly. For example, consider a feature
 file `tests/features/quit.feature`:
 
 ```gherkin
@@ -691,7 +691,7 @@ include the new snapshot suggestions for manual download and inspection.
 However, it is often easier to reproduce the failure locally, run the review,
 and then update the files.
 
-**Example output:** Suppose a border character in the UI changes from `│` to
+**Example output:** Suppose the border character in the UI changes from `│` to
 `|`. A snapshot diff might look like:
 
 ```diff
@@ -701,12 +701,12 @@ and then update the files.
  + | Item 2
 ```
 
-This small difference would fail the test. If it is a regression (the fancy box
-drawing character was meant to be retained), the view code needs adjustment. If
-the change was intentional (perhaps simplifying to ASCII), accept the change
-and the new snapshot will have the `|`. The snapshot review diff is essentially
-a visual review of the TUI, which is almost like *looking at the UI*
-side-by-side before and after.
+This small difference would fail the test. If it is a regression (the box-drawn
+border was meant to be retained), the view code needs adjustment. If the change
+was intentional (perhaps simplifying to ASCII), the change is accepted and the
+new snapshot will contain the `|`. The snapshot review diff is effectively a
+visual check of the TUI, almost like viewing the UI side-by-side before and
+after.
 
 As a rule of thumb, snapshots can serve as living documentation of the TUI.
 Reading through a `.snap` file should give a reasonable picture of what the
@@ -749,8 +749,13 @@ Combined with rstest-bdd, test code can read almost like a specification of the
 UI’s behaviour. This not only helps catch bugs but also serves as documentation
 for how the TUI is supposed to react to input.
 
-Happy testing, and enjoy the confidence that comes from knowing the terminal
-interface is thoroughly checked by automated tests!
+In summary: leverage insta to assert a Bubbletea app’s text-based UI just as a
+data structure would be asserted. The benefits include quick diffing and an
+approval workflow, with the rich context of seeing terminal UI content. When a
+test fails, the change in the UI is immediately visible. Combined with
+rstest-bdd, test code can read almost like a specification of the UI’s
+behaviour. This aids in catching bugs and serves as documentation for how the
+TUI is expected to react to input.
 
 [^1]: Ratatui snapshot testing note on colour handling:
       <https://ratatui.rs/recipes/testing/snapshots/#:~:text=Note>

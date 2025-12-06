@@ -142,11 +142,11 @@ In this example, the test sets expectations on the mock: it expects
 predefined vector of `RepositoryCommit` objects. Similarly, `get_issue` is
 expected with a specific issue number, returning a fake `Issue`.
 `process_pull_and_issue` (which internally calls `api.list_pr_commits` and
-`api.get_issue`) will receive these fake responses. Assertions then confirm
-that `process_pull_and_issue` produced the correct output based on the stubbed
-data. This pattern allows unit tests to cover logic like filtering,
-transformations, and error handling by forcing various scenarios (e.g., the
-mock can return an error to exercise error paths).
+`api.get_issue`) receives these fake responses. Assertions then confirm that
+`process_pull_and_issue` produced the correct output based on the stubbed data.
+This pattern allows unit tests to cover logic like filtering, transformations,
+and error handling by forcing various scenarios (e.g., the mock can return an
+error to exercise error paths).
 
 **Advantages:** Using mocks for unit tests keeps them **fast and reliable**.
 There are no HTTP calls or large data parsing – the tests run synchronously (or
