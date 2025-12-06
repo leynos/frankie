@@ -547,7 +547,7 @@ This replaces any string that looks like a datetime `YYYY-MM-DD HH:MM:SS` with
 need to manually post-process the string in test code; the adjustment is
 handled during the snapshot assertion.
 
-- **Snapshot file location:** By default, insta will create a `snapshots`
+- **Snapshot file location:** By default, insta creates a `snapshots`
   directory in the same folder as the test file (for a unit test in the main
   crate) or in the crate’s root for integration tests, with filenames derived
   from the test name. To keep all snapshots in a single place or adjust the
