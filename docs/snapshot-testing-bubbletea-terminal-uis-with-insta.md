@@ -18,7 +18,7 @@ and **rstest-bdd**, and dealing with common challenges like dynamic output and
 terminal sizing.
 
 **Why snapshot-test a TUI?**  Traditional assertions are tedious for TUIs –
-every piece of text, whitespace, or color would need to be checked manually.
+every piece of text, whitespace, or colour would need to be checked manually.
 Snapshot tests (also called golden file tests) capture the entire screen output
 and allow differences to be reviewed when they occur. This is invaluable for
 catching regressions: a small change in the `View` implementation (say, a
@@ -51,7 +51,7 @@ gives us confidence that the UI reacts correctly to events (almost like an
 end-to-end test) while still running fully in-memory and under our control
 (making it easier to enforce determinism and test isolation).
 
-**Tip:** If your Bubbletea app has heavy side-effects or asynchronous commands
+**Tip:** If the Bubbletea app has heavy side effects or asynchronous commands
 in its update logic, you might need to stub those out or use model injection to
 avoid nondeterminism. For example, if an update returns a command that fetches
 network data or the current time, a pure snapshot test should not actually
@@ -83,12 +83,12 @@ that call `insta::assert_snapshot!` on strings or debug representations. By
 default, snapshot files (with extension `.snap`) will be saved under a
 `snapshots/` directory next to your test file.
 
-Because bubbletea-rs UIs often include ANSI color/style codes (via the Lipgloss
-styling library), decide how you want to handle them in snapshots. The insta
-crate will capture the raw string including any escape sequences. This is fine
-(it actually lets you detect styling changes), but it can make the snapshot
-hard to read. If you prefer to strip ANSI codes for clarity, you can use
-insta’s filter feature to remove them. For example, before asserting, add a
+Because bubbletea-rs UIs often include ANSI colour/style codes (via the
+Lipgloss styling library), decide how you want to handle them in snapshots. The
+insta crate will capture the raw string including any escape sequences. This is
+fine (it actually lets you detect styling changes), but it can make the
+snapshot hard to read. If you prefer to strip ANSI codes for clarity, you can
+use insta’s filter feature to remove them. For example, before asserting, add a
 filter to delete ANSI escape sequences:
 
 ```rust
@@ -101,14 +101,14 @@ settings.bind(|| {
 });
 ```
 
-In practice, many developers leave color codes in the snapshot, unless the
-output becomes too noisy. (The Ratatui project notes that its built-in snapshot
-support doesn’t yet handle color, effectively ignoring color in
-comparisons([1](https://ratatui.rs/recipes/testing/snapshots/#:~:text=Note)).)
-If colors are not critical to your test, you can also run your view with a
-“no-color” setting (e.g., set the `NO_COLOR` env variable or configure Lipgloss
-to disable color) so that the output is plain text. This is optional – just be
-consistent with whatever choice you make so your snapshots remain comparable.
+In practice, many developers leave colour codes in the snapshot, unless the
+output becomes too noisy. The Ratatui project notes that its built-in snapshot
+support doesn’t yet handle colour, effectively ignoring colour in
+comparisons.[^1] If colours are not critical to the test, the view can also be
+run with a “no-colour” setting (e.g., set the `NO_COLOR` env variable or
+configure Lipgloss to disable colour) so that the output is plain text. This is
+optional – just be consistent with whatever choice you make so your snapshots
+remain comparable.
 
 Finally, when writing snapshot tests for TUIs, it’s crucial to **fix the
 terminal dimensions** during tests. The rendered output of many TUIs depends on
@@ -185,12 +185,10 @@ Let’s break that down:
   against a saved snapshot. On the first run, this will create a new snapshot
   file (e.g. `my_app__main_menu_initial_render.snap`). On subsequent runs,
   insta will diff the current output with the file. If they differ, the test
-  fails, and you can run `cargo insta review` to see the diff and decide
-  whether to accept the changes. The snapshot file will contain the text
-  exactly as printed by your TUI, line by
-  line([1](https://ratatui.rs/recipes/testing/snapshots/#:~:text=snapshots%2Fdemo2__tests__render_app))([1](https://ratatui.rs/recipes/testing/snapshots/#:~:text=,Traceroute%20%20Weather)).
-   It’s a good idea to commit these `.snap` files to your VCS, as they
-  represent the expected output.
+  fails, and `cargo insta review` can be run to see the diff and decide whether
+  to accept the changes. The snapshot file will contain the text exactly as
+  printed by the TUI, line by line.[^2] It is a good idea to commit these
+  `.snap` files to your VCS, as they represent the expected output.
 
 **Tip:** If the model’s view output contains non-deterministic elements (for
 example, a timestamp, a random number, or an ID that changes each run), you
@@ -336,7 +334,7 @@ many cases, you can ignore the returned `Cmd` in tests. But if, say, pressing a
 key triggers a `Cmd` that after 1 second sends a `TickMsg` which changes the
 UI, you might simulate that by directly calling `update(TickMsg)` in your test
 (instead of actually waiting one second). This gives you fine-grained control
-to advance the app state in a deterministic way. The goal is to avoid real time
+to advance the app state in a deterministic way. The goal is to avoid real-time
 delays in tests – simulate the passage of time or the completion of async tasks
 by injecting the corresponding message.
 
@@ -469,7 +467,7 @@ step function either takes `&mut MyAppModel` (if it modifies state) or
 `&MyAppModel` (if it’s just checking). We used a mix of assertions: a basic
 `assert!(contains)` for one Then step and a full `assert_snapshot!` for the
 final state. You could choose to only use snapshots (especially if the dialog
-output spans multiple lines or has colors you want to verify), or use
+output spans multiple lines or has colours that need verification), or use
 fine-grained asserts for specific elements and reserve snapshot for the full
 screen. Both approaches are valid and can complement each other.
 
@@ -581,18 +579,18 @@ snapshots.
 
 - **Reviewing and updating snapshots:** When a snapshot test fails (because the
   output changed from the saved snapshot), use `cargo insta review` to
-  interactively review differences. This will show you a colored diff of
-  expected vs actual output. For TUIs, this might highlight even subtle
-  alignment changes. If the changes are intentional, you can approve them,
-  which updates the `.snap` file. If not, you investigate which commit/code
-  caused the difference. It’s good practice to run `cargo insta review` as part
-  of your workflow whenever you change UI code. Additionally, if you anticipate
-  a lot of churn, you might batch updates: for example, if you purposely
-  restyled the whole app, all snapshots will fail – you can use
-  `cargo insta accept --all` for a quick update, but do skim through the diffs
-  to ensure everything looks right. Remember that **any** change in the output,
-  even whitespace or ANSI codes, will appear in the diff. This strictness is
-  what gives snapshot tests their power.
+  interactively review differences. This will show a coloured diff of expected
+  vs actual output. For TUIs, this might highlight even subtle alignment
+  changes. If the changes are intentional, you can approve them, which updates
+  the `.snap` file. If not, you investigate which commit/code caused the
+  difference. It’s good practice to run `cargo insta review` as part of your
+  workflow whenever you change UI code. Additionally, if you anticipate a lot
+  of churn, you might batch updates: for example, if you purposely restyled the
+  whole app, all snapshots will fail – you can use `cargo insta accept --all`
+  for a quick update, but do skim through the diffs to ensure everything looks
+  right. Remember that **any** change in the output, even whitespace or ANSI
+  codes, will appear in the diff. This strictness is what gives snapshot tests
+  their power.
 
 One caveat to bear in mind: because snapshot tests assert the entire screen
 content, if your UI changes frequently (e.g., dynamic layouts), you may end up
@@ -676,7 +674,7 @@ managed:
 To give a concrete example, one developer of a Bubbletea app retrofitted
 snapshot tests and noted it forced him to think deeply about the app’s
 architecture and state handling. It’s often during this process you realize you
-need to separate side-effects from pure updates, or that you could reorganize
+need to separate side effects from pure updates, or that you could reorganise
 code to be more testable. Embrace those improvements – your TUI code will
 become cleaner and more maintainable.
 
@@ -693,23 +691,22 @@ assertions would be laborious.
 ## Running the Tests and Interpreting Results
 
 Once snapshot tests have been written, run them with `cargo test`. The first
-run (or whenever you add new tests) will create initial `.snap` files. Inspect
-them to ensure they contain what you expect (you can open them in any text
-editor – they show the captured screen content). If a test fails due to a
-snapshot mismatch, use `cargo insta review` to see the differences side by
-side. You can run `cargo insta review --accept` (or press the accept key in
-interactive mode) to accept new snapshots if the change is intended. Committing
-the updated snapshots to version control will make future test runs use those
-as the baseline.
+run (or whenever new tests are added) will create initial `.snap` files. The
+files should be inspected to verify the captured screen content. If a test
+fails due to a snapshot mismatch, run `cargo insta review` to see the
+differences side by side. Running `cargo insta review --accept` (or pressing
+the accept key in interactive mode) approves new snapshots when the change is
+intended. Committing the updated snapshots to version control makes future test
+runs use those as the baseline.
 
-In CI, you’d typically have snapshot tests run as part of `cargo test`. If
-there’s a failure, the CI logs will show which snapshot didn’t match. You can
-even have the CI artifacts include the new snapshot suggestions for manual
-download and inspection. However, it’s often easier to reproduce the failure
-locally, run the review, and then update the files.
+In CI, snapshot tests typically run as part of `cargo test`. If there is a
+failure, the CI logs will show which snapshot did not match. CI artifacts can
+include the new snapshot suggestions for manual download and inspection.
+However, it is often easier to reproduce the failure locally, run the review,
+and then update the files.
 
-**Example output:** Suppose you accidentally changed a border character in your
-UI from `│` to `|`. A snapshot diff might look like:
+**Example output:** Suppose a border character in the UI changes from `│` to
+`|`. A snapshot diff might look like:
 
 ```diff
  - │ Item 1
@@ -718,24 +715,24 @@ UI from `│` to `|`. A snapshot diff might look like:
  + | Item 2
 ```
 
-This small difference would fail the test. If it’s a regression (you intended
-to keep the fancy box drawing character), you know exactly what to fix in your
-view code. If it was intentional (perhaps simplifying to ASCII), you accept the
-change and the new snapshot will have the `|`. The snapshot review diff is
-essentially a visual review of your TUI, which is quite fitting – it’s almost
-like *looking at the UI* side-by-side before and after.
+This small difference would fail the test. If it is a regression (the fancy box
+drawing character was meant to be retained), the view code needs adjustment. If
+the change was intentional (perhaps simplifying to ASCII), accept the change
+and the new snapshot will have the `|`. The snapshot review diff is essentially
+a visual review of the TUI, which is almost like *looking at the UI*
+side-by-side before and after.
 
 As a rule of thumb, snapshots can serve as living documentation of the TUI.
 Reading through a `.snap` file should give a reasonable picture of what the
-screen looks like (even though color codes and some alignment might be harder
+screen looks like (even though colour codes and some alignment might be harder
 to grok in raw text). Some developers even include representative snapshot
 files in their docs or pull requests to show what the UI output is. Since insta
 stores snapshots as plain text, they work well for this purpose.
 
 ## Conclusion
 
-Snapshot testing a Bubbletea-rs application with insta allows you to verify
-terminal UI output with confidence and ease. By capturing the full screen state
+Snapshot testing a Bubbletea-rs application with insta allows verification of
+terminal UI output with confidence and ease. By capturing the full-screen state
 after a series of simulated inputs, you create a robust regression test that
 will flag any unintended UI change. We covered how to set up a stable test
 environment (fixed terminal size, controlled inputs), how to integrate with
@@ -770,6 +767,13 @@ documentation for how the TUI is supposed to react to input.
 
 Happy testing, and enjoy the confidence that comes from knowing your terminal
 interface is thoroughly checked by your automated tests!
+
+[^1]: Ratatui snapshot testing note on colour handling:
+      <https://ratatui.rs/recipes/testing/snapshots/#:~:text=Note>
+[^2]: Ratatui snapshot recipe examples showing line-by-line snapshots:
+      <https://ratatui.rs/recipes/testing/snapshots/#:~:text=snapshots%2Fdemo2__tests__render_app>
+       and
+      <https://ratatui.rs/recipes/testing/snapshots/#:~:text=,Traceroute%20%20Weather>
 
 **Sources:**
 

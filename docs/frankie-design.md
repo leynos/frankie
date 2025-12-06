@@ -756,7 +756,7 @@ The application operates within the following technical boundaries:
 
 **Export format specification**: Comment exports must follow a stable
 XML-wrapped Markdown structure to preserve location, context, and comment
-metadata. The diff context is embedded as fenced Markdown inside the XML
+metadata. The diff context is embedded as plain diff lines inside the XML
 payload:
 
 ```xml
@@ -769,7 +769,7 @@ payload:
   </code-context>
 
   &lt;contributor&gt;someuser&lt;/contributor&gt;
-  &lt;comment-url&gt;https://github.com/owner/repo/pull/400#discussion_r2592557280&lt;/comment-url&gt;
+  &lt;comment-url&gt;<https://github.com/owner/repo/pull/400#discussion_r2592557280&lt;/comment-url>&gt;
 
   &lt;issue-to-address&gt;
     Comment text (rendered in markdown with details tags collapsed).
