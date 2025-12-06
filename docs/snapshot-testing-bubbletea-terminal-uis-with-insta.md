@@ -212,10 +212,10 @@ approaches help achieve this:
 - **Ignore ephemeral UI elements:** Sometimes the easiest path is to omit
   certain dynamic elements from the snapshot. For example, if the TUI displays
   a live clock or progress percentage, that portion can be suppressed for
-  tests. Design the view to omit or zero-out such information when a debug/test
-  flag is set. This is more of a last resort, as it changes the behaviour under
-  test; but it can be acceptable if those elements do not affect the rest of
-  the layout and are verified via other means.
+  tests. The view can be designed to omit or zero-out such information when a
+  debug/test flag is set. This is more of a last resort, as it changes the
+  behaviour under test — but it can be acceptable if those elements do not
+  affect the rest of the layout and are verified via other means.
 
 Preparing the model state carefully and cleaning any dynamic data keeps
 snapshot comparisons meaningful and stable. As an illustration, the maintainers
