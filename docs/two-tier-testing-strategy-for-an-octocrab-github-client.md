@@ -43,11 +43,11 @@ achieved by introducing a *trait* abstraction for the GitHub client and using
 
 ### Designing a Trait for Octocrab
 
-First, define a trait that captures the Octocrab operations the client relies
-on – for example, fetching issues, listing pull request commits, getting
-workflow runs, etc. Then implement this trait for the real `Octocrab` type. For
-instance, if commits on a pull request must be listed alongside an issue, the
-trait could be:
+A trait should capture the Octocrab operations the client relies on – for
+example, fetching issues, listing pull request commits, getting workflow runs,
+etc. That trait is then implemented for the real `Octocrab` type. For instance,
+if commits on a pull request must be listed alongside an issue, the trait could
+be:
 
 ```rust
 use octocrab::models::{Issue, RepositoryCommit};
