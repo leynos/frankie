@@ -756,25 +756,26 @@ The application operates within the following technical boundaries:
 
 **Export format specification**: Comment exports must follow a stable
 XML-wrapped Markdown structure to preserve location, context, and comment
-metadata. The diff context is embedded as plain diff lines inside the XML
-payload:
+metadata. The diff context is embedded as plain diff lines inside a CDATA block
+in the XML payload:
 
 ```xml
 <comment index="1">
   <location>path/to/file.py:168</location>
-  <code-context>
-    +line added
-    -line removed
-     line unchanged
-  </code-context>
+  <code-context><![CDATA[
++line added
+-line removed
+ line unchanged
+  ]]></code-context>
 
-  &lt;contributor&gt;someuser&lt;/contributor&gt;
-  &lt;comment-url&gt;<https://github.com/owner/repo/pull/400#discussion_r2592557280&lt;/comment-url>&gt;
+  <contributor>someuser</contributor>
+  <comment-url>https://github.com/owner/repo/pull/400#discussion_r2592557280</comment-url>
 
-  &lt;issue-to-address&gt;
+  <issue-to-address>
     Comment text (rendered in markdown with details tags collapsed).
-  &lt;/issue-to-address&gt;
+  </issue-to-address>
 </comment>
+
 ```
 
 ### 2.2.3 Ai Integration Requirements
