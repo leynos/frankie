@@ -40,6 +40,13 @@ struct CliArgs {
     token: String,
 }
 
+fn parse_flag_value(
+    args: &mut impl Iterator<Item = String>,
+    error: IntakeError,
+) -> Result<String, IntakeError> {
+    args.next().ok_or(error)
+}
+
 fn parse_args() -> Result<CliArgs, IntakeError> {
     let mut pr_url: Option<String> = None;
     let mut token: Option<String> = env::var("GITHUB_TOKEN").ok();
@@ -56,16 +63,13 @@ fn parse_args() -> Result<CliArgs, IntakeError> {
         }
         match arg.as_str() {
             "--pr-url" | "-u" => {
-                pr_url = args.next();
-                if pr_url.is_none() {
-                    return Err(IntakeError::MissingPullRequestUrl);
-                }
+                pr_url = Some(parse_flag_value(
+                    &mut args,
+                    IntakeError::MissingPullRequestUrl,
+                )?);
             }
             "--token" | "-t" => {
-                token = args.next();
-                if token.is_none() {
-                    return Err(IntakeError::MissingToken);
-                }
+                token = Some(parse_flag_value(&mut args, IntakeError::MissingToken)?);
             }
             _ => {
                 return Err(IntakeError::InvalidArgument {
