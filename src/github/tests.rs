@@ -64,6 +64,61 @@ fn rejects_missing_number() -> Result<(), IntakeError> {
 }
 
 #[rstest]
+fn rejects_non_numeric_number() -> Result<(), IntakeError> {
+    let result = PullRequestLocator::parse("https://github.com/octo/repo/pull/not-a-number");
+    match result {
+        Err(IntakeError::InvalidPullRequestNumber) => Ok(()),
+        other => Err(IntakeError::Api {
+            message: format!("expected invalid pull request number, got {other:?}"),
+        }),
+    }
+}
+
+#[rstest]
+fn rejects_zero_number() -> Result<(), IntakeError> {
+    let result = PullRequestLocator::parse("https://github.com/octo/repo/pull/0");
+    match result {
+        Err(IntakeError::InvalidPullRequestNumber) => Ok(()),
+        other => Err(IntakeError::Api {
+            message: format!("expected invalid pull request number for zero, got {other:?}"),
+        }),
+    }
+}
+
+#[rstest]
+fn rejects_issues_path() -> Result<(), IntakeError> {
+    let result = PullRequestLocator::parse("https://github.com/octo/repo/issues/4");
+    match result {
+        Err(IntakeError::MissingPathSegments) => Ok(()),
+        other => Err(IntakeError::Api {
+            message: format!("expected missing path segments for issues path, got {other:?}"),
+        }),
+    }
+}
+
+#[rstest]
+fn rejects_pulls_collection_path() -> Result<(), IntakeError> {
+    let result = PullRequestLocator::parse("https://github.com/octo/repo/pulls/4");
+    match result {
+        Err(IntakeError::MissingPathSegments) => Ok(()),
+        other => Err(IntakeError::Api {
+            message: format!("expected missing path segments for pulls path, got {other:?}"),
+        }),
+    }
+}
+
+#[rstest]
+fn rejects_invalid_url() -> Result<(), IntakeError> {
+    let result = PullRequestLocator::parse("octo/repo/pull/4");
+    match result {
+        Err(IntakeError::InvalidUrl(_)) => Ok(()),
+        other => Err(IntakeError::Api {
+            message: format!("expected invalid url error for malformed URL, got {other:?}"),
+        }),
+    }
+}
+
+#[rstest]
 fn rejects_empty_token() -> Result<(), IntakeError> {
     let result = PersonalAccessToken::new(String::new());
     match result {

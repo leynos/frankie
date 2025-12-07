@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 /// Errors surfaced while parsing input or communicating with GitHub.
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum IntakeError {
     /// The CLI did not include a pull request URL.
     #[error("pull request URL is required")]
@@ -50,6 +50,13 @@ pub enum IntakeError {
     #[error("network error talking to GitHub: {message}")]
     Network {
         /// Transport-level error detail.
+        message: String,
+    },
+
+    /// Local I/O operation failed.
+    #[error("I/O error: {message}")]
+    Io {
+        /// Error detail from the underlying I/O operation.
         message: String,
     },
 }

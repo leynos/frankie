@@ -191,7 +191,6 @@ emphasizes:
 - **Context Switch Reduction**: Measured decrease in tool transitions
   during code review workflows
 - **Error Rate**: Frequency of failed GitHub API calls or AI service
-- **Error Rate**: Frequency of failed GitHub API calls or AI service
   integrations
 
 ### 1.2.4 GitHub intake implementation (December 2025)
@@ -322,6 +321,7 @@ classDiagram
         +Authentication
         +Api
         +Network
+        +Io
     }
 
     class FrankieLibFacade {

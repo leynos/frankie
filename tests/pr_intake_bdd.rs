@@ -224,18 +224,27 @@ fn assert_comment_count(intake_state: &IntakeState, count: u64) -> Result<(), In
 
 #[then("the error message mentions authentication failure")]
 fn assert_authentication_error(intake_state: &IntakeState) -> Result<(), IntakeError> {
-    let message = intake_state
+    let error = intake_state
         .error
-        .with_ref(ToString::to_string)
+        .with_ref(Clone::clone)
         .ok_or_else(|| IntakeError::Api {
             message: "expected authentication error".to_owned(),
         })?;
 
-    if message.to_lowercase().contains("rejected") {
-        Ok(())
-    } else {
-        Err(IntakeError::Api { message })
+    if let IntakeError::Authentication { message } = error {
+        if message.to_lowercase().contains("rejected")
+            || message.to_lowercase().contains("credentials")
+        {
+            return Ok(());
+        }
+        return Err(IntakeError::Api {
+            message: format!("authentication error did not mention rejection: {message}"),
+        });
     }
+
+    Err(IntakeError::Api {
+        message: format!("expected Authentication variant, got {error:?}"),
+    })
 }
 
 #[scenario(path = "tests/features/pr_intake.feature", index = 0)]

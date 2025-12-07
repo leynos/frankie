@@ -72,9 +72,7 @@ fn parse_args() -> Result<CliArgs, IntakeError> {
                 token = Some(parse_flag_value(&mut args, IntakeError::MissingToken)?);
             }
             _ => {
-                return Err(IntakeError::InvalidArgument {
-                    argument: arg.clone(),
-                });
+                return Err(IntakeError::InvalidArgument { argument: arg });
             }
         }
     }
@@ -110,7 +108,7 @@ fn write_summary(details: &PullRequestDetails) -> Result<(), IntakeError> {
         details.comments.len()
     );
 
-    writeln!(stdout, "{message}").map_err(|error| IntakeError::Api {
+    writeln!(stdout, "{message}").map_err(|error| IntakeError::Io {
         message: error.to_string(),
     })
 }

@@ -66,16 +66,17 @@ impl PullRequestNumber {
 pub struct PersonalAccessToken(String);
 
 impl PersonalAccessToken {
-    /// Validates that the token is non-empty.
+    /// Validates that the token is non-empty and trims whitespace.
     ///
     /// # Errors
     ///
     /// Returns `IntakeError::MissingToken` when the supplied string is blank.
-    pub fn new(token: String) -> Result<Self, IntakeError> {
-        if token.trim().is_empty() {
+    pub fn new(token: impl AsRef<str>) -> Result<Self, IntakeError> {
+        let trimmed = token.as_ref().trim();
+        if trimmed.is_empty() {
             return Err(IntakeError::MissingToken);
         }
-        Ok(Self(token))
+        Ok(Self(trimmed.to_owned()))
     }
 
     /// Borrow the token value.
@@ -114,13 +115,11 @@ impl PullRequestLocator {
         let parsed =
             Url::parse(input).map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
 
-        let mut segments = if let Some(segments) = parsed.path_segments() {
+        let segments = if let Some(segments) = parsed.path_segments() {
             segments.collect::<Vec<_>>()
         } else {
             return Err(IntakeError::MissingPathSegments);
         };
-
-        segments.truncate(4);
 
         let (owner_segment, repository_segment, marker, number_segment) = match segments.as_slice()
         {

@@ -8,7 +8,7 @@ expect from the current intake workflow.
 - Authentication is performed through Octocrab; HTTP 401 or 403 responses are
   surfaced as a clear authentication failure that includes the GitHub error
   message.
-- The CLI summarises the pull request number, author, title, HTML URL and the
+- The CLI summarizes the pull request number, author, title, HTML URL and the
   total number of comments.
 
 ## Prerequisites
