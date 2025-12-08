@@ -304,10 +304,10 @@ classDiagram
         +pull_request_comments(locator: &PullRequestLocator) Result_Vec_PullRequestComment_IntakeError
     }
 
-    class PullRequestIntake {
+    class PullRequestIntake~G: PullRequestGateway~ {
         -client: &G
-        +new(client: &G) PullRequestIntake_G
-        +load(locator: &PullRequestLocator) Result_PullRequestDetails_IntakeError
+        +new(client: &G) PullRequestIntake~G~
+        +load(locator: &PullRequestLocator) Result~PullRequestDetails, IntakeError~
     }
 
     class IntakeError {
