@@ -235,7 +235,7 @@ classDiagram
 
     class PersonalAccessToken {
         -value: String
-        +new(token: String) Result_PersonalAccessToken_IntakeError
+        +new(token: impl AsRef~str~) Result_PersonalAccessToken_IntakeError
         +value() &str
     }
 
@@ -354,6 +354,17 @@ classDiagram
     FrankieLibFacade ..> PullRequestDetails
     FrankieLibFacade ..> IntakeError
 ```
+
+**Reference:** The types and relationships above are implemented in:
+
+- `src/github/error.rs` - `IntakeError` enum variants
+- `src/github/locator.rs` - `PullRequestLocator`, `RepositoryOwner`,
+  `RepositoryName`, `PullRequestNumber`, `PersonalAccessToken`
+- `src/github/gateway.rs` - `PullRequestGateway` trait, `OctocrabGateway`
+- `src/github/intake.rs` - `PullRequestIntake`
+- `src/github/models.rs` - `PullRequestMetadata`, `PullRequestComment`,
+  `PullRequestDetails`
+- `src/lib.rs` - public re-exports forming the `FrankieLibFacade`
 
 ## 1.3 Scope
 
@@ -918,8 +929,10 @@ The application operates within the following technical boundaries:
 
 **Export format specification**: Comment exports must follow a stable XML
 export structure to preserve location, context, and comment metadata. The diff
-context is embedded as fenced Markdown inside a CDATA block so diff markers stay
-intact while remaining valid XML:
+context is embedded as fenced Markdown inside a CDATA block as a unified diff
+hunk; the example lines "+line added", "-line removed", and "line unchanged"
+are illustrative markers, ensuring diff markers stay intact while remaining
+valid XML:
 
 ```xml
 <comment index="1">

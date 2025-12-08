@@ -8,12 +8,29 @@ use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde_json::json;
+use std::cell::RefCell;
+use std::rc::Rc;
 use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+/// Shared runtime wrapper that can be stored in rstest-bdd Slot.
+#[derive(Clone)]
+struct SharedRuntime(Rc<RefCell<Runtime>>);
+
+impl SharedRuntime {
+    fn new(runtime: Runtime) -> Self {
+        Self(Rc::new(RefCell::new(runtime)))
+    }
+
+    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        self.0.borrow().block_on(future)
+    }
+}
+
 #[derive(ScenarioState, Default)]
 struct IntakeState {
+    runtime: Slot<SharedRuntime>,
     server: Slot<MockServer>,
     token: Slot<String>,
     details: Slot<PullRequestDetails>,
@@ -25,10 +42,26 @@ fn intake_state() -> IntakeState {
     IntakeState::default()
 }
 
-fn build_runtime() -> Result<Runtime, IntakeError> {
-    Runtime::new().map_err(|error| IntakeError::Io {
-        message: format!("failed to create Tokio runtime: {error}"),
-    })
+/// Ensures the runtime and server are initialised in `IntakeState`.
+fn ensure_runtime_and_server(intake_state: &IntakeState) -> Result<SharedRuntime, IntakeError> {
+    if intake_state.runtime.with_ref(|_| ()).is_none() {
+        let runtime = Runtime::new().map_err(|error| IntakeError::Io {
+            message: format!("failed to create Tokio runtime: {error}"),
+        })?;
+        intake_state.runtime.set(SharedRuntime::new(runtime));
+    }
+
+    let shared_runtime = intake_state.runtime.get().ok_or_else(|| IntakeError::Api {
+        message: "runtime not initialised".to_owned(),
+    })?;
+
+    if intake_state.server.with_ref(|_| ()).is_none() {
+        intake_state
+            .server
+            .set(shared_runtime.block_on(MockServer::start()));
+    }
+
+    Ok(shared_runtime)
 }
 
 #[expect(
@@ -45,12 +78,7 @@ fn seed_successful_server(
     title: String,
     count: u64,
 ) -> Result<(), IntakeError> {
-    let runtime = build_runtime()?;
-    if intake_state.server.with_ref(|_| ()).is_none() {
-        intake_state
-            .server
-            .set(runtime.block_on(MockServer::start()));
-    }
+    let runtime = ensure_runtime_and_server(intake_state)?;
 
     let comments: Vec<_> = (0..count)
         .map(|index| {
@@ -73,58 +101,45 @@ fn seed_successful_server(
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
 
+    let pr_mock = Mock::given(method("GET"))
+        .and(path(pr_path))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&pr_body));
+
+    let comments_mock = Mock::given(method("GET"))
+        .and(path(comments_path))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&comments));
+
     intake_state
         .server
         .with_ref(|server| {
-            runtime.block_on(
-                Mock::given(method("GET"))
-                    .and(path(pr_path))
-                    .respond_with(ResponseTemplate::new(200).set_body_json(&pr_body))
-                    .mount(server),
-            );
-
-            runtime.block_on(
-                Mock::given(method("GET"))
-                    .and(path(comments_path))
-                    .respond_with(ResponseTemplate::new(200).set_body_json(comments))
-                    .mount(server),
-            );
+            runtime.block_on(pr_mock.mount(server));
+            runtime.block_on(comments_mock.mount(server));
         })
         .ok_or_else(|| IntakeError::Api {
             message: "mock server not initialised".to_owned(),
-        })?;
-
-    Ok(())
+        })
 }
 
 #[given("a mock GitHub API server that rejects token for pull request {pr:u64}")]
 fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) -> Result<(), IntakeError> {
-    let runtime = build_runtime()?;
-    if intake_state.server.with_ref(|_| ()).is_none() {
-        intake_state
-            .server
-            .set(runtime.block_on(MockServer::start()));
-    }
+    let runtime = ensure_runtime_and_server(intake_state)?;
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let response =
         ResponseTemplate::new(401).set_body_json(json!({ "message": "Bad credentials" }));
 
+    let mock = Mock::given(method("GET"))
+        .and(path(pr_path))
+        .respond_with(response);
+
     intake_state
         .server
         .with_ref(|server| {
-            runtime.block_on(
-                Mock::given(method("GET"))
-                    .and(path(pr_path))
-                    .respond_with(response)
-                    .mount(server),
-            );
+            runtime.block_on(mock.mount(server));
         })
         .ok_or_else(|| IntakeError::Api {
             message: "mock server not initialised".to_owned(),
-        })?;
-
-    Ok(())
+        })
 }
 
 #[given("a personal access token {token}")]
@@ -138,8 +153,6 @@ fn remember_token(intake_state: &IntakeState, token: String) {
 )]
 #[when("the client loads pull request {pr_url}")]
 fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), IntakeError> {
-    let runtime = build_runtime()?;
-
     let server_url = intake_state
         .server
         .with_ref(MockServer::uri)
@@ -159,7 +172,11 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), I
 
     let locator_clone = locator.clone();
 
-    let result = runtime.block_on(async move {
+    let runtime = intake_state.runtime.get().ok_or_else(|| IntakeError::Api {
+        message: "runtime not initialised".to_owned(),
+    })?;
+
+    let result = runtime.block_on(async {
         let token_value = intake_state.token.get().ok_or(IntakeError::MissingToken)?;
         let token = PersonalAccessToken::new(token_value)?;
 
