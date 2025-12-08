@@ -43,17 +43,21 @@ fn intake_state() -> IntakeState {
 }
 
 /// Ensures the runtime and server are initialised in `IntakeState`.
-fn ensure_runtime_and_server(intake_state: &IntakeState) -> Result<SharedRuntime, IntakeError> {
+///
+/// # Panics
+///
+/// Panics if the Tokio runtime cannot be created.
+fn ensure_runtime_and_server(intake_state: &IntakeState) -> SharedRuntime {
     if intake_state.runtime.with_ref(|_| ()).is_none() {
-        let runtime = Runtime::new().map_err(|error| IntakeError::Io {
-            message: format!("failed to create Tokio runtime: {error}"),
-        })?;
+        let runtime = Runtime::new()
+            .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
         intake_state.runtime.set(SharedRuntime::new(runtime));
     }
 
-    let shared_runtime = intake_state.runtime.get().ok_or_else(|| IntakeError::Api {
-        message: "runtime not initialised".to_owned(),
-    })?;
+    let shared_runtime = intake_state
+        .runtime
+        .get()
+        .unwrap_or_else(|| panic!("runtime not initialised after set"));
 
     if intake_state.server.with_ref(|_| ()).is_none() {
         intake_state
@@ -61,7 +65,7 @@ fn ensure_runtime_and_server(intake_state: &IntakeState) -> Result<SharedRuntime
             .set(shared_runtime.block_on(MockServer::start()));
     }
 
-    Ok(shared_runtime)
+    shared_runtime
 }
 
 #[expect(
@@ -72,13 +76,8 @@ fn ensure_runtime_and_server(intake_state: &IntakeState) -> Result<SharedRuntime
     "a mock GitHub API server with pull request {pr:u64} titled {title} and \
      {count:u64} comments"
 )]
-fn seed_successful_server(
-    intake_state: &IntakeState,
-    pr: u64,
-    title: String,
-    count: u64,
-) -> Result<(), IntakeError> {
-    let runtime = ensure_runtime_and_server(intake_state)?;
+fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, count: u64) {
+    let runtime = ensure_runtime_and_server(intake_state);
 
     let comments: Vec<_> = (0..count)
         .map(|index| {
@@ -115,14 +114,12 @@ fn seed_successful_server(
             runtime.block_on(pr_mock.mount(server));
             runtime.block_on(comments_mock.mount(server));
         })
-        .ok_or_else(|| IntakeError::Api {
-            message: "mock server not initialised".to_owned(),
-        })
+        .unwrap_or_else(|| panic!("mock server not initialised"));
 }
 
 #[given("a mock GitHub API server that rejects token for pull request {pr:u64}")]
-fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) -> Result<(), IntakeError> {
-    let runtime = ensure_runtime_and_server(intake_state)?;
+fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) {
+    let runtime = ensure_runtime_and_server(intake_state);
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let response =
@@ -137,9 +134,7 @@ fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) -> Result<(), Inta
         .with_ref(|server| {
             runtime.block_on(mock.mount(server));
         })
-        .ok_or_else(|| IntakeError::Api {
-            message: "mock server not initialised".to_owned(),
-        })
+        .unwrap_or_else(|| panic!("mock server not initialised"));
 }
 
 #[given("a personal access token {token}")]
@@ -152,11 +147,11 @@ fn remember_token(intake_state: &IntakeState, token: String) {
     reason = "rstest-bdd passes owned step arguments"
 )]
 #[when("the client loads pull request {pr_url}")]
-fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), IntakeError> {
+fn load_pull_request(intake_state: &IntakeState, pr_url: String) {
     let server_url = intake_state
         .server
         .with_ref(MockServer::uri)
-        .ok_or_else(|| IntakeError::InvalidUrl("mock server URL missing".to_owned()))?;
+        .unwrap_or_else(|| panic!("mock server URL missing"));
 
     let cleaned_pr_url = pr_url.trim_matches('"');
 
@@ -168,13 +163,14 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), I
         cleaned_pr_url.replace("SERVER", &server_url)
     };
     let locator = PullRequestLocator::parse(&resolved_url)
-        .map_err(|error| IntakeError::InvalidUrl(format!("{resolved_url}: {error}")))?;
+        .unwrap_or_else(|error| panic!("{resolved_url}: {error}"));
 
     let locator_clone = locator.clone();
 
-    let runtime = intake_state.runtime.get().ok_or_else(|| IntakeError::Api {
-        message: "runtime not initialised".to_owned(),
-    })?;
+    let runtime = intake_state
+        .runtime
+        .get()
+        .unwrap_or_else(|| panic!("runtime not initialised"));
 
     let result = runtime.block_on(async {
         let token_value = intake_state.token.get().ok_or(IntakeError::MissingToken)?;
@@ -195,8 +191,6 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), I
             intake_state.error.set(error);
         }
     }
-
-    Ok(())
 }
 
 #[expect(
@@ -204,7 +198,7 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) -> Result<(), I
     reason = "rstest-bdd passes owned step arguments"
 )]
 #[then("the response includes the title {expected}")]
-fn assert_title(intake_state: &IntakeState, expected: String) -> Result<(), IntakeError> {
+fn assert_title(intake_state: &IntakeState, expected: String) {
     let expected_title = expected.trim_matches('"');
 
     let matches = intake_state
@@ -212,56 +206,35 @@ fn assert_title(intake_state: &IntakeState, expected: String) -> Result<(), Inta
         .with_ref(|details| details.metadata.title.as_deref() == Some(expected_title))
         .unwrap_or(false);
 
-    if matches {
-        Ok(())
-    } else {
-        Err(IntakeError::Api {
-            message: format!("missing expected title {expected}"),
-        })
-    }
+    assert!(matches, "expected title {expected_title:?} not found");
 }
 
 #[then("the response includes {count:u64} comments")]
-fn assert_comment_count(intake_state: &IntakeState, count: u64) -> Result<(), IntakeError> {
+fn assert_comment_count(intake_state: &IntakeState, count: u64) {
     let actual = intake_state
         .details
         .with_ref(|details| details.comments.len() as u64)
-        .ok_or_else(|| IntakeError::Api {
-            message: "pull request details missing".to_owned(),
-        })?;
+        .unwrap_or_else(|| panic!("pull request details missing"));
 
-    if actual == count {
-        Ok(())
-    } else {
-        Err(IntakeError::Api {
-            message: format!("expected {count} comments but found {actual}"),
-        })
-    }
+    assert_eq!(actual, count, "comment count mismatch");
 }
 
 #[then("the error message mentions authentication failure")]
-fn assert_authentication_error(intake_state: &IntakeState) -> Result<(), IntakeError> {
+fn assert_authentication_error(intake_state: &IntakeState) {
     let error = intake_state
         .error
         .with_ref(Clone::clone)
-        .ok_or_else(|| IntakeError::Api {
-            message: "expected authentication error".to_owned(),
-        })?;
+        .unwrap_or_else(|| panic!("expected authentication error"));
 
-    if let IntakeError::Authentication { message } = error {
-        if message.to_lowercase().contains("rejected")
-            || message.to_lowercase().contains("credentials")
-        {
-            return Ok(());
-        }
-        return Err(IntakeError::Api {
-            message: format!("authentication error did not mention rejection: {message}"),
-        });
-    }
+    let IntakeError::Authentication { message } = error else {
+        panic!("expected Authentication variant, got {error:?}");
+    };
 
-    Err(IntakeError::Api {
-        message: format!("expected Authentication variant, got {error:?}"),
-    })
+    assert!(
+        message.to_lowercase().contains("rejected")
+            || message.to_lowercase().contains("credentials"),
+        "authentication error did not mention rejection: {message}"
+    );
 }
 
 #[scenario(path = "tests/features/pr_intake.feature", index = 0)]

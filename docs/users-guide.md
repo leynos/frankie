@@ -40,6 +40,6 @@ URL: https://github.com/owner/repo/pull/123
 Comments: 2
 ```
 
-Authentication or network failures keep the process exit code at non-zero and
-emit a clear error message describing the failing step (e.g. "GitHub rejected
-the token: Bad credentials").
+Authentication or network failures set the process exit code to a non-zero
+value and emit a clear error message describing the failing step (e.g. "GitHub
+rejected the token: Bad credentials").
