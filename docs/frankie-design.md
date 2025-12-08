@@ -202,7 +202,7 @@ emphasizes:
 - A thin `PullRequestGateway` trait wraps Octocrab and is mocked in unit tests.
   Behavioural coverage uses `wiremock` plus `rstest-bdd` scenarios to verify
   success and authentication failure paths without calling the live API.
-- Authentication errors are normalised: HTTP 401/403 responses surface as a
+- Authentication errors are normalized: HTTP 401/403 responses surface as a
   dedicated `Authentication` error with the GitHub message preserved. Other API
   or transport failures are mapped into user-readable variants so the CLI can
   print a precise failure reason.
