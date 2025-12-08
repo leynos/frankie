@@ -939,9 +939,7 @@ valid XML:
   <location>path/to/file.py:168</location>
   <code-context><![CDATA[
 ```diff
-+line added
--line removed
- line unchanged
++line added -line removed line unchanged
 ```]]></code-context>
   <contributor>someuser</contributor>
   <comment-url>https://github.com/owner/repo/pull/400#discussion_r2592557280
