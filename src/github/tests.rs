@@ -1,7 +1,5 @@
 //! Unit tests for the GitHub intake module.
 
-use std::fmt::Debug;
-
 use mockall::predicate::always;
 use rstest::rstest;
 
@@ -10,128 +8,102 @@ use super::{
     PullRequestDetails, PullRequestIntake, PullRequestLocator, PullRequestMetadata,
 };
 
-fn sample_locator() -> Result<PullRequestLocator, IntakeError> {
+fn sample_locator() -> PullRequestLocator {
     PullRequestLocator::parse("https://github.com/octo/repo/pull/4")
-}
-
-fn ensure_eq<T>(actual: &T, expected: &T, label: &str) -> Result<(), IntakeError>
-where
-    T: PartialEq + Debug,
-{
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(IntakeError::Api {
-            message: format!("{label} mismatch: expected {expected:?}, got {actual:?}"),
-        })
-    }
+        .expect("sample locator should parse")
 }
 
 #[rstest]
-fn parses_standard_github_url() -> Result<(), IntakeError> {
-    let locator = PullRequestLocator::parse("https://github.com/octo/repo/pull/12/files")?;
-    ensure_eq(&locator.owner().as_str(), &"octo", "owner")?;
-    ensure_eq(&locator.repository().as_str(), &"repo", "repository")?;
-    ensure_eq(&locator.number().get(), &12_u64, "number")?;
-    ensure_eq(
-        &locator.api_base().as_str(),
-        &"https://api.github.com/",
-        "api base",
-    )?;
-    Ok(())
+fn parses_standard_github_url() {
+    let locator = PullRequestLocator::parse("https://github.com/octo/repo/pull/12/files")
+        .expect("should parse standard GitHub URL");
+    assert_eq!(locator.owner().as_str(), "octo", "owner mismatch");
+    assert_eq!(locator.repository().as_str(), "repo", "repository mismatch");
+    assert_eq!(locator.number().get(), 12_u64, "number mismatch");
+    assert_eq!(
+        locator.api_base().as_str(),
+        "https://api.github.com/",
+        "api base mismatch"
+    );
 }
 
 #[rstest]
-fn parses_enterprise_url() -> Result<(), IntakeError> {
-    let locator = PullRequestLocator::parse("https://ghe.example.com/foo/bar/pull/7")?;
-    ensure_eq(
-        &locator.api_base().as_str(),
-        &"https://ghe.example.com/api/v3",
-        "enterprise api base",
-    )?;
-    Ok(())
+fn parses_enterprise_url() {
+    let locator = PullRequestLocator::parse("https://ghe.example.com/foo/bar/pull/7")
+        .expect("should parse enterprise URL");
+    assert_eq!(
+        locator.api_base().as_str(),
+        "https://ghe.example.com/api/v3",
+        "enterprise api base mismatch"
+    );
 }
 
 #[rstest]
-fn rejects_missing_number() -> Result<(), IntakeError> {
+fn rejects_missing_number() {
     let result = PullRequestLocator::parse("https://github.com/octo/repo/pull/");
-    match result {
-        Err(IntakeError::MissingPathSegments) => Ok(()),
-        other => Err(IntakeError::Api {
-            message: format!("expected missing path segments, got {other:?}"),
-        }),
-    }
+    assert!(
+        matches!(result, Err(IntakeError::MissingPathSegments)),
+        "expected MissingPathSegments, got {result:?}"
+    );
 }
 
 #[rstest]
-fn rejects_non_numeric_number() -> Result<(), IntakeError> {
+fn rejects_non_numeric_number() {
     let result = PullRequestLocator::parse("https://github.com/octo/repo/pull/not-a-number");
-    match result {
-        Err(IntakeError::InvalidPullRequestNumber) => Ok(()),
-        other => Err(IntakeError::Api {
-            message: format!("expected invalid pull request number, got {other:?}"),
-        }),
-    }
+    assert!(
+        matches!(result, Err(IntakeError::InvalidPullRequestNumber)),
+        "expected InvalidPullRequestNumber, got {result:?}"
+    );
 }
 
 #[rstest]
-fn rejects_zero_number() -> Result<(), IntakeError> {
+fn rejects_zero_number() {
     let result = PullRequestLocator::parse("https://github.com/octo/repo/pull/0");
-    match result {
-        Err(IntakeError::InvalidPullRequestNumber) => Ok(()),
-        other => Err(IntakeError::Api {
-            message: format!("expected invalid pull request number for zero, got {other:?}"),
-        }),
-    }
+    assert!(
+        matches!(result, Err(IntakeError::InvalidPullRequestNumber)),
+        "expected InvalidPullRequestNumber for zero, got {result:?}"
+    );
 }
 
 #[rstest]
-fn rejects_issues_path() -> Result<(), IntakeError> {
+fn rejects_issues_path() {
     let result = PullRequestLocator::parse("https://github.com/octo/repo/issues/4");
-    match result {
-        Err(IntakeError::MissingPathSegments) => Ok(()),
-        other => Err(IntakeError::Api {
-            message: format!("expected missing path segments for issues path, got {other:?}"),
-        }),
-    }
+    assert!(
+        matches!(result, Err(IntakeError::MissingPathSegments)),
+        "expected MissingPathSegments for issues path, got {result:?}"
+    );
 }
 
 #[rstest]
-fn rejects_pulls_collection_path() -> Result<(), IntakeError> {
+fn rejects_pulls_collection_path() {
     let result = PullRequestLocator::parse("https://github.com/octo/repo/pulls/4");
-    match result {
-        Err(IntakeError::MissingPathSegments) => Ok(()),
-        other => Err(IntakeError::Api {
-            message: format!("expected missing path segments for pulls path, got {other:?}"),
-        }),
-    }
+    assert!(
+        matches!(result, Err(IntakeError::MissingPathSegments)),
+        "expected MissingPathSegments for pulls path, got {result:?}"
+    );
 }
 
 #[rstest]
-fn rejects_invalid_url() -> Result<(), IntakeError> {
+fn rejects_invalid_url() {
     let result = PullRequestLocator::parse("octo/repo/pull/4");
-    match result {
-        Err(IntakeError::InvalidUrl(_)) => Ok(()),
-        other => Err(IntakeError::Api {
-            message: format!("expected invalid url error for malformed URL, got {other:?}"),
-        }),
-    }
+    assert!(
+        matches!(result, Err(IntakeError::InvalidUrl(_))),
+        "expected InvalidUrl for malformed URL, got {result:?}"
+    );
 }
 
 #[rstest]
-fn rejects_empty_token() -> Result<(), IntakeError> {
+fn rejects_empty_token() {
     let result = PersonalAccessToken::new(String::new());
-    match result {
-        Err(IntakeError::MissingToken) => Ok(()),
-        other => Err(IntakeError::Api {
-            message: format!("expected missing token error, got {other:?}"),
-        }),
-    }
+    assert!(
+        matches!(result, Err(IntakeError::MissingToken)),
+        "expected MissingToken, got {result:?}"
+    );
 }
 
 #[tokio::test]
-async fn aggregates_comments_from_gateway() -> Result<(), IntakeError> {
-    let locator = sample_locator()?;
+async fn aggregates_comments_from_gateway() {
+    let locator = sample_locator();
     let mut gateway = MockPullRequestGateway::new();
 
     gateway
@@ -168,6 +140,16 @@ async fn aggregates_comments_from_gateway() -> Result<(), IntakeError> {
         });
 
     let intake = PullRequestIntake::new(&gateway);
-    let PullRequestDetails { comments, .. } = intake.load(&locator).await?;
-    ensure_eq(&comments.len(), &2_usize, "comment count")
+    let PullRequestDetails { metadata, comments } =
+        intake.load(&locator).await.expect("intake should succeed");
+
+    assert_eq!(metadata.number, 4, "number mismatch");
+    assert_eq!(metadata.title, Some(String::from("demo")), "title mismatch");
+    assert_eq!(
+        metadata.author,
+        Some(String::from("octocat")),
+        "author mismatch"
+    );
+    assert_eq!(metadata.state, Some(String::from("open")), "state mismatch");
+    assert_eq!(comments.len(), 2, "comment count mismatch");
 }

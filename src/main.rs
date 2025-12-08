@@ -47,6 +47,21 @@ fn parse_flag_value(
     args.next().ok_or(error)
 }
 
+/// Recognised CLI flag variants.
+enum CliFlag {
+    PrUrl,
+    Token,
+}
+
+/// Maps a flag string to its recognised variant.
+fn recognised_flag(flag: &str) -> Option<CliFlag> {
+    match flag {
+        "--pr-url" | "-u" => Some(CliFlag::PrUrl),
+        "--token" | "-t" => Some(CliFlag::Token),
+        _ => None,
+    }
+}
+
 fn parse_args() -> Result<CliArgs, IntakeError> {
     let mut pr_url: Option<String> = None;
     let mut token: Option<String> = env::var("GITHUB_TOKEN").ok();
@@ -61,17 +76,17 @@ fn parse_args() -> Result<CliArgs, IntakeError> {
             token = Some(value.to_owned());
             continue;
         }
-        match arg.as_str() {
-            "--pr-url" | "-u" => {
+        match recognised_flag(&arg) {
+            Some(CliFlag::PrUrl) => {
                 pr_url = Some(parse_flag_value(
                     &mut args,
                     IntakeError::MissingPullRequestUrl,
                 )?);
             }
-            "--token" | "-t" => {
+            Some(CliFlag::Token) => {
                 token = Some(parse_flag_value(&mut args, IntakeError::MissingToken)?);
             }
-            _ => {
+            None => {
                 return Err(IntakeError::InvalidArgument { argument: arg });
             }
         }

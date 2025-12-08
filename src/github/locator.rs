@@ -92,6 +92,27 @@ impl AsRef<str> for PersonalAccessToken {
     }
 }
 
+/// Derives the GitHub API base URL from a parsed pull request URL.
+fn derive_api_base(parsed: &Url) -> Result<Url, IntakeError> {
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| IntakeError::InvalidUrl("URL must include a host".to_owned()))?;
+
+    if host.eq_ignore_ascii_case("github.com") {
+        Url::parse("https://api.github.com")
+            .map_err(|error| IntakeError::InvalidUrl(error.to_string()))
+    } else {
+        let mut api_url = Url::parse(&format!("{}://{}", parsed.scheme(), host))
+            .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
+
+        api_url
+            .set_port(parsed.port())
+            .map_err(|()| IntakeError::InvalidUrl("invalid port".to_owned()))?;
+        api_url.set_path("api/v3");
+        Ok(api_url)
+    }
+}
+
 /// Parsed pull request URL and derived API base.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequestLocator {
@@ -115,17 +136,14 @@ impl PullRequestLocator {
         let parsed =
             Url::parse(input).map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
 
-        let segments = if let Some(segments) = parsed.path_segments() {
-            segments.collect::<Vec<_>>()
-        } else {
-            return Err(IntakeError::MissingPathSegments);
-        };
+        let mut segments = parsed
+            .path_segments()
+            .ok_or(IntakeError::MissingPathSegments)?;
 
-        let (owner_segment, repository_segment, marker, number_segment) = match segments.as_slice()
-        {
-            [owner, repository, marker, number, ..] => (*owner, *repository, *marker, *number),
-            _ => return Err(IntakeError::MissingPathSegments),
-        };
+        let owner_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+        let repository_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+        let marker = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+        let number_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
 
         if marker != "pull" {
             return Err(IntakeError::MissingPathSegments);
@@ -142,23 +160,7 @@ impl PullRequestLocator {
             .map_err(|_| IntakeError::InvalidPullRequestNumber)
             .and_then(PullRequestNumber::new)?;
 
-        let host = parsed
-            .host_str()
-            .ok_or_else(|| IntakeError::InvalidUrl("URL must include a host".to_owned()))?;
-
-        let api_base = if host.eq_ignore_ascii_case("github.com") {
-            Url::parse("https://api.github.com")
-                .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?
-        } else {
-            let mut api_url = Url::parse(&format!("{}://{}", parsed.scheme(), host))
-                .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
-
-            api_url
-                .set_port(parsed.port())
-                .map_err(|()| IntakeError::InvalidUrl("invalid port".to_owned()))?;
-            api_url.set_path("api/v3");
-            api_url
-        };
+        let api_base = derive_api_base(&parsed)?;
 
         Ok(Self {
             api_base,

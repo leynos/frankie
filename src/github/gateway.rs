@@ -58,7 +58,7 @@ impl OctocrabGateway {
             .base_uri(base_uri)
             .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?
             .build()
-            .map_err(|error| map_octocrab_error("build client", error))?;
+            .map_err(|error| map_octocrab_error("build client", &error))?;
 
         Ok(Self::new(octocrab))
     }
@@ -74,7 +74,7 @@ impl PullRequestGateway for OctocrabGateway {
             .get::<ApiPullRequest, _, _>(locator.pull_request_path(), None::<&()>)
             .await
             .map(ApiPullRequest::into)
-            .map_err(|error| map_octocrab_error("pull request", error))
+            .map_err(|error| map_octocrab_error("pull request", &error))
     }
 
     async fn pull_request_comments(
@@ -85,44 +85,59 @@ impl PullRequestGateway for OctocrabGateway {
             .client
             .get::<Page<ApiComment>, _, _>(locator.comments_path(), None::<&()>)
             .await
-            .map_err(|error| map_octocrab_error("issue comments", error))?;
+            .map_err(|error| map_octocrab_error("issue comments", &error))?;
 
         self.client
             .all_pages(page)
             .await
             .map(|comments| comments.into_iter().map(ApiComment::into).collect())
-            .map_err(|error| map_octocrab_error("issue comments", error))
+            .map_err(|error| map_octocrab_error("issue comments", &error))
     }
 }
 
-pub(super) fn map_octocrab_error(operation: &str, error: octocrab::Error) -> IntakeError {
-    match error {
-        octocrab::Error::GitHub { source, .. } => match source.status_code {
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => IntakeError::Authentication {
+/// Checks if a GitHub error status indicates an authentication failure.
+const fn is_auth_failure(status: StatusCode) -> bool {
+    matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
+}
+
+/// Checks if an octocrab error represents a network/transport issue.
+const fn is_network_error(error: &octocrab::Error) -> bool {
+    matches!(
+        error,
+        octocrab::Error::Http { .. }
+            | octocrab::Error::Hyper { .. }
+            | octocrab::Error::Service { .. }
+    )
+}
+
+pub(super) fn map_octocrab_error(operation: &str, error: &octocrab::Error) -> IntakeError {
+    if let octocrab::Error::GitHub { source, .. } = error {
+        return if is_auth_failure(source.status_code) {
+            IntakeError::Authentication {
                 message: format!(
                     "{operation} failed: GitHub returned {status} {message}",
                     status = source.status_code,
                     message = source.message
                 ),
-            },
-            status => IntakeError::Api {
+            }
+        } else {
+            IntakeError::Api {
                 message: format!(
                     "{operation} failed with status {status}: {message}",
+                    status = source.status_code,
                     message = source.message
                 ),
-            },
-        },
-        octocrab::Error::Http { source, .. } => IntakeError::Network {
-            message: format!("{operation} failed: {source}"),
-        },
-        octocrab::Error::Hyper { source, .. } => IntakeError::Network {
-            message: format!("{operation} failed: {source}"),
-        },
-        octocrab::Error::Service { source, .. } => IntakeError::Network {
-            message: format!("{operation} failed: {source}"),
-        },
-        _ => IntakeError::Api {
+            }
+        };
+    }
+
+    if is_network_error(error) {
+        return IntakeError::Network {
             message: format!("{operation} failed: {error}"),
-        },
+        };
+    }
+
+    IntakeError::Api {
+        message: format!("{operation} failed: {error}"),
     }
 }
