@@ -26,8 +26,8 @@ fn intake_state() -> IntakeState {
 }
 
 fn build_runtime() -> Result<Runtime, IntakeError> {
-    Runtime::new().map_err(|error| IntakeError::Api {
-        message: error.to_string(),
+    Runtime::new().map_err(|error| IntakeError::Io {
+        message: format!("failed to create Tokio runtime: {error}"),
     })
 }
 
