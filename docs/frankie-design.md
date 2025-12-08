@@ -235,7 +235,7 @@ classDiagram
 
     class PersonalAccessToken {
         -value: String
-        +new(token: impl AsRef~str~) Result_PersonalAccessToken_IntakeError
+        +new(token: impl AsRef) Result_PersonalAccessToken_IntakeError
         +value() &str
     }
 
@@ -304,9 +304,9 @@ classDiagram
         +pull_request_comments(locator: &PullRequestLocator) Result_Vec_PullRequestComment_IntakeError
     }
 
-    class PullRequestIntake~Gateway~ {
-        -client: &Gateway
-        +new(client: &Gateway) PullRequestIntake_Gateway
+    class PullRequestIntake {
+        -client: &G
+        +new(client: &G) PullRequestIntake_G
         +load(locator: &PullRequestLocator) Result_PullRequestDetails_IntakeError
     }
 
@@ -333,8 +333,8 @@ classDiagram
         +IntakeError
     }
 
-    ApiUser --> ApiPullRequest
-    ApiUser --> ApiComment
+    ApiPullRequest --> ApiUser
+    ApiComment --> ApiUser
     ApiPullRequest ..> PullRequestMetadata : converts_to
     ApiComment ..> PullRequestComment : converts_to
 
@@ -357,14 +357,16 @@ classDiagram
 
 **Reference:** The types and relationships above are implemented in:
 
-- `src/github/error.rs` - `IntakeError` enum variants
-- `src/github/locator.rs` - `PullRequestLocator`, `RepositoryOwner`,
-  `RepositoryName`, `PullRequestNumber`, `PersonalAccessToken`
-- `src/github/gateway.rs` - `PullRequestGateway` trait, `OctocrabGateway`
-- `src/github/intake.rs` - `PullRequestIntake`
-- `src/github/models.rs` - `PullRequestMetadata`, `PullRequestComment`,
-  `PullRequestDetails`
-- `src/lib.rs` - public re-exports forming the `FrankieLibFacade`
+- `src/github/error.rs:7` — `IntakeError` enum variants
+- `src/github/locator.rs:9` — `RepositoryOwner`, `RepositoryName` (:28),
+  `PullRequestNumber` (:47), `PersonalAccessToken` (:66),
+  `PullRequestLocator` (:118)
+- `src/github/gateway.rs:14` — `PullRequestGateway` trait,
+  `OctocrabGateway` (:29)
+- `src/github/intake.rs:9` — `PullRequestIntake`
+- `src/github/models.rs:7` — `PullRequestMetadata`, `PullRequestComment` (:22),
+  `PullRequestDetails` (:33)
+- `src/lib.rs:9` — public re-exports forming the `FrankieLibFacade`
 
 ## 1.3 Scope
 
