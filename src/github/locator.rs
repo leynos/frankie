@@ -102,7 +102,12 @@ fn derive_api_base(parsed: &Url) -> Result<Url, IntakeError> {
         Url::parse("https://api.github.com")
             .map_err(|error| IntakeError::InvalidUrl(error.to_string()))
     } else {
-        let mut api_url = Url::parse(&format!("{}://{}", parsed.scheme(), host))
+        let authority = if host.contains(':') {
+            format!("[{host}]")
+        } else {
+            host.to_owned()
+        };
+        let mut api_url = Url::parse(&format!("{}://{authority}", parsed.scheme()))
             .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
 
         api_url
