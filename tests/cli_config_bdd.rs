@@ -1,5 +1,6 @@
 //! Behavioural tests for CLI configuration loading.
 
+use env_lock::EnvGuard;
 use frankie::{FrankieConfig, IntakeError};
 use ortho_config::MergeComposer;
 use rstest::fixture;
@@ -19,7 +20,7 @@ struct ConfigState {
     config: Slot<FrankieConfig>,
     pr_url_error: Slot<IntakeError>,
     token_error: Slot<IntakeError>,
-    github_token_backup: Slot<Option<String>>,
+    env_guard: Slot<EnvGuard<'static>>,
 }
 
 #[fixture]
@@ -98,24 +99,17 @@ fn env_token_set(config_state: &ConfigState, token: String) {
 
 #[given("no GITHUB_TOKEN environment variable")]
 fn no_github_token_env(config_state: &ConfigState) {
-    // Backup and remove GITHUB_TOKEN
-    let backup = std::env::var("GITHUB_TOKEN").ok();
-    config_state.github_token_backup.set(backup);
-    // SAFETY: This test runs in isolation and does not rely on this
-    // environment variable being set for any concurrent thread.
-    unsafe { std::env::remove_var("GITHUB_TOKEN") };
+    // Lock environment and remove GITHUB_TOKEN
+    let guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
+    config_state.env_guard.set(guard);
 }
 
 #[given("a GITHUB_TOKEN environment variable set to {token}")]
 fn github_token_env_set(config_state: &ConfigState, token: String) {
-    // Backup current value
-    let backup = std::env::var("GITHUB_TOKEN").ok();
-    config_state.github_token_backup.set(backup);
-
+    // Lock environment and set GITHUB_TOKEN
     let token_clean = token.trim_matches('"');
-    // SAFETY: This test runs in isolation and does not rely on this
-    // environment variable being set for any concurrent thread.
-    unsafe { std::env::set_var("GITHUB_TOKEN", token_clean) };
+    let guard = env_lock::lock_env([("GITHUB_TOKEN", Some(token_clean))]);
+    config_state.env_guard.set(guard);
 }
 
 // --- When steps ---
@@ -175,12 +169,6 @@ fn assert_resolved_token(config_state: &ConfigState, expected: String) {
         .resolve_token()
         .unwrap_or_else(|error| panic!("token resolution failed: {error}"));
 
-    // Restore GITHUB_TOKEN if we backed it up
-    if let Some(Some(value)) = config_state.github_token_backup.take() {
-        // SAFETY: This test runs in isolation.
-        unsafe { std::env::set_var("GITHUB_TOKEN", value) };
-    }
-
     assert_eq!(resolved, expected_clean, "resolved token mismatch");
 }
 
@@ -207,12 +195,6 @@ fn assert_token_error(config_state: &ConfigState) {
         .unwrap_or_else(|| panic!("configuration not built"));
 
     let result = config.resolve_token();
-
-    // Restore GITHUB_TOKEN if we backed it up
-    if let Some(Some(value)) = config_state.github_token_backup.take() {
-        // SAFETY: This test runs in isolation.
-        unsafe { std::env::set_var("GITHUB_TOKEN", value) };
-    }
 
     assert!(result.is_err(), "expected token resolution to return error");
 

@@ -252,10 +252,8 @@ mod tests {
             token: None,
         };
 
-        // Clear GITHUB_TOKEN if set to ensure test isolation
-        // SAFETY: This test runs in isolation and does not rely on this
-        // environment variable being set for any concurrent thread.
-        unsafe { std::env::remove_var("GITHUB_TOKEN") };
+        // Lock and clear GITHUB_TOKEN to ensure test isolation
+        let _guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
 
         let result = config.resolve_token();
         assert!(result.is_err(), "should return error when token is None");
