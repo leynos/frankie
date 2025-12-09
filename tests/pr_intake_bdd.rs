@@ -68,10 +68,6 @@ fn ensure_runtime_and_server(intake_state: &IntakeState) -> SharedRuntime {
     shared_runtime
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "rstest-bdd passes owned step arguments"
-)]
 #[given(
     "a mock GitHub API server with pull request {pr:u64} titled {title} and \
      {count:u64} comments"
@@ -142,10 +138,6 @@ fn remember_token(intake_state: &IntakeState, token: String) {
     intake_state.token.set(token);
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "rstest-bdd passes owned step arguments"
-)]
 #[when("the client loads pull request {pr_url}")]
 fn load_pull_request(intake_state: &IntakeState, pr_url: String) {
     let server_url = intake_state
@@ -193,10 +185,6 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) {
     }
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "rstest-bdd passes owned step arguments"
-)]
 #[then("the response includes the title {expected}")]
 fn assert_title(intake_state: &IntakeState, expected: String) {
     let expected_title = expected.trim_matches('"');

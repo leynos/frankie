@@ -4,8 +4,10 @@
 //! retrieve pull request metadata, and surface friendly errors that can be
 //! displayed in the CLI.
 
+pub mod config;
 pub mod github;
 
+pub use config::FrankieConfig;
 pub use github::{
     IntakeError, OctocrabGateway, PersonalAccessToken, PullRequestDetails, PullRequestIntake,
     PullRequestLocator,

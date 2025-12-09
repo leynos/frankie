@@ -25,7 +25,7 @@ support later workflow features.
       error surfacing; acceptance: opening a valid PR URL loads metadata and
       comments, invalid tokens return a user-readable failure message, and
       integration tests cover success and auth error paths.
-- [ ] Implement command-line parsing with `ortho-config` so flags, environment
+- [x] Implement command-line parsing with `ortho-config` so flags, environment
       variables, and config files share a single schema; acceptance: CLI help
       documents all options, precedence order is tested, and defaults mirror
       config file values.
@@ -44,7 +44,7 @@ support later workflow features.
 - [ ] Implement local caching layer with coherent expiry policy; acceptance:
       cached PR metadata is reused across sessions and invalidates on ETag or
       Last-Modified changes detected via octocrab responses.
-- [ ] Introduce configuration loading via ortho-config with environment and
+- [x] Introduce configuration loading via ortho-config with environment and
       file sources; acceptance: configuration precedence is unit-tested and
       misconfiguration produces actionable error messages.
 

@@ -1,13 +1,13 @@
 //! Frankie CLI entrypoint for pull request intake.
 
-use std::env;
 use std::io::{self, Write};
 use std::process::ExitCode;
 
 use frankie::{
-    IntakeError, OctocrabGateway, PersonalAccessToken, PullRequestDetails, PullRequestIntake,
-    PullRequestLocator,
+    FrankieConfig, IntakeError, OctocrabGateway, PersonalAccessToken, PullRequestDetails,
+    PullRequestIntake, PullRequestLocator,
 };
+use ortho_config::OrthoConfig;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -23,9 +23,13 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<(), IntakeError> {
-    let args = parse_args()?;
-    let locator = PullRequestLocator::parse(&args.pr_url)?;
-    let token = PersonalAccessToken::new(args.token)?;
+    let config = load_config()?;
+
+    let pr_url = config.require_pr_url()?;
+    let token_value = config.resolve_token()?;
+
+    let locator = PullRequestLocator::parse(pr_url)?;
+    let token = PersonalAccessToken::new(token_value)?;
 
     let gateway = OctocrabGateway::for_token(&token, &locator)?;
     let intake = PullRequestIntake::new(&gateway);
@@ -35,68 +39,15 @@ async fn run() -> Result<(), IntakeError> {
     Ok(())
 }
 
-struct CliArgs {
-    pr_url: String,
-    token: String,
-}
-
-fn parse_flag_value(
-    args: &mut impl Iterator<Item = String>,
-    error: IntakeError,
-) -> Result<String, IntakeError> {
-    args.next().ok_or(error)
-}
-
-/// Recognised CLI flag variants.
-enum CliFlag {
-    PrUrl,
-    Token,
-}
-
-/// Maps a flag string to its recognised variant.
-fn recognised_flag(flag: &str) -> Option<CliFlag> {
-    match flag {
-        "--pr-url" | "-u" => Some(CliFlag::PrUrl),
-        "--token" | "-t" => Some(CliFlag::Token),
-        _ => None,
-    }
-}
-
-fn parse_args() -> Result<CliArgs, IntakeError> {
-    let mut pr_url: Option<String> = None;
-    let mut token: Option<String> = env::var("GITHUB_TOKEN").ok();
-    let mut args = env::args().skip(1);
-
-    while let Some(arg) = args.next() {
-        if let Some(value) = arg.strip_prefix("--pr-url=") {
-            pr_url = Some(value.to_owned());
-            continue;
-        }
-        if let Some(value) = arg.strip_prefix("--token=") {
-            token = Some(value.to_owned());
-            continue;
-        }
-        match recognised_flag(&arg) {
-            Some(CliFlag::PrUrl) => {
-                pr_url = Some(parse_flag_value(
-                    &mut args,
-                    IntakeError::MissingPullRequestUrl,
-                )?);
-            }
-            Some(CliFlag::Token) => {
-                token = Some(parse_flag_value(&mut args, IntakeError::MissingToken)?);
-            }
-            None => {
-                return Err(IntakeError::InvalidArgument { argument: arg });
-            }
-        }
-    }
-
-    let pr_url_value = pr_url.ok_or(IntakeError::MissingPullRequestUrl)?;
-    let token_value = token.ok_or(IntakeError::MissingToken)?;
-    Ok(CliArgs {
-        pr_url: pr_url_value,
-        token: token_value,
+/// Loads configuration from CLI, environment, and files.
+///
+/// # Errors
+///
+/// Returns [`IntakeError::Configuration`] when ortho-config fails to parse
+/// arguments or load configuration files.
+fn load_config() -> Result<FrankieConfig, IntakeError> {
+    FrankieConfig::load().map_err(|error| IntakeError::Configuration {
+        message: error.to_string(),
     })
 }
 
