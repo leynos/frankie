@@ -193,6 +193,195 @@ emphasizes:
 - **Error Rate**: Frequency of failed GitHub API calls or AI service
   integrations
 
+### 1.2.4 GitHub intake implementation (December 2025)
+
+- Pull request intake uses Octocrab with the base URI derived from the PR URL.
+  Requests against `github.com` are routed to `https://api.github.com`; all
+  other hosts use `<host>/api/v3` so GitHub Enterprise and wiremock stubs share
+  the same code path.
+- A thin `PullRequestGateway` trait wraps Octocrab and is mocked in unit tests.
+  Behavioural coverage uses `wiremock` plus `rstest-bdd` scenarios to verify
+  success and authentication failure paths without calling the live API.
+- Authentication errors are normalized: HTTP 401/403 responses surface as a
+  dedicated `Authentication` error with the GitHub message preserved. Other API
+  or transport failures are mapped into user-readable variants so the CLI can
+  print a precise failure reason.
+- Intake requests fetch pull request metadata and the associated issue comments
+  via the REST API. Only the minimal fields needed by the CLI (title, state,
+  author login, comment bodies) are parsed to keep fixtures small and
+  deterministic.
+
+#### GitHub intake class diagram
+
+```mermaid
+classDiagram
+    class RepositoryOwner {
+        -value: String
+        +new(value: &str) Result_RepositoryOwner_IntakeError
+        +as_str() &str
+    }
+
+    class RepositoryName {
+        -value: String
+        +new(value: &str) Result_RepositoryName_IntakeError
+        +as_str() &str
+    }
+
+    class PullRequestNumber {
+        -value: u64
+        +new(value: u64) Result_PullRequestNumber_IntakeError
+        +get() u64
+    }
+
+    class PersonalAccessToken {
+        -value: String
+        +new(token: impl AsRef) Result_PersonalAccessToken_IntakeError
+        +value() &str
+    }
+
+    class PullRequestLocator {
+        -api_base: Url
+        -owner: RepositoryOwner
+        -repository: RepositoryName
+        -number: PullRequestNumber
+        +parse(input: &str) Result_PullRequestLocator_IntakeError
+        +api_base() &Url
+        +owner() &RepositoryOwner
+        +repository() &RepositoryName
+        +number() PullRequestNumber
+        +pull_request_path() String
+        +comments_path() String
+    }
+
+    class PullRequestMetadata {
+        +number: u64
+        +title: Option_String
+        +state: Option_String
+        +html_url: Option_String
+        +author: Option_String
+    }
+
+    class PullRequestComment {
+        +id: u64
+        +body: Option_String
+        +author: Option_String
+    }
+
+    class PullRequestDetails {
+        +metadata: PullRequestMetadata
+        +comments: Vec_PullRequestComment
+    }
+
+    class ApiUser {
+        +login: Option_String
+    }
+
+    class ApiPullRequest {
+        +number: u64
+        +title: Option_String
+        +state: Option_String
+        +html_url: Option_String
+        +user: Option_ApiUser
+    }
+
+    class ApiComment {
+        +id: u64
+        +body: Option_String
+        +user: Option_ApiUser
+    }
+
+    class PullRequestGateway {
+        <<interface>>
+        +pull_request(locator: &PullRequestLocator) Result_PullRequestMetadata_IntakeError
+        +pull_request_comments(locator: &PullRequestLocator) Result_Vec_PullRequestComment_IntakeError
+    }
+
+    class OctocrabGateway {
+        -client: Octocrab
+        +new(client: Octocrab) OctocrabGateway
+        +for_token(token: &PersonalAccessToken, locator: &PullRequestLocator) Result_OctocrabGateway_IntakeError
+        +pull_request(locator: &PullRequestLocator) Result_PullRequestMetadata_IntakeError
+        +pull_request_comments(locator: &PullRequestLocator) Result_Vec_PullRequestComment_IntakeError
+    }
+
+    class PullRequestIntake~G: PullRequestGateway~ {
+        -client: &G
+        +new(client: &G) PullRequestIntake~G~
+        +load(locator: &PullRequestLocator) Result~PullRequestDetails, IntakeError~
+    }
+
+    class IntakeError {
+        <<enum>>
+        +MissingPullRequestUrl
+        +InvalidArgument
+        +InvalidUrl
+        +MissingPathSegments
+        +InvalidPullRequestNumber
+        +MissingToken
+        +Authentication
+        +Api
+        +Network
+        +Io
+    }
+
+    class FrankieLibFacade {
+        +PullRequestLocator
+        +PullRequestIntake
+        +OctocrabGateway
+        +PersonalAccessToken
+        +PullRequestDetails
+        +IntakeError
+    }
+
+    ApiPullRequest --> ApiUser
+    ApiComment --> ApiUser
+    ApiPullRequest ..> PullRequestMetadata : converts_to
+    ApiComment ..> PullRequestComment : converts_to
+
+    PullRequestLocator --> RepositoryOwner
+    PullRequestLocator --> RepositoryName
+    PullRequestLocator --> PullRequestNumber
+
+    OctocrabGateway ..|> PullRequestGateway
+
+    PullRequestIntake --> PullRequestGateway : uses
+    PullRequestIntake --> PullRequestDetails
+
+    FrankieLibFacade ..> PullRequestLocator
+    FrankieLibFacade ..> PullRequestIntake
+    FrankieLibFacade ..> OctocrabGateway
+    FrankieLibFacade ..> PersonalAccessToken
+    FrankieLibFacade ..> PullRequestDetails
+    FrankieLibFacade ..> IntakeError
+```
+
+**Reference:** The types and relationships above are implemented in:
+
+- [`src/github/error.rs`][error-L7] — `IntakeError` enum variants
+- [`src/github/locator.rs`][locator-L9] — `RepositoryOwner`,
+  [`RepositoryName`][locator-L28], [`PullRequestNumber`][locator-L47],
+  [`PersonalAccessToken`][locator-L66], [`PullRequestLocator`][locator-L118]
+- [`src/github/gateway.rs`][gateway-L14] — `PullRequestGateway` trait,
+  [`OctocrabGateway`][gateway-L29]
+- [`src/github/intake.rs`][intake-L9] — `PullRequestIntake`
+- [`src/github/models.rs`][models-L7] — `PullRequestMetadata`,
+  [`PullRequestComment`][models-L22], [`PullRequestDetails`][models-L33]
+- [`src/lib.rs`][lib-L9] — public re-exports forming the `FrankieLibFacade`
+
+[error-L7]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/error.rs#L7
+[locator-L9]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L9
+[locator-L28]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L28
+[locator-L47]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L47
+[locator-L66]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L66
+[locator-L118]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L118
+[gateway-L14]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/gateway.rs#L14
+[gateway-L29]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/gateway.rs#L29
+[intake-L9]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/intake.rs#L9
+[models-L7]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L7
+[models-L22]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L22
+[models-L33]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L33
+[lib-L9]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/lib.rs#L9
+
 ## 1.3 Scope
 
 ### 1.3.1 In-scope
@@ -756,14 +945,19 @@ The application operates within the following technical boundaries:
 
 **Export format specification**: Comment exports must follow a stable XML
 export structure to preserve location, context, and comment metadata. The diff
-context is embedded as plain diff lines inside a CDATA block in the XML payload:
+context is embedded as fenced Markdown inside a CDATA block as a unified diff
+hunk; the example lines "+line added", "-line removed", and "line unchanged"
+are illustrative markers, ensuring diff markers stay intact while remaining
+valid XML:
 
 ```xml
 <comment index="1">
   <location>path/to/file.py:168</location>
   <code-context><![CDATA[
 ```diff
-+line added -line removed line unchanged
++line added
+-line removed
+ line unchanged
 ```]]></code-context>
   <contributor>someuser</contributor>
   <comment-url>https://github.com/owner/repo/pull/400#discussion_r2592557280
