@@ -114,30 +114,57 @@ impl FrankieConfig {
 mod tests {
     use ortho_config::MergeComposer;
     use rstest::rstest;
-    use serde_json::json;
+    use serde_json::{Value, json};
 
     use super::FrankieConfig;
 
-    /// Asserts that configuration layers merge with the expected precedence.
-    ///
-    /// # Arguments
-    ///
-    /// * `setup` - Closure that configures the `MergeComposer` with layers
-    /// * `getter` - Closure that extracts the field to verify from `FrankieConfig`
-    /// * `expected` - The expected value after merging
-    /// * `message` - Assertion message on failure
-    fn assert_layer_precedence<S, G>(setup: S, getter: G, expected: &str, message: &str)
-    where
-        S: FnOnce(&mut MergeComposer),
-        G: FnOnce(&FrankieConfig) -> Option<&str>,
-    {
+    #[rstest]
+    #[case::file_overrides_defaults(
+        vec![("defaults", json!({"pr_url": "default-url"})), ("file", json!({"pr_url": "file-url"}))],
+        "pr_url",
+        "file-url",
+        "file should override default"
+    )]
+    #[case::environment_overrides_file(
+        vec![("file", json!({"token": "file-token"})), ("environment", json!({"token": "env-token"}))],
+        "token",
+        "env-token",
+        "environment should override file"
+    )]
+    #[case::cli_overrides_environment(
+        vec![("environment", json!({"pr_url": "env-url"})), ("cli", json!({"pr_url": "cli-url"}))],
+        "pr_url",
+        "cli-url",
+        "CLI should override environment"
+    )]
+    fn test_layer_precedence(
+        #[case] layers: Vec<(&str, Value)>,
+        #[case] field: &str,
+        #[case] expected: &str,
+        #[case] message: &str,
+    ) {
         let mut composer = MergeComposer::new();
-        setup(&mut composer);
+
+        for (layer_type, value) in layers {
+            match layer_type {
+                "defaults" => composer.push_defaults(value),
+                "file" => composer.push_file(value, None),
+                "environment" => composer.push_environment(value),
+                "cli" => composer.push_cli(value),
+                _ => panic!("unknown layer type: {layer_type}"),
+            }
+        }
 
         let config =
             FrankieConfig::merge_from_layers(composer.layers()).expect("merge should succeed");
 
-        assert_eq!(getter(&config), Some(expected), "{message}");
+        let actual = match field {
+            "pr_url" => config.pr_url.as_deref(),
+            "token" => config.token.as_deref(),
+            _ => panic!("unknown field: {field}"),
+        };
+
+        assert_eq!(actual, Some(expected), "{message}");
     }
 
     #[rstest]
@@ -150,45 +177,6 @@ mod tests {
 
         assert!(config.pr_url.is_none(), "pr_url should be None");
         assert!(config.token.is_none(), "token should be None");
-    }
-
-    #[rstest]
-    fn file_values_override_defaults() {
-        assert_layer_precedence(
-            |composer| {
-                composer.push_defaults(json!({"pr_url": "default-url"}));
-                composer.push_file(json!({"pr_url": "file-url"}), None);
-            },
-            |config| config.pr_url.as_deref(),
-            "file-url",
-            "file should override default",
-        );
-    }
-
-    #[rstest]
-    fn environment_overrides_file() {
-        assert_layer_precedence(
-            |composer| {
-                composer.push_file(json!({"token": "file-token"}), None);
-                composer.push_environment(json!({"token": "env-token"}));
-            },
-            |config| config.token.as_deref(),
-            "env-token",
-            "environment should override file",
-        );
-    }
-
-    #[rstest]
-    fn cli_overrides_environment() {
-        assert_layer_precedence(
-            |composer| {
-                composer.push_environment(json!({"pr_url": "env-url"}));
-                composer.push_cli(json!({"pr_url": "cli-url"}));
-            },
-            |config| config.pr_url.as_deref(),
-            "cli-url",
-            "CLI should override environment",
-        );
     }
 
     #[rstest]
