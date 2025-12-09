@@ -8,8 +8,8 @@ expect from the current intake workflow.
 - Authentication is performed through Octocrab; HTTP 401 or 403 responses are
   surfaced as a clear authentication failure that includes the GitHub error
   message.
-- The CLI summarizes the pull request number, author, title, HTML URL and the
-  total number of comments.
+- The command-line interface (CLI) summarizes the pull request number, author,
+  title, HTML URL and the total number of comments.
 
 ## Prerequisites
 
@@ -50,7 +50,7 @@ takes precedence over an environment variable or configuration file value.
 
 ### Configuration file
 
-Create a `.frankie.toml` file in your current directory, home directory, or XDG
+Create a `.frankie.toml` file in the current directory, home directory, or XDG
 config directory (typically `~/.config/frankie/frankie.toml`):
 
 ```toml
@@ -61,7 +61,7 @@ token = "ghp_example"
 Frankie searches for configuration files in this order:
 
 1. `.frankie.toml` in the current working directory
-2. `.frankie.toml` in your home directory
+2. `.frankie.toml` in the home directory
 3. `frankie.toml` in `$XDG_CONFIG_HOME/frankie/` (typically
    `~/.config/frankie/`)
 

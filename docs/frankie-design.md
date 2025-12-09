@@ -368,32 +368,19 @@ classDiagram
   [`PullRequestComment`][models-L22], [`PullRequestDetails`][models-L33]
 - [`src/lib.rs`][lib-L9] — public re-exports forming the `FrankieLibFacade`
 
-[error-L7]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/error.rs#L7
- [locator-L9]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L9
- [locator-L28]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L28
- [locator-L47]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L47
- [locator-L66]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L66
- [locator-L118]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L118
- [gateway-L14]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/gateway.rs#L14
- [gateway-L29]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/gateway.rs#L29
- [intake-L9]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/intake.rs#L9
- [models-L7]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L7
- [models-L22]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L22
- [models-L33]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L33
- [lib-L9]:
-https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/lib.rs#L9
+[error-L7]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/error.rs#L7
+[locator-L9]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L9
+[locator-L28]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L28
+[locator-L47]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L47
+[locator-L66]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L66
+[locator-L118]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L118
+[gateway-L14]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/gateway.rs#L14
+[gateway-L29]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/gateway.rs#L29
+[intake-L9]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/intake.rs#L9
+[models-L7]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L7
+[models-L22]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L22
+[models-L33]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L33
+[lib-L9]: https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/lib.rs#L9
 
 ## 1.3 Scope
 

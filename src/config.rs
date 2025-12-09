@@ -118,6 +118,17 @@ mod tests {
 
     use super::FrankieConfig;
 
+    /// Applies a configuration layer to the composer based on the layer type.
+    fn apply_layer(composer: &mut MergeComposer, layer_type: &str, value: Value) {
+        match layer_type {
+            "defaults" => composer.push_defaults(value),
+            "file" => composer.push_file(value, None),
+            "environment" => composer.push_environment(value),
+            "cli" => composer.push_cli(value),
+            _ => panic!("unknown layer type: {layer_type}"),
+        }
+    }
+
     #[rstest]
     #[case::file_overrides_defaults(
         vec![("defaults", json!({"pr_url": "default-url"})), ("file", json!({"pr_url": "file-url"}))],
@@ -146,13 +157,7 @@ mod tests {
         let mut composer = MergeComposer::new();
 
         for (layer_type, value) in layers {
-            match layer_type {
-                "defaults" => composer.push_defaults(value),
-                "file" => composer.push_file(value, None),
-                "environment" => composer.push_environment(value),
-                "cli" => composer.push_cli(value),
-                _ => panic!("unknown layer type: {layer_type}"),
-            }
+            apply_layer(&mut composer, layer_type, value);
         }
 
         let config =
