@@ -118,6 +118,28 @@ mod tests {
 
     use super::FrankieConfig;
 
+    /// Asserts that configuration layers merge with the expected precedence.
+    ///
+    /// # Arguments
+    ///
+    /// * `setup` - Closure that configures the `MergeComposer` with layers
+    /// * `getter` - Closure that extracts the field to verify from `FrankieConfig`
+    /// * `expected` - The expected value after merging
+    /// * `message` - Assertion message on failure
+    fn assert_layer_precedence<S, G>(setup: S, getter: G, expected: &str, message: &str)
+    where
+        S: FnOnce(&mut MergeComposer),
+        G: FnOnce(&FrankieConfig) -> Option<&str>,
+    {
+        let mut composer = MergeComposer::new();
+        setup(&mut composer);
+
+        let config =
+            FrankieConfig::merge_from_layers(composer.layers()).expect("merge should succeed");
+
+        assert_eq!(getter(&config), Some(expected), "{message}");
+    }
+
     #[rstest]
     fn defaults_are_none_when_no_sources_provided() {
         let mut composer = MergeComposer::new();
@@ -132,49 +154,40 @@ mod tests {
 
     #[rstest]
     fn file_values_override_defaults() {
-        let mut composer = MergeComposer::new();
-        composer.push_defaults(json!({"pr_url": "default-url"}));
-        composer.push_file(json!({"pr_url": "file-url"}), None);
-
-        let config =
-            FrankieConfig::merge_from_layers(composer.layers()).expect("merge should succeed");
-
-        assert_eq!(
-            config.pr_url.as_deref(),
-            Some("file-url"),
-            "file should override default"
+        assert_layer_precedence(
+            |composer| {
+                composer.push_defaults(json!({"pr_url": "default-url"}));
+                composer.push_file(json!({"pr_url": "file-url"}), None);
+            },
+            |config| config.pr_url.as_deref(),
+            "file-url",
+            "file should override default",
         );
     }
 
     #[rstest]
     fn environment_overrides_file() {
-        let mut composer = MergeComposer::new();
-        composer.push_file(json!({"token": "file-token"}), None);
-        composer.push_environment(json!({"token": "env-token"}));
-
-        let config =
-            FrankieConfig::merge_from_layers(composer.layers()).expect("merge should succeed");
-
-        assert_eq!(
-            config.token.as_deref(),
-            Some("env-token"),
-            "environment should override file"
+        assert_layer_precedence(
+            |composer| {
+                composer.push_file(json!({"token": "file-token"}), None);
+                composer.push_environment(json!({"token": "env-token"}));
+            },
+            |config| config.token.as_deref(),
+            "env-token",
+            "environment should override file",
         );
     }
 
     #[rstest]
     fn cli_overrides_environment() {
-        let mut composer = MergeComposer::new();
-        composer.push_environment(json!({"pr_url": "env-url"}));
-        composer.push_cli(json!({"pr_url": "cli-url"}));
-
-        let config =
-            FrankieConfig::merge_from_layers(composer.layers()).expect("merge should succeed");
-
-        assert_eq!(
-            config.pr_url.as_deref(),
-            Some("cli-url"),
-            "CLI should override environment"
+        assert_layer_precedence(
+            |composer| {
+                composer.push_environment(json!({"pr_url": "env-url"}));
+                composer.push_cli(json!({"pr_url": "cli-url"}));
+            },
+            |config| config.pr_url.as_deref(),
+            "cli-url",
+            "CLI should override environment",
         );
     }
 
