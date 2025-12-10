@@ -357,6 +357,7 @@ classDiagram
 
 **Reference:** The types and relationships above are implemented in:
 
+<!-- markdownlint-disable MD013 -->
 - [`src/github/error.rs`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/error.rs#L7) — `IntakeError` enum variants
 - [`src/github/locator.rs`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L9) — `RepositoryOwner`,
   [`RepositoryName`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L28), [`PullRequestNumber`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/locator.rs#L47),
@@ -367,6 +368,7 @@ classDiagram
 - [`src/github/models.rs`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L7) — `PullRequestMetadata`,
   [`PullRequestComment`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L22), [`PullRequestDetails`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/github/models.rs#L33)
 - [`src/lib.rs`](https://github.com/leynos/frankie/blob/c439d88da56abb67d97e0149bedab9c57be4a076/src/lib.rs#L9) — public re-exports forming the `FrankieLibFacade`
+<!-- markdownlint-enable MD013 -->
 
 ## 1.3 Scope
 
