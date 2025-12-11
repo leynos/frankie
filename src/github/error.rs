@@ -59,4 +59,11 @@ pub enum IntakeError {
         /// Error detail from the underlying I/O operation.
         message: String,
     },
+
+    /// Configuration could not be loaded.
+    #[error("configuration error: {message}")]
+    Configuration {
+        /// Details about the configuration failure.
+        message: String,
+    },
 }
