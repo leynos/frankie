@@ -259,49 +259,73 @@ fn repository_locator_rejects_empty_repo() {
 
 #[rstest]
 fn page_info_identifies_first_page() {
-    let info = PageInfo::new(1, 50, Some(5), true, false);
+    let info = PageInfo::builder(1, 50)
+        .total_pages(Some(5))
+        .has_next(true)
+        .build();
     assert!(info.is_first_page(), "should be first page");
     assert!(!info.is_last_page(), "should not be last page");
 }
 
 #[rstest]
 fn page_info_first_page_navigation() {
-    let info = PageInfo::new(1, 50, Some(5), true, false);
+    let info = PageInfo::builder(1, 50)
+        .total_pages(Some(5))
+        .has_next(true)
+        .build();
     assert!(info.has_next(), "should have next page");
     assert!(!info.has_prev(), "should not have previous page");
 }
 
 #[rstest]
 fn page_info_identifies_middle_page() {
-    let info = PageInfo::new(2, 50, Some(5), true, true);
+    let info = PageInfo::builder(2, 50)
+        .total_pages(Some(5))
+        .has_next(true)
+        .has_prev(true)
+        .build();
     assert!(!info.is_first_page(), "should not be first page");
     assert!(!info.is_last_page(), "should not be last page");
 }
 
 #[rstest]
 fn page_info_middle_page_navigation() {
-    let info = PageInfo::new(2, 50, Some(5), true, true);
+    let info = PageInfo::builder(2, 50)
+        .total_pages(Some(5))
+        .has_next(true)
+        .has_prev(true)
+        .build();
     assert!(info.has_next(), "should have next page");
     assert!(info.has_prev(), "should have previous page");
 }
 
 #[rstest]
 fn page_info_identifies_last_page() {
-    let info = PageInfo::new(5, 50, Some(5), false, true);
+    let info = PageInfo::builder(5, 50)
+        .total_pages(Some(5))
+        .has_prev(true)
+        .build();
     assert!(!info.is_first_page(), "should not be first page");
     assert!(info.is_last_page(), "should be last page");
 }
 
 #[rstest]
 fn page_info_last_page_navigation() {
-    let info = PageInfo::new(5, 50, Some(5), false, true);
+    let info = PageInfo::builder(5, 50)
+        .total_pages(Some(5))
+        .has_prev(true)
+        .build();
     assert!(!info.has_next(), "should not have next page");
     assert!(info.has_prev(), "should have previous page");
 }
 
 #[rstest]
 fn page_info_accessors() {
-    let info = PageInfo::new(3, 25, Some(10), true, true);
+    let info = PageInfo::builder(3, 25)
+        .total_pages(Some(10))
+        .has_next(true)
+        .has_prev(true)
+        .build();
     assert_eq!(info.current_page(), 3, "current page mismatch");
     assert_eq!(info.per_page(), 25, "per page mismatch");
     assert_eq!(info.total_pages(), Some(10), "total pages mismatch");
@@ -362,7 +386,7 @@ fn setup_repository_gateway() -> MockRepositoryGateway {
                         updated_at: None,
                     },
                 ],
-                page_info: PageInfo::new(1, 50, Some(1), false, false),
+                page_info: PageInfo::builder(1, 50).total_pages(Some(1)).build(),
                 rate_limit: None,
             })
         });
@@ -430,7 +454,7 @@ async fn lists_pull_requests_with_rate_limit_info() {
         .returning(|_, _| {
             Ok(PaginatedPullRequests {
                 items: vec![],
-                page_info: PageInfo::new(1, 50, Some(0), false, false),
+                page_info: PageInfo::builder(1, 50).total_pages(Some(0)).build(),
                 rate_limit: Some(RateLimitInfo::new(5000, 4950, 1_700_000_000)),
             })
         });

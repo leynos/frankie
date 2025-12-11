@@ -9,10 +9,112 @@ use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde_json::json;
 use std::cell::RefCell;
+use std::fmt;
 use std::rc::Rc;
+use std::str::FromStr;
 use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+// --- Domain wrapper types to eliminate primitive obsession ---
+
+/// Page number for pagination (1-based).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PageNumber(u32);
+
+impl PageNumber {
+    const fn new(value: u32) -> Self {
+        Self(value)
+    }
+    const fn value(self) -> u32 {
+        self.0
+    }
+}
+
+impl FromStr for PageNumber {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u32>().map(Self)
+    }
+}
+
+impl fmt::Display for PageNumber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Count of pull requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PullRequestCount(u32);
+
+impl PullRequestCount {
+    const fn new(value: u32) -> Self {
+        Self(value)
+    }
+    const fn value(self) -> u32 {
+        self.0
+    }
+}
+
+impl FromStr for PullRequestCount {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u32>().map(Self)
+    }
+}
+
+impl fmt::Display for PullRequestCount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Total number of pages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PageCount(u32);
+
+impl PageCount {
+    const fn value(self) -> u32 {
+        self.0
+    }
+}
+
+impl FromStr for PageCount {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u32>().map(Self)
+    }
+}
+
+impl fmt::Display for PageCount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+/// Rate limit remaining count.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RateLimitCount(u32);
+
+impl RateLimitCount {
+    const fn value(self) -> u32 {
+        self.0
+    }
+}
+
+impl FromStr for RateLimitCount {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<u32>().map(Self)
+    }
+}
+
+impl fmt::Display for RateLimitCount {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// Shared runtime wrapper that can be stored in rstest-bdd Slot.
 #[derive(Clone)]
@@ -65,9 +167,13 @@ fn ensure_runtime_and_server(listing_state: &ListingState) -> SharedRuntime {
     shared_runtime
 }
 
-fn generate_pr_list(count: u32, page: u32, per_page: u32) -> Vec<serde_json::Value> {
-    let start = (page - 1) * per_page;
-    (0..count)
+fn generate_pr_list(
+    count: PullRequestCount,
+    page: PageNumber,
+    per_page: PullRequestCount,
+) -> Vec<serde_json::Value> {
+    let start = (page.value() - 1) * per_page.value();
+    (0..count.value())
         .map(|i| {
             let pr_number = start + i + 1;
             json!({
@@ -82,11 +188,11 @@ fn generate_pr_list(count: u32, page: u32, per_page: u32) -> Vec<serde_json::Val
         .collect()
 }
 
-#[given("a mock GitHub API server with {count:u32} open PRs for owner/repo")]
-fn seed_server_with_prs(listing_state: &ListingState, count: u32) {
+#[given("a mock GitHub API server with {count:PullRequestCount} open PRs for owner/repo")]
+fn seed_server_with_prs(listing_state: &ListingState, count: PullRequestCount) {
     let runtime = ensure_runtime_and_server(listing_state);
 
-    let prs = generate_pr_list(count, 1, count);
+    let prs = generate_pr_list(count, PageNumber::new(1), count);
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
 
     let mock = Mock::given(method("GET"))
@@ -101,20 +207,30 @@ fn seed_server_with_prs(listing_state: &ListingState, count: u32) {
         .unwrap_or_else(|| panic!("mock server not initialised"));
 }
 
-#[given("a mock GitHub API server with {total:u32} PRs across {pages:u32} pages for owner/repo")]
+#[given(
+    "a mock GitHub API server with {total:PullRequestCount} PRs across {pages:PageCount} pages for owner/repo"
+)]
 #[expect(
     clippy::integer_division,
     clippy::integer_division_remainder_used,
     reason = "test data: exact division is intentional for page setup"
 )]
-fn seed_server_with_paginated_prs(listing_state: &ListingState, total: u32, pages: u32) {
+fn seed_server_with_paginated_prs(
+    listing_state: &ListingState,
+    total: PullRequestCount,
+    pages: PageCount,
+) {
     let runtime = ensure_runtime_and_server(listing_state);
-    let per_page = total / pages;
+    let per_page = total.value() / pages.value();
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
 
-    for page in 1..=pages {
-        let prs = generate_pr_list(per_page, page, per_page);
+    for page in 1..=pages.value() {
+        let prs = generate_pr_list(
+            PullRequestCount::new(per_page),
+            PageNumber::new(page),
+            PullRequestCount::new(per_page),
+        );
         let server_uri = listing_state
             .server
             .with_ref(MockServer::uri)
@@ -124,7 +240,7 @@ fn seed_server_with_paginated_prs(listing_state: &ListingState, total: u32, page
 
         // Add Link header for pagination
         let mut links = Vec::new();
-        if page < pages {
+        if page < pages.value() {
             links.push(format!(
                 "<{server_uri}{pulls_path}?page={}&per_page={per_page}>; rel=\"next\"",
                 page + 1
@@ -137,7 +253,8 @@ fn seed_server_with_paginated_prs(listing_state: &ListingState, total: u32, page
             ));
         }
         links.push(format!(
-            "<{server_uri}{pulls_path}?page={pages}&per_page={per_page}>; rel=\"last\""
+            "<{server_uri}{pulls_path}?page={}&per_page={per_page}>; rel=\"last\"",
+            pages.value()
         ));
 
         if !links.is_empty() {
@@ -158,17 +275,23 @@ fn seed_server_with_paginated_prs(listing_state: &ListingState, total: u32, page
     }
 }
 
-#[given("a mock GitHub API server with rate limit headers showing {remaining:u32} remaining")]
-fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: u32) {
+#[given(
+    "a mock GitHub API server with rate limit headers showing {remaining:RateLimitCount} remaining"
+)]
+fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: RateLimitCount) {
     let runtime = ensure_runtime_and_server(listing_state);
 
-    let prs = generate_pr_list(10, 1, 10);
+    let prs = generate_pr_list(
+        PullRequestCount::new(10),
+        PageNumber::new(1),
+        PullRequestCount::new(10),
+    );
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
 
     let response = ResponseTemplate::new(200)
         .set_body_json(&prs)
         .insert_header("X-RateLimit-Limit", "5000")
-        .insert_header("X-RateLimit-Remaining", remaining.to_string())
+        .insert_header("X-RateLimit-Remaining", remaining.value().to_string())
         .insert_header("X-RateLimit-Reset", "1700000000");
 
     let mock = Mock::given(method("GET"))
@@ -211,8 +334,8 @@ fn remember_token(listing_state: &ListingState, token: String) {
     listing_state.token.set(token);
 }
 
-#[when("the client lists pull requests for {repo_url} page {page:u32}")]
-fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, page: u32) {
+#[when("the client lists pull requests for {repo_url} page {page:PageNumber}")]
+fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, page: PageNumber) {
     let server_url = listing_state
         .server
         .with_ref(MockServer::uri)
@@ -230,7 +353,7 @@ fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, 
     let locator = RepositoryLocator::parse(&resolved_url)
         .unwrap_or_else(|error| panic!("{resolved_url}: {error}"));
 
-    listing_state.page.set(page);
+    listing_state.page.set(page.value());
 
     let runtime = listing_state
         .runtime
@@ -244,7 +367,7 @@ fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, 
         let gateway = OctocrabRepositoryGateway::for_token(&token, &locator)?;
         let intake = RepositoryIntake::new(&gateway);
         let params = ListPullRequestsParams {
-            page: Some(page),
+            page: Some(page.value()),
             per_page: Some(50),
             ..Default::default()
         };
@@ -263,28 +386,28 @@ fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, 
     }
 }
 
-#[then("the response includes {count:usize} pull requests")]
-fn assert_pr_count(listing_state: &ListingState, count: usize) {
+#[then("the response includes {count:PullRequestCount} pull requests")]
+fn assert_pr_count(listing_state: &ListingState, count: PullRequestCount) {
     let actual = listing_state
         .result
         .with_ref(|result| result.items.len())
         .unwrap_or_else(|| panic!("pull request listing missing"));
 
-    assert_eq!(actual, count, "PR count mismatch");
+    assert_eq!(actual, count.value() as usize, "PR count mismatch");
 }
 
-#[then("the pagination indicates page {page:u32}")]
-fn assert_current_page(listing_state: &ListingState, page: u32) {
+#[then("the current page is {page:PageNumber}")]
+fn assert_current_page(listing_state: &ListingState, page: PageNumber) {
     let actual = listing_state
         .result
         .with_ref(|result| result.page_info.current_page())
         .unwrap_or_else(|| panic!("pull request listing missing"));
 
-    assert_eq!(actual, page, "current page mismatch");
+    assert_eq!(actual, page.value(), "current page mismatch");
 }
 
-#[then("the pagination indicates page {page:u32} of {total:u32}")]
-fn assert_page_of_total(listing_state: &ListingState, page: u32, total: u32) {
+#[then("the pagination indicates page {page:PageNumber} of {total:PageCount}")]
+fn assert_page_of_total(listing_state: &ListingState, page: PageNumber, total: PageCount) {
     let (actual_page, actual_total) = listing_state
         .result
         .with_ref(|result| {
@@ -295,8 +418,8 @@ fn assert_page_of_total(listing_state: &ListingState, page: u32, total: u32) {
         })
         .unwrap_or_else(|| panic!("pull request listing missing"));
 
-    assert_eq!(actual_page, page, "current page mismatch");
-    assert_eq!(actual_total, Some(total), "total pages mismatch");
+    assert_eq!(actual_page, page.value(), "current page mismatch");
+    assert_eq!(actual_total, Some(total.value()), "total pages mismatch");
 }
 
 #[then("pagination has next page")]

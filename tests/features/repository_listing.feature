@@ -5,7 +5,7 @@ Feature: Repository pull request listing
     And a personal access token "valid-token"
     When the client lists pull requests for "http://SERVER/owner/repo" page 1
     Then the response includes 50 pull requests
-    And the pagination indicates page 1
+    And the current page is 1
 
   Scenario: Paginate through multiple pages of PRs
     Given a mock GitHub API server with 150 PRs across 3 pages for owner/repo

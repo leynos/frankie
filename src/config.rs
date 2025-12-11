@@ -290,52 +290,49 @@ mod tests {
     }
 
     #[rstest]
-    fn require_pr_url_returns_error_when_none() {
+    #[case::pr_url(
+        FrankieConfig { pr_url: Some("https://github.com/owner/repo/pull/1".to_owned()), ..Default::default() },
+        "https://github.com/owner/repo/pull/1",
+        false
+    )]
+    #[case::token(
+        FrankieConfig { token: Some("my-token".to_owned()), ..Default::default() },
+        "my-token",
+        true
+    )]
+    fn returns_value_when_field_present(
+        #[case] config: FrankieConfig,
+        #[case] expected: &str,
+        #[case] is_token: bool,
+    ) {
+        if is_token {
+            let result = config.resolve_token();
+            assert_eq!(
+                result.ok(),
+                Some(expected.to_owned()),
+                "should return the token"
+            );
+        } else {
+            let result = config.require_pr_url();
+            assert_eq!(result.ok(), Some(expected), "should return the URL");
+        }
+    }
+
+    #[rstest]
+    #[case::pr_url(false)]
+    #[case::token(true)]
+    fn returns_error_when_field_none(#[case] is_token: bool) {
         let config = FrankieConfig::default();
 
-        let result = config.require_pr_url();
-        assert!(result.is_err(), "should return error when pr_url is None");
-    }
-
-    #[rstest]
-    fn require_pr_url_returns_value_when_present() {
-        let config = FrankieConfig {
-            pr_url: Some("https://github.com/owner/repo/pull/1".to_owned()),
-            ..Default::default()
-        };
-
-        let result = config.require_pr_url();
-        assert_eq!(
-            result.ok(),
-            Some("https://github.com/owner/repo/pull/1"),
-            "should return the URL"
-        );
-    }
-
-    #[rstest]
-    fn resolve_token_returns_error_when_none() {
-        let config = FrankieConfig::default();
-
-        // Lock and clear GITHUB_TOKEN to ensure test isolation
-        let _guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
-
-        let result = config.resolve_token();
-        assert!(result.is_err(), "should return error when token is None");
-    }
-
-    #[rstest]
-    fn resolve_token_returns_value_when_present() {
-        let config = FrankieConfig {
-            token: Some("my-token".to_owned()),
-            ..Default::default()
-        };
-
-        let result = config.resolve_token();
-        assert_eq!(
-            result.ok(),
-            Some("my-token".to_owned()),
-            "should return the token"
-        );
+        if is_token {
+            // Lock and clear GITHUB_TOKEN to ensure test isolation
+            let _guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
+            let result = config.resolve_token();
+            assert!(result.is_err(), "should return error when token is None");
+        } else {
+            let result = config.require_pr_url();
+            assert!(result.is_err(), "should return error when pr_url is None");
+        }
     }
 
     #[rstest]
