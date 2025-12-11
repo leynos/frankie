@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use super::rate_limit::RateLimitInfo;
+
 /// Errors surfaced while parsing input or communicating with GitHub.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum IntakeError {
@@ -64,6 +66,22 @@ pub enum IntakeError {
     #[error("configuration error: {message}")]
     Configuration {
         /// Details about the configuration failure.
+        message: String,
+    },
+
+    /// Rate limit exceeded - the API returned 403 with rate limit message.
+    #[error("GitHub API rate limit exceeded: {message}")]
+    RateLimitExceeded {
+        /// Rate limit info if available from response headers.
+        rate_limit: Option<RateLimitInfo>,
+        /// Error message from GitHub.
+        message: String,
+    },
+
+    /// Invalid pagination parameters.
+    #[error("invalid pagination: {message}")]
+    InvalidPagination {
+        /// Description of the invalid parameter.
         message: String,
     },
 }
