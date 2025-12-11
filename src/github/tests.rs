@@ -16,12 +16,18 @@ fn sample_locator() -> PullRequestLocator {
 }
 
 #[rstest]
-fn parses_standard_github_url() {
+fn parses_standard_github_url_segments() {
     let locator = PullRequestLocator::parse("https://github.com/octo/repo/pull/12/files")
         .expect("should parse standard GitHub URL");
     assert_eq!(locator.owner().as_str(), "octo", "owner mismatch");
     assert_eq!(locator.repository().as_str(), "repo", "repository mismatch");
     assert_eq!(locator.number().get(), 12_u64, "number mismatch");
+}
+
+#[rstest]
+fn parses_standard_github_url_api_base() {
+    let locator = PullRequestLocator::parse("https://github.com/octo/repo/pull/12/files")
+        .expect("should parse standard GitHub URL");
     assert_eq!(
         locator.api_base().as_str(),
         "https://api.github.com/",
@@ -103,9 +109,8 @@ fn rejects_empty_token() {
     );
 }
 
-#[tokio::test]
-async fn aggregates_comments_from_gateway() {
-    let locator = sample_locator();
+/// Sets up a mock gateway for pull request intake tests.
+fn setup_pull_request_gateway() -> MockPullRequestGateway {
     let mut gateway = MockPullRequestGateway::new();
 
     gateway
@@ -141,8 +146,16 @@ async fn aggregates_comments_from_gateway() {
             ])
         });
 
+    gateway
+}
+
+#[tokio::test]
+async fn aggregates_metadata_from_gateway() {
+    let locator = sample_locator();
+    let gateway = setup_pull_request_gateway();
+
     let intake = PullRequestIntake::new(&gateway);
-    let PullRequestDetails { metadata, comments } =
+    let PullRequestDetails { metadata, .. } =
         intake.load(&locator).await.expect("intake should succeed");
 
     assert_eq!(metadata.number, 4, "number mismatch");
@@ -153,7 +166,28 @@ async fn aggregates_comments_from_gateway() {
         "author mismatch"
     );
     assert_eq!(metadata.state, Some(String::from("open")), "state mismatch");
+}
+
+#[tokio::test]
+async fn aggregates_comments_list_from_gateway() {
+    let locator = sample_locator();
+    let gateway = setup_pull_request_gateway();
+
+    let intake = PullRequestIntake::new(&gateway);
+    let PullRequestDetails { comments, .. } =
+        intake.load(&locator).await.expect("intake should succeed");
+
     assert_eq!(comments.len(), 2, "comment count mismatch");
+    assert_eq!(
+        comments.first().and_then(|c| c.body.clone()),
+        Some(String::from("first")),
+        "first comment body mismatch"
+    );
+    assert_eq!(
+        comments.get(1).and_then(|c| c.body.clone()),
+        Some(String::from("second")),
+        "second comment body mismatch"
+    );
 }
 
 // --- RepositoryLocator tests ---
@@ -224,28 +258,43 @@ fn repository_locator_rejects_empty_repo() {
 // --- PageInfo tests ---
 
 #[rstest]
-fn page_info_navigation_first_page() {
+fn page_info_identifies_first_page() {
     let info = PageInfo::new(1, 50, Some(5), true, false);
     assert!(info.is_first_page(), "should be first page");
     assert!(!info.is_last_page(), "should not be last page");
+}
+
+#[rstest]
+fn page_info_first_page_navigation() {
+    let info = PageInfo::new(1, 50, Some(5), true, false);
     assert!(info.has_next(), "should have next page");
     assert!(!info.has_prev(), "should not have previous page");
 }
 
 #[rstest]
-fn page_info_navigation_middle_page() {
+fn page_info_identifies_middle_page() {
     let info = PageInfo::new(2, 50, Some(5), true, true);
     assert!(!info.is_first_page(), "should not be first page");
     assert!(!info.is_last_page(), "should not be last page");
+}
+
+#[rstest]
+fn page_info_middle_page_navigation() {
+    let info = PageInfo::new(2, 50, Some(5), true, true);
     assert!(info.has_next(), "should have next page");
     assert!(info.has_prev(), "should have previous page");
 }
 
 #[rstest]
-fn page_info_navigation_last_page() {
+fn page_info_identifies_last_page() {
     let info = PageInfo::new(5, 50, Some(5), false, true);
     assert!(!info.is_first_page(), "should not be first page");
     assert!(info.is_last_page(), "should be last page");
+}
+
+#[rstest]
+fn page_info_last_page_navigation() {
+    let info = PageInfo::new(5, 50, Some(5), false, true);
     assert!(!info.has_next(), "should not have next page");
     assert!(info.has_prev(), "should have previous page");
 }
@@ -285,10 +334,8 @@ fn rate_limit_accessors() {
 
 // --- RepositoryIntake tests ---
 
-#[tokio::test]
-async fn lists_pull_requests_with_pagination() {
-    let locator =
-        RepositoryLocator::from_owner_repo("octo", "repo").expect("should create locator");
+/// Sets up a mock gateway for repository intake tests with sample pull requests.
+fn setup_repository_gateway() -> MockRepositoryGateway {
     let mut gateway = MockRepositoryGateway::new();
 
     gateway
@@ -320,6 +367,15 @@ async fn lists_pull_requests_with_pagination() {
             })
         });
 
+    gateway
+}
+
+#[tokio::test]
+async fn lists_pull_requests_returns_items() {
+    let locator =
+        RepositoryLocator::from_owner_repo("octo", "repo").expect("should create locator");
+    let gateway = setup_repository_gateway();
+
     let intake = RepositoryIntake::new(&gateway);
     let params = ListPullRequestsParams::default();
     let result = intake
@@ -338,6 +394,21 @@ async fn lists_pull_requests_with_pagination() {
         Some(2),
         "second PR number mismatch"
     );
+}
+
+#[tokio::test]
+async fn lists_pull_requests_returns_page_info() {
+    let locator =
+        RepositoryLocator::from_owner_repo("octo", "repo").expect("should create locator");
+    let gateway = setup_repository_gateway();
+
+    let intake = RepositoryIntake::new(&gateway);
+    let params = ListPullRequestsParams::default();
+    let result = intake
+        .list_pull_requests(&locator, &params)
+        .await
+        .expect("listing should succeed");
+
     assert_eq!(
         result.page_info.current_page(),
         1,
