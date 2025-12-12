@@ -215,10 +215,15 @@ impl RepositoryGateway for OctocrabRepositoryGateway {
         let page = params.page.unwrap_or(1);
         let per_page = params.per_page.unwrap_or(30);
 
+        validate_pagination_params(page, per_page)?;
+
+        let page_str = page.to_string();
+        let per_page_str = per_page.to_string();
+
         let query_params = [
             ("state", state.as_str()),
-            ("page", &page.to_string()),
-            ("per_page", &per_page.to_string()),
+            ("page", page_str.as_str()),
+            ("per_page", per_page_str.as_str()),
         ];
 
         let page_result: Page<ApiPullRequestSummary> = self
@@ -238,11 +243,10 @@ impl RepositoryGateway for OctocrabRepositoryGateway {
             .map(ApiPullRequestSummary::into)
             .collect();
 
-        let page_info = PageInfo::builder(page, per_page)
-            .total_pages(total_pages)
-            .has_next(has_next)
-            .has_prev(has_prev)
-            .build();
+        let page_info = PageInfo::new(page, per_page)
+            .with_total_pages(total_pages)
+            .with_has_next(has_next)
+            .with_has_prev(has_prev);
 
         Ok(PaginatedPullRequests {
             items,
@@ -309,14 +313,35 @@ pub(super) fn map_octocrab_error(operation: &str, error: &octocrab::Error) -> In
 
 /// Maps octocrab errors with special handling for rate limit errors.
 fn map_octocrab_error_with_rate_limit(operation: &str, error: &octocrab::Error) -> IntakeError {
-    if let octocrab::Error::GitHub { source, .. } = error
-        && is_rate_limit_error(source)
-    {
-        return IntakeError::RateLimitExceeded {
-            rate_limit: None,
-            message: format!("{operation} failed: {message}", message = source.message),
-        };
+    match error {
+        octocrab::Error::GitHub { source, .. } if is_rate_limit_error(source) => {
+            IntakeError::RateLimitExceeded {
+                rate_limit: None,
+                message: format!("{operation} failed: {message}", message = source.message),
+            }
+        }
+        _ => map_octocrab_error(operation, error),
+    }
+}
+
+fn validate_pagination_params(page: u32, per_page: u8) -> Result<(), IntakeError> {
+    if page == 0 {
+        return Err(IntakeError::InvalidPagination {
+            message: "page must be at least 1".to_owned(),
+        });
     }
 
-    map_octocrab_error(operation, error)
+    if per_page == 0 {
+        return Err(IntakeError::InvalidPagination {
+            message: "per_page must be at least 1".to_owned(),
+        });
+    }
+
+    if per_page > 100 {
+        return Err(IntakeError::InvalidPagination {
+            message: "per_page must not exceed 100".to_owned(),
+        });
+    }
+
+    Ok(())
 }

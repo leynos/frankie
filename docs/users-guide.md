@@ -52,7 +52,7 @@ List pull requests for a repository with pagination support:
 frankie --owner octocat --repo hello-world --token ghp_example
 ```
 
-- `--owner` (or `-o`) specifies the repository owner (user or organization).
+- `--owner` (or `-o`) specifies the repository owner (user or organisation).
 - `--repo` (or `-r`) specifies the repository name.
 - Both `--owner` and `--repo` must be provided together.
 - The listing displays up to 50 PRs per page with pagination controls.
@@ -85,7 +85,7 @@ Frankie handles GitHub API rate limits gracefully:
 
 - Rate limit errors (HTTP 403 with rate limit message) are surfaced as clear
   error messages rather than panics.
-- The error includes information about when the rate limit resets when
+- The error includes information about when the rate limit resets, if
   available.
 
 ## Configuration
@@ -97,7 +97,8 @@ precedence (lowest to highest):
 2. **Configuration file** - `.frankie.toml` in current directory, home
    directory, or XDG config directory
 3. **Environment variables** - `FRANKIE_*` variables or legacy `GITHUB_TOKEN`
-4. **Command-line arguments** - CLI flags take highest precedence
+4. **Command-line arguments** - command-line interface (CLI) flags take highest
+   precedence
 
 Higher precedence sources override lower ones. For example, a CLI flag always
 takes precedence over an environment variable or configuration file value.
@@ -145,7 +146,7 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | Flag              | Short | Description                             |
 | ----------------- | ----- | --------------------------------------- |
 | `--pr-url <URL>`  | `-u`  | GitHub pull request URL                 |
-| `--owner <OWNER>` | `-o`  | Repository owner (user or organization) |
+| `--owner <OWNER>` | `-o`  | Repository owner (user or organisation) |
 | `--repo <REPO>`   | `-r`  | Repository name                         |
 | `--token <TOKEN>` | `-t`  | Personal access token                   |
 | `--help`          | `-h`  | Show help information                   |

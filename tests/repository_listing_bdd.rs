@@ -453,16 +453,31 @@ fn assert_no_error(listing_state: &ListingState) {
 
 #[then("the error indicates rate limit exceeded")]
 fn assert_rate_limit_error(listing_state: &ListingState) {
+    const EXPECTED_RATE_LIMIT_MESSAGE: &str = "API rate limit exceeded for user";
+
     let error = listing_state
         .error
         .with_ref(Clone::clone)
         .unwrap_or_else(|| panic!("expected rate limit error"));
 
-    let is_rate_limit = matches!(error, IntakeError::RateLimitExceeded { .. });
-    assert!(
-        is_rate_limit,
-        "expected RateLimitExceeded variant, got {error:?}"
-    );
+    match error {
+        IntakeError::RateLimitExceeded {
+            rate_limit,
+            message,
+        } => {
+            assert!(
+                message.contains(EXPECTED_RATE_LIMIT_MESSAGE),
+                "expected rate limit message to contain `{EXPECTED_RATE_LIMIT_MESSAGE}`, got `{message}`"
+            );
+            assert!(
+                rate_limit.is_none(),
+                "expected rate_limit to be unpopulated for rate limit errors"
+            );
+        }
+        other => {
+            panic!("expected RateLimitExceeded variant, got {other:?}");
+        }
+    }
 }
 
 #[scenario(path = "tests/features/repository_listing.feature", index = 0)]
