@@ -116,30 +116,6 @@ impl PageInfo {
         PageInfoBuilder::new(current_page, per_page)
     }
 
-    /// Creates a new page info instance.
-    ///
-    /// Prefer using [`PageInfo::builder`] for public API usage.
-    #[must_use]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "internal constructor retained for performance in gateway"
-    )]
-    pub(crate) const fn new(
-        current_page: u32,
-        per_page: u8,
-        total_pages: Option<u32>,
-        has_next: bool,
-        has_prev: bool,
-    ) -> Self {
-        Self {
-            current_page,
-            per_page,
-            total_pages,
-            has_next,
-            has_prev,
-        }
-    }
-
     /// Returns the current page number (1-based).
     #[must_use]
     pub const fn current_page(&self) -> u32 {
@@ -185,6 +161,6 @@ impl PageInfo {
 
 impl Default for PageInfo {
     fn default() -> Self {
-        Self::new(1, 30, None, false, false)
+        Self::builder(1, 30).build()
     }
 }

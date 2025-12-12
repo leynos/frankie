@@ -238,7 +238,11 @@ impl RepositoryGateway for OctocrabRepositoryGateway {
             .map(ApiPullRequestSummary::into)
             .collect();
 
-        let page_info = PageInfo::new(page, per_page, total_pages, has_next, has_prev);
+        let page_info = PageInfo::builder(page, per_page)
+            .total_pages(total_pages)
+            .has_next(has_next)
+            .has_prev(has_prev)
+            .build();
 
         Ok(PaginatedPullRequests {
             items,
