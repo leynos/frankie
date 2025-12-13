@@ -283,35 +283,41 @@ impl OctocrabRepositoryGateway {
         operation: &str,
         error: &octocrab::Error,
     ) -> IntakeError {
-        match error {
-            octocrab::Error::GitHub { source, .. }
-                if matches!(
-                    source.status_code,
-                    StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS
-                ) && (source.message.contains("rate limit")
-                    || source.message.contains("Rate limit")
-                    || source
-                        .documentation_url
-                        .as_deref()
-                        .is_some_and(|url| url.contains("rate-limit"))) =>
-            {
-                let rate_limit = self.fetch_rate_limit_info().await;
-                let base_message =
-                    format!("{operation} failed: {message}", message = source.message);
-                let message = match &rate_limit {
-                    Some(info) => format!(
-                        "{base_message} (resets at {reset})",
-                        reset = info.reset_at()
-                    ),
-                    None => base_message,
-                };
+        let octocrab::Error::GitHub { source, .. } = error else {
+            return map_octocrab_error(operation, error);
+        };
 
-                IntakeError::RateLimitExceeded {
-                    rate_limit,
-                    message,
-                }
-            }
-            _ => map_octocrab_error(operation, error),
+        if !matches!(
+            source.status_code,
+            StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS
+        ) {
+            return map_octocrab_error(operation, error);
+        }
+
+        let message_mentions_rate_limit =
+            source.message.contains("rate limit") || source.message.contains("Rate limit");
+        let docs_mentions_rate_limit = source
+            .documentation_url
+            .as_deref()
+            .is_some_and(|url| url.contains("rate-limit"));
+
+        if !message_mentions_rate_limit && !docs_mentions_rate_limit {
+            return map_octocrab_error(operation, error);
+        }
+
+        let rate_limit = self.fetch_rate_limit_info().await;
+        let base_message = format!("{operation} failed: {message}", message = source.message);
+        let message = match &rate_limit {
+            Some(info) => format!(
+                "{base_message} (resets at {reset})",
+                reset = info.reset_at()
+            ),
+            None => base_message,
+        };
+
+        IntakeError::RateLimitExceeded {
+            rate_limit,
+            message,
         }
     }
 
