@@ -29,7 +29,7 @@ support later workflow features.
       variables, and config files share a single schema; acceptance: CLI help
       documents all options, precedence order is tested, and defaults mirror
       config file values.
-- [ ] Implement owner/repository discovery with paginated PR listing;
+- [x] Implement owner/repository discovery with paginated PR listing;
       acceptance: repository selection lists at least 50 PRs with pagination
       controls and asserts rate-limit headers are handled without panics.
 - [ ] Add local repository discovery via git2 that maps remotes to GitHub

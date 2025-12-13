@@ -24,6 +24,8 @@
 //! ```toml
 //! pr_url = "https://github.com/owner/repo/pull/123"
 //! token = "ghp_example"
+//! owner = "octocat"
+//! repo = "hello-world"
 //! ```
 
 use std::env;
@@ -33,12 +35,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::github::error::IntakeError;
 
+/// Operation mode determined by CLI arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperationMode {
+    /// Load a single PR by URL.
+    SinglePullRequest,
+    /// List PRs for a repository.
+    RepositoryListing,
+    /// Interactive repository discovery (future).
+    Interactive,
+}
+
 /// Application configuration supporting CLI, environment, and file sources.
 ///
 /// # Environment Variables
 ///
-/// - `FRANKIE_PR_URL` or `--pr-url`: Pull request URL (required)
+/// - `FRANKIE_PR_URL` or `--pr-url`: Pull request URL
 /// - `FRANKIE_TOKEN`, `GITHUB_TOKEN`, or `--token`: Authentication token
+/// - `FRANKIE_OWNER` or `--owner`: Repository owner
+/// - `FRANKIE_REPO` or `--repo`: Repository name
 ///
 /// # Example
 ///
@@ -77,6 +92,24 @@ pub struct FrankieConfig {
     /// - Config file: `token = "..."`
     #[ortho_config(cli_short = 't')]
     pub token: Option<String>,
+
+    /// Repository owner (e.g., "octocat").
+    ///
+    /// Can be provided via:
+    /// - CLI: `--owner <OWNER>` or `-o <OWNER>`
+    /// - Environment: `FRANKIE_OWNER`
+    /// - Config file: `owner = "..."`
+    #[ortho_config(cli_short = 'o')]
+    pub owner: Option<String>,
+
+    /// Repository name (e.g., "hello-world").
+    ///
+    /// Can be provided via:
+    /// - CLI: `--repo <REPO>` or `-r <REPO>`
+    /// - Environment: `FRANKIE_REPO`
+    /// - Config file: `repo = "..."`
+    #[ortho_config(cli_short = 'r')]
+    pub repo: Option<String>,
 }
 
 impl FrankieConfig {
@@ -108,6 +141,38 @@ impl FrankieConfig {
             .as_deref()
             .ok_or(IntakeError::MissingPullRequestUrl)
     }
+
+    /// Determines the operation mode based on provided configuration.
+    ///
+    /// Returns `SinglePullRequest` if a PR URL is provided, `RepositoryListing`
+    /// if both owner and repo are provided, or `Interactive` otherwise.
+    #[must_use]
+    pub const fn operation_mode(&self) -> OperationMode {
+        if self.pr_url.is_some() {
+            OperationMode::SinglePullRequest
+        } else if self.owner.is_some() && self.repo.is_some() {
+            OperationMode::RepositoryListing
+        } else {
+            OperationMode::Interactive
+        }
+    }
+
+    /// Returns owner and repo if both are configured.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntakeError::Configuration`] when owner or repo is missing.
+    pub fn require_repository_info(&self) -> Result<(&str, &str), IntakeError> {
+        match (&self.owner, &self.repo) {
+            (Some(owner), Some(repo)) => Ok((owner.as_str(), repo.as_str())),
+            (None, _) => Err(IntakeError::Configuration {
+                message: "repository owner is required (use --owner or -o)".to_owned(),
+            }),
+            (_, None) => Err(IntakeError::Configuration {
+                message: "repository name is required (use --repo or -r)".to_owned(),
+            }),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -116,7 +181,7 @@ mod tests {
     use rstest::rstest;
     use serde_json::{Value, json};
 
-    use super::FrankieConfig;
+    use super::{FrankieConfig, OperationMode};
 
     /// Applies a configuration layer to the composer based on the layer type.
     fn apply_layer(composer: &mut MergeComposer, layer_type: &str, value: Value) {
@@ -225,57 +290,142 @@ mod tests {
     }
 
     #[rstest]
-    fn require_pr_url_returns_error_when_none() {
-        let config = FrankieConfig {
-            pr_url: None,
-            token: None,
-        };
-
-        let result = config.require_pr_url();
-        assert!(result.is_err(), "should return error when pr_url is None");
+    #[case::pr_url(
+        FrankieConfig { pr_url: Some("https://github.com/owner/repo/pull/1".to_owned()), ..Default::default() },
+        "https://github.com/owner/repo/pull/1",
+        false
+    )]
+    #[case::token(
+        FrankieConfig { token: Some("my-token".to_owned()), ..Default::default() },
+        "my-token",
+        true
+    )]
+    fn returns_value_when_field_present(
+        #[case] config: FrankieConfig,
+        #[case] expected: &str,
+        #[case] is_token: bool,
+    ) {
+        if is_token {
+            let result = config.resolve_token();
+            assert_eq!(
+                result.ok(),
+                Some(expected.to_owned()),
+                "should return the token"
+            );
+        } else {
+            let result = config.require_pr_url();
+            assert_eq!(result.ok(), Some(expected), "should return the URL");
+        }
     }
 
     #[rstest]
-    fn require_pr_url_returns_value_when_present() {
+    #[case::pr_url(false)]
+    #[case::token(true)]
+    fn returns_error_when_field_none(#[case] is_token: bool) {
+        let config = FrankieConfig::default();
+
+        if is_token {
+            // Lock and clear GITHUB_TOKEN to ensure test isolation
+            let _guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
+            let result = config.resolve_token();
+            assert!(result.is_err(), "should return error when token is None");
+        } else {
+            let result = config.require_pr_url();
+            assert!(result.is_err(), "should return error when pr_url is None");
+        }
+    }
+
+    #[rstest]
+    fn operation_mode_single_pr_when_pr_url_present() {
         let config = FrankieConfig {
             pr_url: Some("https://github.com/owner/repo/pull/1".to_owned()),
-            token: None,
+            ..Default::default()
         };
 
-        let result = config.require_pr_url();
         assert_eq!(
-            result.ok(),
-            Some("https://github.com/owner/repo/pull/1"),
-            "should return the URL"
+            config.operation_mode(),
+            OperationMode::SinglePullRequest,
+            "should be SinglePullRequest when pr_url is set"
         );
     }
 
     #[rstest]
-    fn resolve_token_returns_error_when_none() {
+    fn operation_mode_repository_listing_when_owner_and_repo_present() {
         let config = FrankieConfig {
-            pr_url: None,
-            token: None,
+            owner: Some("octocat".to_owned()),
+            repo: Some("hello-world".to_owned()),
+            ..Default::default()
         };
 
-        // Lock and clear GITHUB_TOKEN to ensure test isolation
-        let _guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
-
-        let result = config.resolve_token();
-        assert!(result.is_err(), "should return error when token is None");
+        assert_eq!(
+            config.operation_mode(),
+            OperationMode::RepositoryListing,
+            "should be RepositoryListing when owner and repo are set"
+        );
     }
 
     #[rstest]
-    fn resolve_token_returns_value_when_present() {
+    fn operation_mode_interactive_when_no_fields_set() {
+        let config = FrankieConfig::default();
+
+        assert_eq!(
+            config.operation_mode(),
+            OperationMode::Interactive,
+            "should be Interactive when no fields are set"
+        );
+    }
+
+    #[rstest]
+    fn pr_url_takes_precedence_over_owner_repo() {
         let config = FrankieConfig {
-            pr_url: None,
-            token: Some("my-token".to_owned()),
+            pr_url: Some("https://github.com/owner/repo/pull/1".to_owned()),
+            owner: Some("octocat".to_owned()),
+            repo: Some("hello-world".to_owned()),
+            ..Default::default()
         };
 
-        let result = config.resolve_token();
+        assert_eq!(
+            config.operation_mode(),
+            OperationMode::SinglePullRequest,
+            "pr_url should take precedence over owner/repo"
+        );
+    }
+
+    #[rstest]
+    fn require_repository_info_returns_error_when_owner_missing() {
+        let config = FrankieConfig {
+            repo: Some("hello-world".to_owned()),
+            ..Default::default()
+        };
+
+        let result = config.require_repository_info();
+        assert!(result.is_err(), "should return error when owner is missing");
+    }
+
+    #[rstest]
+    fn require_repository_info_returns_error_when_repo_missing() {
+        let config = FrankieConfig {
+            owner: Some("octocat".to_owned()),
+            ..Default::default()
+        };
+
+        let result = config.require_repository_info();
+        assert!(result.is_err(), "should return error when repo is missing");
+    }
+
+    #[rstest]
+    fn require_repository_info_returns_values_when_present() {
+        let config = FrankieConfig {
+            owner: Some("octocat".to_owned()),
+            repo: Some("hello-world".to_owned()),
+            ..Default::default()
+        };
+
+        let result = config.require_repository_info();
         assert_eq!(
             result.ok(),
-            Some("my-token".to_owned()),
-            "should return the token"
+            Some(("octocat", "hello-world")),
+            "should return owner and repo"
         );
     }
 }
