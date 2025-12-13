@@ -1,13 +1,13 @@
 //! Unit tests for the GitHub intake module.
 
-use mockall::predicate::always;
+use mockall::predicate::{always, function};
 use rstest::rstest;
 
 use super::{
     IntakeError, ListPullRequestsParams, MockPullRequestGateway, MockRepositoryGateway, PageInfo,
     PaginatedPullRequests, PersonalAccessToken, PullRequestComment, PullRequestDetails,
-    PullRequestIntake, PullRequestLocator, PullRequestMetadata, PullRequestSummary, RateLimitInfo,
-    RepositoryIntake, RepositoryLocator,
+    PullRequestIntake, PullRequestLocator, PullRequestMetadata, PullRequestState,
+    PullRequestSummary, RateLimitInfo, RepositoryIntake, RepositoryLocator,
 };
 
 fn sample_locator() -> PullRequestLocator {
@@ -364,7 +364,19 @@ fn setup_repository_gateway() -> MockRepositoryGateway {
 
     gateway
         .expect_list_pull_requests()
-        .with(always(), always())
+        .with(
+            always(),
+            function(|params: &ListPullRequestsParams| {
+                assert_eq!(
+                    params.state,
+                    Some(PullRequestState::Open),
+                    "unexpected default state"
+                );
+                assert_eq!(params.page, Some(1), "unexpected default page");
+                assert_eq!(params.per_page, Some(30), "unexpected default per_page");
+                true
+            }),
+        )
         .times(1)
         .returning(|_, _| {
             Ok(PaginatedPullRequests {
@@ -449,7 +461,19 @@ async fn lists_pull_requests_with_rate_limit_info() {
 
     gateway
         .expect_list_pull_requests()
-        .with(always(), always())
+        .with(
+            always(),
+            function(|params: &ListPullRequestsParams| {
+                assert_eq!(
+                    params.state,
+                    Some(PullRequestState::Open),
+                    "unexpected default state"
+                );
+                assert_eq!(params.page, Some(1), "unexpected default page");
+                assert_eq!(params.per_page, Some(30), "unexpected default per_page");
+                true
+            }),
+        )
         .times(1)
         .returning(|_, _| {
             Ok(PaginatedPullRequests {

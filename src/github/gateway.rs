@@ -147,7 +147,7 @@ impl PullRequestState {
 }
 
 /// Parameters for listing pull requests.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ListPullRequestsParams {
     /// Filter by state (open, closed, all). Defaults to open.
     pub state: Option<PullRequestState>,
@@ -155,6 +155,16 @@ pub struct ListPullRequestsParams {
     pub page: Option<u32>,
     /// Items per page (max 100). Defaults to 30.
     pub per_page: Option<u8>,
+}
+
+impl Default for ListPullRequestsParams {
+    fn default() -> Self {
+        Self {
+            state: Some(PullRequestState::Open),
+            page: Some(1),
+            per_page: Some(30),
+        }
+    }
 }
 
 /// Paginated pull request listing result.
@@ -274,7 +284,17 @@ impl OctocrabRepositoryGateway {
         error: &octocrab::Error,
     ) -> IntakeError {
         match error {
-            octocrab::Error::GitHub { source, .. } if is_rate_limit_error(source) => {
+            octocrab::Error::GitHub { source, .. }
+                if matches!(
+                    source.status_code,
+                    StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS
+                ) && (source.message.contains("rate limit")
+                    || source.message.contains("Rate limit")
+                    || source
+                        .documentation_url
+                        .as_deref()
+                        .is_some_and(|url| url.contains("rate-limit"))) =>
+            {
                 let rate_limit = self.fetch_rate_limit_info().await;
                 let base_message =
                     format!("{operation} failed: {message}", message = source.message);
@@ -308,25 +328,6 @@ impl OctocrabRepositoryGateway {
 /// Checks if a GitHub error status indicates an authentication failure.
 const fn is_auth_failure(status: StatusCode) -> bool {
     matches!(status, StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN)
-}
-
-/// Checks if a GitHub error indicates rate limiting.
-fn is_rate_limit_error(source: &octocrab::GitHubError) -> bool {
-    if !matches!(
-        source.status_code,
-        StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS
-    ) {
-        return false;
-    }
-
-    let message_mentions_rate_limit =
-        source.message.contains("rate limit") || source.message.contains("Rate limit");
-    let docs_mentions_rate_limit = source
-        .documentation_url
-        .as_deref()
-        .is_some_and(|url| url.contains("rate-limit"));
-
-    message_mentions_rate_limit || docs_mentions_rate_limit
 }
 
 /// Checks if an octocrab error represents a network/transport issue.

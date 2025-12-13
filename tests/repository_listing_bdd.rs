@@ -95,6 +95,7 @@ fn seed_server_with_paginated_prs(
         let mock = Mock::given(method("GET"))
             .and(path(pulls_path))
             .and(query_param("page", page.to_string()))
+            .and(query_param("per_page", per_page.to_string()))
             .respond_with(response);
 
         listing_state
@@ -267,7 +268,7 @@ fn assert_has_next_page(listing_state: &ListingState) {
     let has_next = listing_state
         .result
         .with_ref(|result| result.page_info.has_next())
-        .unwrap_or(false);
+        .unwrap_or_else(|| panic!("pull request listing missing"));
 
     assert!(has_next, "expected pagination to have next page");
 }
@@ -277,7 +278,7 @@ fn assert_has_prev_page(listing_state: &ListingState) {
     let has_prev = listing_state
         .result
         .with_ref(|result| result.page_info.has_prev())
-        .unwrap_or(false);
+        .unwrap_or_else(|| panic!("pull request listing missing"));
 
     assert!(has_prev, "expected pagination to have previous page");
 }

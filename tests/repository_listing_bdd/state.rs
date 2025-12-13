@@ -72,25 +72,12 @@ pub(crate) fn run_repository_listing(
             message: "mock server URL missing".to_owned(),
         })?;
 
-    let cleaned_url = repo_url.trim_matches('"');
-    let resolved_url = if cleaned_url.contains("://SERVER") {
-        cleaned_url
-            .replace("https://SERVER", &server_url)
-            .replace("http://SERVER", &server_url)
-    } else {
-        cleaned_url.replace("SERVER", &server_url)
-    };
-
+    let resolved_url = resolve_mock_server_url(&server_url, repo_url);
     let locator = RepositoryLocator::parse(&resolved_url)?;
 
     listing_state.page.set(page.value());
 
-    let runtime = listing_state
-        .runtime
-        .get()
-        .ok_or_else(|| IntakeError::Api {
-            message: "runtime not initialised".to_owned(),
-        })?;
+    let runtime = get_runtime(listing_state)?;
 
     runtime.block_on(async {
         let token_value = listing_state.token.get().ok_or(IntakeError::MissingToken)?;
@@ -105,5 +92,22 @@ pub(crate) fn run_repository_listing(
         };
 
         intake.list_pull_requests(&locator, &params).await
+    })
+}
+
+fn resolve_mock_server_url(server_url: &str, repo_url: &str) -> String {
+    let cleaned_url = repo_url.trim_matches('"');
+    if cleaned_url.contains("://SERVER") {
+        cleaned_url
+            .replace("https://SERVER", server_url)
+            .replace("http://SERVER", server_url)
+    } else {
+        cleaned_url.replace("SERVER", server_url)
+    }
+}
+
+fn get_runtime(listing_state: &ListingState) -> Result<SharedRuntime, IntakeError> {
+    listing_state.runtime.get().ok_or_else(|| IntakeError::Api {
+        message: "runtime not initialised".to_owned(),
     })
 }

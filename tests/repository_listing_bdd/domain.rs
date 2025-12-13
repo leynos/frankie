@@ -18,10 +18,15 @@ impl PageNumber {
 }
 
 impl FromStr for PageNumber {
-    type Err = std::num::ParseIntError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self)
+        let value = s.parse::<u32>().map_err(|error| error.to_string())?;
+        if value == 0 {
+            return Err("PageNumber must be >= 1".to_owned());
+        }
+
+        Ok(Self(value))
     }
 }
 
@@ -74,10 +79,15 @@ impl PageCount {
 }
 
 impl FromStr for PageCount {
-    type Err = std::num::ParseIntError;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self::new)
+        let value = s.parse::<u32>().map_err(|error| error.to_string())?;
+        if value == 0 {
+            return Err("PageCount must be >= 1".to_owned());
+        }
+
+        Ok(Self::new(value))
     }
 }
 

@@ -11,6 +11,9 @@ pub(crate) fn generate_pr_list(
     page: PageNumber,
     per_page: PullRequestCount,
 ) -> Vec<serde_json::Value> {
+    assert!(page.value() >= 1, "PageNumber must be >= 1");
+    assert!(per_page.value() >= 1, "per_page must be >= 1");
+
     let start = (page.value() - 1) * per_page.value();
     (0..count.value())
         .map(|i| {

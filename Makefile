@@ -1,4 +1,4 @@
-.PHONY: help all clean test build release lint fmt check-fmt markdownlint nixie
+.PHONY: help all clean test build release lint fmt check-fmt typecheck markdownlint nixie
 
 
 TARGET ?= frankie
@@ -36,6 +36,9 @@ fmt: ## Format Rust and Markdown sources
 
 check-fmt: ## Verify formatting
 	$(CARGO) fmt --all -- --check
+
+typecheck: ## Run cargo check with warnings denied
+	RUSTFLAGS="$(RUST_FLAGS)" $(CARGO) check $(CARGO_FLAGS) $(BUILD_JOBS)
 
 markdownlint: ## Lint Markdown files
 	$(MDLINT) '**/*.md'
