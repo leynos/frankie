@@ -218,10 +218,11 @@ mod tests {
 
     #[test]
     fn write_listing_summary_includes_items_and_pagination() {
-        let page_info = PageInfo::new(2, 50)
-            .with_total_pages(Some(3))
-            .with_has_next(true)
-            .with_has_prev(true);
+        let page_info = PageInfo::builder(2, 50)
+            .total_pages(Some(3))
+            .has_next(true)
+            .has_prev(true)
+            .build();
         let result = frankie::PaginatedPullRequests {
             items: vec![PullRequestSummary {
                 number: 42,
@@ -348,7 +349,7 @@ mod tests {
 
     #[test]
     fn write_listing_summary_defaults_total_pages_to_one_when_unknown() {
-        let page_info = PageInfo::new(1, 50);
+        let page_info = PageInfo::builder(1, 50).build();
         let result = frankie::PaginatedPullRequests {
             items: vec![],
             page_info,

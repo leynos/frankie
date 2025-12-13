@@ -1,201 +1,22 @@
 //! Behavioural tests for repository pull request listing.
 
-use frankie::{
-    IntakeError, ListPullRequestsParams, OctocrabRepositoryGateway, PaginatedPullRequests,
-    PersonalAccessToken, RepositoryIntake, RepositoryLocator,
+#[path = "repository_listing_bdd/mod.rs"]
+mod repository_listing_bdd_support;
+
+use frankie::IntakeError;
+use repository_listing_bdd_support::{
+    EXPECTED_RATE_LIMIT_RESET_AT, ListingState, PageCount, PageNumber, PullRequestCount,
+    RateLimitCount, ensure_runtime_and_server, generate_pr_list, run_repository_listing,
 };
 use rstest::fixture;
-use rstest_bdd::Slot;
-use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
+use rstest_bdd_macros::{given, scenario, then, when};
 use serde_json::json;
-use std::cell::RefCell;
-use std::fmt;
-use std::rc::Rc;
-use std::str::FromStr;
-use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
-
-const EXPECTED_RATE_LIMIT_RESET_AT: u64 = 1_700_000_000;
-
-// --- Domain wrapper types to eliminate primitive obsession ---
-
-/// Page number for pagination (1-based).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PageNumber(u32);
-
-impl PageNumber {
-    const fn new(value: u32) -> Self {
-        Self(value)
-    }
-    const fn value(self) -> u32 {
-        self.0
-    }
-}
-
-impl FromStr for PageNumber {
-    type Err = std::num::ParseIntError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self)
-    }
-}
-
-impl fmt::Display for PageNumber {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// Count of pull requests.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PullRequestCount(u32);
-
-impl PullRequestCount {
-    const fn new(value: u32) -> Self {
-        Self(value)
-    }
-    const fn value(self) -> u32 {
-        self.0
-    }
-}
-
-impl FromStr for PullRequestCount {
-    type Err = std::num::ParseIntError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self)
-    }
-}
-
-impl fmt::Display for PullRequestCount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// Total number of pages.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct PageCount(u32);
-
-impl PageCount {
-    const fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    const fn value(self) -> u32 {
-        self.0
-    }
-}
-
-impl FromStr for PageCount {
-    type Err = std::num::ParseIntError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self::new)
-    }
-}
-
-impl fmt::Display for PageCount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// Rate limit remaining count.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RateLimitCount(u32);
-
-impl RateLimitCount {
-    const fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    const fn value(self) -> u32 {
-        self.0
-    }
-}
-
-impl FromStr for RateLimitCount {
-    type Err = std::num::ParseIntError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self::new)
-    }
-}
-
-impl fmt::Display for RateLimitCount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// Shared runtime wrapper that can be stored in rstest-bdd Slot.
-#[derive(Clone)]
-struct SharedRuntime(Rc<RefCell<Runtime>>);
-
-impl SharedRuntime {
-    fn new(runtime: Runtime) -> Self {
-        Self(Rc::new(RefCell::new(runtime)))
-    }
-
-    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.0.borrow().block_on(future)
-    }
-}
-
-#[derive(ScenarioState, Default)]
-struct ListingState {
-    runtime: Slot<SharedRuntime>,
-    server: Slot<MockServer>,
-    token: Slot<String>,
-    page: Slot<u32>,
-    result: Slot<PaginatedPullRequests>,
-    error: Slot<IntakeError>,
-}
 
 #[fixture]
 fn listing_state() -> ListingState {
     ListingState::default()
-}
-
-/// Ensures the runtime and server are initialised in `ListingState`.
-fn ensure_runtime_and_server(listing_state: &ListingState) -> SharedRuntime {
-    if listing_state.runtime.with_ref(|_| ()).is_none() {
-        let runtime = Runtime::new()
-            .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
-        listing_state.runtime.set(SharedRuntime::new(runtime));
-    }
-
-    let shared_runtime = listing_state
-        .runtime
-        .get()
-        .unwrap_or_else(|| panic!("runtime not initialised after set"));
-
-    if listing_state.server.with_ref(|_| ()).is_none() {
-        listing_state
-            .server
-            .set(shared_runtime.block_on(MockServer::start()));
-    }
-
-    shared_runtime
-}
-
-fn generate_pr_list(
-    count: PullRequestCount,
-    page: PageNumber,
-    per_page: PullRequestCount,
-) -> Vec<serde_json::Value> {
-    let start = (page.value() - 1) * per_page.value();
-    (0..count.value())
-        .map(|i| {
-            let pr_number = start + i + 1;
-            json!({
-                "number": pr_number,
-                "title": format!("PR #{pr_number}"),
-                "state": "open",
-                "user": { "login": "contributor" },
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
-            })
-        })
-        .collect()
 }
 
 #[given("a mock GitHub API server with {count:PullRequestCount} open PRs for owner/repo")]
@@ -244,7 +65,7 @@ fn seed_server_with_paginated_prs(
         let server_uri = listing_state
             .server
             .with_ref(MockServer::uri)
-            .unwrap_or_default();
+            .unwrap_or_else(|| panic!("mock server URL missing"));
 
         let mut response = ResponseTemplate::new(200).set_body_json(&prs);
 
@@ -389,43 +210,7 @@ fn remember_token(listing_state: &ListingState, token: String) {
 
 #[when("the client lists pull requests for {repo_url} page {page:PageNumber}")]
 fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, page: PageNumber) {
-    let server_url = listing_state
-        .server
-        .with_ref(MockServer::uri)
-        .unwrap_or_else(|| panic!("mock server URL missing"));
-
-    let cleaned_url = repo_url.trim_matches('"');
-    let resolved_url = if cleaned_url.contains("://SERVER") {
-        cleaned_url
-            .replace("https://SERVER", &server_url)
-            .replace("http://SERVER", &server_url)
-    } else {
-        cleaned_url.replace("SERVER", &server_url)
-    };
-
-    let locator = RepositoryLocator::parse(&resolved_url)
-        .unwrap_or_else(|error| panic!("{resolved_url}: {error}"));
-
-    listing_state.page.set(page.value());
-
-    let runtime = listing_state
-        .runtime
-        .get()
-        .unwrap_or_else(|| panic!("runtime not initialised"));
-
-    let result = runtime.block_on(async {
-        let token_value = listing_state.token.get().ok_or(IntakeError::MissingToken)?;
-        let token = PersonalAccessToken::new(token_value)?;
-
-        let gateway = OctocrabRepositoryGateway::for_token(&token, &locator)?;
-        let intake = RepositoryIntake::new(&gateway);
-        let params = ListPullRequestsParams {
-            page: Some(page.value()),
-            per_page: Some(50),
-            ..Default::default()
-        };
-        intake.list_pull_requests(&locator, &params).await
-    });
+    let result = run_repository_listing(listing_state, &repo_url, page);
 
     match result {
         Ok(prs) => {

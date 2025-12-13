@@ -14,10 +14,11 @@
 /// ```
 /// use frankie::github::pagination::PageInfo;
 ///
-/// let info = PageInfo::new(2, 50)
-///     .with_total_pages(Some(5))
-///     .with_has_next(true)
-///     .with_has_prev(true);
+/// let info = PageInfo::builder(2, 50)
+///     .total_pages(Some(5))
+///     .has_next(true)
+///     .has_prev(true)
+///     .build();
 /// assert!(!info.is_first_page());
 /// assert!(!info.is_last_page());
 /// assert!(info.has_next());
@@ -37,39 +38,16 @@ pub struct PageInfo {
 }
 
 impl PageInfo {
-    /// Creates a new page info instance.
-    ///
-    /// The `total_pages` and navigation flags default to unknown / false.
+    /// Starts building pagination metadata for the given page and page size.
     #[must_use]
-    pub const fn new(current_page: u32, per_page: u8) -> Self {
-        Self {
+    pub const fn builder(current_page: u32, per_page: u8) -> PageInfoBuilder {
+        PageInfoBuilder {
             current_page,
             per_page,
             total_pages: None,
             has_next: false,
             has_prev: false,
         }
-    }
-
-    /// Sets the total number of pages.
-    #[must_use]
-    pub const fn with_total_pages(mut self, total_pages: Option<u32>) -> Self {
-        self.total_pages = total_pages;
-        self
-    }
-
-    /// Sets whether there is a next page.
-    #[must_use]
-    pub const fn with_has_next(mut self, has_next: bool) -> Self {
-        self.has_next = has_next;
-        self
-    }
-
-    /// Sets whether there is a previous page.
-    #[must_use]
-    pub const fn with_has_prev(mut self, has_prev: bool) -> Self {
-        self.has_prev = has_prev;
-        self
     }
 
     /// Returns the current page number (1-based).
@@ -115,14 +93,53 @@ impl PageInfo {
     }
 }
 
+/// Builder for [`PageInfo`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageInfoBuilder {
+    current_page: u32,
+    per_page: u8,
+    total_pages: Option<u32>,
+    has_next: bool,
+    has_prev: bool,
+}
+
+impl PageInfoBuilder {
+    /// Sets the total number of pages if the API provides it.
+    #[must_use]
+    pub const fn total_pages(mut self, total_pages: Option<u32>) -> Self {
+        self.total_pages = total_pages;
+        self
+    }
+
+    /// Sets whether there is a next page.
+    #[must_use]
+    pub const fn has_next(mut self, has_next: bool) -> Self {
+        self.has_next = has_next;
+        self
+    }
+
+    /// Sets whether there is a previous page.
+    #[must_use]
+    pub const fn has_prev(mut self, has_prev: bool) -> Self {
+        self.has_prev = has_prev;
+        self
+    }
+
+    /// Finishes building the [`PageInfo`].
+    #[must_use]
+    pub const fn build(self) -> PageInfo {
+        PageInfo {
+            current_page: self.current_page,
+            per_page: self.per_page,
+            total_pages: self.total_pages,
+            has_next: self.has_next,
+            has_prev: self.has_prev,
+        }
+    }
+}
+
 impl Default for PageInfo {
     fn default() -> Self {
-        Self {
-            current_page: 1,
-            per_page: 30,
-            total_pages: None,
-            has_next: false,
-            has_prev: false,
-        }
+        Self::builder(1, 30).build()
     }
 }

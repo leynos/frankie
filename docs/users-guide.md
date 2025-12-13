@@ -14,8 +14,8 @@ including loading individual pull requests and listing PRs for a repository.
 
 Frankie supports two operation modes:
 
-1. **Single pull request mode** - Load a specific PR by URL using `--pr-url`
-2. **Repository listing mode** - List PRs for a repository using `--owner` and
+1. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
+2. **Repository listing mode** — List PRs for a repository using `--owner` and
    `--repo`
 
 ## Single pull request mode
@@ -93,11 +93,11 @@ Frankie handles GitHub API rate limits gracefully:
 Frankie supports configuration through multiple sources with the following
 precedence (lowest to highest):
 
-1. **Defaults** - Built-in application defaults
-2. **Configuration file** - `.frankie.toml` in current directory, home
+1. **Defaults** — Built-in application defaults
+2. **Configuration file** — `.frankie.toml` in current directory, home
    directory, or XDG config directory
-3. **Environment variables** - `FRANKIE_*` variables or legacy `GITHUB_TOKEN`
-4. **Command-line arguments** - command-line interface (CLI) flags take the
+3. **Environment variables** — `FRANKIE_*` variables or legacy `GITHUB_TOKEN`
+4. **Command-line arguments** — command-line interface (CLI) flags take the
    highest precedence
 
 Higher precedence sources override lower ones. For example, a CLI flag always
@@ -161,8 +161,8 @@ rejected the token: Bad credentials").
 
 Common error scenarios:
 
-- **Missing required arguments** - Either `--pr-url` or both `--owner` and
+- **Missing required arguments** — Either `--pr-url` or both `--owner` and
   `--repo` must be provided.
-- **Authentication failure** - Token is missing, empty, or rejected by GitHub.
-- **Rate limit exceeded** - API rate limit reached; wait for reset time.
-- **Network errors** - Cannot reach the GitHub API endpoint.
+- **Authentication failure** — Token is missing, empty, or rejected by GitHub.
+- **Rate limit exceeded** — API rate limit reached; wait for reset time.
+- **Network errors** — Cannot reach the GitHub API endpoint.

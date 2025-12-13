@@ -38,7 +38,9 @@ fn build_octocrab_client(
     Octocrab::builder()
         .personal_token(token.as_ref())
         .base_uri(base_uri)
-        .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?
+        .map_err(|error| IntakeError::Api {
+            message: format!("build client failed: {error}"),
+        })?
         .build()
         .map_err(|error| map_octocrab_error("build client", &error))
 }
@@ -251,10 +253,11 @@ impl RepositoryGateway for OctocrabRepositoryGateway {
             .map(ApiPullRequestSummary::into)
             .collect();
 
-        let page_info = PageInfo::new(page, per_page)
-            .with_total_pages(total_pages)
-            .with_has_next(has_next)
-            .with_has_prev(has_prev);
+        let page_info = PageInfo::builder(page, per_page)
+            .total_pages(total_pages)
+            .has_next(has_next)
+            .has_prev(has_prev)
+            .build();
 
         Ok(PaginatedPullRequests {
             items,
@@ -559,5 +562,62 @@ mod tests {
             matches!(error, IntakeError::InvalidPagination { .. }),
             "expected InvalidPagination, got {error:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn list_pull_requests_rejects_per_page_over_maximum() {
+        let locator = RepositoryLocator::from_owner_repo("owner", "repo")
+            .expect("should create repository locator");
+        let token = PersonalAccessToken::new("valid-token").expect("token should be valid");
+        let gateway =
+            OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway");
+
+        let params = ListPullRequestsParams {
+            state: Some(PullRequestState::All),
+            page: Some(1),
+            per_page: Some(101),
+        };
+        let error = gateway
+            .list_pull_requests(&locator, &params)
+            .await
+            .expect_err("invalid per_page should fail");
+
+        assert!(
+            matches!(error, IntakeError::InvalidPagination { .. }),
+            "expected InvalidPagination, got {error:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_pull_requests_applies_default_query_params() {
+        let server = MockServer::start().await;
+        let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))
+            .expect("should create repository locator");
+        let token = PersonalAccessToken::new("valid-token").expect("token should be valid");
+        let gateway =
+            OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway");
+
+        let pulls_path = "/api/v3/repos/owner/repo/pulls";
+        let response = ResponseTemplate::new(200).set_body_json(serde_json::json!([]));
+
+        Mock::given(method("GET"))
+            .and(path(pulls_path))
+            .and(query_param("state", "open"))
+            .and(query_param("page", "1"))
+            .and(query_param("per_page", "30"))
+            .respond_with(response)
+            .mount(&server)
+            .await;
+
+        let result = gateway
+            .list_pull_requests(&locator, &ListPullRequestsParams::default())
+            .await
+            .expect("request should succeed");
+
+        assert_eq!(result.items.len(), 0, "expected no items");
+        assert_eq!(result.page_info.current_page(), 1);
+        assert_eq!(result.page_info.per_page(), 30);
+        assert!(!result.page_info.has_next());
+        assert!(!result.page_info.has_prev());
     }
 }
