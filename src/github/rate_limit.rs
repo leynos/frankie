@@ -80,3 +80,31 @@ impl RateLimitInfo {
         self.reset_at.saturating_sub(now)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use super::RateLimitInfo;
+
+    #[test]
+    fn seconds_until_reset_returns_zero_when_reset_has_passed() {
+        let info = RateLimitInfo::new(5000, 0, 0);
+        assert_eq!(info.seconds_until_reset(), 0);
+    }
+
+    #[test]
+    fn seconds_until_reset_returns_positive_for_future_reset() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be available")
+            .as_secs();
+        let info = RateLimitInfo::new(5000, 0, now + 60);
+
+        let seconds = info.seconds_until_reset();
+        assert!(
+            (1..=60).contains(&seconds),
+            "expected 1..=60 seconds until reset, got {seconds}"
+        );
+    }
+}

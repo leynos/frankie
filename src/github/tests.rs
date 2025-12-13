@@ -349,29 +349,6 @@ fn rate_limit_accessors() {
     assert_eq!(info.reset_at(), 1_700_000_000, "reset_at mismatch");
 }
 
-#[rstest]
-fn rate_limit_seconds_until_reset_returns_zero_when_reset_has_passed() {
-    let info = RateLimitInfo::new(5000, 0, 0);
-    assert_eq!(info.seconds_until_reset(), 0);
-}
-
-#[rstest]
-fn rate_limit_seconds_until_reset_supports_future_timestamps() {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time should be available")
-        .as_secs();
-    let info = RateLimitInfo::new(5000, 0, now + 60);
-
-    let seconds = info.seconds_until_reset();
-    assert!(
-        (1..=60).contains(&seconds),
-        "expected 1..=60 seconds until reset, got {seconds}"
-    );
-}
-
 // --- RepositoryIntake tests ---
 
 /// Sets up a mock gateway for repository intake tests with sample pull requests.

@@ -27,3 +27,4 @@ Feature: Repository pull request listing
     And a personal access token "valid-token"
     When the client lists pull requests for "http://SERVER/owner/repo" page 1
     Then the error indicates rate limit exceeded
+    And the error includes rate limit reset information

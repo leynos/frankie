@@ -97,8 +97,8 @@ precedence (lowest to highest):
 2. **Configuration file** - `.frankie.toml` in current directory, home
    directory, or XDG config directory
 3. **Environment variables** - `FRANKIE_*` variables or legacy `GITHUB_TOKEN`
-4. **Command-line arguments** - command-line interface (CLI) flags take highest
-   precedence
+4. **Command-line arguments** - command-line interface (CLI) flags take the
+   highest precedence
 
 Higher precedence sources override lower ones. For example, a CLI flag always
 takes precedence over an environment variable or configuration file value.

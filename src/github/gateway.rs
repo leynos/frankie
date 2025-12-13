@@ -7,6 +7,7 @@
 use async_trait::async_trait;
 use http::{StatusCode, Uri};
 use octocrab::{Octocrab, Page};
+use std::convert::TryFrom;
 
 use super::error::IntakeError;
 use super::locator::{PersonalAccessToken, PullRequestLocator, RepositoryLocator};
@@ -226,11 +227,18 @@ impl RepositoryGateway for OctocrabRepositoryGateway {
             ("per_page", per_page_str.as_str()),
         ];
 
-        let page_result: Page<ApiPullRequestSummary> = self
+        let page_result: Page<ApiPullRequestSummary> = match self
             .client
             .get(locator.pulls_path(), Some(&query_params))
             .await
-            .map_err(|error| map_octocrab_error_with_rate_limit("list pulls", &error))?;
+        {
+            Ok(page_result) => page_result,
+            Err(error) => {
+                return Err(self
+                    .map_octocrab_error_with_rate_limit("list pulls", &error)
+                    .await);
+            }
+        };
 
         // Extract pagination info before consuming items
         let has_next = page_result.next.is_some();
@@ -256,6 +264,42 @@ impl RepositoryGateway for OctocrabRepositoryGateway {
     }
 }
 
+impl OctocrabRepositoryGateway {
+    async fn map_octocrab_error_with_rate_limit(
+        &self,
+        operation: &str,
+        error: &octocrab::Error,
+    ) -> IntakeError {
+        match error {
+            octocrab::Error::GitHub { source, .. } if is_rate_limit_error(source) => {
+                let rate_limit = self.fetch_rate_limit_info().await;
+                let base_message =
+                    format!("{operation} failed: {message}", message = source.message);
+                let message = match &rate_limit {
+                    Some(info) => format!(
+                        "{base_message} (resets at {reset})",
+                        reset = info.reset_at()
+                    ),
+                    None => base_message,
+                };
+
+                IntakeError::RateLimitExceeded {
+                    rate_limit,
+                    message,
+                }
+            }
+            _ => map_octocrab_error(operation, error),
+        }
+    }
+
+    async fn fetch_rate_limit_info(&self) -> Option<RateLimitInfo> {
+        let rate = self.client.ratelimit().get().await.ok()?.rate;
+        let limit = u32::try_from(rate.limit).unwrap_or(u32::MAX);
+        let remaining = u32::try_from(rate.remaining).unwrap_or(u32::MAX);
+        Some(RateLimitInfo::new(limit, remaining, rate.reset))
+    }
+}
+
 // --- Error mapping helpers ---
 
 /// Checks if a GitHub error status indicates an authentication failure.
@@ -265,8 +309,21 @@ const fn is_auth_failure(status: StatusCode) -> bool {
 
 /// Checks if a GitHub error indicates rate limiting.
 fn is_rate_limit_error(source: &octocrab::GitHubError) -> bool {
-    source.status_code == StatusCode::FORBIDDEN
-        && source.message.to_lowercase().contains("rate limit")
+    if !matches!(
+        source.status_code,
+        StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS
+    ) {
+        return false;
+    }
+
+    let message_mentions_rate_limit =
+        source.message.contains("rate limit") || source.message.contains("Rate limit");
+    let docs_mentions_rate_limit = source
+        .documentation_url
+        .as_deref()
+        .is_some_and(|url| url.contains("rate-limit"));
+
+    message_mentions_rate_limit || docs_mentions_rate_limit
 }
 
 /// Checks if an octocrab error represents a network/transport issue.
@@ -308,19 +365,6 @@ pub(super) fn map_octocrab_error(operation: &str, error: &octocrab::Error) -> In
 
     IntakeError::Api {
         message: format!("{operation} failed: {error}"),
-    }
-}
-
-/// Maps octocrab errors with special handling for rate limit errors.
-fn map_octocrab_error_with_rate_limit(operation: &str, error: &octocrab::Error) -> IntakeError {
-    match error {
-        octocrab::Error::GitHub { source, .. } if is_rate_limit_error(source) => {
-            IntakeError::RateLimitExceeded {
-                rate_limit: None,
-                message: format!("{operation} failed: {message}", message = source.message),
-            }
-        }
-        _ => map_octocrab_error(operation, error),
     }
 }
 
@@ -430,6 +474,8 @@ mod tests {
 
     #[tokio::test]
     async fn list_pull_requests_maps_rate_limit_errors() {
+        const EXPECTED_RESET_AT: u64 = 1_700_000_000;
+
         let server = MockServer::start().await;
         let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))
             .expect("should create repository locator");
@@ -449,6 +495,19 @@ mod tests {
             .mount(&server)
             .await;
 
+        let rate_limit_response = ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "resources": {
+                "core": { "limit": 5000, "used": 5000, "remaining": 0, "reset": EXPECTED_RESET_AT },
+                "search": { "limit": 30, "used": 0, "remaining": 30, "reset": EXPECTED_RESET_AT }
+            },
+            "rate": { "limit": 5000, "used": 5000, "remaining": 0, "reset": EXPECTED_RESET_AT }
+        }));
+        Mock::given(method("GET"))
+            .and(path("/api/v3/rate_limit"))
+            .respond_with(rate_limit_response)
+            .mount(&server)
+            .await;
+
         let error = gateway
             .list_pull_requests(&locator, &ListPullRequestsParams::default())
             .await
@@ -459,13 +518,19 @@ mod tests {
                 rate_limit,
                 message,
             } => {
-                assert!(
-                    rate_limit.is_none(),
-                    "rate_limit is not populated on errors"
+                let info = rate_limit.expect("expected rate_limit info to be populated");
+                assert_eq!(
+                    info.reset_at(),
+                    EXPECTED_RESET_AT,
+                    "unexpected reset timestamp"
                 );
                 assert!(
                     message.contains("API rate limit exceeded for user"),
                     "unexpected message: {message}"
+                );
+                assert!(
+                    message.contains(&EXPECTED_RESET_AT.to_string()),
+                    "expected message to include reset time, got `{message}`"
                 );
             }
             other => panic!("expected RateLimitExceeded, got {other:?}"),

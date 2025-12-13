@@ -16,6 +16,8 @@ use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+const EXPECTED_RATE_LIMIT_RESET_AT: u64 = 1_700_000_000;
+
 // --- Domain wrapper types to eliminate primitive obsession ---
 
 /// Page number for pagination (1-based).
@@ -75,6 +77,10 @@ impl fmt::Display for PullRequestCount {
 struct PageCount(u32);
 
 impl PageCount {
+    const fn new(value: u32) -> Self {
+        Self(value)
+    }
+
     const fn value(self) -> u32 {
         self.0
     }
@@ -83,7 +89,7 @@ impl PageCount {
 impl FromStr for PageCount {
     type Err = std::num::ParseIntError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self)
+        s.parse::<u32>().map(Self::new)
     }
 }
 
@@ -98,6 +104,10 @@ impl fmt::Display for PageCount {
 struct RateLimitCount(u32);
 
 impl RateLimitCount {
+    const fn new(value: u32) -> Self {
+        Self(value)
+    }
+
     const fn value(self) -> u32 {
         self.0
     }
@@ -106,7 +116,7 @@ impl RateLimitCount {
 impl FromStr for RateLimitCount {
     type Err = std::num::ParseIntError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<u32>().map(Self)
+        s.parse::<u32>().map(Self::new)
     }
 }
 
@@ -292,7 +302,10 @@ fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: 
         .set_body_json(&prs)
         .insert_header("X-RateLimit-Limit", "5000")
         .insert_header("X-RateLimit-Remaining", remaining.value().to_string())
-        .insert_header("X-RateLimit-Reset", "1700000000");
+        .insert_header(
+            "X-RateLimit-Reset",
+            EXPECTED_RATE_LIMIT_RESET_AT.to_string(),
+        );
 
     let mock = Mock::given(method("GET"))
         .and(path(pulls_path))
@@ -312,10 +325,17 @@ fn seed_server_with_rate_limit_error(listing_state: &ListingState) {
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
 
-    let response = ResponseTemplate::new(403).set_body_json(json!({
-        "message": "API rate limit exceeded for user",
-        "documentation_url": "https://docs.github.com/rest/rate-limit"
-    }));
+    let response = ResponseTemplate::new(403)
+        .set_body_json(json!({
+            "message": "API rate limit exceeded for user",
+            "documentation_url": "https://docs.github.com/rest/rate-limit"
+        }))
+        .insert_header("X-RateLimit-Limit", "5000")
+        .insert_header("X-RateLimit-Remaining", "0")
+        .insert_header(
+            "X-RateLimit-Reset",
+            EXPECTED_RATE_LIMIT_RESET_AT.to_string(),
+        );
 
     let mock = Mock::given(method("GET"))
         .and(path(pulls_path))
@@ -325,6 +345,39 @@ fn seed_server_with_rate_limit_error(listing_state: &ListingState) {
         .server
         .with_ref(|server| {
             runtime.block_on(mock.mount(server));
+        })
+        .unwrap_or_else(|| panic!("mock server not initialised"));
+
+    let rate_limit_response = ResponseTemplate::new(200).set_body_json(json!({
+        "resources": {
+            "core": {
+                "limit": 5000,
+                "used": 5000,
+                "remaining": 0,
+                "reset": EXPECTED_RATE_LIMIT_RESET_AT
+            },
+            "search": {
+                "limit": 30,
+                "used": 0,
+                "remaining": 30,
+                "reset": EXPECTED_RATE_LIMIT_RESET_AT
+            }
+        },
+        "rate": {
+            "limit": 5000,
+            "used": 5000,
+            "remaining": 0,
+            "reset": EXPECTED_RATE_LIMIT_RESET_AT
+        }
+    }));
+    let rate_limit_mock = Mock::given(method("GET"))
+        .and(path("/api/v3/rate_limit"))
+        .respond_with(rate_limit_response);
+
+    listing_state
+        .server
+        .with_ref(|server| {
+            runtime.block_on(rate_limit_mock.mount(server));
         })
         .unwrap_or_else(|| panic!("mock server not initialised"));
 }
@@ -376,11 +429,13 @@ fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, 
 
     match result {
         Ok(prs) => {
-            drop(listing_state.error.take());
+            // Clear any previous error.
+            let _had_previous_error = listing_state.error.take().is_some();
             listing_state.result.set(prs);
         }
         Err(error) => {
-            drop(listing_state.result.take());
+            // Clear any previous result.
+            let _had_previous_result = listing_state.result.take().is_some();
             listing_state.error.set(error);
         }
     }
@@ -470,13 +525,41 @@ fn assert_rate_limit_error(listing_state: &ListingState) {
                 "expected rate limit message to contain `{EXPECTED_RATE_LIMIT_MESSAGE}`, got `{message}`"
             );
             assert!(
-                rate_limit.is_none(),
-                "expected rate_limit to be unpopulated for rate limit errors"
+                rate_limit.is_some(),
+                "expected rate_limit to be populated for rate limit errors"
             );
         }
         other => {
             panic!("expected RateLimitExceeded variant, got {other:?}");
         }
+    }
+}
+
+#[then("the error includes rate limit reset information")]
+fn assert_rate_limit_reset_information(listing_state: &ListingState) {
+    let error = listing_state
+        .error
+        .with_ref(Clone::clone)
+        .unwrap_or_else(|| panic!("expected rate limit error"));
+
+    match error {
+        IntakeError::RateLimitExceeded { rate_limit, .. } => {
+            let Some(info) = rate_limit else {
+                panic!("expected rate_limit info to be populated")
+            };
+            assert_eq!(
+                info.reset_at(),
+                EXPECTED_RATE_LIMIT_RESET_AT,
+                "unexpected rate limit reset time"
+            );
+
+            let rendered = error.to_string();
+            assert!(
+                rendered.contains(&EXPECTED_RATE_LIMIT_RESET_AT.to_string()),
+                "expected error message to contain reset time, got `{rendered}`"
+            );
+        }
+        other => panic!("expected RateLimitExceeded variant, got {other:?}"),
     }
 }
 
