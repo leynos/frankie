@@ -223,9 +223,14 @@ mod tests {
         run_repository_listing_with_gateway_builder, write_listing_summary,
     };
 
-    #[test]
-    fn migrate_db_requires_database_url() {
+    /// Asserts the migration subcommand exits with a configuration error.
+    ///
+    /// This helper keeps the migration error tests focused on the scenario
+    /// setup by centralising the shared call to `run_database_migrations`
+    /// and assertion on the error variant.
+    fn assert_migration_fails_with_config_error(database_url: Option<String>) {
         let config = FrankieConfig {
+            database_url,
             migrate_db: true,
             ..Default::default()
         };
@@ -238,18 +243,13 @@ mod tests {
     }
 
     #[test]
-    fn migrate_db_rejects_blank_database_url_as_configuration_error() {
-        let config = FrankieConfig {
-            database_url: Some("   ".to_owned()),
-            migrate_db: true,
-            ..Default::default()
-        };
+    fn migrate_db_requires_database_url() {
+        assert_migration_fails_with_config_error(None);
+    }
 
-        let result = super::run_database_migrations(&config);
-        assert!(
-            matches!(result, Err(IntakeError::Configuration { .. })),
-            "expected Configuration error, got {result:?}"
-        );
+    #[test]
+    fn migrate_db_rejects_blank_database_url_as_configuration_error() {
+        assert_migration_fails_with_config_error(Some("   ".to_owned()));
     }
 
     #[derive(Clone)]
