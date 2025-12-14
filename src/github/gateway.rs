@@ -283,41 +283,25 @@ impl OctocrabRepositoryGateway {
         operation: &str,
         error: &octocrab::Error,
     ) -> IntakeError {
-        let octocrab::Error::GitHub { source, .. } = error else {
-            return map_octocrab_error(operation, error);
-        };
+        match error {
+            octocrab::Error::GitHub { source, .. } if is_rate_limit_error(source) => {
+                let rate_limit = self.fetch_rate_limit_info().await;
+                let base_message =
+                    format!("{operation} failed: {message}", message = source.message);
+                let message = match &rate_limit {
+                    Some(info) => format!(
+                        "{base_message} (resets at {reset})",
+                        reset = info.reset_at()
+                    ),
+                    None => base_message,
+                };
 
-        if !matches!(
-            source.status_code,
-            StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS
-        ) {
-            return map_octocrab_error(operation, error);
-        }
-
-        let message_mentions_rate_limit =
-            source.message.contains("rate limit") || source.message.contains("Rate limit");
-        let docs_mentions_rate_limit = source
-            .documentation_url
-            .as_deref()
-            .is_some_and(|url| url.contains("rate-limit"));
-
-        if !message_mentions_rate_limit && !docs_mentions_rate_limit {
-            return map_octocrab_error(operation, error);
-        }
-
-        let rate_limit = self.fetch_rate_limit_info().await;
-        let base_message = format!("{operation} failed: {message}", message = source.message);
-        let message = match &rate_limit {
-            Some(info) => format!(
-                "{base_message} (resets at {reset})",
-                reset = info.reset_at()
-            ),
-            None => base_message,
-        };
-
-        IntakeError::RateLimitExceeded {
-            rate_limit,
-            message,
+                IntakeError::RateLimitExceeded {
+                    rate_limit,
+                    message,
+                }
+            }
+            _ => map_octocrab_error(operation, error),
         }
     }
 
@@ -344,6 +328,23 @@ const fn is_network_error(error: &octocrab::Error) -> bool {
             | octocrab::Error::Hyper { .. }
             | octocrab::Error::Service { .. }
     )
+}
+
+/// Checks whether the GitHub error represents a rate limit error based on the
+/// HTTP status and message / documentation URL content.
+fn is_rate_limit_error(source: &octocrab::GitHubError) -> bool {
+    let is_rate_limit_status = matches!(
+        source.status_code,
+        StatusCode::FORBIDDEN | StatusCode::TOO_MANY_REQUESTS
+    );
+
+    let message_indicates_rate_limit = source.message.to_lowercase().contains("rate limit")
+        || source
+            .documentation_url
+            .as_deref()
+            .is_some_and(|url| url.contains("rate-limit"));
+
+    is_rate_limit_status && message_indicates_rate_limit
 }
 
 pub(super) fn map_octocrab_error(operation: &str, error: &octocrab::Error) -> IntakeError {
