@@ -26,6 +26,7 @@
 //! token = "ghp_example"
 //! owner = "octocat"
 //! repo = "hello-world"
+//! database_url = "frankie.sqlite"
 //! ```
 
 use std::env;
@@ -54,6 +55,7 @@ pub enum OperationMode {
 /// - `FRANKIE_TOKEN`, `GITHUB_TOKEN`, or `--token`: Authentication token
 /// - `FRANKIE_OWNER` or `--owner`: Repository owner
 /// - `FRANKIE_REPO` or `--repo`: Repository name
+/// - `FRANKIE_DATABASE_URL` or `--database-url`: Local `SQLite` database path
 ///
 /// # Example
 ///
@@ -110,6 +112,24 @@ pub struct FrankieConfig {
     /// - Config file: `repo = "..."`
     #[ortho_config(cli_short = 'r')]
     pub repo: Option<String>,
+
+    /// Local `SQLite` database URL/path used for persistence.
+    ///
+    /// Diesel uses a filesystem path for `SQLite` connections. The same value is
+    /// also used by the Diesel CLI via `DATABASE_URL` when running migrations.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--database-url <PATH>`
+    /// - Environment: `FRANKIE_DATABASE_URL`
+    /// - Config file: `database_url = "..."`
+    pub database_url: Option<String>,
+
+    /// Runs database migrations and exits.
+    ///
+    /// When set, Frankie initialises the database at `database_url`, applies
+    /// any pending Diesel migrations, records the schema version in telemetry,
+    /// and exits without performing GitHub operations.
+    pub migrate_db: bool,
 }
 
 impl FrankieConfig {

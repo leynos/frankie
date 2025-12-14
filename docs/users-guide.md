@@ -118,6 +118,9 @@ repo = "hello-world"
 
 # Authentication
 token = "ghp_example"
+
+# Local persistence (optional)
+database_url = "frankie.sqlite"
 ```
 
 Frankie searches for configuration files in this order:
@@ -129,13 +132,14 @@ Frankie searches for configuration files in this order:
 
 ### Environment variables
 
-| Variable         | Description                                         |
-| ---------------- | --------------------------------------------------- |
-| `FRANKIE_PR_URL` | Pull request URL (for single PR mode)               |
-| `FRANKIE_OWNER`  | Repository owner (for listing mode)                 |
-| `FRANKIE_REPO`   | Repository name (for listing mode)                  |
-| `FRANKIE_TOKEN`  | GitHub personal access token                        |
-| `GITHUB_TOKEN`   | Legacy token variable (lower precedence than above) |
+| Variable               | Description                                         |
+| ---------------------- | --------------------------------------------------- |
+| `FRANKIE_PR_URL`       | Pull request URL (for single PR mode)               |
+| `FRANKIE_OWNER`        | Repository owner (for listing mode)                 |
+| `FRANKIE_REPO`         | Repository name (for listing mode)                  |
+| `FRANKIE_TOKEN`        | GitHub personal access token                        |
+| `FRANKIE_DATABASE_URL` | Local SQLite database path for persistence          |
+| `GITHUB_TOKEN`         | Legacy token variable (lower precedence than above) |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
 compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
@@ -143,15 +147,30 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 
 ### Command-line flags
 
-| Flag              | Short | Description                             |
-| ----------------- | ----- | --------------------------------------- |
-| `--pr-url <URL>`  | `-u`  | GitHub pull request URL                 |
-| `--owner <OWNER>` | `-o`  | Repository owner (user or organization) |
-| `--repo <REPO>`   | `-r`  | Repository name                         |
-| `--token <TOKEN>` | `-t`  | Personal access token                   |
-| `--help`          | `-h`  | Show help information                   |
+| Flag                    | Short | Description                             |
+| ----------------------- | ----- | --------------------------------------- |
+| `--pr-url <URL>`        | `-u`  | GitHub pull request URL                 |
+| `--owner <OWNER>`       | `-o`  | Repository owner (user or organization) |
+| `--repo <REPO>`         | `-r`  | Repository name                         |
+| `--token <TOKEN>`       | `-t`  | Personal access token                   |
+| `--database-url <PATH>` | —     | Local SQLite database path              |
+| `--migrate-db`          | —     | Run database migrations and exit        |
+| `--help`                | `-h`  | Show help information                   |
 
 Run `frankie --help` to see all available options and their descriptions.
+
+## Database migrations
+
+Frankie ships Diesel migrations for its local SQLite schema. To apply any
+pending migrations to a database file and record the resulting schema version
+in telemetry, run:
+
+```bash
+frankie --migrate-db --database-url frankie.sqlite
+```
+
+This command does not contact GitHub. On success, Frankie records a telemetry
+event as a JSON line on stderr.
 
 ## Error handling
 

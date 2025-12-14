@@ -4,6 +4,8 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use frankie::github::RepositoryGateway;
+use frankie::persistence::{PersistenceError, migrate_database};
+use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::{
     FrankieConfig, IntakeError, ListPullRequestsParams, OctocrabGateway, OctocrabRepositoryGateway,
     OperationMode, PaginatedPullRequests, PersonalAccessToken, PullRequestDetails,
@@ -27,6 +29,10 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), IntakeError> {
     let config = load_config()?;
 
+    if config.migrate_db {
+        return run_database_migrations(&config);
+    }
+
     match config.operation_mode() {
         OperationMode::SinglePullRequest => run_single_pr(&config).await,
         OperationMode::RepositoryListing => run_repository_listing(&config).await,
@@ -38,6 +44,33 @@ async fn run() -> Result<(), IntakeError> {
             .to_owned(),
         }),
     }
+}
+
+fn run_database_migrations(config: &FrankieConfig) -> Result<(), IntakeError> {
+    let database_url =
+        config
+            .database_url
+            .as_deref()
+            .ok_or_else(|| IntakeError::Configuration {
+                message: PersistenceError::MissingDatabaseUrl.to_string(),
+            })?;
+
+    let telemetry = StderrJsonlTelemetrySink;
+    migrate_database(database_url, &telemetry)
+        .map(|_schema_version| ())
+        .map_err(|error| match error {
+            PersistenceError::MissingDatabaseUrl | PersistenceError::BlankDatabaseUrl => {
+                IntakeError::Configuration {
+                    message: error.to_string(),
+                }
+            }
+            PersistenceError::ConnectionFailed { .. }
+            | PersistenceError::MigrationFailed { .. }
+            | PersistenceError::SchemaVersionQueryFailed { .. }
+            | PersistenceError::MissingSchemaVersion => IntakeError::Io {
+                message: error.to_string(),
+            },
+        })
 }
 
 /// Loads a single pull request by URL.
@@ -190,6 +223,35 @@ mod tests {
         run_repository_listing_with_gateway_builder, write_listing_summary,
     };
 
+    #[test]
+    fn migrate_db_requires_database_url() {
+        let config = FrankieConfig {
+            migrate_db: true,
+            ..Default::default()
+        };
+
+        let result = super::run_database_migrations(&config);
+        assert!(
+            matches!(result, Err(IntakeError::Configuration { .. })),
+            "expected Configuration error, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn migrate_db_rejects_blank_database_url_as_configuration_error() {
+        let config = FrankieConfig {
+            database_url: Some("   ".to_owned()),
+            migrate_db: true,
+            ..Default::default()
+        };
+
+        let result = super::run_database_migrations(&config);
+        assert!(
+            matches!(result, Err(IntakeError::Configuration { .. })),
+            "expected Configuration error, got {result:?}"
+        );
+    }
+
     #[derive(Clone)]
     struct CapturingGateway {
         captured: Arc<Mutex<Option<(RepositoryLocator, ListPullRequestsParams)>>>,
@@ -266,6 +328,8 @@ mod tests {
             token: Some("ghp_example".to_owned()),
             owner: Some("octo".to_owned()),
             repo: Some("repo".to_owned()),
+            database_url: None,
+            migrate_db: false,
         };
 
         let captured = Arc::new(Mutex::new(None));
@@ -324,6 +388,8 @@ mod tests {
             token: Some("ghp_example".to_owned()),
             owner: Some("octo".to_owned()),
             repo: Some("repo".to_owned()),
+            database_url: None,
+            migrate_db: false,
         };
 
         let gateway = CapturingGateway {
