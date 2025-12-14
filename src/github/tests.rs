@@ -257,66 +257,41 @@ fn repository_locator_rejects_empty_repo() {
 
 // --- PageInfo tests ---
 
-#[rstest]
-fn page_info_identifies_first_page() {
-    let info = PageInfo::builder(1, 50)
-        .total_pages(Some(5))
-        .has_next(true)
-        .build();
-    assert!(info.is_first_page(), "should be first page");
-    assert!(!info.is_last_page(), "should not be last page");
+#[derive(Debug, Clone, Copy)]
+enum PageInfoPositionCase {
+    First,
+    Middle,
+    Last,
 }
 
 #[rstest]
-fn page_info_first_page_navigation() {
-    let info = PageInfo::builder(1, 50)
-        .total_pages(Some(5))
-        .has_next(true)
-        .build();
-    assert!(info.has_next(), "should have next page");
-    assert!(!info.has_prev(), "should not have previous page");
-}
+#[case::first(PageInfoPositionCase::First)]
+#[case::middle(PageInfoPositionCase::Middle)]
+#[case::last(PageInfoPositionCase::Last)]
+fn page_info_position_behaviour(#[case] case: PageInfoPositionCase) {
+    let (current_page, has_next, has_prev) = match case {
+        PageInfoPositionCase::First => (1, true, false),
+        PageInfoPositionCase::Middle => (2, true, true),
+        PageInfoPositionCase::Last => (5, false, true),
+    };
 
-#[rstest]
-fn page_info_identifies_middle_page() {
-    let info = PageInfo::builder(2, 50)
+    let info = PageInfo::builder(current_page, 50)
         .total_pages(Some(5))
-        .has_next(true)
-        .has_prev(true)
+        .has_next(has_next)
+        .has_prev(has_prev)
         .build();
-    assert!(!info.is_first_page(), "should not be first page");
-    assert!(!info.is_last_page(), "should not be last page");
-}
 
-#[rstest]
-fn page_info_middle_page_navigation() {
-    let info = PageInfo::builder(2, 50)
-        .total_pages(Some(5))
-        .has_next(true)
-        .has_prev(true)
-        .build();
-    assert!(info.has_next(), "should have next page");
-    assert!(info.has_prev(), "should have previous page");
-}
+    assert_eq!(info.has_next(), has_next, "unexpected has_next");
+    assert_eq!(info.has_prev(), has_prev, "unexpected has_prev");
 
-#[rstest]
-fn page_info_identifies_last_page() {
-    let info = PageInfo::builder(5, 50)
-        .total_pages(Some(5))
-        .has_prev(true)
-        .build();
-    assert!(!info.is_first_page(), "should not be first page");
-    assert!(info.is_last_page(), "should be last page");
-}
-
-#[rstest]
-fn page_info_last_page_navigation() {
-    let info = PageInfo::builder(5, 50)
-        .total_pages(Some(5))
-        .has_prev(true)
-        .build();
-    assert!(!info.has_next(), "should not have next page");
-    assert!(info.has_prev(), "should have previous page");
+    let is_first_page = matches!(case, PageInfoPositionCase::First);
+    let is_last_page = matches!(case, PageInfoPositionCase::Last);
+    assert_eq!(
+        info.is_first_page(),
+        is_first_page,
+        "unexpected is_first_page"
+    );
+    assert_eq!(info.is_last_page(), is_last_page, "unexpected is_last_page");
 }
 
 #[rstest]

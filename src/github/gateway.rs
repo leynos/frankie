@@ -7,7 +7,6 @@
 use async_trait::async_trait;
 use http::{StatusCode, Uri};
 use octocrab::{Octocrab, Page};
-use std::convert::TryFrom;
 
 use super::error::IntakeError;
 use super::locator::{PersonalAccessToken, PullRequestLocator, RepositoryLocator};
