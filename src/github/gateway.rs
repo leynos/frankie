@@ -174,7 +174,12 @@ pub struct PaginatedPullRequests {
     pub items: Vec<PullRequestSummary>,
     /// Pagination state.
     pub page_info: PageInfo,
-    /// Rate limit info if available from response headers.
+    /// Rate limit information when available.
+    ///
+    /// This is currently always `None` for successful responses because
+    /// Octocrab does not expose rate limit headers on normal requests. Rate
+    /// limit errors are instead mapped to `IntakeError::RateLimitExceeded`
+    /// (with optional rate limit data when it can be fetched).
     pub rate_limit: Option<RateLimitInfo>,
 }
 
@@ -307,8 +312,12 @@ impl OctocrabRepositoryGateway {
 
     async fn fetch_rate_limit_info(&self) -> Option<RateLimitInfo> {
         let rate = self.client.ratelimit().get().await.ok()?.rate;
-        let limit = u32::try_from(rate.limit).unwrap_or(u32::MAX);
-        let remaining = u32::try_from(rate.remaining).unwrap_or(u32::MAX);
+        let Ok(limit) = u32::try_from(rate.limit) else {
+            return None;
+        };
+        let Ok(remaining) = u32::try_from(rate.remaining) else {
+            return None;
+        };
         Some(RateLimitInfo::new(limit, remaining, rate.reset))
     }
 }
@@ -502,6 +511,9 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path(pulls_path))
+            .and(query_param("state", "open"))
+            .and(query_param("page", "1"))
+            .and(query_param("per_page", "30"))
             .respond_with(response)
             .mount(&server)
             .await;

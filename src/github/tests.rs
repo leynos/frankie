@@ -333,15 +333,17 @@ fn page_info_accessors() {
 
 // --- RateLimitInfo tests ---
 
+const EXPECTED_RATE_LIMIT_RESET_AT: u64 = 1_700_000_000;
+
 #[rstest]
 fn rate_limit_exhausted() {
-    let info = RateLimitInfo::new(5000, 0, 1_700_000_000);
+    let info = RateLimitInfo::new(5000, 0, EXPECTED_RATE_LIMIT_RESET_AT);
     assert!(info.is_exhausted(), "should be exhausted with 0 remaining");
 }
 
 #[rstest]
 fn rate_limit_not_exhausted() {
-    let info = RateLimitInfo::new(5000, 100, 1_700_000_000);
+    let info = RateLimitInfo::new(5000, 100, EXPECTED_RATE_LIMIT_RESET_AT);
     assert!(
         !info.is_exhausted(),
         "should not be exhausted with 100 remaining"
@@ -350,10 +352,14 @@ fn rate_limit_not_exhausted() {
 
 #[rstest]
 fn rate_limit_accessors() {
-    let info = RateLimitInfo::new(5000, 4999, 1_700_000_000);
+    let info = RateLimitInfo::new(5000, 4999, EXPECTED_RATE_LIMIT_RESET_AT);
     assert_eq!(info.limit(), 5000, "limit mismatch");
     assert_eq!(info.remaining(), 4999, "remaining mismatch");
-    assert_eq!(info.reset_at(), 1_700_000_000, "reset_at mismatch");
+    assert_eq!(
+        info.reset_at(),
+        EXPECTED_RATE_LIMIT_RESET_AT,
+        "reset_at mismatch"
+    );
 }
 
 // --- RepositoryIntake tests ---
@@ -398,7 +404,7 @@ fn setup_repository_gateway() -> MockRepositoryGateway {
                         updated_at: None,
                     },
                 ],
-                page_info: PageInfo::builder(1, 50).total_pages(Some(1)).build(),
+                page_info: PageInfo::builder(1, 30).total_pages(Some(1)).build(),
                 rate_limit: None,
             })
         });
@@ -450,6 +456,7 @@ async fn lists_pull_requests_returns_page_info() {
         1,
         "current page should be 1"
     );
+    assert_eq!(result.page_info.per_page(), 30, "per page should be 30");
     assert!(!result.page_info.has_next(), "should not have next page");
 }
 
@@ -478,8 +485,8 @@ async fn lists_pull_requests_with_rate_limit_info() {
         .returning(|_, _| {
             Ok(PaginatedPullRequests {
                 items: vec![],
-                page_info: PageInfo::builder(1, 50).total_pages(Some(0)).build(),
-                rate_limit: Some(RateLimitInfo::new(5000, 4950, 1_700_000_000)),
+                page_info: PageInfo::builder(1, 30).total_pages(Some(1)).build(),
+                rate_limit: Some(RateLimitInfo::new(5000, 4950, EXPECTED_RATE_LIMIT_RESET_AT)),
             })
         });
 
