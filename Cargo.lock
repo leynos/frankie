@@ -896,6 +896,7 @@ dependencies = [
  "diesel",
  "diesel_migrations",
  "env-lock",
+ "frankie",
  "http",
  "mockall",
  "octocrab",

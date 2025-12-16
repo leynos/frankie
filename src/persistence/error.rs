@@ -27,6 +27,13 @@ pub enum PersistenceError {
         message: String,
     },
 
+    /// Enabling foreign key enforcement failed.
+    #[error("failed to enable foreign keys: {message}")]
+    ForeignKeysEnableFailed {
+        /// Error detail from the PRAGMA execution.
+        message: String,
+    },
+
     /// Reading the schema version from the migration table failed.
     #[error("failed to read schema version after migrations: {message}")]
     SchemaVersionQueryFailed {

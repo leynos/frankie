@@ -172,6 +172,17 @@ frankie --migrate-db --database-url frankie.sqlite
 This command does not contact GitHub. On success, Frankie records a telemetry
 event as a JSON line on stderr.
 
+For testing or ephemeral usage, SQLite supports an in-memory database using the
+special `:memory:` URL:
+
+```bash
+frankie --migrate-db --database-url :memory:
+```
+
+> **Note:** The `--migrate-db` flag is a CLI-only option. It cannot be set via
+> environment variables or configuration files—use the command-line flag
+> explicitly when running migrations.
+
 ## Error handling
 
 Authentication or network failures set the process exit code to a non-zero

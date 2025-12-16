@@ -1,3 +1,6 @@
+-- Note: PRAGMA foreign_keys is connection-scoped in SQLite; this statement
+-- serves as documentation of the intended constraint behaviour. Actual
+-- enforcement happens at connection setup in the Rust migrator.
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE repositories (
@@ -20,7 +23,7 @@ CREATE TABLE pull_requests (
     pr_number INTEGER NOT NULL,
     title TEXT NOT NULL,
     body TEXT,
-    state TEXT NOT NULL,
+    state TEXT NOT NULL CHECK(state IN ('open', 'closed', 'merged', 'all')),
     head_sha TEXT,
     base_sha TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -28,6 +31,9 @@ CREATE TABLE pull_requests (
     last_synced TIMESTAMP,
     UNIQUE(repository_id, pr_number)
 );
+
+CREATE INDEX idx_pull_requests_repository
+    ON pull_requests(repository_id);
 
 CREATE TABLE review_comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -38,7 +44,8 @@ CREATE TABLE review_comments (
     line_number INTEGER,
     original_line_number INTEGER,
     diff_hunk TEXT,
-    resolution_status TEXT NOT NULL DEFAULT 'unresolved',
+    resolution_status TEXT NOT NULL DEFAULT 'unresolved'
+        CHECK(resolution_status IN ('unresolved', 'resolved', 'won''t fix', 'outdated')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(github_comment_id)

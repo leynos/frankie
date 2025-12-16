@@ -41,11 +41,23 @@ pub struct StderrJsonlTelemetrySink;
 
 impl TelemetrySink for StderrJsonlTelemetrySink {
     fn record(&self, event: TelemetryEvent) {
-        let Ok(serialised) = serde_json::to_string(&event) else {
-            return;
-        };
-
-        let _ignored = writeln_stderr(&serialised);
+        match serde_json::to_string(&event) {
+            Ok(serialised) => {
+                // Stderr write failures are intentionally ignored; there's no
+                // meaningful recovery action for local telemetry.
+                drop(writeln_stderr(&serialised));
+            }
+            Err(error) => {
+                let fallback = format!(
+                    r#"{{"type":"telemetry_serialisation_failed","error":{}}}"#,
+                    serde_json::to_string(&error.to_string())
+                        .unwrap_or_else(|_| "\"unknown\"".to_owned())
+                );
+                // Stderr write failures are intentionally ignored; there's no
+                // meaningful recovery action for local telemetry.
+                drop(writeln_stderr(&fallback));
+            }
+        }
     }
 }
 
@@ -56,22 +68,56 @@ fn writeln_stderr(message: &str) -> io::Result<()> {
     writeln!(stderr, "{message}")
 }
 
-#[cfg(test)]
-mod tests {
+/// Test support utilities for telemetry testing.
+///
+/// This module provides a shared [`RecordingSink`] implementation that can be
+/// used across unit tests, integration tests, and BDD scenarios.
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support {
+    #![allow(
+        clippy::expect_used,
+        clippy::missing_panics_doc,
+        reason = "test-only code; panics are acceptable in test fixtures"
+    )]
+
+    use std::sync::{Arc, Mutex};
+
     use super::{TelemetryEvent, TelemetrySink};
 
-    #[derive(Debug, Default)]
-    struct RecordingSink {
-        events: std::sync::Mutex<Vec<TelemetryEvent>>,
+    /// A telemetry sink that records events for later assertion.
+    ///
+    /// This sink is thread-safe and can be cloned to share across test
+    /// boundaries. Use [`take`](Self::take) to drain and retrieve recorded
+    /// events, or [`events`](Self::events) for a non-draining snapshot.
+    #[derive(Debug, Clone, Default)]
+    pub struct RecordingSink {
+        events: Arc<Mutex<Vec<TelemetryEvent>>>,
     }
 
     impl RecordingSink {
-        fn take(&self) -> Vec<TelemetryEvent> {
+        /// Drains and returns all recorded events.
+        ///
+        /// This clears the internal event list. Subsequent calls return an
+        /// empty vector until new events are recorded.
+        #[must_use]
+        pub fn take(&self) -> Vec<TelemetryEvent> {
             self.events
                 .lock()
                 .expect("events mutex should be available")
                 .drain(..)
                 .collect()
+        }
+
+        /// Returns a snapshot of all recorded events without draining.
+        ///
+        /// Use this when you need to inspect events without clearing them,
+        /// such as when multiple Then steps need to check the same events.
+        #[must_use]
+        pub fn events(&self) -> Vec<TelemetryEvent> {
+            self.events
+                .lock()
+                .expect("events mutex should be available")
+                .clone()
         }
     }
 
@@ -83,6 +129,12 @@ mod tests {
                 .push(event);
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::RecordingSink;
+    use super::{TelemetryEvent, TelemetrySink};
 
     #[test]
     fn recording_sink_captures_events() {
@@ -97,5 +149,19 @@ mod tests {
                 schema_version: "20251214000000".to_owned(),
             }]
         );
+    }
+
+    #[test]
+    fn recording_sink_events_returns_snapshot_without_draining() {
+        let sink = RecordingSink::default();
+        sink.record(TelemetryEvent::SchemaVersionRecorded {
+            schema_version: "20251214000000".to_owned(),
+        });
+
+        let first = sink.events();
+        let second = sink.events();
+
+        assert_eq!(first, second, "events() should not drain");
+        assert_eq!(first.len(), 1);
     }
 }

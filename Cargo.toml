@@ -3,11 +3,15 @@ name = "frankie"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+test-support = []
+
 [dependencies]
 async-trait = "0.1.83"
 clap = { version = "4.5.53", features = ["derive"] }
-diesel = { version = "2.2.0", features = ["sqlite"] }
-diesel_migrations = "2.2.0"
+diesel = { version = "^2.2.3", features = ["sqlite"] }
+diesel_migrations = "^2.2.3"
 http = "1.1.0"
 octocrab = "0.48.1"
 ortho_config = "0.6.0"
@@ -18,6 +22,7 @@ tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread"] }
 url = "2.5.4"
 
 [dev-dependencies]
+frankie = { path = ".", features = ["test-support"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"
 rstest = "0.22.0"

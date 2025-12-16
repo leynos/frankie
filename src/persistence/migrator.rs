@@ -1,6 +1,7 @@
 //! Diesel-backed migration runner for the local `SQLite` database.
 
 use diesel::Connection;
+use diesel::OptionalExtension;
 use diesel::QueryableByName;
 use diesel::RunQueryDsl;
 use diesel::sql_query;
@@ -71,8 +72,8 @@ pub fn migrate_database(
 fn enable_foreign_keys(connection: &mut SqliteConnection) -> Result<(), PersistenceError> {
     sql_query("PRAGMA foreign_keys = ON;")
         .execute(connection)
-        .map(|_rows| ())
-        .map_err(|error| PersistenceError::MigrationFailed {
+        .map(drop)
+        .map_err(|error| PersistenceError::ForeignKeysEnableFailed {
             message: error.to_string(),
         })
 }
@@ -86,14 +87,15 @@ fn read_schema_version(
         version: String,
     }
 
-    let mut rows: Vec<Row> =
+    let result: Option<Row> =
         sql_query("SELECT version FROM __diesel_schema_migrations ORDER BY version DESC LIMIT 1;")
-            .load(connection)
+            .get_result(connection)
+            .optional()
             .map_err(|error| PersistenceError::SchemaVersionQueryFailed {
                 message: error.to_string(),
             })?;
 
-    let Some(row) = rows.pop() else {
+    let Some(row) = result else {
         return Err(PersistenceError::MissingSchemaVersion);
     };
 
@@ -103,31 +105,8 @@ fn read_schema_version(
 #[cfg(test)]
 mod tests {
     use super::{INITIAL_SCHEMA_VERSION, migrate_database};
-    use crate::telemetry::{TelemetryEvent, TelemetrySink};
-
-    #[derive(Debug, Default)]
-    struct RecordingSink {
-        events: std::sync::Mutex<Vec<TelemetryEvent>>,
-    }
-
-    impl RecordingSink {
-        fn take(&self) -> Vec<TelemetryEvent> {
-            self.events
-                .lock()
-                .expect("events mutex should be available")
-                .drain(..)
-                .collect()
-        }
-    }
-
-    impl TelemetrySink for RecordingSink {
-        fn record(&self, event: TelemetryEvent) {
-            self.events
-                .lock()
-                .expect("events mutex should be available")
-                .push(event);
-        }
-    }
+    use crate::telemetry::TelemetryEvent;
+    use crate::telemetry::test_support::RecordingSink;
 
     #[test]
     fn migrate_database_records_schema_version_telemetry() {

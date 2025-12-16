@@ -1,38 +1,19 @@
 //! Behavioural tests for local database migrations and schema telemetry.
+#![allow(
+    clippy::expect_used,
+    clippy::missing_panics_doc,
+    reason = "test code; panics are acceptable in test fixtures and assertions"
+)]
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 
-use frankie::persistence::{PersistenceError, migrate_database};
-use frankie::telemetry::{TelemetryEvent, TelemetrySink};
+use frankie::persistence::{INITIAL_SCHEMA_VERSION, PersistenceError, migrate_database};
+use frankie::telemetry::TelemetryEvent;
+use frankie::telemetry::test_support::RecordingSink;
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use tempfile::TempDir;
-
-#[derive(Debug, Clone, Default)]
-struct RecordingTelemetrySink {
-    events: Arc<Mutex<Vec<TelemetryEvent>>>,
-}
-
-impl RecordingTelemetrySink {
-    fn take(&self) -> Vec<TelemetryEvent> {
-        self.events
-            .lock()
-            .unwrap_or_else(|error| panic!("events mutex should be available: {error}"))
-            .drain(..)
-            .collect()
-    }
-}
-
-impl TelemetrySink for RecordingTelemetrySink {
-    fn record(&self, event: TelemetryEvent) {
-        self.events
-            .lock()
-            .unwrap_or_else(|error| panic!("events mutex should be available: {error}"))
-            .push(event);
-    }
-}
 
 #[derive(ScenarioState, Default)]
 struct MigrationState {
@@ -40,12 +21,24 @@ struct MigrationState {
     temp_dir: Slot<TempDir>,
     schema_version: Slot<String>,
     error: Slot<PersistenceError>,
-    telemetry: Slot<RecordingTelemetrySink>,
+    telemetry: Slot<RecordingSink>,
 }
 
 #[fixture]
 fn migration_state() -> MigrationState {
     MigrationState::default()
+}
+
+/// Creates a temporary directory and returns its path as a string.
+///
+/// This helper centralises `TempDir` creation to reduce boilerplate in Given
+/// steps and ensure consistent error handling.
+fn create_temp_dir() -> TempDir {
+    TempDir::new().expect("failed to create temporary directory")
+}
+
+fn path_to_string(path: &Path) -> String {
+    path.to_string_lossy().to_string()
 }
 
 // --- Given steps ---
@@ -62,9 +55,7 @@ fn blank_database_url(migration_state: &MigrationState) {
 
 #[given("a directory database path")]
 fn directory_database_path(migration_state: &MigrationState) {
-    let temp_dir = TempDir::new().unwrap_or_else(|error| {
-        panic!("failed to create temporary directory for database path: {error}");
-    });
+    let temp_dir = create_temp_dir();
     let database_url = path_to_string(temp_dir.path());
     migration_state.temp_dir.set(temp_dir);
     migration_state.database_url.set(database_url);
@@ -72,13 +63,16 @@ fn directory_database_path(migration_state: &MigrationState) {
 
 #[given("a temporary database file")]
 fn temporary_database_file(migration_state: &MigrationState) {
-    let temp_dir = TempDir::new().unwrap_or_else(|error| {
-        panic!("failed to create temporary directory for database file: {error}");
-    });
+    let temp_dir = create_temp_dir();
     let db_path = temp_dir.path().join("frankie.sqlite");
     let database_url = path_to_string(&db_path);
     migration_state.temp_dir.set(temp_dir);
     migration_state.database_url.set(database_url);
+}
+
+#[given("a telemetry sink")]
+fn telemetry_sink(migration_state: &MigrationState) {
+    migration_state.telemetry.set(RecordingSink::default());
 }
 
 // --- When steps ---
@@ -89,7 +83,7 @@ fn run_migrations(migration_state: &MigrationState) {
         .telemetry
         .with_ref(Clone::clone)
         .unwrap_or_else(|| {
-            let telemetry = RecordingTelemetrySink::default();
+            let telemetry = RecordingSink::default();
             migration_state.telemetry.set(telemetry.clone());
             telemetry
         });
@@ -97,7 +91,7 @@ fn run_migrations(migration_state: &MigrationState) {
     let database_url = migration_state
         .database_url
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("database URL not initialised"));
+        .expect("database URL not initialised");
 
     match migrate_database(&database_url, &telemetry) {
         Ok(version) => {
@@ -125,7 +119,7 @@ fn schema_version_is(migration_state: &MigrationState, expected: String) {
     let actual = migration_state
         .schema_version
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("schema version missing"));
+        .expect("schema version missing");
 
     assert_eq!(actual, expected_clean, "schema version mismatch");
 }
@@ -134,8 +128,8 @@ fn schema_version_is(migration_state: &MigrationState, expected: String) {
 fn telemetry_records_schema_version(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
-        .with_ref(RecordingTelemetrySink::take)
-        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
+        .with_ref(RecordingSink::events)
+        .expect("telemetry sink not initialised");
 
     let Some(TelemetryEvent::SchemaVersionRecorded { schema_version }) = events.first() else {
         panic!("expected SchemaVersionRecorded event, got {events:?}");
@@ -151,17 +145,33 @@ fn telemetry_records_schema_version(migration_state: &MigrationState) {
 fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
-        .with_ref(RecordingTelemetrySink::take)
-        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
+        .with_ref(RecordingSink::events)
+        .expect("telemetry sink not initialised");
 
-    let count = events
+    let schema_versions: Vec<&str> = events
         .iter()
-        .filter(|event| matches!(event, TelemetryEvent::SchemaVersionRecorded { .. }))
-        .count();
+        .map(|event| {
+            let TelemetryEvent::SchemaVersionRecorded { schema_version } = event;
+            schema_version.as_str()
+        })
+        .collect();
 
     assert_eq!(
-        count, 2,
-        "expected SchemaVersionRecorded twice, got {events:?}"
+        schema_versions.len(),
+        2,
+        "expected exactly two SchemaVersionRecorded events, got {events:?}"
+    );
+
+    assert_eq!(
+        schema_versions.first(),
+        schema_versions.get(1),
+        "expected idempotent migration to record the same schema_version twice"
+    );
+
+    assert_eq!(
+        schema_versions.first().copied(),
+        Some(INITIAL_SCHEMA_VERSION),
+        "expected recorded schema_version to match INITIAL_SCHEMA_VERSION"
     );
 }
 
@@ -172,7 +182,7 @@ fn persistence_error_is(migration_state: &MigrationState, expected: String) {
     let error = migration_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected persistence error"));
+        .expect("expected persistence error");
 
     assert_eq!(error.to_string(), expected_clean);
 }
@@ -184,7 +194,7 @@ fn persistence_error_starts_with(migration_state: &MigrationState, expected_pref
     let error = migration_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected persistence error"));
+        .expect("expected persistence error");
 
     assert!(
         error.to_string().starts_with(expected_clean),
@@ -196,17 +206,13 @@ fn persistence_error_starts_with(migration_state: &MigrationState, expected_pref
 fn no_telemetry_is_recorded(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
-        .with_ref(RecordingTelemetrySink::take)
-        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
+        .with_ref(RecordingSink::events)
+        .expect("telemetry sink not initialised");
 
     assert!(
         events.is_empty(),
         "expected no telemetry events, got {events:?}"
     );
-}
-
-fn path_to_string(path: &Path) -> String {
-    path.to_string_lossy().to_string()
 }
 
 #[scenario(path = "tests/features/database_migration.feature", index = 0)]

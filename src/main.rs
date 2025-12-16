@@ -57,20 +57,33 @@ fn run_database_migrations(config: &FrankieConfig) -> Result<(), IntakeError> {
 
     let telemetry = StderrJsonlTelemetrySink;
     migrate_database(database_url, &telemetry)
-        .map(|_schema_version| ())
-        .map_err(|error| match error {
-            PersistenceError::MissingDatabaseUrl | PersistenceError::BlankDatabaseUrl => {
-                IntakeError::Configuration {
-                    message: error.to_string(),
-                }
-            }
-            PersistenceError::ConnectionFailed { .. }
-            | PersistenceError::MigrationFailed { .. }
-            | PersistenceError::SchemaVersionQueryFailed { .. }
-            | PersistenceError::MissingSchemaVersion => IntakeError::Io {
-                message: error.to_string(),
-            },
-        })
+        .map(drop)
+        .map_err(|error| map_persistence_error(&error))
+}
+
+/// Maps a persistence error to an intake error.
+///
+/// Configuration-related errors (missing or blank URL) become
+/// [`IntakeError::Configuration`], while runtime errors (connection, migration,
+/// query failures) become [`IntakeError::Io`].
+fn map_persistence_error(error: &PersistenceError) -> IntakeError {
+    if is_configuration_error(error) {
+        IntakeError::Configuration {
+            message: error.to_string(),
+        }
+    } else {
+        IntakeError::Io {
+            message: error.to_string(),
+        }
+    }
+}
+
+/// Returns true if the persistence error is a configuration problem.
+const fn is_configuration_error(error: &PersistenceError) -> bool {
+    matches!(
+        error,
+        PersistenceError::MissingDatabaseUrl | PersistenceError::BlankDatabaseUrl
+    )
 }
 
 /// Loads a single pull request by URL.
@@ -217,18 +230,20 @@ mod tests {
     use async_trait::async_trait;
     use frankie::github::PageInfo;
     use frankie::{PaginatedPullRequests, PullRequestSummary, RateLimitInfo, RepositoryLocator};
+    use rstest::rstest;
 
     use super::{
         FrankieConfig, IntakeError, ListPullRequestsParams, PullRequestState, RepositoryGateway,
         run_repository_listing_with_gateway_builder, write_listing_summary,
     };
 
-    /// Asserts the migration subcommand exits with a configuration error.
-    ///
-    /// This helper keeps the migration error tests focused on the scenario
-    /// setup by centralising the shared call to `run_database_migrations`
-    /// and assertion on the error variant.
-    fn assert_migration_fails_with_config_error(database_url: Option<String>) {
+    #[rstest]
+    #[case::missing_database_url(None, "database URL is required")]
+    #[case::blank_database_url(Some("   ".to_owned()), "database URL must not be blank")]
+    fn migrate_db_rejects_invalid_database_url(
+        #[case] database_url: Option<String>,
+        #[case] expected_message_prefix: &str,
+    ) {
         let config = FrankieConfig {
             database_url,
             migrate_db: true,
@@ -236,20 +251,16 @@ mod tests {
         };
 
         let result = super::run_database_migrations(&config);
-        assert!(
-            matches!(result, Err(IntakeError::Configuration { .. })),
-            "expected Configuration error, got {result:?}"
-        );
-    }
 
-    #[test]
-    fn migrate_db_requires_database_url() {
-        assert_migration_fails_with_config_error(None);
-    }
-
-    #[test]
-    fn migrate_db_rejects_blank_database_url_as_configuration_error() {
-        assert_migration_fails_with_config_error(Some("   ".to_owned()));
+        match result {
+            Err(IntakeError::Configuration { message }) => {
+                assert!(
+                    message.starts_with(expected_message_prefix),
+                    "expected message starting with {expected_message_prefix:?}, got {message:?}"
+                );
+            }
+            other => panic!("expected Configuration error, got {other:?}"),
+        }
     }
 
     #[derive(Clone)]

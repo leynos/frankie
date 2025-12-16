@@ -3904,7 +3904,7 @@ migration that creates the Phase 1 tables needed for local persistence:
 
 - `repositories`
 - `pull_requests`
-- `review_comments` (used as the "comments" table)
+- `review_comments` (stores GitHub pull request review comments)
 - `sync_checkpoints`
 
 The additional entities in the ER diagram (for example `users`, `ai_sessions`,
