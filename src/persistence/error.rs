@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Errors returned while initialising or migrating the local `SQLite` database.
+/// Errors returned while initialising or migrating the local sqlite database.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum PersistenceError {
     /// No database URL/path was provided.
@@ -13,7 +13,7 @@ pub enum PersistenceError {
     #[error("database URL must not be blank")]
     BlankDatabaseUrl,
 
-    /// Establishing a `SQLite` connection failed.
+    /// Establishing a sqlite connection failed.
     #[error("failed to connect to SQLite database: {message}")]
     ConnectionFailed {
         /// Error detail from Diesel.

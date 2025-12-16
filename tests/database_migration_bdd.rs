@@ -1,9 +1,4 @@
 //! Behavioural tests for local database migrations and schema telemetry.
-#![allow(
-    clippy::expect_used,
-    clippy::missing_panics_doc,
-    reason = "test code; panics are acceptable in test fixtures and assertions"
-)]
 
 use std::path::Path;
 
@@ -34,7 +29,7 @@ fn migration_state() -> MigrationState {
 /// This helper centralises `TempDir` creation to reduce boilerplate in Given
 /// steps and ensure consistent error handling.
 fn create_temp_dir() -> TempDir {
-    TempDir::new().expect("failed to create temporary directory")
+    TempDir::new().unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"))
 }
 
 fn path_to_string(path: &Path) -> String {
@@ -82,16 +77,12 @@ fn run_migrations(migration_state: &MigrationState) {
     let telemetry = migration_state
         .telemetry
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| {
-            let telemetry = CapturingMockSink::default();
-            migration_state.telemetry.set(telemetry.clone());
-            telemetry
-        });
+        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
 
     let database_url = migration_state
         .database_url
         .with_ref(Clone::clone)
-        .expect("database URL not initialised");
+        .unwrap_or_else(|| panic!("database URL not initialised"));
 
     match migrate_database(&database_url, &telemetry) {
         Ok(version) => {
@@ -119,7 +110,7 @@ fn schema_version_is(migration_state: &MigrationState, expected: String) {
     let actual = migration_state
         .schema_version
         .with_ref(Clone::clone)
-        .expect("schema version missing");
+        .unwrap_or_else(|| panic!("schema version missing"));
 
     assert_eq!(actual, expected_clean, "schema version mismatch");
 }
@@ -129,7 +120,7 @@ fn telemetry_records_schema_version(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
         .with_ref(CapturingMockSink::events)
-        .expect("telemetry sink not initialised");
+        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
 
     let Some(TelemetryEvent::SchemaVersionRecorded { schema_version }) = events.first() else {
         panic!("expected SchemaVersionRecorded event, got {events:?}");
@@ -146,13 +137,12 @@ fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
         .with_ref(CapturingMockSink::events)
-        .expect("telemetry sink not initialised");
+        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
 
     let schema_versions: Vec<&str> = events
         .iter()
-        .map(|event| {
-            let TelemetryEvent::SchemaVersionRecorded { schema_version } = event;
-            schema_version.as_str()
+        .map(|event| match event {
+            TelemetryEvent::SchemaVersionRecorded { schema_version } => schema_version.as_str(),
         })
         .collect();
 
@@ -182,7 +172,7 @@ fn persistence_error_is(migration_state: &MigrationState, expected: String) {
     let error = migration_state
         .error
         .with_ref(Clone::clone)
-        .expect("expected persistence error");
+        .unwrap_or_else(|| panic!("expected persistence error"));
 
     assert_eq!(error.to_string(), expected_clean);
 }
@@ -194,7 +184,7 @@ fn persistence_error_starts_with(migration_state: &MigrationState, expected_pref
     let error = migration_state
         .error
         .with_ref(Clone::clone)
-        .expect("expected persistence error");
+        .unwrap_or_else(|| panic!("expected persistence error"));
 
     assert!(
         error.to_string().starts_with(expected_clean),
@@ -207,7 +197,7 @@ fn no_telemetry_is_recorded(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
         .with_ref(CapturingMockSink::events)
-        .expect("telemetry sink not initialised");
+        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
 
     assert!(
         events.is_empty(),

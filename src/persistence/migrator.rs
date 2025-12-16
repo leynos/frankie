@@ -1,4 +1,4 @@
-//! Diesel-backed migration runner for the local `SQLite` database.
+//! Diesel-backed migration runner for the local sqlite database.
 
 use diesel::Connection;
 use diesel::OptionalExtension;

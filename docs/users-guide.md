@@ -121,6 +121,9 @@ token = "ghp_example"
 
 # Local persistence (optional)
 database_url = "frankie.sqlite"
+
+# Database migrations (set to true to run migrations and exit)
+migrate_db = true
 ```
 
 Frankie searches for configuration files in this order:

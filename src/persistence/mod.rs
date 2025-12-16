@@ -1,6 +1,7 @@
 //! Local persistence and database migrations.
 //!
-//! Frankie uses `SQLite` for local-first caching and persistence. The schema is
+//! Frankie uses a local sqlite database for local-first caching and
+//! persistence. The schema is
 //! managed with Diesel migrations so the database can be created and upgraded
 //! consistently across machines.
 

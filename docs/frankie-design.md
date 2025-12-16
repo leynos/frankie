@@ -3915,8 +3915,10 @@ keep Phase 1 focused on foundations.
 using an opaque `checkpoint` string, allowing future implementations to store
 GitHub cursors, ETags, timestamps, or other sync tokens without schema churn.
 
-When migrations are applied via the application, the current Diesel migration
-version string is recorded in the application's local telemetry stream.
+When migrations are applied via the application, Frankie reads the latest
+`version` value from Diesel's `__diesel_schema_migrations` table (for example
+`20251214000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
+the stderr JSONL telemetry sink.
 
 #### 6.6.3.2 Versioning Strategy
 

@@ -2,20 +2,16 @@
 //!
 //! These tests spawn the Frankie binary as a subprocess to verify process exit
 //! behaviour and ensure no GitHub operations occur during migration-only runs.
-#![allow(
-    clippy::expect_used,
-    clippy::missing_panics_doc,
-    reason = "test code; panics are acceptable in test fixtures and assertions"
-)]
 
-use std::process::Command;
+use std::process::{Command, Output};
 
 use tempfile::TempDir;
 
 /// Returns the path to the built binary.
 fn binary_path() -> std::path::PathBuf {
     // cargo test builds binaries in target/debug
-    let mut path = std::env::current_exe().expect("failed to get current exe path");
+    let mut path = std::env::current_exe()
+        .unwrap_or_else(|error| panic!("failed to get current exe path: {error}"));
     path.pop(); // remove test binary name
     path.pop(); // remove deps
     path.push("frankie");
@@ -24,41 +20,85 @@ fn binary_path() -> std::path::PathBuf {
 
 /// Creates a temporary directory for database tests.
 fn create_temp_dir() -> TempDir {
-    TempDir::new().expect("failed to create temporary directory")
+    TempDir::new().unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"))
 }
 
-#[test]
-fn migrate_db_succeeds_with_in_memory_database() {
-    let output = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", ":memory:"])
-        .output()
-        .expect("failed to execute binary");
+fn run_frankie(args: &[&str], env: &[(&str, Option<&str>)]) -> Output {
+    let mut command = Command::new(binary_path());
+    command.args(args);
 
+    for (key, value) in env {
+        match value {
+            Some(env_value) => {
+                command.env(key, env_value);
+            }
+            None => {
+                command.env_remove(key);
+            }
+        }
+    }
+
+    command
+        .output()
+        .unwrap_or_else(|error| panic!("failed to execute binary: {error}"))
+}
+
+fn run_migrate_db(database_url: Option<&str>, env: &[(&str, Option<&str>)]) -> Output {
+    let mut args = vec!["--migrate-db"];
+    if let Some(database_url_value) = database_url {
+        args.extend(["--database-url", database_url_value]);
+    }
+
+    run_frankie(&args, env)
+}
+
+fn assert_migrate_db_succeeds(database_url: &str) {
+    let output = run_migrate_db(Some(database_url), &[]);
     assert!(
         output.status.success(),
         "expected successful exit, got: {:?}\nstderr: {}",
         output.status,
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn assert_migrate_db_fails(
+    database_url: Option<&str>,
+    env: &[(&str, Option<&str>)],
+    expected_stderr_substring: &str,
+) {
+    let output = run_migrate_db(database_url, env);
+    assert!(!output.status.success(), "expected failure exit status");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(expected_stderr_substring),
+        "expected stderr to contain {expected_stderr_substring:?}, got: {stderr}"
+    );
+}
+
+fn assert_migrate_db_exit_code(database_url: Option<&str>, expected_code: i32) {
+    let output = run_migrate_db(database_url, &[("FRANKIE_DATABASE_URL", None)]);
+    assert_eq!(
+        output.status.code(),
+        Some(expected_code),
+        "unexpected exit code: {:?}",
+        output.status
+    );
+}
+
+#[test]
+fn migrate_db_succeeds_with_in_memory_database() {
+    assert_migrate_db_succeeds(":memory:");
 }
 
 #[test]
 fn migrate_db_succeeds_with_file_database() {
     let temp_dir = create_temp_dir();
     let db_path = temp_dir.path().join("frankie.sqlite");
-    let db_url = db_path.to_string_lossy();
+    let db_url = db_path.to_string_lossy().to_string();
 
-    let output = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", &db_url])
-        .output()
-        .expect("failed to execute binary");
-
-    assert!(
-        output.status.success(),
-        "expected successful exit, got: {:?}\nstderr: {}",
-        output.status,
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert_migrate_db_succeeds(&db_url);
 
     assert!(
         db_path.exists(),
@@ -69,10 +109,7 @@ fn migrate_db_succeeds_with_file_database() {
 
 #[test]
 fn migrate_db_emits_telemetry_to_stderr() {
-    let output = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", ":memory:"])
-        .output()
-        .expect("failed to execute binary");
+    let output = run_migrate_db(Some(":memory:"), &[]);
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -90,12 +127,10 @@ fn migrate_db_does_not_perform_github_operations() {
     // Running with --migrate-db and no GitHub args should succeed without
     // attempting any network calls. Providing an invalid token or no token
     // should not matter since GitHub operations are skipped.
-    let output = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", ":memory:"])
-        .env_remove("GITHUB_TOKEN")
-        .env_remove("FRANKIE_TOKEN")
-        .output()
-        .expect("failed to execute binary");
+    let output = run_migrate_db(
+        Some(":memory:"),
+        &[("GITHUB_TOKEN", None), ("FRANKIE_TOKEN", None)],
+    );
 
     assert!(
         output.status.success(),
@@ -118,113 +153,57 @@ fn migrate_db_does_not_perform_github_operations() {
 
 #[test]
 fn migrate_db_fails_without_database_url() {
-    let output = Command::new(binary_path())
-        .args(["--migrate-db"])
-        .env_remove("FRANKIE_DATABASE_URL")
-        .output()
-        .expect("failed to execute binary");
-
-    assert!(
-        !output.status.success(),
-        "should fail when database URL is missing"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("database URL is required"),
-        "should report missing database URL error, got: {stderr}"
+    assert_migrate_db_fails(
+        None,
+        &[("FRANKIE_DATABASE_URL", None)],
+        "database URL is required",
     );
 }
 
 #[test]
 fn migrate_db_fails_with_blank_database_url() {
-    let output = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", "   "])
-        .output()
-        .expect("failed to execute binary");
-
-    assert!(
-        !output.status.success(),
-        "should fail when database URL is blank"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("database URL must not be blank"),
-        "should report blank database URL error, got: {stderr}"
+    assert_migrate_db_fails(
+        Some("   "),
+        &[("FRANKIE_DATABASE_URL", None)],
+        "database URL must not be blank",
     );
 }
 
 #[test]
 fn migrate_db_fails_with_directory_path() {
     let temp_dir = create_temp_dir();
-    let dir_path = temp_dir.path().to_string_lossy();
+    let dir_path = temp_dir.path().to_string_lossy().to_string();
 
-    let output = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", &dir_path])
-        .output()
-        .expect("failed to execute binary");
-
-    assert!(
-        !output.status.success(),
-        "should fail when database URL is a directory"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("failed to connect to SQLite database"),
-        "should report connection error, got: {stderr}"
+    assert_migrate_db_fails(
+        Some(&dir_path),
+        &[("FRANKIE_DATABASE_URL", None)],
+        "failed to connect to SQLite database",
     );
 }
 
 #[test]
 fn migrate_db_exits_with_success_code_on_success() {
-    let output = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", ":memory:"])
-        .output()
-        .expect("failed to execute binary");
-
-    assert_eq!(
-        output.status.code(),
-        Some(0),
-        "should exit with code 0 on success"
-    );
+    assert_migrate_db_exit_code(Some(":memory:"), 0);
 }
 
 #[test]
 fn migrate_db_exits_with_failure_code_on_error() {
-    let output = Command::new(binary_path())
-        .args(["--migrate-db"])
-        .env_remove("FRANKIE_DATABASE_URL")
-        .output()
-        .expect("failed to execute binary");
-
-    assert_eq!(
-        output.status.code(),
-        Some(1),
-        "should exit with code 1 on failure"
-    );
+    assert_migrate_db_exit_code(None, 1);
 }
 
 #[test]
 fn migrate_db_is_idempotent() {
     let temp_dir = create_temp_dir();
     let db_path = temp_dir.path().join("frankie.sqlite");
-    let db_url = db_path.to_string_lossy();
+    let db_url = db_path.to_string_lossy().to_string();
 
     // First migration
-    let first = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", &db_url])
-        .output()
-        .expect("failed to execute first migration");
+    let first = run_migrate_db(Some(&db_url), &[]);
 
     assert!(first.status.success(), "first migration should succeed");
 
     // Second migration
-    let second = Command::new(binary_path())
-        .args(["--migrate-db", "--database-url", &db_url])
-        .output()
-        .expect("failed to execute second migration");
+    let second = run_migrate_db(Some(&db_url), &[]);
 
     assert!(
         second.status.success(),
