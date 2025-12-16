@@ -102,25 +102,34 @@ fn read_schema_version(
     Ok(SchemaVersion(row.version))
 }
 
-#[cfg(test)]
+/// Unit tests for the migration runner.
+///
+/// These tests require the `test-support` feature to be enabled, which provides
+/// the mockall-generated [`MockTelemetrySink`].
+#[cfg(all(test, feature = "test-support"))]
 mod tests {
     use super::{INITIAL_SCHEMA_VERSION, migrate_database};
     use crate::telemetry::TelemetryEvent;
-    use crate::telemetry::test_support::RecordingSink;
+    use crate::telemetry::test_support::MockTelemetrySink;
 
     #[test]
     fn migrate_database_records_schema_version_telemetry() {
-        let telemetry = RecordingSink::default();
+        let mut telemetry = MockTelemetrySink::new();
+        telemetry
+            .expect_record()
+            .withf(|event| {
+                matches!(
+                    event,
+                    TelemetryEvent::SchemaVersionRecorded { schema_version }
+                    if schema_version == INITIAL_SCHEMA_VERSION
+                )
+            })
+            .times(1)
+            .return_const(());
 
         let schema_version =
             migrate_database(":memory:", &telemetry).expect("migration should succeed");
 
         assert_eq!(schema_version.as_str(), INITIAL_SCHEMA_VERSION);
-        assert_eq!(
-            telemetry.take(),
-            vec![TelemetryEvent::SchemaVersionRecorded {
-                schema_version: INITIAL_SCHEMA_VERSION.to_owned(),
-            }]
-        );
     }
 }

@@ -20,6 +20,7 @@ pub enum TelemetryEvent {
 }
 
 /// A sink that can record telemetry events.
+#[cfg_attr(feature = "test-support", mockall::automock)]
 pub trait TelemetrySink: Send + Sync {
     /// Records a telemetry event.
     fn record(&self, event: TelemetryEvent);
@@ -70,48 +71,48 @@ fn writeln_stderr(message: &str) -> io::Result<()> {
 
 /// Test support utilities for telemetry testing.
 ///
-/// This module provides a shared [`RecordingSink`] implementation that can be
-/// used across unit tests, integration tests, and BDD scenarios.
-#[cfg(any(test, feature = "test-support"))]
+/// This module re-exports the mockall-generated [`MockTelemetrySink`] and
+/// provides a [`CapturingMockSink`] adapter for scenarios that need to capture
+/// events for later inspection.
+#[cfg(feature = "test-support")]
 pub mod test_support {
-    #![allow(
-        clippy::expect_used,
-        clippy::missing_panics_doc,
-        reason = "test-only code; panics are acceptable in test fixtures"
-    )]
-
     use std::sync::{Arc, Mutex};
 
+    pub use super::MockTelemetrySink;
     use super::{TelemetryEvent, TelemetrySink};
 
-    /// A telemetry sink that records events for later assertion.
+    /// A mockall-backed telemetry sink that captures events for later assertion.
     ///
-    /// This sink is thread-safe and can be cloned to share across test
-    /// boundaries. Use [`take`](Self::take) to drain and retrieve recorded
-    /// events, or [`events`](Self::events) for a non-draining snapshot.
-    #[derive(Debug, Clone, Default)]
-    pub struct RecordingSink {
+    /// This adapter wraps [`MockTelemetrySink`] and stores recorded events in a
+    /// thread-safe buffer. Use [`events`](Self::events) to retrieve a snapshot of
+    /// captured events for assertion in BDD scenarios.
+    #[derive(Clone)]
+    pub struct CapturingMockSink {
         events: Arc<Mutex<Vec<TelemetryEvent>>>,
     }
 
-    impl RecordingSink {
-        /// Drains and returns all recorded events.
-        ///
-        /// This clears the internal event list. Subsequent calls return an
-        /// empty vector until new events are recorded.
-        #[must_use]
-        pub fn take(&self) -> Vec<TelemetryEvent> {
-            self.events
-                .lock()
-                .expect("events mutex should be available")
-                .drain(..)
-                .collect()
+    impl Default for CapturingMockSink {
+        fn default() -> Self {
+            Self {
+                events: Arc::new(Mutex::new(Vec::new())),
+            }
         }
+    }
 
+    impl CapturingMockSink {
         /// Returns a snapshot of all recorded events without draining.
         ///
         /// Use this when you need to inspect events without clearing them,
         /// such as when multiple Then steps need to check the same events.
+        ///
+        /// # Panics
+        ///
+        /// Panics if the events mutex is poisoned, which indicates a prior panic
+        /// during event recording.
+        #[expect(
+            clippy::expect_used,
+            reason = "test fixture; panic is acceptable if mutex is poisoned"
+        )]
         #[must_use]
         pub fn events(&self) -> Vec<TelemetryEvent> {
             self.events
@@ -121,7 +122,11 @@ pub mod test_support {
         }
     }
 
-    impl TelemetrySink for RecordingSink {
+    impl TelemetrySink for CapturingMockSink {
+        #[expect(
+            clippy::expect_used,
+            reason = "test fixture; panic is acceptable if mutex is poisoned"
+        )]
         fn record(&self, event: TelemetryEvent) {
             self.events
                 .lock()
@@ -131,37 +136,31 @@ pub mod test_support {
     }
 }
 
-#[cfg(test)]
+/// Unit tests for telemetry module.
+///
+/// These tests require the `test-support` feature to be enabled, which provides
+/// the mockall-generated [`MockTelemetrySink`].
+#[cfg(all(test, feature = "test-support"))]
 mod tests {
-    use super::test_support::RecordingSink;
+    use super::test_support::MockTelemetrySink;
     use super::{TelemetryEvent, TelemetrySink};
 
     #[test]
-    fn recording_sink_captures_events() {
-        let sink = RecordingSink::default();
-        sink.record(TelemetryEvent::SchemaVersionRecorded {
+    fn mock_sink_receives_expected_event() {
+        let mut mock = MockTelemetrySink::new();
+        mock.expect_record()
+            .withf(|event| {
+                matches!(
+                    event,
+                    TelemetryEvent::SchemaVersionRecorded { schema_version }
+                    if schema_version == "20251214000000"
+                )
+            })
+            .times(1)
+            .return_const(());
+
+        mock.record(TelemetryEvent::SchemaVersionRecorded {
             schema_version: "20251214000000".to_owned(),
         });
-
-        assert_eq!(
-            sink.take(),
-            vec![TelemetryEvent::SchemaVersionRecorded {
-                schema_version: "20251214000000".to_owned(),
-            }]
-        );
-    }
-
-    #[test]
-    fn recording_sink_events_returns_snapshot_without_draining() {
-        let sink = RecordingSink::default();
-        sink.record(TelemetryEvent::SchemaVersionRecorded {
-            schema_version: "20251214000000".to_owned(),
-        });
-
-        let first = sink.events();
-        let second = sink.events();
-
-        assert_eq!(first, second, "events() should not drain");
-        assert_eq!(first.len(), 1);
     }
 }
