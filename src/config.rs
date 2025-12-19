@@ -56,7 +56,7 @@ pub enum OperationMode {
 /// - `FRANKIE_TOKEN`, `GITHUB_TOKEN`, or `--token`: Authentication token
 /// - `FRANKIE_OWNER` or `--owner`: Repository owner
 /// - `FRANKIE_REPO` or `--repo`: Repository name
-/// - `FRANKIE_DATABASE_URL` or `--database-url`: Local sqlite database path
+/// - `FRANKIE_DATABASE_URL` or `--database-url`: Local `SQLite` database path
 ///
 /// # Example
 ///
@@ -114,15 +114,16 @@ pub struct FrankieConfig {
     #[ortho_config(cli_short = 'r')]
     pub repo: Option<String>,
 
-    /// Local sqlite database URL/path used for persistence.
+    /// Local `SQLite` database URL/path used for persistence.
     ///
-    /// Diesel uses a filesystem path for sqlite connections. The same value is
+    /// Diesel uses a filesystem path for `SQLite` connections. The same value is
     /// also used by the Diesel CLI via `DATABASE_URL` when running migrations.
     ///
     /// Can be provided via:
     /// - CLI: `--database-url <PATH>`
     /// - Environment: `FRANKIE_DATABASE_URL`
     /// - Config file: `database_url = "..."`
+    #[ortho_config()]
     pub database_url: Option<String>,
 
     /// Runs database migrations and exits.
