@@ -68,17 +68,18 @@ fn telemetry_sink(migration_state: &MigrationState) {
 
 // --- When steps ---
 
+#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[when("database migrations are run")]
 fn run_migrations(migration_state: &MigrationState) {
     let telemetry = migration_state
         .telemetry
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
+        .expect("telemetry sink not initialised");
 
     let database_url = migration_state
         .database_url
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("database URL not initialised"));
+        .expect("database URL not initialised");
 
     match migrate_database(&database_url, &telemetry) {
         Ok(version) => {
@@ -99,6 +100,7 @@ fn run_migrations_again(migration_state: &MigrationState) {
 
 // --- Then steps ---
 
+#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("the schema version is {expected}")]
 fn schema_version_is(migration_state: &MigrationState, expected: String) {
     let expected_clean = expected.trim_matches('"');
@@ -106,17 +108,18 @@ fn schema_version_is(migration_state: &MigrationState, expected: String) {
     let actual = migration_state
         .schema_version
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("schema version missing"));
+        .expect("schema version missing");
 
     assert_eq!(actual, expected_clean, "schema version mismatch");
 }
 
+#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("telemetry records the schema version")]
 fn telemetry_records_schema_version(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
         .with_ref(CapturingMockSink::events)
-        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
+        .expect("telemetry sink not initialised");
 
     let Some(TelemetryEvent::SchemaVersionRecorded { schema_version }) = events.first() else {
         panic!("expected SchemaVersionRecorded event, got {events:?}");
@@ -128,12 +131,13 @@ fn telemetry_records_schema_version(migration_state: &MigrationState) {
     );
 }
 
+#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("telemetry records the schema version twice")]
 fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
         .with_ref(CapturingMockSink::events)
-        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
+        .expect("telemetry sink not initialised");
 
     let schema_versions: Vec<&str> = events
         .iter()
@@ -161,6 +165,7 @@ fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
     );
 }
 
+#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("a persistence error {expected} is reported")]
 fn persistence_error_is(migration_state: &MigrationState, expected: String) {
     let expected_clean = expected.trim_matches('"');
@@ -168,11 +173,12 @@ fn persistence_error_is(migration_state: &MigrationState, expected: String) {
     let error = migration_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected persistence error"));
+        .expect("expected persistence error");
 
     assert_eq!(error.to_string(), expected_clean);
 }
 
+#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("a persistence error starts with {expected_prefix}")]
 fn persistence_error_starts_with(migration_state: &MigrationState, expected_prefix: String) {
     let expected_clean = expected_prefix.trim_matches('"');
@@ -180,7 +186,7 @@ fn persistence_error_starts_with(migration_state: &MigrationState, expected_pref
     let error = migration_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected persistence error"));
+        .expect("expected persistence error");
 
     assert!(
         error.to_string().starts_with(expected_clean),
@@ -188,12 +194,13 @@ fn persistence_error_starts_with(migration_state: &MigrationState, expected_pref
     );
 }
 
+#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("no telemetry is recorded")]
 fn no_telemetry_is_recorded(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
         .with_ref(CapturingMockSink::events)
-        .unwrap_or_else(|| panic!("telemetry sink not initialised"));
+        .expect("telemetry sink not initialised");
 
     assert!(
         events.is_empty(),

@@ -131,6 +131,12 @@ pub struct FrankieConfig {
     /// When set, Frankie initializes the database at `database_url`, applies
     /// any pending Diesel migrations, records the schema version in telemetry,
     /// and exits without performing GitHub operations.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--migrate-db`
+    /// - Environment: `FRANKIE_MIGRATE_DB`
+    /// - Config file: `migrate_db = true`
+    #[ortho_config()]
     pub migrate_db: bool,
 }
 
