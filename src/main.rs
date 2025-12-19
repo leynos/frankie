@@ -63,9 +63,9 @@ fn run_database_migrations(config: &FrankieConfig) -> Result<(), IntakeError> {
 
 /// Maps a persistence error to an intake error.
 ///
-/// Configuration-related errors (missing or blank URL) become
-/// [`IntakeError::Configuration`], while runtime errors (connection, migration,
-/// query failures) become [`IntakeError::Io`].
+/// Configuration-related errors (blank URL) become [`IntakeError::Configuration`],
+/// while runtime errors (connection, migration, query failures) become
+/// [`IntakeError::Io`].
 fn map_persistence_error(error: &PersistenceError) -> IntakeError {
     if is_configuration_error(error) {
         IntakeError::Configuration {
@@ -80,10 +80,7 @@ fn map_persistence_error(error: &PersistenceError) -> IntakeError {
 
 /// Returns true if the persistence error is a configuration problem.
 const fn is_configuration_error(error: &PersistenceError) -> bool {
-    matches!(
-        error,
-        PersistenceError::MissingDatabaseUrl | PersistenceError::BlankDatabaseUrl
-    )
+    matches!(error, PersistenceError::BlankDatabaseUrl)
 }
 
 /// Loads a single pull request by URL.

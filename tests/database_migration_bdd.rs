@@ -6,7 +6,7 @@ use std::path::Path;
 
 use frankie::persistence::{INITIAL_SCHEMA_VERSION, PersistenceError, migrate_database};
 use frankie::telemetry::TelemetryEvent;
-use frankie::telemetry::test_support::CapturingMockSink;
+use frankie::telemetry::test_support::RecordingTelemetrySink;
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
@@ -20,7 +20,7 @@ struct MigrationState {
     temp_dir: Slot<TempDir>,
     schema_version: Slot<String>,
     error: Slot<PersistenceError>,
-    telemetry: Slot<CapturingMockSink>,
+    telemetry: Slot<RecordingTelemetrySink>,
 }
 
 #[fixture]
@@ -63,7 +63,9 @@ fn temporary_database_file(migration_state: &MigrationState) {
 
 #[given("a telemetry sink")]
 fn telemetry_sink(migration_state: &MigrationState) {
-    migration_state.telemetry.set(CapturingMockSink::default());
+    migration_state
+        .telemetry
+        .set(RecordingTelemetrySink::default());
 }
 
 // --- When steps ---
@@ -118,7 +120,7 @@ fn schema_version_is(migration_state: &MigrationState, expected: String) {
 fn telemetry_records_schema_version(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
-        .with_ref(CapturingMockSink::events)
+        .with_ref(RecordingTelemetrySink::events)
         .expect("telemetry sink not initialised");
 
     let Some(TelemetryEvent::SchemaVersionRecorded { schema_version }) = events.first() else {
@@ -136,7 +138,7 @@ fn telemetry_records_schema_version(migration_state: &MigrationState) {
 fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
-        .with_ref(CapturingMockSink::events)
+        .with_ref(RecordingTelemetrySink::events)
         .expect("telemetry sink not initialised");
 
     let schema_versions: Vec<&str> = events
@@ -199,7 +201,7 @@ fn persistence_error_starts_with(migration_state: &MigrationState, expected_pref
 fn no_telemetry_is_recorded(migration_state: &MigrationState) {
     let events = migration_state
         .telemetry
-        .with_ref(CapturingMockSink::events)
+        .with_ref(RecordingTelemetrySink::events)
         .expect("telemetry sink not initialised");
 
     assert!(
