@@ -3,10 +3,17 @@ name = "frankie"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+test-support = ["mockall"]
+
 [dependencies]
 async-trait = "0.1.83"
 clap = { version = "4.5.53", features = ["derive"] }
+diesel = { version = "2.3.4", features = ["sqlite"] }
+diesel_migrations = "2.3.1"
 http = "1.1.0"
+mockall = { version = "0.12.1", optional = true }
 octocrab = "0.48.1"
 ortho_config = "0.6.0"
 serde = { version = "1.0.217", features = ["derive"] }
@@ -16,11 +23,13 @@ tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread"] }
 url = "2.5.4"
 
 [dev-dependencies]
+frankie = { path = ".", features = ["test-support"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"
 rstest = "0.22.0"
 rstest-bdd = "0.2.0"
 rstest-bdd-macros = { version = "0.2.0", features = ["compile-time-validation"] }
+tempfile = "3.15.0"
 wiremock = "0.6.5"
 
 [lints.clippy]
@@ -87,4 +96,6 @@ result_large_err                    = "deny"
 
 [lints.rust]
 missing_docs                        = "deny"
+
+[lints.rustdoc]
 missing_crate_level_docs            = "deny"

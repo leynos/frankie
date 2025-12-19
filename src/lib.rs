@@ -6,6 +6,8 @@
 
 pub mod config;
 pub mod github;
+pub mod persistence;
+pub mod telemetry;
 
 pub use config::{FrankieConfig, OperationMode};
 pub use github::{

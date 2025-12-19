@@ -38,7 +38,7 @@ support later workflow features.
 
 ### Step: Persistence and configuration
 
-- [ ] Define initial SQLite schema (repositories, pull requests, comments,
+- [x] Define initial SQLite schema (repositories, pull requests, comments,
       sync checkpoints) using Diesel migrations; acceptance: `diesel migration
       run` succeeds and schema version is recorded in app telemetry.
 - [ ] Implement local caching layer with coherent expiry policy; acceptance:

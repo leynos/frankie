@@ -3897,6 +3897,29 @@ flowchart TD
         └── down.sql
 ```
 
+#### 6.6.3.1.1 Phase 1 implementation decisions
+
+The initial implementation in this repository starts with a single Diesel
+migration that creates the Phase 1 tables needed for local persistence:
+
+- `repositories`
+- `pull_requests`
+- `review_comments` (stores GitHub pull request review comments)
+- `sync_checkpoints`
+
+The additional entities in the ER diagram (for example `users`, `ai_sessions`,
+and `cache_metadata`) are intentionally deferred until later roadmap slices to
+keep Phase 1 focused on foundations.
+
+`sync_checkpoints` tracks incremental sync state per repository and resource
+using an opaque `checkpoint` string, allowing future implementations to store
+GitHub cursors, ETags, timestamps, or other sync tokens without schema churn.
+
+When migrations are applied via the application, Frankie reads the latest
+`version` value from Diesel's `__diesel_schema_migrations` table (for example
+`20251214000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
+the stderr JSONL telemetry sink.
+
 #### 6.6.3.2 Versioning Strategy
 
 | Version Component     | Implementation               | Purpose                       | Example             |

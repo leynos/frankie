@@ -4,6 +4,8 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use frankie::github::RepositoryGateway;
+use frankie::persistence::{PersistenceError, migrate_database};
+use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::{
     FrankieConfig, IntakeError, ListPullRequestsParams, OctocrabGateway, OctocrabRepositoryGateway,
     OperationMode, PaginatedPullRequests, PersonalAccessToken, PullRequestDetails,
@@ -27,6 +29,10 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), IntakeError> {
     let config = load_config()?;
 
+    if config.migrate_db {
+        return run_database_migrations(&config);
+    }
+
     match config.operation_mode() {
         OperationMode::SinglePullRequest => run_single_pr(&config).await,
         OperationMode::RepositoryListing => run_repository_listing(&config).await,
@@ -38,6 +44,46 @@ async fn run() -> Result<(), IntakeError> {
             .to_owned(),
         }),
     }
+}
+
+fn run_database_migrations(config: &FrankieConfig) -> Result<(), IntakeError> {
+    let database_url =
+        config
+            .database_url
+            .as_deref()
+            .ok_or_else(|| IntakeError::Configuration {
+                message: PersistenceError::MissingDatabaseUrl.to_string(),
+            })?;
+
+    let telemetry = StderrJsonlTelemetrySink;
+    migrate_database(database_url, &telemetry)
+        .map(drop)
+        .map_err(|error| map_persistence_error(&error))
+}
+
+/// Maps a persistence error to an intake error.
+///
+/// Configuration-related errors (missing or blank URL) become
+/// [`IntakeError::Configuration`], while runtime errors (connection, migration,
+/// query failures) become [`IntakeError::Io`].
+fn map_persistence_error(error: &PersistenceError) -> IntakeError {
+    if is_configuration_error(error) {
+        IntakeError::Configuration {
+            message: error.to_string(),
+        }
+    } else {
+        IntakeError::Io {
+            message: error.to_string(),
+        }
+    }
+}
+
+/// Returns true if the persistence error is a configuration problem.
+const fn is_configuration_error(error: &PersistenceError) -> bool {
+    matches!(
+        error,
+        PersistenceError::MissingDatabaseUrl | PersistenceError::BlankDatabaseUrl
+    )
 }
 
 /// Loads a single pull request by URL.
@@ -184,11 +230,38 @@ mod tests {
     use async_trait::async_trait;
     use frankie::github::PageInfo;
     use frankie::{PaginatedPullRequests, PullRequestSummary, RateLimitInfo, RepositoryLocator};
+    use rstest::rstest;
 
     use super::{
         FrankieConfig, IntakeError, ListPullRequestsParams, PullRequestState, RepositoryGateway,
         run_repository_listing_with_gateway_builder, write_listing_summary,
     };
+
+    #[rstest]
+    #[case::missing_database_url(None, "database URL is required")]
+    #[case::blank_database_url(Some("   ".to_owned()), "database URL must not be blank")]
+    fn migrate_db_rejects_invalid_database_url(
+        #[case] database_url: Option<String>,
+        #[case] expected_message_prefix: &str,
+    ) {
+        let config = FrankieConfig {
+            database_url,
+            migrate_db: true,
+            ..Default::default()
+        };
+
+        let result = super::run_database_migrations(&config);
+
+        match result {
+            Err(IntakeError::Configuration { message }) => {
+                assert!(
+                    message.starts_with(expected_message_prefix),
+                    "expected message starting with {expected_message_prefix:?}, got {message:?}"
+                );
+            }
+            other => panic!("expected Configuration error, got {other:?}"),
+        }
+    }
 
     #[derive(Clone)]
     struct CapturingGateway {
@@ -266,6 +339,8 @@ mod tests {
             token: Some("ghp_example".to_owned()),
             owner: Some("octo".to_owned()),
             repo: Some("repo".to_owned()),
+            database_url: None,
+            migrate_db: false,
         };
 
         let captured = Arc::new(Mutex::new(None));
@@ -324,6 +399,8 @@ mod tests {
             token: Some("ghp_example".to_owned()),
             owner: Some("octo".to_owned()),
             repo: Some("repo".to_owned()),
+            database_url: None,
+            migrate_db: false,
         };
 
         let gateway = CapturingGateway {
