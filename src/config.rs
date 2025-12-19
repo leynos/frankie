@@ -127,7 +127,7 @@ pub struct FrankieConfig {
 
     /// Runs database migrations and exits.
     ///
-    /// When set, Frankie initialises the database at `database_url`, applies
+    /// When set, Frankie initializes the database at `database_url`, applies
     /// any pending Diesel migrations, records the schema version in telemetry,
     /// and exits without performing GitHub operations.
     pub migrate_db: bool,

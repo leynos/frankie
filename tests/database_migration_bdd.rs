@@ -1,5 +1,7 @@
 //! Behavioural tests for local database migrations and schema telemetry.
 
+mod support;
+
 use std::path::Path;
 
 use frankie::persistence::{INITIAL_SCHEMA_VERSION, PersistenceError, migrate_database};
@@ -9,6 +11,8 @@ use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use tempfile::TempDir;
+
+use support::create_temp_dir;
 
 #[derive(ScenarioState, Default)]
 struct MigrationState {
@@ -22,14 +26,6 @@ struct MigrationState {
 #[fixture]
 fn migration_state() -> MigrationState {
     MigrationState::default()
-}
-
-/// Creates a temporary directory and returns its path as a string.
-///
-/// This helper centralises `TempDir` creation to reduce boilerplate in Given
-/// steps and ensure consistent error handling.
-fn create_temp_dir() -> TempDir {
-    TempDir::new().unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"))
 }
 
 fn path_to_string(path: &Path) -> String {

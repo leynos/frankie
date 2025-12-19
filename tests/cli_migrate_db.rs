@@ -3,9 +3,13 @@
 //! These tests spawn the Frankie binary as a subprocess to verify process exit
 //! behaviour and ensure no GitHub operations occur during migration-only runs.
 
+mod support;
+
 use std::process::{Command, Output};
 
-use tempfile::TempDir;
+use rstest::rstest;
+
+use support::create_temp_dir;
 
 /// Returns the path to the built binary.
 fn binary_path() -> std::path::PathBuf {
@@ -16,11 +20,6 @@ fn binary_path() -> std::path::PathBuf {
     path.pop(); // remove deps
     path.push("frankie");
     path
-}
-
-/// Creates a temporary directory for database tests.
-fn create_temp_dir() -> TempDir {
-    TempDir::new().unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"))
 }
 
 fn run_frankie(args: &[&str], env: &[(&str, Option<&str>)]) -> Output {
@@ -151,21 +150,17 @@ fn migrate_db_does_not_perform_github_operations() {
     );
 }
 
-#[test]
-fn migrate_db_fails_without_database_url() {
+#[rstest]
+#[case::missing_database_url(None, "database URL is required")]
+#[case::blank_database_url(Some("   "), "database URL must not be blank")]
+fn migrate_db_fails_with_invalid_database_url(
+    #[case] database_url: Option<&str>,
+    #[case] expected_stderr_substring: &str,
+) {
     assert_migrate_db_fails(
-        None,
+        database_url,
         &[("FRANKIE_DATABASE_URL", None)],
-        "database URL is required",
-    );
-}
-
-#[test]
-fn migrate_db_fails_with_blank_database_url() {
-    assert_migrate_db_fails(
-        Some("   "),
-        &[("FRANKIE_DATABASE_URL", None)],
-        "database URL must not be blank",
+        expected_stderr_substring,
     );
 }
 
@@ -181,14 +176,14 @@ fn migrate_db_fails_with_directory_path() {
     );
 }
 
-#[test]
-fn migrate_db_exits_with_success_code_on_success() {
-    assert_migrate_db_exit_code(Some(":memory:"), 0);
-}
-
-#[test]
-fn migrate_db_exits_with_failure_code_on_error() {
-    assert_migrate_db_exit_code(None, 1);
+#[rstest]
+#[case::success_with_in_memory_database(Some(":memory:"), 0)]
+#[case::failure_without_database_url(None, 1)]
+fn migrate_db_exits_with_expected_code(
+    #[case] database_url: Option<&str>,
+    #[case] expected_code: i32,
+) {
+    assert_migrate_db_exit_code(database_url, expected_code);
 }
 
 #[test]

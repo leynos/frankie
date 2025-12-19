@@ -182,10 +182,6 @@ special `:memory:` URL:
 frankie --migrate-db --database-url :memory:
 ```
 
-> **Note:** The `--migrate-db` flag is a CLI-only option. It cannot be set via
-> environment variables or configuration files—use the command-line flag
-> explicitly when running migrations.
-
 ## Error handling
 
 Authentication or network failures set the process exit code to a non-zero
