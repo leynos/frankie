@@ -280,51 +280,39 @@ impl PullRequestMetadataCache {
         Ok(exists.is_some())
     }
 
-    fn map_error_with_schema_check<F, G>(
+    fn map_error_with_schema_check<F>(
         connection: &mut SqliteConnection,
         error: &diesel::result::Error,
-        create_operation_error: F,
-        create_fallback_error: G,
+        create_error: F,
     ) -> PersistenceError
     where
-        F: FnOnce(String) -> PersistenceError,
-        G: FnOnce(String) -> PersistenceError,
+        F: Fn(String) -> PersistenceError,
     {
         match Self::cache_table_exists(connection) {
-            Ok(false) => return PersistenceError::SchemaNotInitialised,
-            Ok(true) => {}
-            Err(check_error) => {
-                return create_operation_error(format!(
-                    "schema presence check failed: {check_error}; original error: {error}"
-                ));
-            }
+            Ok(false) => PersistenceError::SchemaNotInitialised,
+            Ok(true) => create_error(error.to_string()),
+            Err(check_error) => create_error(format!(
+                "schema presence check failed: {check_error}; original error: {error}"
+            )),
         }
-
-        create_fallback_error(error.to_string())
     }
 
     fn map_query_error(
         connection: &mut SqliteConnection,
         error: &diesel::result::Error,
     ) -> PersistenceError {
-        Self::map_error_with_schema_check(
-            connection,
-            error,
-            |message| PersistenceError::QueryFailed { message },
-            |message| PersistenceError::QueryFailed { message },
-        )
+        Self::map_error_with_schema_check(connection, error, |message| {
+            PersistenceError::QueryFailed { message }
+        })
     }
 
     fn map_write_error(
         connection: &mut SqliteConnection,
         error: &diesel::result::Error,
     ) -> PersistenceError {
-        Self::map_error_with_schema_check(
-            connection,
-            error,
-            |message| PersistenceError::WriteFailed { message },
-            |message| PersistenceError::WriteFailed { message },
-        )
+        Self::map_error_with_schema_check(connection, error, |message| {
+            PersistenceError::WriteFailed { message }
+        })
     }
 }
 

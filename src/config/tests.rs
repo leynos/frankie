@@ -1,6 +1,6 @@
 //! Unit tests for configuration loading and precedence.
 
-use ortho_config::MergeComposer;
+use ortho_config::{MergeComposer, OrthoConfig};
 use rstest::rstest;
 use serde_json::{Value, json};
 
@@ -378,6 +378,74 @@ fn pr_metadata_cache_ttl_seconds_defaults_to_24_hours() {
     assert_eq!(
         config.pr_metadata_cache_ttl_seconds, 86_400,
         "default pr_metadata_cache_ttl_seconds should be 24 hours"
+    );
+}
+
+#[rstest]
+fn pr_metadata_cache_ttl_seconds_loads_from_environment_variable() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
+    let home = temp_dir.path().to_string_lossy().to_string();
+
+    let _guard = env_lock::lock_env([
+        ("FRANKIE_PR_METADATA_CACHE_TTL_SECONDS", Some("3600")),
+        ("HOME", Some(&home)),
+        ("XDG_CONFIG_HOME", Some(&home)),
+    ]);
+
+    let args = vec![std::ffi::OsString::from("frankie")];
+    let config = FrankieConfig::load_from_iter(args).expect("config should load");
+
+    assert_eq!(
+        config.pr_metadata_cache_ttl_seconds, 3600,
+        "expected FRANKIE_PR_METADATA_CACHE_TTL_SECONDS to set TTL"
+    );
+}
+
+#[rstest]
+fn pr_metadata_cache_ttl_seconds_loads_from_cli_flag() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
+    let home = temp_dir.path().to_string_lossy().to_string();
+
+    let _guard = env_lock::lock_env([
+        ("FRANKIE_PR_METADATA_CACHE_TTL_SECONDS", None::<&str>),
+        ("HOME", Some(&home)),
+        ("XDG_CONFIG_HOME", Some(&home)),
+    ]);
+
+    let args = vec![
+        std::ffi::OsString::from("frankie"),
+        std::ffi::OsString::from("--pr-metadata-cache-ttl-seconds"),
+        std::ffi::OsString::from("123"),
+    ];
+    let config = FrankieConfig::load_from_iter(args).expect("config should load");
+
+    assert_eq!(
+        config.pr_metadata_cache_ttl_seconds, 123,
+        "expected --pr-metadata-cache-ttl-seconds to set TTL"
+    );
+}
+
+#[rstest]
+fn pr_metadata_cache_ttl_seconds_cli_overrides_environment() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
+    let home = temp_dir.path().to_string_lossy().to_string();
+
+    let _guard = env_lock::lock_env([
+        ("FRANKIE_PR_METADATA_CACHE_TTL_SECONDS", Some("3600")),
+        ("HOME", Some(&home)),
+        ("XDG_CONFIG_HOME", Some(&home)),
+    ]);
+
+    let args = vec![
+        std::ffi::OsString::from("frankie"),
+        std::ffi::OsString::from("--pr-metadata-cache-ttl-seconds"),
+        std::ffi::OsString::from("123"),
+    ];
+    let config = FrankieConfig::load_from_iter(args).expect("config should load");
+
+    assert_eq!(
+        config.pr_metadata_cache_ttl_seconds, 123,
+        "CLI should override environment for pr_metadata_cache_ttl_seconds"
     );
 }
 
