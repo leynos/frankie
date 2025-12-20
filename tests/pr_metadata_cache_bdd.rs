@@ -10,7 +10,7 @@ use frankie::{
 };
 use rstest::fixture;
 use rstest_bdd::Slot;
-use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
+use rstest_bdd_macros::{ScenarioState, StepArgs, given, scenario, then, when};
 use serde_json::json;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -20,6 +20,48 @@ use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use support::create_temp_dir;
+
+#[derive(Clone, Debug)]
+struct MockPrMetadata {
+    pr: u64,
+    title: String,
+    etag: String,
+    last_modified: String,
+}
+
+impl MockPrMetadata {
+    const fn new(pr: u64, title: String, etag: String, last_modified: String) -> Self {
+        Self {
+            pr,
+            title,
+            etag,
+            last_modified,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct MockPrInvalidation {
+    pr: u64,
+    old_title: String,
+    new_title: String,
+    etag1: String,
+    etag2: String,
+}
+
+impl MockPrInvalidation {
+    fn new(pr: u64, titles: (String, String), etags: (String, String)) -> Self {
+        let (old_title, new_title) = titles;
+        let (etag_one, etag_two) = etags;
+        Self {
+            pr,
+            old_title,
+            new_title,
+            etag1: etag_one,
+            etag2: etag_two,
+        }
+    }
+}
 
 /// Shared runtime wrapper that can be stored in rstest-bdd Slot.
 #[derive(Clone)]
@@ -40,6 +82,53 @@ struct NoopTelemetry;
 
 impl TelemetrySink for NoopTelemetry {
     fn record(&self, _event: TelemetryEvent) {}
+}
+
+#[derive(Clone, Debug, StepArgs)]
+struct MockInvalidationConfig {
+    pr: u64,
+    old_title: String,
+    new_title: String,
+    etag1: String,
+    etag2: String,
+    count: u64,
+}
+
+impl MockInvalidationConfig {
+    fn new(pr: u64, titles: (String, String), etag_values: (String, String), count: u64) -> Self {
+        let (old_title, new_title) = titles;
+        let (etag_one, etag_two) = etag_values;
+        Self {
+            pr,
+            old_title,
+            new_title,
+            etag1: etag_one.trim_matches('"').to_owned(),
+            etag2: etag_two.trim_matches('"').to_owned(),
+            count,
+        }
+    }
+}
+
+#[derive(Clone, Debug, StepArgs)]
+struct MockRevalidationConfig {
+    pr: u64,
+    title: String,
+    etag: String,
+    last_modified: String,
+    count: u64,
+}
+
+impl MockRevalidationConfig {
+    fn new(pr: u64, title: String, validators: (String, String), count: u64) -> Self {
+        let (etag, last_modified) = validators;
+        Self {
+            pr,
+            title,
+            etag: etag.trim_matches('"').to_owned(),
+            last_modified: last_modified.trim_matches('"').to_owned(),
+            count,
+        }
+    }
 }
 
 #[derive(ScenarioState, Default)]
@@ -88,6 +177,28 @@ fn create_database_path(temp_dir: &TempDir) -> String {
         .to_string()
 }
 
+fn create_mock_comments(count: u64) -> Vec<serde_json::Value> {
+    (0..count)
+        .map(|index| {
+            json!({
+                "id": index + 1,
+                "body": format!("comment {index}"),
+                "user": { "login": "reviewer" }
+            })
+        })
+        .collect()
+}
+
+fn create_pr_body(pr: u64, title: &str) -> serde_json::Value {
+    json!({
+        "number": pr,
+        "title": title,
+        "state": "open",
+        "html_url": "http://example.invalid",
+        "user": { "login": "octocat" }
+    })
+}
+
 // --- Given steps ---
 
 #[given("a temporary database file with migrations applied")]
@@ -122,23 +233,8 @@ fn cache_ttl(cache_state: &CacheState, ttl: u64) {
 fn mock_server_simple(cache_state: &CacheState, pr: u64, title: String, count: u64) {
     let runtime = ensure_runtime_and_server(cache_state);
 
-    let comments: Vec<_> = (0..count)
-        .map(|index| {
-            json!({
-                "id": index + 1,
-                "body": format!("comment {index}"),
-                "user": { "login": "reviewer" }
-            })
-        })
-        .collect();
-
-    let pr_body = json!({
-        "number": pr,
-        "title": title,
-        "state": "open",
-        "html_url": "http://example.invalid",
-        "user": { "login": "octocat" }
-    });
+    let comments = create_mock_comments(count);
+    let pr_body = create_pr_body(pr, &title);
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
@@ -169,51 +265,55 @@ fn mock_server_simple(cache_state: &CacheState, pr: u64, title: String, count: u
 #[given(
     "a mock GitHub API server that serves pull request {pr:u64} titled {title} with ETag {etag} and Last-Modified {last_modified} with {count:u64} comments"
 )]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "rstest-bdd step signatures follow feature parameters"
-)]
 fn mock_server_with_revalidation(
+    #[step_args] config: MockRevalidationConfig,
     cache_state: &CacheState,
-    pr: u64,
-    title: String,
-    etag: String,
-    last_modified: String,
+) {
+    let MockRevalidationConfig {
+        pr,
+        title,
+        etag,
+        last_modified,
+        count,
+    } = config;
+
+    let normalised_config = MockRevalidationConfig::new(pr, title, (etag, last_modified), count);
+    let metadata = MockPrMetadata::new(
+        normalised_config.pr,
+        normalised_config.title,
+        normalised_config.etag,
+        normalised_config.last_modified,
+    );
+    mock_server_with_revalidation_impl(cache_state, metadata, normalised_config.count);
+}
+
+fn mock_server_with_revalidation_impl(
+    cache_state: &CacheState,
+    metadata: MockPrMetadata,
     count: u64,
 ) {
+    let MockPrMetadata {
+        pr,
+        title,
+        etag,
+        last_modified,
+    } = metadata;
+
     let runtime = ensure_runtime_and_server(cache_state);
 
-    let comments: Vec<_> = (0..count)
-        .map(|index| {
-            json!({
-                "id": index + 1,
-                "body": format!("comment {index}"),
-                "user": { "login": "reviewer" }
-            })
-        })
-        .collect();
-
-    let pr_body = json!({
-        "number": pr,
-        "title": title,
-        "state": "open",
-        "html_url": "http://example.invalid",
-        "user": { "login": "octocat" }
-    });
+    let comments = create_mock_comments(count);
+    let pr_body = create_pr_body(pr, &title);
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
-
-    let etag_clean = etag.trim_matches('"').to_owned();
-    let last_modified_clean = last_modified.trim_matches('"').to_owned();
 
     let initial = Mock::given(method("GET"))
         .and(path(pr_path.clone()))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&pr_body)
-                .insert_header("ETag", etag_clean.clone())
-                .insert_header("Last-Modified", last_modified_clean.clone()),
+                .insert_header("ETag", etag)
+                .insert_header("Last-Modified", last_modified),
         )
         .up_to_n_times(1)
         .expect(1)
@@ -245,59 +345,58 @@ fn mock_server_with_revalidation(
 #[given(
     "a mock GitHub API server that updates pull request {pr:u64} from title {old_title} to title {new_title} with ETag {etag1} then {etag2} and {count:u64} comments"
 )]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "rstest-bdd step signatures follow feature parameters"
-)]
 fn mock_server_with_invalidation(
+    #[step_args] config: MockInvalidationConfig,
     cache_state: &CacheState,
-    pr: u64,
-    old_title: String,
-    new_title: String,
-    etag1: String,
-    etag2: String,
+) {
+    let MockInvalidationConfig {
+        pr,
+        old_title,
+        new_title,
+        etag1,
+        etag2,
+        count,
+    } = config;
+
+    let normalised_config =
+        MockInvalidationConfig::new(pr, (old_title, new_title), (etag1, etag2), count);
+    let invalidation = MockPrInvalidation::new(
+        normalised_config.pr,
+        (normalised_config.old_title, normalised_config.new_title),
+        (normalised_config.etag1, normalised_config.etag2),
+    );
+    mock_server_with_invalidation_impl(cache_state, invalidation, normalised_config.count);
+}
+
+fn mock_server_with_invalidation_impl(
+    cache_state: &CacheState,
+    invalidation: MockPrInvalidation,
     count: u64,
 ) {
+    let MockPrInvalidation {
+        pr,
+        old_title,
+        new_title,
+        etag1,
+        etag2,
+    } = invalidation;
+
     let runtime = ensure_runtime_and_server(cache_state);
 
-    let comments: Vec<_> = (0..count)
-        .map(|index| {
-            json!({
-                "id": index + 1,
-                "body": format!("comment {index}"),
-                "user": { "login": "reviewer" }
-            })
-        })
-        .collect();
+    let comments = create_mock_comments(count);
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
 
-    let etag1_clean = etag1.trim_matches('"').to_owned();
-    let etag2_clean = etag2.trim_matches('"').to_owned();
-
-    let old_body = json!({
-        "number": pr,
-        "title": old_title,
-        "state": "open",
-        "html_url": "http://example.invalid",
-        "user": { "login": "octocat" }
-    });
-
-    let new_body = json!({
-        "number": pr,
-        "title": new_title,
-        "state": "open",
-        "html_url": "http://example.invalid",
-        "user": { "login": "octocat" }
-    });
+    let old_body = create_pr_body(pr, &old_title);
+    let new_body = create_pr_body(pr, &new_title);
 
     let initial = Mock::given(method("GET"))
         .and(path(pr_path.clone()))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&old_body)
-                .insert_header("ETag", etag1_clean.clone()),
+                .insert_header("ETag", etag1.clone()),
         )
         .up_to_n_times(1)
         .expect(1)
@@ -305,11 +404,11 @@ fn mock_server_with_invalidation(
 
     let changed = Mock::given(method("GET"))
         .and(path(pr_path))
-        .and(header("if-none-match", etag1_clean))
+        .and(header("if-none-match", etag1))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&new_body)
-                .insert_header("ETag", etag2_clean),
+                .insert_header("ETag", etag2),
         )
         .expect(1)
         .named("PR metadata refresh with new ETag");
