@@ -62,6 +62,7 @@ pub enum OperationMode {
 ///
 /// ```no_run
 /// use frankie::FrankieConfig;
+/// use ortho_config::OrthoConfig;
 ///
 /// let config = FrankieConfig::load().expect("failed to load configuration");
 /// let pr_url = config.require_pr_url().expect("PR URL required");

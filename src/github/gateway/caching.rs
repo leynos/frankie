@@ -3,17 +3,18 @@
 use async_trait::async_trait;
 use http::header::{ETAG, LAST_MODIFIED};
 use http::{StatusCode, Uri};
-use octocrab::{Octocrab, Page};
+use octocrab::Octocrab;
 
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
-use crate::github::models::{ApiComment, ApiPullRequest, PullRequestComment, PullRequestMetadata};
+use crate::github::models::{ApiPullRequest, PullRequestComment, PullRequestMetadata};
 use crate::persistence::{
     CachedPullRequestMetadata, PullRequestMetadataCache, PullRequestMetadataCacheWrite,
 };
 
 use super::PullRequestGateway;
 use super::client::build_octocrab_client;
+use super::comments::fetch_pull_request_comments;
 use super::error_mapping::{map_http_error, map_octocrab_error, map_persistence_error};
 use super::http_utils::{build_conditional_headers, extract_github_message, header_to_string};
 
@@ -21,6 +22,12 @@ use super::http_utils::{build_conditional_headers, extract_github_message, heade
 struct ResponseValidators {
     etag: Option<String>,
     last_modified: Option<String>,
+}
+
+#[derive(Debug)]
+struct ModifiedPullRequest {
+    metadata: PullRequestMetadata,
+    validators: ResponseValidators,
 }
 
 /// Octocrab-backed gateway that caches pull request metadata in `SQLite`.
@@ -61,6 +68,32 @@ impl OctocrabCachingGateway {
         let ttl_unix = i64::try_from(self.ttl_seconds).unwrap_or(i64::MAX);
         let expires_at = now_unix.saturating_add(ttl_unix);
         (now_unix, expires_at)
+    }
+
+    fn store_and_return(
+        &self,
+        locator: &PullRequestLocator,
+        modified: ModifiedPullRequest,
+        now: i64,
+    ) -> Result<PullRequestMetadata, IntakeError> {
+        let ModifiedPullRequest {
+            metadata,
+            validators,
+        } = modified;
+        let (fetched_at, expires_at) = self.expiry_window(now);
+        self.cache
+            .upsert(
+                locator,
+                PullRequestMetadataCacheWrite {
+                    metadata: &metadata,
+                    etag: validators.etag.as_deref(),
+                    last_modified: validators.last_modified.as_deref(),
+                    fetched_at_unix: fetched_at,
+                    expires_at_unix: expires_at,
+                },
+            )
+            .map_err(|error| map_persistence_error("write cache", &error))?;
+        Ok(metadata)
     }
 
     async fn fetch_pull_request(
@@ -143,64 +176,38 @@ impl PullRequestGateway for OctocrabCachingGateway {
             .get(locator)
             .map_err(|error| map_persistence_error("read cache", &error))?;
 
-        if let Some(entry) = cached {
-            if !entry.is_expired(now) {
-                return Ok(entry.metadata);
-            }
+        if let Some(entry) = cached.as_ref()
+            && !entry.is_expired(now)
+        {
+            return Ok(entry.metadata.clone());
+        }
 
-            match self.fetch_pull_request(locator, Some(&entry)).await? {
-                FetchResult::NotModified => {
+        let fetch_result = self.fetch_pull_request(locator, cached.as_ref()).await?;
+
+        match fetch_result {
+            FetchResult::NotModified => match cached {
+                Some(entry) => {
                     let (fetched_at, expires_at) = self.expiry_window(now);
                     self.cache
                         .touch(locator, fetched_at, expires_at)
                         .map_err(|error| map_persistence_error("update cache", &error))?;
                     Ok(entry.metadata)
                 }
-                FetchResult::Modified {
-                    metadata,
-                    validators,
-                } => {
-                    let (fetched_at, expires_at) = self.expiry_window(now);
-                    self.cache
-                        .upsert(
-                            locator,
-                            PullRequestMetadataCacheWrite {
-                                metadata: &metadata,
-                                etag: validators.etag.as_deref(),
-                                last_modified: validators.last_modified.as_deref(),
-                                fetched_at_unix: fetched_at,
-                                expires_at_unix: expires_at,
-                            },
-                        )
-                        .map_err(|error| map_persistence_error("write cache", &error))?;
-                    Ok(metadata)
-                }
-            }
-        } else {
-            match self.fetch_pull_request(locator, None).await? {
-                FetchResult::NotModified => Err(IntakeError::Api {
+                None => Err(IntakeError::Api {
                     message: "unexpected 304 for uncached pull request".to_owned(),
                 }),
-                FetchResult::Modified {
+            },
+            FetchResult::Modified {
+                metadata,
+                validators,
+            } => self.store_and_return(
+                locator,
+                ModifiedPullRequest {
                     metadata,
                     validators,
-                } => {
-                    let (fetched_at, expires_at) = self.expiry_window(now);
-                    self.cache
-                        .upsert(
-                            locator,
-                            PullRequestMetadataCacheWrite {
-                                metadata: &metadata,
-                                etag: validators.etag.as_deref(),
-                                last_modified: validators.last_modified.as_deref(),
-                                fetched_at_unix: fetched_at,
-                                expires_at_unix: expires_at,
-                            },
-                        )
-                        .map_err(|error| map_persistence_error("write cache", &error))?;
-                    Ok(metadata)
-                }
-            }
+                },
+                now,
+            ),
         }
     }
 
@@ -208,16 +215,6 @@ impl PullRequestGateway for OctocrabCachingGateway {
         &self,
         locator: &PullRequestLocator,
     ) -> Result<Vec<PullRequestComment>, IntakeError> {
-        let page = self
-            .client
-            .get::<Page<ApiComment>, _, _>(locator.comments_path(), None::<&()>)
-            .await
-            .map_err(|error| map_octocrab_error("issue comments", &error))?;
-
-        self.client
-            .all_pages(page)
-            .await
-            .map(|comments| comments.into_iter().map(ApiComment::into).collect())
-            .map_err(|error| map_octocrab_error("issue comments", &error))
+        fetch_pull_request_comments(&self.client, locator).await
     }
 }

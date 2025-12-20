@@ -1316,12 +1316,12 @@ flowchart TD
 
 ### 3.5.2 Data Persistence Strategy
 
-| Data Type           | Storage Method               | Caching Strategy | Retention Policy  |
-| ------------------- | ---------------------------- | ---------------- | ----------------- |
-| GitHub PR Metadata  | SQLite with indexing         | 24-hour TTL      | 30-day cleanup    |
-| Review Comments     | SQLite with full-text search | Session-based    | User-configurable |
-| User Configuration  | TOML files                   | In-memory cache  | Persistent        |
-| AI Interaction Logs | SQLite with rotation         | No caching       | 7-day retention   |
+| Data Type           | Storage Method               | Caching Strategy           | Retention Policy  |
+| ------------------- | ---------------------------- | -------------------------- | ----------------- |
+| GitHub PR Metadata  | SQLite with indexing         | 24-hour time-to-live (TTL) | 30-day cleanup    |
+| Review Comments     | SQLite with full-text search | Session-based              | User-configurable |
+| User Configuration  | TOML files                   | In-memory cache            | Persistent        |
+| AI Interaction Logs | SQLite with rotation         | No caching                 | 7-day retention   |
 
 **Schema Design Principles:**
 

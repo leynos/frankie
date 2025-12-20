@@ -1,14 +1,15 @@
 //! Octocrab implementation of the pull request gateway.
 
 use async_trait::async_trait;
-use octocrab::{Octocrab, Page};
+use octocrab::Octocrab;
 
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
-use crate::github::models::{ApiComment, ApiPullRequest, PullRequestComment, PullRequestMetadata};
+use crate::github::models::{ApiPullRequest, PullRequestComment, PullRequestMetadata};
 
 use super::PullRequestGateway;
 use super::client::build_octocrab_client;
+use super::comments::fetch_pull_request_comments;
 use super::error_mapping::map_octocrab_error;
 
 /// Octocrab-backed gateway.
@@ -55,16 +56,6 @@ impl PullRequestGateway for OctocrabGateway {
         &self,
         locator: &PullRequestLocator,
     ) -> Result<Vec<PullRequestComment>, IntakeError> {
-        let page = self
-            .client
-            .get::<Page<ApiComment>, _, _>(locator.comments_path(), None::<&()>)
-            .await
-            .map_err(|error| map_octocrab_error("issue comments", &error))?;
-
-        self.client
-            .all_pages(page)
-            .await
-            .map(|comments| comments.into_iter().map(ApiComment::into).collect())
-            .map_err(|error| map_octocrab_error("issue comments", &error))
+        fetch_pull_request_comments(&self.client, locator).await
     }
 }

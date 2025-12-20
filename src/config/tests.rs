@@ -97,6 +97,10 @@ fn defaults_are_none_when_no_sources_provided() {
         !config.migrate_db,
         "migrate_db should default to false when unset"
     );
+    assert_eq!(
+        config.pr_metadata_cache_ttl_seconds, 86_400,
+        "pr_metadata_cache_ttl_seconds should default to 24 hours when unset"
+    );
 }
 
 #[rstest]
@@ -365,5 +369,47 @@ fn resolve_token_ignores_database_fields() {
         config.resolve_token().ok(),
         Some("legacy-token".to_owned()),
         "token resolution should not be affected by database fields"
+    );
+}
+
+#[rstest]
+fn pr_metadata_cache_ttl_seconds_defaults_to_24_hours() {
+    let config = FrankieConfig::default();
+    assert_eq!(
+        config.pr_metadata_cache_ttl_seconds, 86_400,
+        "default pr_metadata_cache_ttl_seconds should be 24 hours"
+    );
+}
+
+#[rstest]
+#[case::file_overrides_defaults(
+    vec![
+        ("defaults", json!({"pr_metadata_cache_ttl_seconds": 10})),
+        ("file", json!({"pr_metadata_cache_ttl_seconds": 20}))
+    ],
+    20
+)]
+#[case::environment_overrides_file(
+    vec![
+        ("file", json!({"pr_metadata_cache_ttl_seconds": 10})),
+        ("environment", json!({"pr_metadata_cache_ttl_seconds": 20}))
+    ],
+    20
+)]
+#[case::cli_overrides_environment(
+    vec![
+        ("environment", json!({"pr_metadata_cache_ttl_seconds": 10})),
+        ("cli", json!({"pr_metadata_cache_ttl_seconds": 20}))
+    ],
+    20
+)]
+fn pr_metadata_cache_ttl_seconds_layer_precedence(
+    #[case] layers: Vec<(&str, Value)>,
+    #[case] expected: u64,
+) {
+    let config = build_config_from_layers(&layers);
+    assert_eq!(
+        config.pr_metadata_cache_ttl_seconds, expected,
+        "pr_metadata_cache_ttl_seconds should follow standard precedence rules"
     );
 }

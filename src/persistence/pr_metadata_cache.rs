@@ -125,7 +125,7 @@ impl PullRequestMetadataCache {
         .bind::<Text, _>(locator.api_base().as_str())
         .bind::<Text, _>(locator.owner().as_str())
         .bind::<Text, _>(locator.repository().as_str())
-        .bind::<BigInt, _>(i64::try_from(locator.number().get()).unwrap_or(i64::MAX))
+        .bind::<BigInt, _>(Self::pr_number_to_i64(locator))
         .get_result(&mut connection)
         .optional()
         .map_err(|error| Self::map_query_error(&mut connection, &error))?;
@@ -179,7 +179,7 @@ impl PullRequestMetadataCache {
         .bind::<Text, _>(locator.api_base().as_str())
         .bind::<Text, _>(locator.owner().as_str())
         .bind::<Text, _>(locator.repository().as_str())
-        .bind::<BigInt, _>(i64::try_from(locator.number().get()).unwrap_or(i64::MAX))
+        .bind::<BigInt, _>(Self::pr_number_to_i64(locator))
         .bind::<Nullable<Text>, _>(metadata.title.as_deref())
         .bind::<Nullable<Text>, _>(metadata.state.as_deref())
         .bind::<Nullable<Text>, _>(metadata.html_url.as_deref())
@@ -217,7 +217,7 @@ impl PullRequestMetadataCache {
         .bind::<Text, _>(locator.api_base().as_str())
         .bind::<Text, _>(locator.owner().as_str())
         .bind::<Text, _>(locator.repository().as_str())
-        .bind::<BigInt, _>(i64::try_from(locator.number().get()).unwrap_or(i64::MAX))
+        .bind::<BigInt, _>(Self::pr_number_to_i64(locator))
         .execute(&mut connection)
         .map_err(|error| Self::map_write_error(&mut connection, &error))?;
 
@@ -256,6 +256,10 @@ impl PullRequestMetadataCache {
         Ok(connection)
     }
 
+    fn pr_number_to_i64(locator: &PullRequestLocator) -> i64 {
+        i64::try_from(locator.number().get()).unwrap_or(i64::MAX)
+    }
+
     fn cache_table_exists(
         connection: &mut SqliteConnection,
     ) -> Result<bool, diesel::result::Error> {
@@ -276,49 +280,57 @@ impl PullRequestMetadataCache {
         Ok(exists.is_some())
     }
 
-    fn map_query_error(
+    fn map_error_with_schema_check<F, G>(
         connection: &mut SqliteConnection,
         error: &diesel::result::Error,
-    ) -> PersistenceError {
+        create_operation_error: F,
+        create_fallback_error: G,
+    ) -> PersistenceError
+    where
+        F: FnOnce(String) -> PersistenceError,
+        G: FnOnce(String) -> PersistenceError,
+    {
         match Self::cache_table_exists(connection) {
             Ok(false) => return PersistenceError::SchemaNotInitialised,
             Ok(true) => {}
             Err(check_error) => {
-                return PersistenceError::QueryFailed {
-                    message: format!(
-                        "schema presence check failed: {check_error}; original error: {error}"
-                    ),
-                };
+                return create_operation_error(format!(
+                    "schema presence check failed: {check_error}; original error: {error}"
+                ));
             }
         }
 
-        let message = error.to_string();
-        PersistenceError::QueryFailed { message }
+        create_fallback_error(error.to_string())
+    }
+
+    fn map_query_error(
+        connection: &mut SqliteConnection,
+        error: &diesel::result::Error,
+    ) -> PersistenceError {
+        Self::map_error_with_schema_check(
+            connection,
+            error,
+            |message| PersistenceError::QueryFailed { message },
+            |message| PersistenceError::QueryFailed { message },
+        )
     }
 
     fn map_write_error(
         connection: &mut SqliteConnection,
         error: &diesel::result::Error,
     ) -> PersistenceError {
-        match Self::cache_table_exists(connection) {
-            Ok(false) => return PersistenceError::SchemaNotInitialised,
-            Ok(true) => {}
-            Err(check_error) => {
-                return PersistenceError::WriteFailed {
-                    message: format!(
-                        "schema presence check failed: {check_error}; original error: {error}"
-                    ),
-                };
-            }
-        }
-
-        let message = error.to_string();
-        PersistenceError::WriteFailed { message }
+        Self::map_error_with_schema_check(
+            connection,
+            error,
+            |message| PersistenceError::WriteFailed { message },
+            |message| PersistenceError::WriteFailed { message },
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use rstest::{fixture, rstest};
     use tempfile::TempDir;
 
     use diesel::Connection;
@@ -340,23 +352,35 @@ mod tests {
         fn record(&self, _event: TelemetryEvent) {}
     }
 
-    fn create_temp_db() -> (TempDir, String) {
+    #[fixture]
+    fn temp_db() -> (TempDir, String) {
         let temp_dir =
             TempDir::new().unwrap_or_else(|error| panic!("temp dir should be created: {error}"));
         let db_path = temp_dir.path().join("frankie.sqlite");
         (temp_dir, db_path.to_string_lossy().to_string())
     }
 
-    #[test]
-    fn cache_round_trips_metadata() {
-        let (_temp_dir, database_url) = create_temp_db();
+    #[fixture]
+    fn migrated_cache(temp_db: (TempDir, String)) -> (TempDir, PullRequestMetadataCache) {
+        let (temp_dir, database_url) = temp_db;
         migrate_database(&database_url, &NoopTelemetry)
             .unwrap_or_else(|error| panic!("migrations should run: {error}"));
 
         let cache = PullRequestMetadataCache::new(database_url)
             .unwrap_or_else(|error| panic!("cache should build: {error}"));
-        let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/42")
-            .unwrap_or_else(|error| panic!("locator should parse: {error}"));
+        (temp_dir, cache)
+    }
+
+    fn parse_locator(pr_number: u64) -> PullRequestLocator {
+        let url = format!("https://github.com/owner/repo/pull/{pr_number}");
+        PullRequestLocator::parse(&url)
+            .unwrap_or_else(|error| panic!("locator should parse: {error}"))
+    }
+
+    #[rstest]
+    fn cache_round_trips_metadata(migrated_cache: (TempDir, PullRequestMetadataCache)) {
+        let (_temp_dir, cache) = migrated_cache;
+        let locator = parse_locator(42);
 
         let metadata = PullRequestMetadata {
             number: 42,
@@ -399,16 +423,10 @@ mod tests {
         );
     }
 
-    #[test]
-    fn cache_touch_updates_expiry() {
-        let (_temp_dir, database_url) = create_temp_db();
-        migrate_database(&database_url, &NoopTelemetry)
-            .unwrap_or_else(|error| panic!("migrations should run: {error}"));
-
-        let cache = PullRequestMetadataCache::new(database_url)
-            .unwrap_or_else(|error| panic!("cache should build: {error}"));
-        let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/1")
-            .unwrap_or_else(|error| panic!("locator should parse: {error}"));
+    #[rstest]
+    fn cache_touch_updates_expiry(migrated_cache: (TempDir, PullRequestMetadataCache)) {
+        let (_temp_dir, cache) = migrated_cache;
+        let locator = parse_locator(1);
 
         let metadata = PullRequestMetadata {
             number: 1,
@@ -443,13 +461,12 @@ mod tests {
         assert_eq!(cached.expires_at_unix, 400);
     }
 
-    #[test]
-    fn cache_reports_missing_schema_when_unmigrated() {
-        let (_temp_dir, database_url) = create_temp_db();
+    #[rstest]
+    fn cache_reports_missing_schema_when_unmigrated(temp_db: (TempDir, String)) {
+        let (_temp_dir, database_url) = temp_db;
         let cache = PullRequestMetadataCache::new(database_url)
             .unwrap_or_else(|error| panic!("cache should build: {error}"));
-        let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/1")
-            .unwrap_or_else(|error| panic!("locator should parse: {error}"));
+        let locator = parse_locator(1);
 
         let error = cache
             .get(&locator)
@@ -458,9 +475,9 @@ mod tests {
         assert_eq!(error, PersistenceError::SchemaNotInitialised);
     }
 
-    #[test]
-    fn cache_distinguishes_missing_table_from_query_failures() {
-        let (_temp_dir, database_url) = create_temp_db();
+    #[rstest]
+    fn cache_distinguishes_missing_table_from_query_failures(temp_db: (TempDir, String)) {
+        let (_temp_dir, database_url) = temp_db;
 
         let mut connection = SqliteConnection::establish(&database_url)
             .unwrap_or_else(|error| panic!("connection should succeed: {error}"));
@@ -470,8 +487,7 @@ mod tests {
 
         let cache = PullRequestMetadataCache::new(database_url)
             .unwrap_or_else(|error| panic!("cache should build: {error}"));
-        let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/1")
-            .unwrap_or_else(|error| panic!("locator should parse: {error}"));
+        let locator = parse_locator(1);
 
         let error = cache
             .get(&locator)

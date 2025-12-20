@@ -122,7 +122,7 @@ token = "ghp_example"
 # Local persistence (optional)
 database_url = "frankie.sqlite"
 
-# Pull request metadata cache TTL (optional, seconds)
+# Pull request metadata cache time-to-live (TTL) (optional, seconds)
 pr_metadata_cache_ttl_seconds = 86400
 
 # Database migrations (set to true to run migrations and exit)

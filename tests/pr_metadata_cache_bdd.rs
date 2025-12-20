@@ -210,6 +210,69 @@ fn create_pr_body(pr: u64, title: &str) -> serde_json::Value {
     })
 }
 
+fn mount_mocks(cache_state: &CacheState, runtime: &SharedRuntime, mocks: Vec<Mock>) {
+    cache_state
+        .server
+        .with_ref(|server| {
+            for mock in mocks {
+                runtime.block_on(mock.mount(server));
+            }
+        })
+        .unwrap_or_else(|| panic!("mock server not initialised"));
+}
+
+fn build_comments_mock(pr: u64, count: u64, expected_calls: u64) -> Mock {
+    let comments = create_mock_comments(count);
+    let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
+
+    Mock::given(method("GET"))
+        .and(path(comments_path))
+        .respond_with(ResponseTemplate::new(200).set_body_json(comments))
+        .up_to_n_times(expected_calls)
+        .expect(expected_calls)
+        .named("Issue comments (two loads)")
+}
+
+fn assert_error_variant_contains(
+    cache_state: &CacheState,
+    variant_name: &str,
+    message_fragment: &str,
+) {
+    match variant_name {
+        "Api" => {
+            let error = cache_state
+                .error
+                .with_ref(Clone::clone)
+                .unwrap_or_else(|| panic!("expected API error"));
+
+            let IntakeError::Api { message } = error else {
+                panic!("expected Api variant, got {error:?}");
+            };
+
+            assert!(
+                message.contains(message_fragment),
+                "unexpected error message: {message}"
+            );
+        }
+        "Configuration" => {
+            let error = cache_state
+                .error
+                .with_ref(Clone::clone)
+                .unwrap_or_else(|| panic!("expected configuration error"));
+
+            let IntakeError::Configuration { message } = error else {
+                panic!("expected Configuration variant, got {error:?}");
+            };
+
+            assert!(
+                message.contains(message_fragment),
+                "expected error message to mention {message_fragment}, got: {message}"
+            );
+        }
+        _ => panic!("unknown error variant name: {variant_name}"),
+    }
+}
+
 // --- Given steps ---
 
 #[given("a temporary database file with migrations applied")]
@@ -312,11 +375,9 @@ fn mock_server_with_revalidation_impl(
 
     let runtime = ensure_runtime_and_server(cache_state);
 
-    let comments = create_mock_comments(count);
     let pr_body = create_pr_body(pr, &title);
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
-    let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
 
     let initial = Mock::given(method("GET"))
         .and(path(pr_path.clone()))
@@ -336,21 +397,12 @@ fn mock_server_with_revalidation_impl(
         .expect(1)
         .named("PR metadata conditional 304");
 
-    let comments_mock = Mock::given(method("GET"))
-        .and(path(comments_path))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&comments))
-        .up_to_n_times(2)
-        .expect(2)
-        .named("Issue comments (two loads)");
-
-    cache_state
-        .server
-        .with_ref(|server| {
-            runtime.block_on(initial.mount(server));
-            runtime.block_on(revalidated.mount(server));
-            runtime.block_on(comments_mock.mount(server));
-        })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+    let comments_mock = build_comments_mock(pr, count, 2);
+    mount_mocks(
+        cache_state,
+        &runtime,
+        vec![initial, revalidated, comments_mock],
+    );
 }
 
 #[given(
@@ -394,10 +446,7 @@ fn mock_server_with_invalidation_impl(
 
     let runtime = ensure_runtime_and_server(cache_state);
 
-    let comments = create_mock_comments(count);
-
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
-    let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
 
     let old_body = create_pr_body(pr, &old_title);
     let new_body = create_pr_body(pr, &new_title);
@@ -424,21 +473,8 @@ fn mock_server_with_invalidation_impl(
         .expect(1)
         .named("PR metadata refresh with new ETag");
 
-    let comments_mock = Mock::given(method("GET"))
-        .and(path(comments_path))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&comments))
-        .up_to_n_times(2)
-        .expect(2)
-        .named("Issue comments (two loads)");
-
-    cache_state
-        .server
-        .with_ref(|server| {
-            runtime.block_on(initial.mount(server));
-            runtime.block_on(changed.mount(server));
-            runtime.block_on(comments_mock.mount(server));
-        })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+    let comments_mock = build_comments_mock(pr, count, 2);
+    mount_mocks(cache_state, &runtime, vec![initial, changed, comments_mock]);
 }
 
 #[given(
@@ -457,12 +493,7 @@ fn mock_server_uncached_not_modified(cache_state: &CacheState, pr: u64, count: u
         .expect(1)
         .named("PR metadata unexpected 304");
 
-    cache_state
-        .server
-        .with_ref(|server| {
-            runtime.block_on(metadata_mock.mount(server));
-        })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+    mount_mocks(cache_state, &runtime, vec![metadata_mock]);
 }
 
 #[given("a personal access token {token}")]
@@ -640,36 +671,16 @@ fn assert_revalidation_request_headers(
 
 #[then("an API error mentions an unexpected 304 response")]
 fn assert_uncached_304_error(cache_state: &CacheState) {
-    let error = cache_state
-        .error
-        .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected API error"));
-
-    let IntakeError::Api { message } = error else {
-        panic!("expected Api variant, got {error:?}");
-    };
-
-    assert!(
-        message.contains("unexpected 304 for uncached pull request"),
-        "unexpected error message: {message}"
+    assert_error_variant_contains(
+        cache_state,
+        "Api",
+        "unexpected 304 for uncached pull request",
     );
 }
 
 #[then("a configuration error mentions running migrations")]
 fn assert_schema_error(cache_state: &CacheState) {
-    let error = cache_state
-        .error
-        .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected configuration error"));
-
-    let IntakeError::Configuration { message } = error else {
-        panic!("expected Configuration variant, got {error:?}");
-    };
-
-    assert!(
-        message.contains("--migrate-db"),
-        "expected error message to mention --migrate-db, got: {message}"
-    );
+    assert_error_variant_contains(cache_state, "Configuration", "--migrate-db");
 }
 
 #[scenario(path = "tests/features/pr_metadata_cache.feature", index = 0)]

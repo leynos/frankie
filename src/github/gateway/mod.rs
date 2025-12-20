@@ -6,6 +6,7 @@
 
 mod caching;
 mod client;
+mod comments;
 mod error_mapping;
 mod http_utils;
 mod pull_request;
