@@ -3142,7 +3142,7 @@ capabilities. Includes diesel_migrations = { version = "2.2.0", features =
 ```mermaid
 erDiagram
     REPOSITORIES {
-        PK id integer
+        id integer PK
         owner text
         name text
         remote_url text
@@ -3150,8 +3150,8 @@ erDiagram
         updated_at timestamp
     }
     PULL_REQUESTS {
-        PK id integer
-        FK repository_id integer
+        id integer PK
+        repository_id integer FK
         pr_number integer
         title text
         state text
@@ -3159,8 +3159,8 @@ erDiagram
         updated_at timestamp
     }
     REVIEW_COMMENTS {
-        PK id integer
-        FK pull_request_id integer
+        id integer PK
+        pull_request_id integer FK
         comment_id integer
         body text
         file_path text
@@ -3170,13 +3170,13 @@ erDiagram
         updated_at timestamp
     }
     USER_PREFERENCES {
-        PK id integer
+        id integer PK
         key text
         value text
         updated_at timestamp
     }
     AI_SESSIONS {
-        PK session_id text
+        session_id text PK
         command_data text
         results text
         status text
@@ -3643,7 +3643,7 @@ advantage of Rust's type system to create a low overhead query builder that
 ```mermaid
 erDiagram
     REPOSITORIES {
-        PK id integer
+        id integer PK
         owner text
         name text
         remote_url text
@@ -3653,8 +3653,8 @@ erDiagram
         last_synced timestamp
     }
     PULL_REQUESTS {
-        PK id integer
-        FK repository_id integer
+        id integer PK
+        repository_id integer FK
         pr_number integer
         title text
         body text
@@ -3667,8 +3667,8 @@ erDiagram
         last_synced timestamp
     }
     REVIEW_COMMENTS {
-        PK id integer
-        FK pull_request_id integer
+        id integer PK
+        pull_request_id integer FK
         github_comment_id integer
         body text
         file_path text
@@ -3681,7 +3681,7 @@ erDiagram
         updated_at timestamp
     }
     USERS {
-        PK id integer
+        id integer PK
         github_user_id integer
         login text
         name text
@@ -3690,8 +3690,8 @@ erDiagram
         updated_at timestamp
     }
     AI_SESSIONS {
-        PK session_id text
-        FK pull_request_id integer
+        session_id text PK
+        pull_request_id integer FK
         command_data text
         results text
         status text
@@ -3700,13 +3700,13 @@ erDiagram
         completed_at timestamp
     }
     USER_PREFERENCES {
-        PK id integer
+        id integer PK
         preference_key text
         preference_value text
         updated_at timestamp
     }
     CACHE_METADATA {
-        PK id integer
+        id integer PK
         cache_key text
         cache_type text
         expires_at timestamp
@@ -3922,6 +3922,48 @@ and stores:
 - Optional `ETag` / `Last-Modified` response headers for conditional requests
 - Unix timestamps for `fetched_at` and `expires_at` to implement a coherent TTL
   policy
+
+Figure: PR metadata cache identity and relationships.
+
+```mermaid
+erDiagram
+    PR_METADATA_CACHE {
+        integer id PK
+        text api_base
+        text owner
+        text repo
+        integer pr_number
+        text title
+        text state
+        text html_url
+        text author
+        text etag
+        text last_modified
+        integer fetched_at_unix
+        integer expires_at_unix
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PULL_REQUESTS {
+        integer id PK
+        text api_base
+        text owner
+        text repo
+        integer pr_number
+    }
+
+    REPOSITORIES {
+        integer id PK
+        text api_base
+        text owner
+        text repo
+    }
+
+    REPOSITORIES ||--o{ PULL_REQUESTS : has
+    PR_METADATA_CACHE }o--|| REPOSITORIES : caches_for
+    PR_METADATA_CACHE }o--|| PULL_REQUESTS : mirrors_identity_of
+```
 
 `sync_checkpoints` tracks incremental sync state per repository and resource
 using an opaque `checkpoint` string, allowing future implementations to store
