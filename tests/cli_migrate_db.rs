@@ -219,6 +219,15 @@ fn migrate_db_cli_database_url_overrides_environment() {
 }
 
 #[test]
+fn migrate_db_fails_with_blank_database_url_from_environment() {
+    assert_migrate_db_fails(
+        None,
+        &[("FRANKIE_DATABASE_URL", Some("   "))],
+        "database URL must not be blank",
+    );
+}
+
+#[test]
 fn migrate_db_is_idempotent() {
     let temp_dir = create_temp_dir();
     let db_path = temp_dir.path().join("frankie.sqlite");

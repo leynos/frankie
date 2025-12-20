@@ -226,6 +226,7 @@ mod tests {
 
     use async_trait::async_trait;
     use frankie::github::PageInfo;
+    use frankie::persistence::PersistenceError;
     use frankie::{PaginatedPullRequests, PullRequestSummary, RateLimitInfo, RepositoryLocator};
     use rstest::rstest;
 
@@ -233,6 +234,33 @@ mod tests {
         FrankieConfig, IntakeError, ListPullRequestsParams, PullRequestState, RepositoryGateway,
         run_repository_listing_with_gateway_builder, write_listing_summary,
     };
+
+    #[test]
+    fn persistence_error_classification_distinguishes_missing_from_blank() {
+        assert!(
+            !super::is_configuration_error(&PersistenceError::MissingDatabaseUrl),
+            "MissingDatabaseUrl is handled before persistence runs"
+        );
+        assert!(
+            super::is_configuration_error(&PersistenceError::BlankDatabaseUrl),
+            "BlankDatabaseUrl is a configuration issue"
+        );
+
+        assert!(
+            matches!(
+                super::map_persistence_error(&PersistenceError::MissingDatabaseUrl),
+                IntakeError::Io { .. }
+            ),
+            "MissingDatabaseUrl should not be treated as a persistence configuration error"
+        );
+        assert!(
+            matches!(
+                super::map_persistence_error(&PersistenceError::BlankDatabaseUrl),
+                IntakeError::Configuration { .. }
+            ),
+            "BlankDatabaseUrl should map to IntakeError::Configuration"
+        );
+    }
 
     #[rstest]
     #[case::missing_database_url(None, "database URL is required")]

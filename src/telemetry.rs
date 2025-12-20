@@ -42,9 +42,11 @@ pub struct StderrJsonlTelemetrySink;
 impl TelemetrySink for StderrJsonlTelemetrySink {
     fn record(&self, event: TelemetryEvent) {
         let line = serde_json::to_string(&event).unwrap_or_else(|error| {
-            let error_json = serde_json::to_string(&error.to_string())
-                .unwrap_or_else(|_| "\"unknown\"".to_owned());
-            format!(r#"{{"type":"telemetry_serialisation_failed","error":{error_json}}}"#)
+            serde_json::to_string(&serde_json::json!({
+                "type": "telemetry_serialisation_failed",
+                "error": error.to_string(),
+            }))
+            .unwrap_or_else(|_| r#"{"type":"telemetry_serialisation_failed"}"#.to_owned())
         });
 
         // Stderr write failures are intentionally ignored; there's no
