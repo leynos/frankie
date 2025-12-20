@@ -4,7 +4,7 @@ mod support;
 
 use std::path::Path;
 
-use frankie::persistence::{INITIAL_SCHEMA_VERSION, PersistenceError, migrate_database};
+use frankie::persistence::{CURRENT_SCHEMA_VERSION, PersistenceError, migrate_database};
 use frankie::telemetry::TelemetryEvent;
 use frankie::telemetry::test_support::RecordingTelemetrySink;
 use rstest::fixture;
@@ -162,8 +162,8 @@ fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
 
     assert_eq!(
         schema_versions.first().copied(),
-        Some(INITIAL_SCHEMA_VERSION),
-        "expected recorded schema_version to match INITIAL_SCHEMA_VERSION"
+        Some(CURRENT_SCHEMA_VERSION),
+        "expected recorded schema_version to match CURRENT_SCHEMA_VERSION"
     );
 }
 

@@ -126,7 +126,7 @@ fn migrate_db_emits_telemetry_to_stderr() {
         "expected telemetry on stderr, got: {stderr}"
     );
     assert!(
-        stderr.contains("20251214000000"),
+        stderr.contains("20251220000000"),
         "expected schema version in telemetry, got: {stderr}"
     );
 }
@@ -251,11 +251,11 @@ fn migrate_db_is_idempotent() {
     let second_stderr = String::from_utf8_lossy(&second.stderr);
 
     assert!(
-        first_stderr.contains("20251214000000"),
+        first_stderr.contains("20251220000000"),
         "first run should emit schema version"
     );
     assert!(
-        second_stderr.contains("20251214000000"),
+        second_stderr.contains("20251220000000"),
         "second run should emit same schema version"
     );
 }

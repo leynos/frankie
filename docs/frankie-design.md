@@ -3899,17 +3899,29 @@ flowchart TD
 
 #### 6.6.3.1.1 Phase 1 implementation decisions
 
-The initial implementation in this repository starts with a single Diesel
-migration that creates the Phase 1 tables needed for local persistence:
+The initial implementation in this repository starts with Diesel migrations
+that create the Phase 1 tables needed for local persistence and caching:
 
 - `repositories`
 - `pull_requests`
 - `review_comments` (stores GitHub pull request review comments)
 - `sync_checkpoints`
+- `pr_metadata_cache` (stores cached pull request metadata with HTTP validators
+  and TTL expiry)
 
 The additional entities in the ER diagram (for example `users`, `ai_sessions`,
-and `cache_metadata`) are intentionally deferred until later roadmap slices to
-keep Phase 1 focused on foundations.
+and `cache_metadata`) are intentionally deferred until later roadmap slices.
+The `pr_metadata_cache` table is a pragmatic exception: it enables cache-first
+pull request intake without requiring repository discovery or the full PR data
+model to be populated in SQLite.
+
+`pr_metadata_cache` is keyed by `api_base`, `owner`, `repo`, and `pr_number`
+and stores:
+
+- Cached PR metadata fields needed by the CLI
+- Optional `ETag` / `Last-Modified` response headers for conditional requests
+- Unix timestamps for `fetched_at` and `expires_at` to implement a coherent TTL
+  policy
 
 `sync_checkpoints` tracks incremental sync state per repository and resource
 using an opaque `checkpoint` string, allowing future implementations to store
@@ -3917,7 +3929,7 @@ GitHub cursors, ETags, timestamps, or other sync tokens without schema churn.
 
 When migrations are applied via the application, Frankie reads the latest
 `version` value from Diesel's `__diesel_schema_migrations` table (for example
-`20251214000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
+`20251220000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
 the stderr JSONL telemetry sink.
 
 #### 6.6.3.2 Versioning Strategy

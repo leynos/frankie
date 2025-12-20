@@ -7,9 +7,10 @@ use frankie::github::RepositoryGateway;
 use frankie::persistence::{PersistenceError, migrate_database};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::{
-    FrankieConfig, IntakeError, ListPullRequestsParams, OctocrabGateway, OctocrabRepositoryGateway,
-    OperationMode, PaginatedPullRequests, PersonalAccessToken, PullRequestDetails,
-    PullRequestIntake, PullRequestLocator, PullRequestState, RepositoryIntake, RepositoryLocator,
+    FrankieConfig, IntakeError, ListPullRequestsParams, OctocrabCachingGateway, OctocrabGateway,
+    OctocrabRepositoryGateway, OperationMode, PaginatedPullRequests, PersonalAccessToken,
+    PullRequestDetails, PullRequestIntake, PullRequestLocator, PullRequestState, RepositoryIntake,
+    RepositoryLocator,
 };
 use ortho_config::OrthoConfig;
 
@@ -91,9 +92,20 @@ async fn run_single_pr(config: &FrankieConfig) -> Result<(), IntakeError> {
     let locator = PullRequestLocator::parse(pr_url)?;
     let token = PersonalAccessToken::new(token_value)?;
 
-    let gateway = OctocrabGateway::for_token(&token, &locator)?;
-    let intake = PullRequestIntake::new(&gateway);
-    let details = intake.load(&locator).await?;
+    let details = if let Some(database_url) = config.database_url.as_deref() {
+        let gateway = OctocrabCachingGateway::for_token(
+            &token,
+            &locator,
+            database_url,
+            config.pr_metadata_cache_ttl_seconds,
+        )?;
+        let intake = PullRequestIntake::new(&gateway);
+        intake.load(&locator).await?
+    } else {
+        let gateway = OctocrabGateway::for_token(&token, &locator)?;
+        let intake = PullRequestIntake::new(&gateway);
+        intake.load(&locator).await?
+    };
 
     write_pr_summary(&details)
 }
@@ -366,6 +378,7 @@ mod tests {
             repo: Some("repo".to_owned()),
             database_url: None,
             migrate_db: false,
+            pr_metadata_cache_ttl_seconds: 86_400,
         };
 
         let captured = Arc::new(Mutex::new(None));
@@ -426,6 +439,7 @@ mod tests {
             repo: Some("repo".to_owned()),
             database_url: None,
             migrate_db: false,
+            pr_metadata_cache_ttl_seconds: 86_400,
         };
 
         let gateway = CapturingGateway {

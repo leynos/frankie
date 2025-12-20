@@ -16,8 +16,8 @@ pub mod repository_intake;
 
 pub use error::IntakeError;
 pub use gateway::{
-    ListPullRequestsParams, OctocrabGateway, OctocrabRepositoryGateway, PaginatedPullRequests,
-    PullRequestGateway, PullRequestState, RepositoryGateway,
+    ListPullRequestsParams, OctocrabCachingGateway, OctocrabGateway, OctocrabRepositoryGateway,
+    PaginatedPullRequests, PullRequestGateway, PullRequestState, RepositoryGateway,
 };
 pub use intake::PullRequestIntake;
 pub use locator::{

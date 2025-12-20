@@ -44,4 +44,27 @@ pub enum PersistenceError {
     /// The migrations completed but no schema version could be found.
     #[error("no schema version recorded after migrations ran")]
     MissingSchemaVersion,
+
+    /// The database is present but does not contain the required schema.
+    ///
+    /// This typically happens when `--database-url` points at a fresh file and
+    /// migrations have not been applied yet.
+    #[error(
+        "database schema is missing required tables; run `frankie --migrate-db --database-url <PATH>`"
+    )]
+    SchemaNotInitialised,
+
+    /// Querying the database failed.
+    #[error("database query failed: {message}")]
+    QueryFailed {
+        /// Error detail from Diesel.
+        message: String,
+    },
+
+    /// Writing to the database failed.
+    #[error("database write failed: {message}")]
+    WriteFailed {
+        /// Error detail from Diesel.
+        message: String,
+    },
 }
