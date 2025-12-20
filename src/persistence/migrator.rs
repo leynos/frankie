@@ -127,7 +127,6 @@ mod tests {
                 schema_version: CURRENT_SCHEMA_VERSION.to_owned()
             }]
         );
-
         assert_eq!(schema_version.as_str(), CURRENT_SCHEMA_VERSION);
     }
 }
