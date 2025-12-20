@@ -26,6 +26,16 @@ fn run_frankie(args: &[&str], env: &[(&str, Option<&str>)]) -> Output {
     let mut command = Command::new(binary_path());
     command.args(args);
 
+    // Ensure tests are hermetic even if the developer has Frankie env vars set.
+    command
+        .env_remove("FRANKIE_DATABASE_URL")
+        .env_remove("FRANKIE_MIGRATE_DB")
+        .env_remove("FRANKIE_PR_URL")
+        .env_remove("FRANKIE_TOKEN")
+        .env_remove("FRANKIE_OWNER")
+        .env_remove("FRANKIE_REPO")
+        .env_remove("GITHUB_TOKEN");
+
     for (key, value) in env {
         match value {
             Some(env_value) => {
@@ -184,6 +194,37 @@ fn migrate_db_exits_with_expected_code(
     #[case] expected_code: i32,
 ) {
     assert_migrate_db_exit_code(database_url, expected_code);
+}
+
+#[test]
+fn migrate_db_succeeds_with_database_url_from_environment() {
+    let output = run_migrate_db(None, &[("FRANKIE_DATABASE_URL", Some(":memory:"))]);
+
+    assert!(
+        output.status.success(),
+        "expected migration to succeed when FRANKIE_DATABASE_URL is set\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn migrate_db_cli_database_url_overrides_environment() {
+    let output = run_migrate_db(Some(":memory:"), &[("FRANKIE_DATABASE_URL", Some("   "))]);
+
+    assert!(
+        output.status.success(),
+        "expected CLI --database-url to override FRANKIE_DATABASE_URL\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn migrate_db_fails_with_blank_database_url_from_environment() {
+    assert_migrate_db_fails(
+        None,
+        &[("FRANKIE_DATABASE_URL", Some("   "))],
+        "database URL must not be blank",
+    );
 }
 
 #[test]

@@ -20,7 +20,6 @@ pub enum TelemetryEvent {
 }
 
 /// A sink that can record telemetry events.
-#[cfg_attr(feature = "test-support", mockall::automock)]
 pub trait TelemetrySink: Send + Sync {
     /// Records a telemetry event.
     fn record(&self, event: TelemetryEvent);
@@ -42,23 +41,12 @@ pub struct StderrJsonlTelemetrySink;
 
 impl TelemetrySink for StderrJsonlTelemetrySink {
     fn record(&self, event: TelemetryEvent) {
-        match serde_json::to_string(&event) {
-            Ok(serialised) => {
-                // Stderr write failures are intentionally ignored; there's no
-                // meaningful recovery action for local telemetry.
-                drop(writeln_stderr(&serialised));
-            }
-            Err(error) => {
-                let fallback = format!(
-                    r#"{{"type":"telemetry_serialisation_failed","error":{}}}"#,
-                    serde_json::to_string(&error.to_string())
-                        .unwrap_or_else(|_| "\"unknown\"".to_owned())
-                );
-                // Stderr write failures are intentionally ignored; there's no
-                // meaningful recovery action for local telemetry.
-                drop(writeln_stderr(&fallback));
-            }
-        }
+        let line = serde_json::to_string(&event)
+            .unwrap_or_else(|_| r#"{"type":"telemetry_serialisation_failed"}"#.to_owned());
+
+        // Stderr write failures are intentionally ignored; there's no
+        // meaningful recovery action for local telemetry.
+        drop(writeln_stderr(&line));
     }
 }
 
@@ -70,36 +58,19 @@ fn writeln_stderr(message: &str) -> io::Result<()> {
 }
 
 /// Test support utilities for telemetry testing.
-///
-/// This module re-exports the mockall-generated [`MockTelemetrySink`] and
-/// provides a [`CapturingMockSink`] adapter for scenarios that need to capture
-/// events for later inspection.
 #[cfg(feature = "test-support")]
 pub mod test_support {
     use std::sync::{Arc, Mutex};
 
-    pub use super::MockTelemetrySink;
     use super::{TelemetryEvent, TelemetrySink};
 
-    /// A mockall-backed telemetry sink that captures events for later assertion.
-    ///
-    /// This adapter wraps [`MockTelemetrySink`] and stores recorded events in a
-    /// thread-safe buffer. Use [`events`](Self::events) to retrieve a snapshot of
-    /// captured events for assertion in BDD scenarios.
-    #[derive(Clone)]
-    pub struct CapturingMockSink {
+    /// An in-memory telemetry sink that captures events for later assertion.
+    #[derive(Clone, Default)]
+    pub struct RecordingTelemetrySink {
         events: Arc<Mutex<Vec<TelemetryEvent>>>,
     }
 
-    impl Default for CapturingMockSink {
-        fn default() -> Self {
-            Self {
-                events: Arc::new(Mutex::new(Vec::new())),
-            }
-        }
-    }
-
-    impl CapturingMockSink {
+    impl RecordingTelemetrySink {
         /// Returns a snapshot of all recorded events without draining.
         ///
         /// Use this when you need to inspect events without clearing them,
@@ -122,7 +93,7 @@ pub mod test_support {
         }
     }
 
-    impl TelemetrySink for CapturingMockSink {
+    impl TelemetrySink for RecordingTelemetrySink {
         #[expect(
             clippy::expect_used,
             reason = "test fixture; panic is acceptable if mutex is poisoned"
@@ -137,30 +108,24 @@ pub mod test_support {
 }
 
 /// Unit tests for telemetry module.
-///
-/// These tests require the `test-support` feature to be enabled, which provides
-/// the mockall-generated [`MockTelemetrySink`].
 #[cfg(all(test, feature = "test-support"))]
 mod tests {
-    use super::test_support::MockTelemetrySink;
+    use super::test_support::RecordingTelemetrySink;
     use super::{TelemetryEvent, TelemetrySink};
 
     #[test]
-    fn mock_sink_receives_expected_event() {
-        let mut mock = MockTelemetrySink::new();
-        mock.expect_record()
-            .withf(|event| {
-                matches!(
-                    event,
-                    TelemetryEvent::SchemaVersionRecorded { schema_version }
-                    if schema_version == "20251214000000"
-                )
-            })
-            .times(1)
-            .return_const(());
+    fn recording_sink_captures_events() {
+        let sink = RecordingTelemetrySink::default();
 
-        mock.record(TelemetryEvent::SchemaVersionRecorded {
+        sink.record(TelemetryEvent::SchemaVersionRecorded {
             schema_version: "20251214000000".to_owned(),
         });
+
+        assert_eq!(
+            sink.events(),
+            vec![TelemetryEvent::SchemaVersionRecorded {
+                schema_version: "20251214000000".to_owned(),
+            }]
+        );
     }
 }
