@@ -139,6 +139,7 @@ struct CacheState {
     database_url: Slot<String>,
     temp_dir: Slot<TempDir>,
     ttl_seconds: Slot<u64>,
+    expected_metadata_path: Slot<String>,
     details: Slot<PullRequestDetails>,
     error: Slot<IntakeError>,
 }
@@ -175,6 +176,16 @@ fn create_database_path(temp_dir: &TempDir) -> String {
         .join("frankie.sqlite")
         .to_string_lossy()
         .to_string()
+}
+
+fn expected_request_path(api_base_path: &str, api_path: &str) -> String {
+    let trimmed_prefix = api_base_path.trim_end_matches('/');
+    let prefix = if trimmed_prefix == "/" {
+        ""
+    } else {
+        trimmed_prefix
+    };
+    format!("{prefix}{api_path}")
 }
 
 fn create_mock_comments(count: u64) -> Vec<serde_json::Value> {
@@ -430,6 +441,30 @@ fn mock_server_with_invalidation_impl(
         .unwrap_or_else(|| panic!("mock server not initialised"));
 }
 
+#[given(
+    "a mock GitHub API server that returns 304 Not Modified for pull request {pr:u64} with {count:u64} comments"
+)]
+fn mock_server_uncached_not_modified(cache_state: &CacheState, pr: u64, count: u64) {
+    let runtime = ensure_runtime_and_server(cache_state);
+    let _ = count;
+
+    let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
+
+    let metadata_mock = Mock::given(method("GET"))
+        .and(path(pr_path))
+        .respond_with(ResponseTemplate::new(304))
+        .up_to_n_times(1)
+        .expect(1)
+        .named("PR metadata unexpected 304");
+
+    cache_state
+        .server
+        .with_ref(|server| {
+            runtime.block_on(metadata_mock.mount(server));
+        })
+        .unwrap_or_else(|| panic!("mock server not initialised"));
+}
+
 #[given("a personal access token {token}")]
 fn remember_token(cache_state: &CacheState, token: String) {
     cache_state.token.set(token);
@@ -457,6 +492,15 @@ fn load_pull_request_first_time(cache_state: &CacheState, pr_url: String) {
 
     let locator = PullRequestLocator::parse(&resolved_url)
         .unwrap_or_else(|error| panic!("{resolved_url}: {error}"));
+
+    let pull_request_path = format!(
+        "/repos/{}/{}/pulls/{}",
+        locator.owner().as_str(),
+        locator.repository().as_str(),
+        locator.number().get()
+    );
+    let metadata_path = expected_request_path(locator.api_base().path(), &pull_request_path);
+    cache_state.expected_metadata_path.set(metadata_path);
 
     let ttl_seconds = cache_state
         .ttl_seconds
@@ -554,11 +598,15 @@ fn assert_revalidation_request_headers(
         .unwrap_or_else(|| panic!("mock server not initialised"))
         .unwrap_or_else(|| panic!("request recording is not enabled"));
 
+    let expected_path = cache_state
+        .expected_metadata_path
+        .get()
+        .unwrap_or_else(|| panic!("expected metadata request path missing from scenario state"));
+
     let metadata_requests: Vec<_> = requests
         .into_iter()
         .filter(|request| {
-            request.method.as_str() == "GET"
-                && request.url.path() == "/api/v3/repos/owner/repo/pulls/7"
+            request.method.as_str() == "GET" && request.url.path() == expected_path.as_str()
         })
         .collect();
 
@@ -587,6 +635,23 @@ fn assert_revalidation_request_headers(
     assert_eq!(
         actual_last_modified, expected_last_modified,
         "unexpected if-modified-since header"
+    );
+}
+
+#[then("an API error mentions an unexpected 304 response")]
+fn assert_uncached_304_error(cache_state: &CacheState) {
+    let error = cache_state
+        .error
+        .with_ref(Clone::clone)
+        .unwrap_or_else(|| panic!("expected API error"));
+
+    let IntakeError::Api { message } = error else {
+        panic!("expected Api variant, got {error:?}");
+    };
+
+    assert!(
+        message.contains("unexpected 304 for uncached pull request"),
+        "unexpected error message: {message}"
     );
 }
 
@@ -624,5 +689,10 @@ fn changed_etag_invalidates(cache_state: CacheState) {
 
 #[scenario(path = "tests/features/pr_metadata_cache.feature", index = 3)]
 fn cache_requires_schema(cache_state: CacheState) {
+    let _ = cache_state;
+}
+
+#[scenario(path = "tests/features/pr_metadata_cache.feature", index = 4)]
+fn uncached_not_modified_returns_error(cache_state: CacheState) {
     let _ = cache_state;
 }

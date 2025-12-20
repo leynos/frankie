@@ -41,3 +41,12 @@ Feature: Pull request metadata caching
     And a personal access token "valid-token"
     When the cached client loads pull request "https://github.com/owner/repo/pull/1" for the first time
     Then a configuration error mentions running migrations
+
+  Scenario: 304 on uncached pull request returns an API error
+    Given a temporary database file with migrations applied
+    And a cache TTL of 0 seconds
+    And a mock GitHub API server that returns 304 Not Modified for pull request 11 with 0 comments
+    And a personal access token "valid-token"
+    When the cached client loads pull request "http://SERVER/owner/repo/pull/11" for the first time
+    Then an API error mentions an unexpected 304 response
+    And the GitHub API mocks are satisfied

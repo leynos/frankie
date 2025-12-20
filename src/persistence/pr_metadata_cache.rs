@@ -21,6 +21,8 @@ use crate::github::models::PullRequestMetadata;
 
 use super::PersistenceError;
 
+const PR_METADATA_CACHE_TABLE: &str = "pr_metadata_cache";
+
 /// Cached pull request metadata along with HTTP validators and expiry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CachedPullRequestMetadata {
@@ -126,7 +128,7 @@ impl PullRequestMetadataCache {
         .bind::<BigInt, _>(i64::try_from(locator.number().get()).unwrap_or(i64::MAX))
         .get_result(&mut connection)
         .optional()
-        .map_err(|error| Self::map_query_error(&error))?;
+        .map_err(|error| Self::map_query_error(&mut connection, &error))?;
 
         Ok(result.map(|row| CachedPullRequestMetadata {
             metadata: PullRequestMetadata {
@@ -188,7 +190,7 @@ impl PullRequestMetadataCache {
         .bind::<BigInt, _>(write.expires_at_unix)
         .execute(&mut connection)
         .map(drop)
-        .map_err(|error| Self::map_write_error(&error))
+        .map_err(|error| Self::map_write_error(&mut connection, &error))
     }
 
     /// Updates the expiry for an existing cache entry (for a 304 response).
@@ -217,7 +219,7 @@ impl PullRequestMetadataCache {
         .bind::<Text, _>(locator.repository().as_str())
         .bind::<BigInt, _>(i64::try_from(locator.number().get()).unwrap_or(i64::MAX))
         .execute(&mut connection)
-        .map_err(|error| Self::map_write_error(&error))?;
+        .map_err(|error| Self::map_write_error(&mut connection, &error))?;
 
         if affected == 0 {
             return Err(PersistenceError::WriteFailed {
@@ -254,23 +256,63 @@ impl PullRequestMetadataCache {
         Ok(connection)
     }
 
-    fn is_schema_missing_error(message: &str) -> bool {
-        message.contains("no such table") && message.contains("pr_metadata_cache")
+    fn cache_table_exists(
+        connection: &mut SqliteConnection,
+    ) -> Result<bool, diesel::result::Error> {
+        #[derive(Debug, QueryableByName)]
+        struct Row {
+            #[diesel(sql_type = BigInt)]
+            one: i64,
+        }
+
+        let exists: Option<Row> = sql_query(
+            "SELECT 1 AS one FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;",
+        )
+        .bind::<Text, _>(PR_METADATA_CACHE_TABLE)
+        .get_result(connection)
+        .optional()?;
+
+        let _ = exists.as_ref().map(|row| row.one);
+        Ok(exists.is_some())
     }
 
-    fn map_query_error(error: &diesel::result::Error) -> PersistenceError {
-        let message = error.to_string();
-        if Self::is_schema_missing_error(&message) {
-            return PersistenceError::SchemaNotInitialised;
+    fn map_query_error(
+        connection: &mut SqliteConnection,
+        error: &diesel::result::Error,
+    ) -> PersistenceError {
+        match Self::cache_table_exists(connection) {
+            Ok(false) => return PersistenceError::SchemaNotInitialised,
+            Ok(true) => {}
+            Err(check_error) => {
+                return PersistenceError::QueryFailed {
+                    message: format!(
+                        "schema presence check failed: {check_error}; original error: {error}"
+                    ),
+                };
+            }
         }
+
+        let message = error.to_string();
         PersistenceError::QueryFailed { message }
     }
 
-    fn map_write_error(error: &diesel::result::Error) -> PersistenceError {
-        let message = error.to_string();
-        if Self::is_schema_missing_error(&message) {
-            return PersistenceError::SchemaNotInitialised;
+    fn map_write_error(
+        connection: &mut SqliteConnection,
+        error: &diesel::result::Error,
+    ) -> PersistenceError {
+        match Self::cache_table_exists(connection) {
+            Ok(false) => return PersistenceError::SchemaNotInitialised,
+            Ok(true) => {}
+            Err(check_error) => {
+                return PersistenceError::WriteFailed {
+                    message: format!(
+                        "schema presence check failed: {check_error}; original error: {error}"
+                    ),
+                };
+            }
         }
+
+        let message = error.to_string();
         PersistenceError::WriteFailed { message }
     }
 }
@@ -278,6 +320,11 @@ impl PullRequestMetadataCache {
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
+
+    use diesel::Connection;
+    use diesel::RunQueryDsl;
+    use diesel::sql_query;
+    use diesel::sqlite::SqliteConnection;
 
     use super::{
         CachedPullRequestMetadata, PullRequestMetadataCache, PullRequestMetadataCacheWrite,
@@ -409,5 +456,30 @@ mod tests {
             .expect_err("unmigrated database should fail");
 
         assert_eq!(error, PersistenceError::SchemaNotInitialised);
+    }
+
+    #[test]
+    fn cache_distinguishes_missing_table_from_query_failures() {
+        let (_temp_dir, database_url) = create_temp_db();
+
+        let mut connection = SqliteConnection::establish(&database_url)
+            .unwrap_or_else(|error| panic!("connection should succeed: {error}"));
+        sql_query("CREATE TABLE pr_metadata_cache (id INTEGER PRIMARY KEY);")
+            .execute(&mut connection)
+            .unwrap_or_else(|error| panic!("table should be created: {error}"));
+
+        let cache = PullRequestMetadataCache::new(database_url)
+            .unwrap_or_else(|error| panic!("cache should build: {error}"));
+        let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/1")
+            .unwrap_or_else(|error| panic!("locator should parse: {error}"));
+
+        let error = cache
+            .get(&locator)
+            .expect_err("malformed schema should still fail");
+
+        assert!(
+            matches!(error, PersistenceError::QueryFailed { .. }),
+            "expected QueryFailed, got {error:?}"
+        );
     }
 }

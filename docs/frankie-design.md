@@ -3923,6 +3923,10 @@ and stores:
 - Unix timestamps for `fetched_at` and `expires_at` to implement a coherent TTL
   policy
 
+Cache reads and writes treat the schema as missing only when the
+`pr_metadata_cache` table is absent in `sqlite_master`, avoiding brittle
+string-matching on SQLite error messages.
+
 Figure: PR metadata cache identity and relationships.
 
 ```mermaid
