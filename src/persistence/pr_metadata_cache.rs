@@ -266,18 +266,16 @@ impl PullRequestMetadataCache {
         #[derive(Debug, QueryableByName)]
         struct Row {
             #[diesel(sql_type = BigInt)]
-            one: i64,
+            count: i64,
         }
 
-        let exists: Option<Row> = sql_query(
-            "SELECT 1 AS one FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1;",
+        let row: Row = sql_query(
+            "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?;",
         )
         .bind::<Text, _>(PR_METADATA_CACHE_TABLE)
-        .get_result(connection)
-        .optional()?;
+        .get_result(connection)?;
 
-        let _ = exists.as_ref().map(|row| row.one);
-        Ok(exists.is_some())
+        Ok(row.count > 0)
     }
 
     fn map_error_with_schema_check<F>(

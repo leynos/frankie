@@ -153,9 +153,7 @@ pub struct FrankieConfig {
     pub pr_metadata_cache_ttl_seconds: u64,
 }
 
-const fn default_pr_metadata_cache_ttl_seconds() -> u64 {
-    86_400
-}
+const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
 
 impl Default for FrankieConfig {
     fn default() -> Self {
@@ -166,7 +164,7 @@ impl Default for FrankieConfig {
             repo: None,
             database_url: None,
             migrate_db: false,
-            pr_metadata_cache_ttl_seconds: default_pr_metadata_cache_ttl_seconds(),
+            pr_metadata_cache_ttl_seconds: DEFAULT_PR_METADATA_CACHE_TTL_SECONDS,
         }
     }
 }

@@ -2,6 +2,8 @@
 
 use tempfile::TempDir;
 
+pub mod pr_metadata_cache_helpers;
+
 /// Creates a temporary directory for database tests.
 ///
 /// # Panics

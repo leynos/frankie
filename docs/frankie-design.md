@@ -1323,6 +1323,10 @@ flowchart TD
 | User Configuration  | TOML files                   | In-memory cache            | Persistent        |
 | AI Interaction Logs | SQLite with rotation         | No caching                 | 7-day retention   |
 
+GitHub PR metadata caching uses a configurable TTL. The default is 24 hours,
+derived from `pr_metadata_cache_ttl_seconds` (set via
+`FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` or `--pr-metadata-cache-ttl-seconds`).
+
 **Schema Design Principles:**
 
 - **Normalized Structure**: Separate tables for repositories, pull
@@ -3915,13 +3919,18 @@ The `pr_metadata_cache` table is a pragmatic exception: it enables cache-first
 pull request intake without requiring repository discovery or the full PR data
 model to be populated in SQLite.
 
-`pr_metadata_cache` is keyed by `api_base`, `owner`, `repo`, and `pr_number`
-and stores:
+`pr_metadata_cache` uses `id` as a surrogate primary key and enforces a
+uniqueness constraint on (`api_base`, `owner`, `repo`, `pr_number`) as the
+logical identity of a cached pull request. It stores:
 
 - Cached PR metadata fields needed by the CLI
 - Optional `ETag` / `Last-Modified` response headers for conditional requests
-- Unix timestamps for `fetched_at` and `expires_at` to implement a coherent TTL
-  policy
+- Unix timestamps for `fetched_at_unix` and `expires_at_unix`, derived from
+  `pr_metadata_cache_ttl_seconds` (default 24 hours), to implement a coherent
+  TTL policy
+
+The TTL can be configured via `pr_metadata_cache_ttl_seconds`
+(`FRANKIE_PR_METADATA_CACHE_TTL_SECONDS`, `--pr-metadata-cache-ttl-seconds`).
 
 Cache reads and writes treat the schema as missing only when the
 `pr_metadata_cache` table is absent in `sqlite_master`, avoiding brittle
