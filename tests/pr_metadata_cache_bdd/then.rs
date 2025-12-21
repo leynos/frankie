@@ -3,7 +3,7 @@
 use rstest_bdd_macros::then;
 
 use crate::pr_metadata_cache_bdd_state::CacheState;
-use crate::support::pr_metadata_cache_helpers::{
+use crate::pr_metadata_cache_helpers::{
     assert_api_error_contains, assert_configuration_error_contains,
 };
 

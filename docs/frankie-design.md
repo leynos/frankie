@@ -3936,7 +3936,8 @@ Cache reads and writes treat the schema as missing only when the
 `pr_metadata_cache` table is absent in `sqlite_master`, avoiding brittle
 string-matching on SQLite error messages.
 
-Figure: PR metadata cache identity and relationships.
+Figure: PR metadata cache identity and relationships (identity keys only; see
+the main schema diagrams for full repository/pull request tables).
 
 ```mermaid
 erDiagram
@@ -3958,24 +3959,22 @@ erDiagram
         timestamp updated_at
     }
 
-    PULL_REQUESTS {
-        integer id PK
+    PULL_REQUEST_IDENTITY {
         text api_base
         text owner
         text repo
         integer pr_number
     }
 
-    REPOSITORIES {
-        integer id PK
+    REPOSITORY_IDENTITY {
         text api_base
         text owner
         text repo
     }
 
-    REPOSITORIES ||--o{ PULL_REQUESTS : has
-    PR_METADATA_CACHE }o--|| REPOSITORIES : caches_for
-    PR_METADATA_CACHE }o--|| PULL_REQUESTS : mirrors_identity_of
+    REPOSITORY_IDENTITY ||--o{ PULL_REQUEST_IDENTITY : has
+    PR_METADATA_CACHE }o--|| REPOSITORY_IDENTITY : caches_for
+    PR_METADATA_CACHE }o--|| PULL_REQUEST_IDENTITY : mirrors_identity_of
 ```
 
 `sync_checkpoints` tracks incremental sync state per repository and resource

@@ -32,15 +32,15 @@ fn migrated_cache(
     Ok((temp_dir, cache))
 }
 
-fn parse_locator(pr_number: u64) -> PullRequestLocator {
+fn parse_locator(pr_number: u64) -> FixtureResult<PullRequestLocator> {
     let url = format!("https://github.com/owner/repo/pull/{pr_number}");
-    PullRequestLocator::parse(&url).unwrap_or_else(|error| panic!("locator should parse: {error}"))
+    Ok(PullRequestLocator::parse(&url)?)
 }
 
 #[rstest]
 fn cache_round_trips_metadata(migrated_cache: FixtureResult<(TempDir, PullRequestMetadataCache)>) {
     let (_temp_dir, cache) = migrated_cache.expect("fixture should succeed");
-    let locator = parse_locator(42);
+    let locator = parse_locator(42).expect("locator should parse");
 
     let metadata = PullRequestMetadata {
         number: 42,
@@ -64,12 +64,10 @@ fn cache_round_trips_metadata(migrated_cache: FixtureResult<(TempDir, PullReques
                 expires_at_unix: expires_at,
             },
         )
-        .unwrap_or_else(|error| panic!("upsert should succeed: {error}"));
+        .expect("upsert should succeed");
 
-    let cached = cache
-        .get(&locator)
-        .unwrap_or_else(|error| panic!("cache get should succeed: {error}"));
-    let entry = cached.unwrap_or_else(|| panic!("entry should exist"));
+    let cached = cache.get(&locator).expect("cache get should succeed");
+    let entry = cached.expect("entry should exist");
 
     assert_eq!(
         entry,
@@ -86,7 +84,7 @@ fn cache_round_trips_metadata(migrated_cache: FixtureResult<(TempDir, PullReques
 #[rstest]
 fn cache_touch_updates_expiry(migrated_cache: FixtureResult<(TempDir, PullRequestMetadataCache)>) {
     let (_temp_dir, cache) = migrated_cache.expect("fixture should succeed");
-    let locator = parse_locator(1);
+    let locator = parse_locator(1).expect("locator should parse");
 
     let metadata = PullRequestMetadata {
         number: 1,
@@ -107,15 +105,15 @@ fn cache_touch_updates_expiry(migrated_cache: FixtureResult<(TempDir, PullReques
                 expires_at_unix: 200,
             },
         )
-        .unwrap_or_else(|error| panic!("upsert should succeed: {error}"));
+        .expect("upsert should succeed");
     cache
         .touch(&locator, 300, 400)
-        .unwrap_or_else(|error| panic!("touch should succeed: {error}"));
+        .expect("touch should succeed");
 
     let cached = cache
         .get(&locator)
-        .unwrap_or_else(|error| panic!("cache get should succeed: {error}"))
-        .unwrap_or_else(|| panic!("entry should exist"));
+        .expect("cache get should succeed")
+        .expect("entry should exist");
 
     assert_eq!(cached.fetched_at_unix, 300);
     assert_eq!(cached.expires_at_unix, 400);
@@ -124,9 +122,8 @@ fn cache_touch_updates_expiry(migrated_cache: FixtureResult<(TempDir, PullReques
 #[rstest]
 fn cache_reports_missing_schema_when_unmigrated(temp_db: FixtureResult<(TempDir, String)>) {
     let (_temp_dir, database_url) = temp_db.expect("fixture should succeed");
-    let cache = PullRequestMetadataCache::new(database_url)
-        .unwrap_or_else(|error| panic!("cache should build: {error}"));
-    let locator = parse_locator(1);
+    let cache = PullRequestMetadataCache::new(database_url).expect("cache should build");
+    let locator = parse_locator(1).expect("locator should parse");
 
     let error = cache
         .get(&locator)
@@ -141,15 +138,14 @@ fn cache_distinguishes_missing_table_from_query_failures(
 ) {
     let (_temp_dir, database_url) = temp_db.expect("fixture should succeed");
 
-    let mut connection = SqliteConnection::establish(&database_url)
-        .unwrap_or_else(|error| panic!("connection should succeed: {error}"));
+    let mut connection =
+        SqliteConnection::establish(&database_url).expect("connection should succeed");
     sql_query("CREATE TABLE pr_metadata_cache (id INTEGER PRIMARY KEY);")
         .execute(&mut connection)
-        .unwrap_or_else(|error| panic!("table should be created: {error}"));
+        .expect("table should be created");
 
-    let cache = PullRequestMetadataCache::new(database_url)
-        .unwrap_or_else(|error| panic!("cache should build: {error}"));
-    let locator = parse_locator(1);
+    let cache = PullRequestMetadataCache::new(database_url).expect("cache should build");
+    let locator = parse_locator(1).expect("locator should parse");
 
     let error = cache
         .get(&locator)

@@ -2,6 +2,8 @@
 
 pub(crate) mod domain;
 pub(crate) mod harness;
+#[path = "../support/runtime.rs"]
+pub(crate) mod runtime;
 pub(crate) mod state;
 
 pub(crate) use domain::{PageCount, PageNumber, PullRequestCount, RateLimitCount};

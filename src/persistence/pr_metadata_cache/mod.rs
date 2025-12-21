@@ -233,10 +233,18 @@ impl PullRequestMetadataCache {
     /// Returns the current unix timestamp in seconds.
     #[must_use]
     pub fn now_unix_seconds() -> i64 {
+        // System clocks can move backwards (e.g. manual adjustments). When that happens we cannot
+        // represent the instant as a unix timestamp, so we return 0 as a conservative fallback.
+        //
+        // `Duration::as_secs()` uses `u64`; if the elapsed seconds overflow `i64`, we saturate to
+        // `i64::MAX` rather than panicking.
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|duration| i64::try_from(duration.as_secs()).unwrap_or(i64::MAX))
-            .unwrap_or(0)
+            .ok()
+            .map_or_else(
+                || 0,
+                |duration| i64::try_from(duration.as_secs()).unwrap_or(i64::MAX),
+            )
     }
 
     fn establish_connection(&self) -> Result<SqliteConnection, PersistenceError> {
@@ -257,6 +265,7 @@ impl PullRequestMetadataCache {
     }
 
     fn pr_number_to_i64(locator: &PullRequestLocator) -> i64 {
+        // PR numbers are `u64` but Diesel's `BigInt` binding uses `i64`; saturate defensively.
         i64::try_from(locator.number().get()).unwrap_or(i64::MAX)
     }
 

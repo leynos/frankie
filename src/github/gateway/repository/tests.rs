@@ -14,6 +14,14 @@ use crate::github::locator::{PersonalAccessToken, RepositoryLocator};
 
 const EXPECTED_RATE_LIMIT_RESET_AT: u64 = 1_700_000_000;
 
+trait BlocksOnRuntime {
+    fn runtime(&self) -> &Runtime;
+
+    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        self.runtime().block_on(future)
+    }
+}
+
 struct RepositoryGatewayFixture {
     runtime: Runtime,
     server: MockServer,
@@ -21,9 +29,9 @@ struct RepositoryGatewayFixture {
     gateway: OctocrabRepositoryGateway,
 }
 
-impl RepositoryGatewayFixture {
-    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.runtime.block_on(future)
+impl BlocksOnRuntime for RepositoryGatewayFixture {
+    fn runtime(&self) -> &Runtime {
+        &self.runtime
     }
 }
 
@@ -33,10 +41,19 @@ struct LocalGatewayFixture {
     gateway: OctocrabRepositoryGateway,
 }
 
-impl LocalGatewayFixture {
-    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.runtime.block_on(future)
+impl BlocksOnRuntime for LocalGatewayFixture {
+    fn runtime(&self) -> &Runtime {
+        &self.runtime
     }
+}
+
+fn create_gateway(
+    runtime: &Runtime,
+    token: &PersonalAccessToken,
+    locator: &RepositoryLocator,
+) -> FixtureResult<OctocrabRepositoryGateway> {
+    let _guard = runtime.enter();
+    Ok(OctocrabRepositoryGateway::for_token(token, locator)?)
 }
 
 #[fixture]
@@ -52,10 +69,7 @@ fn gateway_fixture(
     let runtime = Runtime::new()?;
     let server = runtime.block_on(MockServer::start());
     let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))?;
-    let gateway = {
-        let _guard = runtime.enter();
-        OctocrabRepositoryGateway::for_token(&token_value, &locator)?
-    };
+    let gateway = create_gateway(&runtime, &token_value, &locator)?;
     Ok(RepositoryGatewayFixture {
         runtime,
         server,
@@ -69,10 +83,7 @@ fn local_gateway(token: FixtureResult<PersonalAccessToken>) -> FixtureResult<Loc
     let token_value = token?;
     let runtime = Runtime::new()?;
     let locator = RepositoryLocator::from_owner_repo("owner", "repo")?;
-    let gateway = {
-        let _guard = runtime.enter();
-        OctocrabRepositoryGateway::for_token(&token_value, &locator)?
-    };
+    let gateway = create_gateway(&runtime, &token_value, &locator)?;
     Ok(LocalGatewayFixture {
         runtime,
         locator,
@@ -83,13 +94,13 @@ fn local_gateway(token: FixtureResult<PersonalAccessToken>) -> FixtureResult<Loc
 /// Helper to test that invalid pagination parameters are rejected.
 fn test_invalid_pagination_params(
     local_gateway: &LocalGatewayFixture,
-    params: ListPullRequestsParams,
+    params: &ListPullRequestsParams,
 ) {
     let locator = &local_gateway.locator;
     let gateway = &local_gateway.gateway;
 
     let error = local_gateway
-        .block_on(gateway.list_pull_requests(locator, &params))
+        .block_on(gateway.list_pull_requests(locator, params))
         .expect_err("invalid params should fail");
 
     assert!(
@@ -246,7 +257,7 @@ fn list_pull_requests_rejects_invalid_pagination_params(
         page: Some(0),
         per_page: Some(0),
     };
-    test_invalid_pagination_params(&fixture, params);
+    test_invalid_pagination_params(&fixture, &params);
 }
 
 #[rstest]
@@ -259,7 +270,7 @@ fn list_pull_requests_rejects_per_page_over_maximum(
         page: Some(1),
         per_page: Some(101),
     };
-    test_invalid_pagination_params(&fixture, params);
+    test_invalid_pagination_params(&fixture, &params);
 }
 
 #[rstest]

@@ -1,13 +1,57 @@
 //! Helpers for pull request metadata cache behavioural tests.
 
+use std::io;
+
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
-use wiremock::matchers::{header, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::MockServer;
+
+use rstest_bdd::Slot;
+use wiremock::matchers::{header, header_exists, method, path};
+use wiremock::{Match, Mock, Request, ResponseTemplate};
 
 use frankie::IntakeError;
 use rstest_bdd_macros::StepArgs;
 use serde_json::json;
+
+use super::runtime::SharedRuntime;
+
+#[derive(Clone, Debug)]
+struct HeaderAbsentMatcher(http::header::HeaderName);
+
+impl Match for HeaderAbsentMatcher {
+    fn matches(&self, request: &Request) -> bool {
+        request.headers.get(&self.0).is_none()
+    }
+}
+
+const fn header_absent(key: &'static str) -> HeaderAbsentMatcher {
+    HeaderAbsentMatcher(http::header::HeaderName::from_static(key))
+}
+
+/// Ensures the runtime and mock server are initialised.
+///
+/// # Errors
+///
+/// Returns an error if the Tokio runtime cannot be created or if slots behave unexpectedly.
+pub fn ensure_runtime_and_server(
+    runtime: &Slot<SharedRuntime>,
+    server: &Slot<MockServer>,
+) -> Result<SharedRuntime, io::Error> {
+    if runtime.with_ref(|_| ()).is_none() {
+        runtime.set(SharedRuntime::new(Runtime::new()?));
+    }
+
+    let shared_runtime = runtime
+        .get()
+        .ok_or_else(|| io::Error::other("runtime not initialised after set"))?;
+
+    if server.with_ref(|_| ()).is_none() {
+        server.set(shared_runtime.block_on(MockServer::start()));
+    }
+
+    Ok(shared_runtime)
+}
 
 #[derive(Clone, Debug, StepArgs)]
 pub struct MockRevalidationConfig {
@@ -97,18 +141,6 @@ pub fn expected_request_path(api_base_path: &str, api_path: &str) -> String {
     format!("{prefix}{api_path}")
 }
 
-pub fn create_mock_comments(count: u64) -> Vec<serde_json::Value> {
-    (0..count)
-        .map(|index| {
-            json!({
-                "id": index + 1,
-                "body": format!("comment {index}"),
-                "user": { "login": "reviewer" }
-            })
-        })
-        .collect()
-}
-
 pub fn create_pr_body(pr: u64, title: &str) -> serde_json::Value {
     json!({
         "number": pr,
@@ -123,19 +155,23 @@ pub fn pull_request_path(pr: u64) -> String {
     format!("/api/v3/repos/owner/repo/pulls/{pr}")
 }
 
-pub fn issue_comments_path(pr: u64) -> String {
-    format!("/api/v3/repos/owner/repo/issues/{pr}/comments")
-}
-
-pub fn mount_mocks(server: &MockServer, runtime: &Runtime, mocks: Vec<Mock>) {
+pub fn mount_mocks(server: &MockServer, runtime: &SharedRuntime, mocks: Vec<Mock>) {
     for mock in mocks {
         runtime.block_on(mock.mount(server));
     }
 }
 
 pub fn build_comments_mock(pr: u64, count: u64, expected_calls: u64) -> Mock {
-    let comments = create_mock_comments(count);
-    let comments_path = issue_comments_path(pr);
+    let comments: Vec<_> = (0..count)
+        .map(|index| {
+            json!({
+                "id": index + 1,
+                "body": format!("comment {index}"),
+                "user": { "login": "reviewer" }
+            })
+        })
+        .collect();
+    let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
 
     let mock = Mock::given(method("GET"))
         .and(path(comments_path))
@@ -152,27 +188,32 @@ pub fn build_comments_mock(pr: u64, count: u64, expected_calls: u64) -> Mock {
 
 pub fn mount_server_with_revalidation(
     server: &MockServer,
-    runtime: &Runtime,
+    runtime: &SharedRuntime,
     config: MockRevalidationConfig,
 ) {
     let normalised = config.normalise();
+    let etag = normalised.etag.clone();
+    let last_modified = normalised.last_modified.clone();
     let pr_body = create_pr_body(normalised.pr, &normalised.title);
     let pr_path = pull_request_path(normalised.pr);
 
     let initial = Mock::given(method("GET"))
         .and(path(pr_path.clone()))
+        .and(header_absent("if-none-match"))
+        .and(header_absent("if-modified-since"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&pr_body)
-                .insert_header("ETag", normalised.etag)
-                .insert_header("Last-Modified", normalised.last_modified),
+                .insert_header("ETag", etag.clone())
+                .insert_header("Last-Modified", last_modified.clone()),
         )
-        .up_to_n_times(1)
         .expect(1)
         .named("PR metadata initial fetch");
 
     let revalidated = Mock::given(method("GET"))
         .and(path(pr_path))
+        .and(header_exists("if-none-match"))
+        .and(header_exists("if-modified-since"))
         .respond_with(ResponseTemplate::new(304))
         .expect(1)
         .named("PR metadata conditional 304");
@@ -183,7 +224,7 @@ pub fn mount_server_with_revalidation(
 
 pub fn mount_server_with_invalidation(
     server: &MockServer,
-    runtime: &Runtime,
+    runtime: &SharedRuntime,
     config: MockInvalidationConfig,
 ) {
     let normalised = config.normalise();
@@ -194,12 +235,12 @@ pub fn mount_server_with_invalidation(
 
     let initial = Mock::given(method("GET"))
         .and(path(pr_path.clone()))
+        .and(header_absent("if-none-match"))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&old_body)
                 .insert_header("ETag", normalised.etag1.clone()),
         )
-        .up_to_n_times(1)
         .expect(1)
         .named("PR metadata initial fetch (etag-1)");
 
@@ -237,20 +278,3 @@ pub fn assert_configuration_error_contains(error: &IntakeError, message_fragment
         "expected error message to mention {message_fragment}, got: {message}"
     );
 }
-
-const _: () = {
-    let _revalidation_mocks_size = std::mem::size_of::<MockRevalidationConfig>();
-    let _invalidation_mocks_size = std::mem::size_of::<MockInvalidationConfig>();
-    let _ = create_database_path;
-    let _ = expected_request_path;
-    let _ = create_mock_comments;
-    let _ = create_pr_body;
-    let _ = pull_request_path;
-    let _ = issue_comments_path;
-    let _ = mount_mocks;
-    let _ = build_comments_mock;
-    let _ = mount_server_with_revalidation;
-    let _ = mount_server_with_invalidation;
-    let _ = assert_api_error_contains;
-    let _ = assert_configuration_error_contains;
-};

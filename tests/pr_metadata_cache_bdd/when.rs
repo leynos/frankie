@@ -6,17 +6,22 @@ use frankie::{
 use rstest_bdd_macros::when;
 use wiremock::MockServer;
 
-use crate::pr_metadata_cache_bdd_state::{CacheState, ensure_runtime_and_server};
-use crate::support::pr_metadata_cache_helpers::expected_request_path;
+use crate::pr_metadata_cache_bdd_state::CacheState;
+use crate::pr_metadata_cache_helpers::{ensure_runtime_and_server, expected_request_path};
 
 #[when("the cached client loads pull request {pr_url} for the first time")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn load_pull_request_first_time(cache_state: &CacheState, pr_url: String) {
-    let runtime = ensure_runtime_and_server(cache_state);
+    let runtime = ensure_runtime_and_server(&cache_state.runtime, &cache_state.server)
+        .expect("failed to create Tokio runtime");
 
     let server_url = cache_state
         .server
         .with_ref(MockServer::uri)
-        .unwrap_or_else(|| panic!("mock server URL missing"));
+        .expect("mock server URL missing");
 
     let cleaned_pr_url = pr_url.trim_matches('"');
     let resolved_url = if cleaned_pr_url.contains("://SERVER") {
