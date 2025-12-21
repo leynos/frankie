@@ -7,7 +7,6 @@ use frankie::{
 };
 use rstest_bdd::Slot;
 use rstest_bdd_macros::ScenarioState;
-use tokio::runtime::Runtime;
 use wiremock::MockServer;
 
 use super::domain::PageNumber;
@@ -27,27 +26,10 @@ pub(crate) struct ListingState {
 pub(crate) fn ensure_runtime_and_server(
     listing_state: &ListingState,
 ) -> Result<SharedRuntime, IntakeError> {
-    if listing_state.runtime.with_ref(|_| ()).is_none() {
-        let runtime = Runtime::new().map_err(|error| IntakeError::Api {
+    super::runtime::ensure_runtime_and_server(&listing_state.runtime, &listing_state.server)
+        .map_err(|error| IntakeError::Api {
             message: format!("failed to create Tokio runtime: {error}"),
-        })?;
-        listing_state.runtime.set(SharedRuntime::new(runtime));
-    }
-
-    let shared_runtime = listing_state
-        .runtime
-        .get()
-        .ok_or_else(|| IntakeError::Api {
-            message: "runtime not initialised after set".to_owned(),
-        })?;
-
-    if listing_state.server.with_ref(|_| ()).is_none() {
-        listing_state
-            .server
-            .set(shared_runtime.block_on(MockServer::start()));
-    }
-
-    Ok(shared_runtime)
+        })
 }
 
 pub(crate) fn run_repository_listing(

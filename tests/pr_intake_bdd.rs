@@ -8,7 +8,6 @@ use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde_json::json;
-use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -31,31 +30,6 @@ fn intake_state() -> IntakeState {
     IntakeState::default()
 }
 
-/// Ensures the runtime and server are initialised in `IntakeState`.
-///
-/// # Errors
-///
-/// Returns an error if the Tokio runtime cannot be created.
-fn ensure_runtime_and_server(intake_state: &IntakeState) -> Result<SharedRuntime, std::io::Error> {
-    if intake_state.runtime.with_ref(|_| ()).is_none() {
-        let runtime = Runtime::new()?;
-        intake_state.runtime.set(SharedRuntime::new(runtime));
-    }
-
-    let shared_runtime = intake_state
-        .runtime
-        .get()
-        .ok_or_else(|| std::io::Error::other("runtime not initialised after set"))?;
-
-    if intake_state.server.with_ref(|_| ()).is_none() {
-        intake_state
-            .server
-            .set(shared_runtime.block_on(MockServer::start()));
-    }
-
-    Ok(shared_runtime)
-}
-
 #[given(
     "a mock GitHub API server with pull request {pr:u64} titled {title} and \
      {count:u64} comments"
@@ -65,7 +39,7 @@ fn ensure_runtime_and_server(intake_state: &IntakeState) -> Result<SharedRuntime
     reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, count: u64) {
-    let runtime = ensure_runtime_and_server(intake_state)
+    let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
         .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
 
     let comments: Vec<_> = (0..count)
@@ -112,7 +86,7 @@ fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, co
     reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) {
-    let runtime = ensure_runtime_and_server(intake_state)
+    let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
         .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");

@@ -243,7 +243,12 @@ impl PullRequestMetadataCache {
             .ok()
             .map_or_else(
                 || 0,
-                |duration| i64::try_from(duration.as_secs()).unwrap_or(i64::MAX),
+                |duration| {
+                    i64::try_from(duration.as_secs()).unwrap_or_else(|error| {
+                        let _ = error;
+                        i64::MAX
+                    })
+                },
             )
     }
 

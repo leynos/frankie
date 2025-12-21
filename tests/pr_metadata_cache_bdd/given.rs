@@ -9,11 +9,11 @@ use wiremock::{Mock, ResponseTemplate};
 use crate::pr_metadata_cache_bdd_state::{
     CacheState, MockInvalidationConfig, MockRevalidationConfig,
 };
-use crate::pr_metadata_cache_helpers::{
+use crate::support::create_temp_dir;
+use crate::support::pr_metadata_cache_helpers::{
     build_comments_mock, create_database_path, create_pr_body, ensure_runtime_and_server,
     mount_mocks, mount_server_with_invalidation, mount_server_with_revalidation, pull_request_path,
 };
-use crate::support::create_temp_dir;
 
 #[given("a temporary database file with migrations applied")]
 #[expect(

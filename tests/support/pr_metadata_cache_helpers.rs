@@ -1,12 +1,8 @@
 //! Helpers for pull request metadata cache behavioural tests.
 
-use std::io;
-
 use tempfile::TempDir;
-use tokio::runtime::Runtime;
 use wiremock::MockServer;
 
-use rstest_bdd::Slot;
 use wiremock::matchers::{header, header_exists, method, path};
 use wiremock::{Match, Mock, Request, ResponseTemplate};
 
@@ -15,6 +11,7 @@ use rstest_bdd_macros::StepArgs;
 use serde_json::json;
 
 use super::runtime::SharedRuntime;
+pub use super::runtime::ensure_runtime_and_server;
 
 #[derive(Clone, Debug)]
 struct HeaderAbsentMatcher(http::header::HeaderName);
@@ -27,30 +24,6 @@ impl Match for HeaderAbsentMatcher {
 
 const fn header_absent(key: &'static str) -> HeaderAbsentMatcher {
     HeaderAbsentMatcher(http::header::HeaderName::from_static(key))
-}
-
-/// Ensures the runtime and mock server are initialised.
-///
-/// # Errors
-///
-/// Returns an error if the Tokio runtime cannot be created or if slots behave unexpectedly.
-pub fn ensure_runtime_and_server(
-    runtime: &Slot<SharedRuntime>,
-    server: &Slot<MockServer>,
-) -> Result<SharedRuntime, io::Error> {
-    if runtime.with_ref(|_| ()).is_none() {
-        runtime.set(SharedRuntime::new(Runtime::new()?));
-    }
-
-    let shared_runtime = runtime
-        .get()
-        .ok_or_else(|| io::Error::other("runtime not initialised after set"))?;
-
-    if server.with_ref(|_| ()).is_none() {
-        server.set(shared_runtime.block_on(MockServer::start()));
-    }
-
-    Ok(shared_runtime)
 }
 
 #[derive(Clone, Debug, StepArgs)]

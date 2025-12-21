@@ -248,27 +248,18 @@ fn list_pull_requests_maps_rate_limit_errors(
 }
 
 #[rstest]
+#[case::zero_values(0, 0)]
+#[case::over_maximum(1, 101)]
 fn list_pull_requests_rejects_invalid_pagination_params(
     local_gateway: FixtureResult<LocalGatewayFixture>,
+    #[case] page: u32,
+    #[case] per_page: u8,
 ) {
     let fixture = local_gateway.expect("fixture should succeed");
     let params = ListPullRequestsParams {
         state: Some(PullRequestState::All),
-        page: Some(0),
-        per_page: Some(0),
-    };
-    test_invalid_pagination_params(&fixture, &params);
-}
-
-#[rstest]
-fn list_pull_requests_rejects_per_page_over_maximum(
-    local_gateway: FixtureResult<LocalGatewayFixture>,
-) {
-    let fixture = local_gateway.expect("fixture should succeed");
-    let params = ListPullRequestsParams {
-        state: Some(PullRequestState::All),
-        page: Some(1),
-        per_page: Some(101),
+        page: Some(page),
+        per_page: Some(per_page),
     };
     test_invalid_pagination_params(&fixture, &params);
 }

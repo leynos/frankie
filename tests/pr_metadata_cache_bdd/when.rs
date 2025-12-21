@@ -7,7 +7,7 @@ use rstest_bdd_macros::when;
 use wiremock::MockServer;
 
 use crate::pr_metadata_cache_bdd_state::CacheState;
-use crate::pr_metadata_cache_helpers::{ensure_runtime_and_server, expected_request_path};
+use crate::support::pr_metadata_cache_helpers::{ensure_runtime_and_server, expected_request_path};
 
 #[when("the cached client loads pull request {pr_url} for the first time")]
 #[expect(
@@ -32,8 +32,8 @@ fn load_pull_request_first_time(cache_state: &CacheState, pr_url: String) {
         cleaned_pr_url.replace("SERVER", &server_url)
     };
 
-    let locator = PullRequestLocator::parse(&resolved_url)
-        .unwrap_or_else(|error| panic!("{resolved_url}: {error}"));
+    let locator_error_context = format!("{resolved_url}: locator should parse");
+    let locator = PullRequestLocator::parse(&resolved_url).expect(&locator_error_context);
 
     let pull_request_path = format!(
         "/repos/{}/{}/pulls/{}",
@@ -69,11 +69,11 @@ fn load_pull_request_first_time(cache_state: &CacheState, pr_url: String) {
 
     match result {
         Ok(details) => {
-            drop(cache_state.error.take());
+            let _had_previous_error = cache_state.error.take().is_some();
             cache_state.details.set(details);
         }
         Err(error) => {
-            drop(cache_state.details.take());
+            let _had_previous_details = cache_state.details.take().is_some();
             cache_state.error.set(error);
         }
     }

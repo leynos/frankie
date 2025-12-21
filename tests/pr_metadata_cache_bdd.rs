@@ -1,11 +1,16 @@
 //! Behavioural tests for pull request metadata caching.
 
-mod support;
+mod support {
+    #[path = "../support/mod.rs"]
+    mod common;
 
-#[path = "support/pr_metadata_cache_helpers.rs"]
-mod pr_metadata_cache_helpers;
-#[path = "support/runtime.rs"]
-mod runtime;
+    pub use common::create_temp_dir;
+
+    #[path = "../support/pr_metadata_cache_helpers.rs"]
+    pub mod pr_metadata_cache_helpers;
+    #[path = "../support/runtime.rs"]
+    pub mod runtime;
+}
 
 #[path = "pr_metadata_cache_bdd/given.rs"]
 mod pr_metadata_cache_bdd_given;

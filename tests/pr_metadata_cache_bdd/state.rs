@@ -6,8 +6,10 @@ use rstest_bdd_macros::ScenarioState;
 use tempfile::TempDir;
 use wiremock::MockServer;
 
-pub(crate) use crate::pr_metadata_cache_helpers::{MockInvalidationConfig, MockRevalidationConfig};
-pub(crate) use crate::runtime::SharedRuntime;
+pub(crate) use crate::support::pr_metadata_cache_helpers::{
+    MockInvalidationConfig, MockRevalidationConfig,
+};
+pub(crate) use crate::support::runtime::SharedRuntime;
 
 #[derive(ScenarioState, Default)]
 pub(crate) struct CacheState {
