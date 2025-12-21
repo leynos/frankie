@@ -12,11 +12,56 @@ including loading individual pull requests and listing PRs for a repository.
 
 ## Operation modes
 
-Frankie supports two operation modes:
+Frankie supports three operation modes:
 
-1. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
-2. **Repository listing mode** — List PRs for a repository using `--owner` and
+1. **Interactive mode** — Auto-detect repository from local Git directory
+2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
+3. **Repository listing mode** — List PRs for a repository using `--owner` and
    `--repo`
+
+## Interactive mode (local discovery)
+
+When invoked without `--pr-url`, `--owner`, or `--repo`, Frankie automatically
+discovers the GitHub repository from the current directory's Git configuration:
+
+```bash
+cd /path/to/your-repo
+frankie --token ghp_example
+```
+
+Frankie reads the `origin` remote URL and extracts the owner/repository
+information. Supported remote URL formats:
+
+- SSH: `git@github.com:owner/repo.git`
+- HTTPS: `https://github.com/owner/repo.git`
+- GitHub Enterprise: `git@ghe.example.com:org/project.git`
+
+### Expected output
+
+A successful call prints discovery information:
+
+```text
+Discovered repository from local Git: owner/repo
+(Loaded from origin: git@github.com:owner/repo.git)
+```
+
+### Disabling local discovery
+
+To skip local discovery and require explicit arguments, use
+`--no-local-discovery`:
+
+```bash
+frankie --no-local-discovery --owner octocat --repo hello-world --token ghp_example
+```
+
+### Common discovery errors
+
+- **Not inside a Git repository** — The current directory is not within a Git
+  working tree.
+- **Repository has no remotes configured** — The Git repository has no remote
+  URLs configured.
+- **Remote is not a GitHub origin** — The `origin` remote URL does not point to
+  a GitHub host.
 
 ## Single pull request mode
 
@@ -146,6 +191,7 @@ Frankie searches for configuration files in this order:
 | `FRANKIE_TOKEN`                         | GitHub personal access token                        |
 | `FRANKIE_DATABASE_URL`                  | Local SQLite database path for persistence          |
 | `FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` | PR metadata cache TTL (seconds)                     |
+| `FRANKIE_NO_LOCAL_DISCOVERY`            | Disable automatic local Git discovery               |
 | `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above) |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
@@ -163,6 +209,7 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--database-url <PATH>`                     | —     | Local SQLite database path              |
 | `--migrate-db`                              | —     | Run database migrations and exit        |
 | `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)         |
+| `--no-local-discovery`                      | —     | Disable automatic local Git discovery   |
 | `--help`                                    | `-h`  | Show help information                   |
 
 Run `frankie --help` to see all available options and their descriptions.

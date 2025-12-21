@@ -1,9 +1,11 @@
 //! Frankie CLI entrypoint for pull request intake.
 
 use std::io::{self, Write};
+use std::path::Path;
 use std::process::ExitCode;
 
 use frankie::github::RepositoryGateway;
+use frankie::local::{LocalDiscoveryError, LocalRepository, discover_repository};
 use frankie::persistence::{PersistenceError, migrate_database};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::{
@@ -37,13 +39,101 @@ async fn run() -> Result<(), IntakeError> {
     match config.operation_mode() {
         OperationMode::SinglePullRequest => run_single_pr(&config).await,
         OperationMode::RepositoryListing => run_repository_listing(&config).await,
-        OperationMode::Interactive => Err(IntakeError::Configuration {
-            message: concat!(
-                "either --pr-url/-u or --owner/-o with --repo/-r is required\n",
-                "Run 'frankie --help' for usage information"
-            )
-            .to_owned(),
-        }),
+        OperationMode::Interactive => run_interactive(&config).await,
+    }
+}
+
+/// Runs in interactive mode, attempting local repository discovery.
+async fn run_interactive(config: &FrankieConfig) -> Result<(), IntakeError> {
+    if config.no_local_discovery {
+        return Err(missing_arguments_error());
+    }
+
+    match discover_repository(Path::new(".")) {
+        Ok(local_repo) => run_discovered_repository(config, &local_repo).await,
+        Err(error) => handle_discovery_error(error),
+    }
+}
+
+/// Runs repository listing using a discovered local repository.
+async fn run_discovered_repository(
+    config: &FrankieConfig,
+    local_repo: &LocalRepository,
+) -> Result<(), IntakeError> {
+    let owner = local_repo.owner();
+    let repo = local_repo.repository();
+
+    // Log the discovery to stderr (ignore write errors)
+    drop(writeln!(
+        io::stderr(),
+        "Discovered repository from local Git: {owner}/{repo}"
+    ));
+
+    let token_value = config.resolve_token()?;
+    let locator = RepositoryLocator::from_github_origin(local_repo.github_origin())?;
+    let token = PersonalAccessToken::new(token_value)?;
+
+    let gateway = OctocrabRepositoryGateway::for_token(&token, &locator)?;
+    let intake = RepositoryIntake::new(&gateway);
+
+    let params = ListPullRequestsParams {
+        state: Some(PullRequestState::All),
+        per_page: Some(50),
+        page: Some(1),
+    };
+
+    let result = intake.list_pull_requests(&locator, &params).await?;
+    let mut stdout = io::stdout().lock();
+    write_listing_summary(&mut stdout, &result, owner, repo)
+}
+
+/// Handles discovery errors, printing warnings where appropriate.
+fn handle_discovery_error(error: LocalDiscoveryError) -> Result<(), IntakeError> {
+    match error {
+        LocalDiscoveryError::NotARepository => {
+            // Silent fallthrough - user is not in a repo
+            Err(missing_arguments_error())
+        }
+        LocalDiscoveryError::NoRemotes => {
+            drop(writeln!(
+                io::stderr(),
+                "Warning: Git repository has no remotes configured"
+            ));
+            Err(missing_arguments_error())
+        }
+        LocalDiscoveryError::RemoteNotFound { name } => {
+            drop(writeln!(
+                io::stderr(),
+                "Warning: remote '{name}' not found in repository"
+            ));
+            Err(missing_arguments_error())
+        }
+        LocalDiscoveryError::NotGitHubOrigin { name, url } => {
+            drop(writeln!(
+                io::stderr(),
+                "Warning: remote '{name}' ({url}) is not a GitHub origin"
+            ));
+            Err(missing_arguments_error())
+        }
+        LocalDiscoveryError::InvalidRemoteUrl { url } => {
+            drop(writeln!(
+                io::stderr(),
+                "Warning: could not parse remote URL: {url}"
+            ));
+            Err(missing_arguments_error())
+        }
+        LocalDiscoveryError::Git { message } => Err(IntakeError::LocalDiscovery { message }),
+    }
+}
+
+/// Returns the standard error for missing CLI arguments.
+fn missing_arguments_error() -> IntakeError {
+    IntakeError::Configuration {
+        message: concat!(
+            "either --pr-url/-u or --owner/-o with --repo/-r is required\n",
+            "Run 'frankie --help' for usage information"
+        )
+        .to_owned(),
     }
 }
 
@@ -372,13 +462,10 @@ mod tests {
     #[tokio::test]
     async fn run_repository_listing_uses_expected_params_and_writes_output() {
         let config = FrankieConfig {
-            pr_url: None,
             token: Some("ghp_example".to_owned()),
             owner: Some("octo".to_owned()),
             repo: Some("repo".to_owned()),
-            database_url: None,
-            migrate_db: false,
-            pr_metadata_cache_ttl_seconds: 86_400,
+            ..Default::default()
         };
 
         let captured = Arc::new(Mutex::new(None));
@@ -433,13 +520,10 @@ mod tests {
     #[tokio::test]
     async fn run_repository_listing_propagates_invalid_pagination_error() {
         let config = FrankieConfig {
-            pr_url: None,
             token: Some("ghp_example".to_owned()),
             owner: Some("octo".to_owned()),
             repo: Some("repo".to_owned()),
-            database_url: None,
-            migrate_db: false,
-            pr_metadata_cache_ttl_seconds: 86_400,
+            ..Default::default()
         };
 
         let gateway = CapturingGateway {

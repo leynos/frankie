@@ -151,6 +151,18 @@ pub struct FrankieConfig {
     /// Defaults to 24 hours.
     #[ortho_config()]
     pub pr_metadata_cache_ttl_seconds: u64,
+
+    /// Disables automatic local repository discovery.
+    ///
+    /// When set to true, Frankie will not attempt to detect owner/repo from
+    /// the current Git repository even when running in Interactive mode.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--no-local-discovery`
+    /// - Environment: `FRANKIE_NO_LOCAL_DISCOVERY`
+    /// - Config file: `no_local_discovery = true`
+    #[ortho_config()]
+    pub no_local_discovery: bool,
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
@@ -165,6 +177,7 @@ impl Default for FrankieConfig {
             database_url: None,
             migrate_db: false,
             pr_metadata_cache_ttl_seconds: DEFAULT_PR_METADATA_CACHE_TTL_SECONDS,
+            no_local_discovery: false,
         }
     }
 }

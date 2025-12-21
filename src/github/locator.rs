@@ -325,4 +325,46 @@ impl RepositoryLocator {
             self.repository.as_str()
         )
     }
+
+    /// Creates a repository locator from a discovered GitHub origin.
+    ///
+    /// For standard `github.com` origins, uses the public API base. For GitHub
+    /// Enterprise origins, derives the API base from the host.
+    ///
+    /// # Errors
+    ///
+    /// Returns `IntakeError::MissingPathSegments` if owner or repo is empty, or
+    /// `IntakeError::InvalidUrl` if the URL cannot be parsed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use frankie::github::locator::RepositoryLocator;
+    /// use frankie::local::GitHubOrigin;
+    ///
+    /// let origin = GitHubOrigin::GitHubCom {
+    ///     owner: "octo".to_owned(),
+    ///     repository: "cat".to_owned(),
+    /// };
+    /// let locator = RepositoryLocator::from_github_origin(&origin)
+    ///     .expect("should create locator");
+    /// assert_eq!(locator.owner().as_str(), "octo");
+    /// assert_eq!(locator.repository().as_str(), "cat");
+    /// ```
+    pub fn from_github_origin(origin: &crate::local::GitHubOrigin) -> Result<Self, IntakeError> {
+        match origin {
+            crate::local::GitHubOrigin::GitHubCom { owner, repository } => {
+                Self::from_owner_repo(owner, repository)
+            }
+            crate::local::GitHubOrigin::Enterprise {
+                host,
+                owner,
+                repository,
+            } => {
+                // Build a URL to parse and derive API base
+                let url = format!("https://{host}/{owner}/{repository}");
+                Self::parse(&url)
+            }
+        }
+    }
 }

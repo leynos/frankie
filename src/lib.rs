@@ -6,6 +6,7 @@
 
 pub mod config;
 pub mod github;
+pub mod local;
 pub mod persistence;
 pub mod telemetry;
 
@@ -16,3 +17,4 @@ pub use github::{
     PullRequestDetails, PullRequestIntake, PullRequestLocator, PullRequestState,
     PullRequestSummary, RateLimitInfo, RepositoryIntake, RepositoryLocator,
 };
+pub use local::{GitHubOrigin, LocalDiscoveryError, LocalRepository, discover_repository};
