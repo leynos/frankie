@@ -1,5 +1,7 @@
 //! Tests for the repository gateway.
 
+type FixtureResult<T> = Result<T, Box<dyn std::error::Error>>;
+
 use rstest::{fixture, rstest};
 use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path, query_param};
@@ -9,6 +11,8 @@ use super::{ListPullRequestsParams, OctocrabRepositoryGateway, PullRequestState}
 use crate::github::error::IntakeError;
 use crate::github::gateway::RepositoryGateway;
 use crate::github::locator::{PersonalAccessToken, RepositoryLocator};
+
+const EXPECTED_RATE_LIMIT_RESET_AT: u64 = 1_700_000_000;
 
 struct RepositoryGatewayFixture {
     runtime: Runtime,
@@ -36,51 +40,72 @@ impl LocalGatewayFixture {
 }
 
 #[fixture]
-fn token() -> PersonalAccessToken {
-    PersonalAccessToken::new("valid-token").expect("token should be valid")
+fn token() -> FixtureResult<PersonalAccessToken> {
+    Ok(PersonalAccessToken::new("valid-token")?)
 }
 
 #[fixture]
-fn gateway_fixture(token: PersonalAccessToken) -> RepositoryGatewayFixture {
-    let runtime = Runtime::new().expect("runtime should start");
+fn gateway_fixture(
+    token: FixtureResult<PersonalAccessToken>,
+) -> FixtureResult<RepositoryGatewayFixture> {
+    let token_value = token?;
+    let runtime = Runtime::new()?;
     let server = runtime.block_on(MockServer::start());
-    let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))
-        .expect("should create repository locator");
+    let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))?;
     let gateway = {
         let _guard = runtime.enter();
-        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway")
+        OctocrabRepositoryGateway::for_token(&token_value, &locator)?
     };
-    RepositoryGatewayFixture {
+    Ok(RepositoryGatewayFixture {
         runtime,
         server,
         locator,
         gateway,
-    }
+    })
 }
 
 #[fixture]
-fn local_gateway(token: PersonalAccessToken) -> LocalGatewayFixture {
-    let runtime = Runtime::new().expect("runtime should start");
-    let locator = RepositoryLocator::from_owner_repo("owner", "repo")
-        .expect("should create repository locator");
+fn local_gateway(token: FixtureResult<PersonalAccessToken>) -> FixtureResult<LocalGatewayFixture> {
+    let token_value = token?;
+    let runtime = Runtime::new()?;
+    let locator = RepositoryLocator::from_owner_repo("owner", "repo")?;
     let gateway = {
         let _guard = runtime.enter();
-        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway")
+        OctocrabRepositoryGateway::for_token(&token_value, &locator)?
     };
-    LocalGatewayFixture {
+    Ok(LocalGatewayFixture {
         runtime,
         locator,
         gateway,
-    }
+    })
+}
+
+/// Helper to test that invalid pagination parameters are rejected.
+fn test_invalid_pagination_params(
+    local_gateway: &LocalGatewayFixture,
+    params: ListPullRequestsParams,
+) {
+    let locator = &local_gateway.locator;
+    let gateway = &local_gateway.gateway;
+
+    let error = local_gateway
+        .block_on(gateway.list_pull_requests(locator, &params))
+        .expect_err("invalid params should fail");
+
+    assert!(
+        matches!(error, IntakeError::InvalidPagination { .. }),
+        "expected InvalidPagination, got {error:?}"
+    );
 }
 
 #[rstest]
 fn list_pull_requests_populates_page_info_from_page_response(
-    gateway_fixture: RepositoryGatewayFixture,
+    gateway_fixture: FixtureResult<RepositoryGatewayFixture>,
 ) {
-    let server = &gateway_fixture.server;
-    let locator = &gateway_fixture.locator;
-    let gateway = &gateway_fixture.gateway;
+    let fixture = gateway_fixture.expect("fixture should succeed");
+    let server = &fixture.server;
+    let locator = &fixture.locator;
+    let gateway = &fixture.gateway;
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
     let page = 2_u32;
@@ -112,7 +137,7 @@ fn list_pull_requests_populates_page_info_from_page_response(
         }]))
         .insert_header("Link", link_header);
 
-    gateway_fixture.block_on(
+    fixture.block_on(
         Mock::given(method("GET"))
             .and(path(pulls_path))
             .and(query_param("state", "all"))
@@ -127,7 +152,7 @@ fn list_pull_requests_populates_page_info_from_page_response(
         page: Some(page),
         per_page: Some(per_page),
     };
-    let result = gateway_fixture
+    let result = fixture
         .block_on(gateway.list_pull_requests(locator, &params))
         .expect("request should succeed");
 
@@ -145,12 +170,13 @@ fn list_pull_requests_populates_page_info_from_page_response(
 }
 
 #[rstest]
-fn list_pull_requests_maps_rate_limit_errors(gateway_fixture: RepositoryGatewayFixture) {
-    const EXPECTED_RESET_AT: u64 = 1_700_000_000;
-
-    let server = &gateway_fixture.server;
-    let locator = &gateway_fixture.locator;
-    let gateway = &gateway_fixture.gateway;
+fn list_pull_requests_maps_rate_limit_errors(
+    gateway_fixture: FixtureResult<RepositoryGatewayFixture>,
+) {
+    let fixture = gateway_fixture.expect("fixture should succeed");
+    let server = &fixture.server;
+    let locator = &fixture.locator;
+    let gateway = &fixture.gateway;
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
     let response = ResponseTemplate::new(403).set_body_json(serde_json::json!({
@@ -158,7 +184,7 @@ fn list_pull_requests_maps_rate_limit_errors(gateway_fixture: RepositoryGatewayF
         "documentation_url": "https://docs.github.com/rest/rate-limit"
     }));
 
-    gateway_fixture.block_on(
+    fixture.block_on(
         Mock::given(method("GET"))
             .and(path(pulls_path))
             .and(query_param("state", "open"))
@@ -170,19 +196,19 @@ fn list_pull_requests_maps_rate_limit_errors(gateway_fixture: RepositoryGatewayF
 
     let rate_limit_response = ResponseTemplate::new(200).set_body_json(serde_json::json!({
         "resources": {
-            "core": { "limit": 5000, "used": 5000, "remaining": 0, "reset": EXPECTED_RESET_AT },
-            "search": { "limit": 30, "used": 0, "remaining": 30, "reset": EXPECTED_RESET_AT }
+            "core": { "limit": 5000, "used": 5000, "remaining": 0, "reset": EXPECTED_RATE_LIMIT_RESET_AT },
+            "search": { "limit": 30, "used": 0, "remaining": 30, "reset": EXPECTED_RATE_LIMIT_RESET_AT }
         },
-        "rate": { "limit": 5000, "used": 5000, "remaining": 0, "reset": EXPECTED_RESET_AT }
+        "rate": { "limit": 5000, "used": 5000, "remaining": 0, "reset": EXPECTED_RATE_LIMIT_RESET_AT }
     }));
-    gateway_fixture.block_on(
+    fixture.block_on(
         Mock::given(method("GET"))
             .and(path("/api/v3/rate_limit"))
             .respond_with(rate_limit_response)
             .mount(server),
     );
 
-    let error = gateway_fixture
+    let error = fixture
         .block_on(gateway.list_pull_requests(locator, &ListPullRequestsParams::default()))
         .expect_err("request should fail");
 
@@ -194,7 +220,7 @@ fn list_pull_requests_maps_rate_limit_errors(gateway_fixture: RepositoryGatewayF
             let info = rate_limit.expect("expected rate_limit info to be populated");
             assert_eq!(
                 info.reset_at(),
-                EXPECTED_RESET_AT,
+                EXPECTED_RATE_LIMIT_RESET_AT,
                 "unexpected reset timestamp"
             );
             assert!(
@@ -202,7 +228,7 @@ fn list_pull_requests_maps_rate_limit_errors(gateway_fixture: RepositoryGatewayF
                 "unexpected message: {message}"
             );
             assert!(
-                message.contains(&EXPECTED_RESET_AT.to_string()),
+                message.contains(&EXPECTED_RATE_LIMIT_RESET_AT.to_string()),
                 "expected message to include reset time, got `{message}`"
             );
         }
@@ -211,55 +237,44 @@ fn list_pull_requests_maps_rate_limit_errors(gateway_fixture: RepositoryGatewayF
 }
 
 #[rstest]
-fn list_pull_requests_rejects_invalid_pagination_params(local_gateway: LocalGatewayFixture) {
-    let locator = &local_gateway.locator;
-    let gateway = &local_gateway.gateway;
-
+fn list_pull_requests_rejects_invalid_pagination_params(
+    local_gateway: FixtureResult<LocalGatewayFixture>,
+) {
+    let fixture = local_gateway.expect("fixture should succeed");
     let params = ListPullRequestsParams {
         state: Some(PullRequestState::All),
         page: Some(0),
         per_page: Some(0),
     };
-    let error = local_gateway
-        .block_on(gateway.list_pull_requests(locator, &params))
-        .expect_err("invalid params should fail");
-
-    assert!(
-        matches!(error, IntakeError::InvalidPagination { .. }),
-        "expected InvalidPagination, got {error:?}"
-    );
+    test_invalid_pagination_params(&fixture, params);
 }
 
 #[rstest]
-fn list_pull_requests_rejects_per_page_over_maximum(local_gateway: LocalGatewayFixture) {
-    let locator = &local_gateway.locator;
-    let gateway = &local_gateway.gateway;
-
+fn list_pull_requests_rejects_per_page_over_maximum(
+    local_gateway: FixtureResult<LocalGatewayFixture>,
+) {
+    let fixture = local_gateway.expect("fixture should succeed");
     let params = ListPullRequestsParams {
         state: Some(PullRequestState::All),
         page: Some(1),
         per_page: Some(101),
     };
-    let error = local_gateway
-        .block_on(gateway.list_pull_requests(locator, &params))
-        .expect_err("invalid per_page should fail");
-
-    assert!(
-        matches!(error, IntakeError::InvalidPagination { .. }),
-        "expected InvalidPagination, got {error:?}"
-    );
+    test_invalid_pagination_params(&fixture, params);
 }
 
 #[rstest]
-fn list_pull_requests_applies_default_query_params(gateway_fixture: RepositoryGatewayFixture) {
-    let server = &gateway_fixture.server;
-    let locator = &gateway_fixture.locator;
-    let gateway = &gateway_fixture.gateway;
+fn list_pull_requests_applies_default_query_params(
+    gateway_fixture: FixtureResult<RepositoryGatewayFixture>,
+) {
+    let fixture = gateway_fixture.expect("fixture should succeed");
+    let server = &fixture.server;
+    let locator = &fixture.locator;
+    let gateway = &fixture.gateway;
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
     let response = ResponseTemplate::new(200).set_body_json(serde_json::json!([]));
 
-    gateway_fixture.block_on(
+    fixture.block_on(
         Mock::given(method("GET"))
             .and(path(pulls_path))
             .and(query_param("state", "open"))
@@ -269,7 +284,7 @@ fn list_pull_requests_applies_default_query_params(gateway_fixture: RepositoryGa
             .mount(server),
     );
 
-    let result = gateway_fixture
+    let result = fixture
         .block_on(gateway.list_pull_requests(locator, &ListPullRequestsParams::default()))
         .expect("request should succeed");
 

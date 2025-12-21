@@ -1,5 +1,7 @@
 //! Tests for the pull request metadata cache.
 
+type FixtureResult<T> = Result<T, Box<dyn std::error::Error>>;
+
 use diesel::Connection;
 use diesel::RunQueryDsl;
 use diesel::sql_query;
@@ -13,22 +15,21 @@ use crate::persistence::{PersistenceError, migrate_database};
 use crate::telemetry::NoopTelemetrySink;
 
 #[fixture]
-fn temp_db() -> (TempDir, String) {
-    let temp_dir =
-        TempDir::new().unwrap_or_else(|error| panic!("temp dir should be created: {error}"));
+fn temp_db() -> FixtureResult<(TempDir, String)> {
+    let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("frankie.sqlite");
-    (temp_dir, db_path.to_string_lossy().to_string())
+    Ok((temp_dir, db_path.to_string_lossy().to_string()))
 }
 
 #[fixture]
-fn migrated_cache(temp_db: (TempDir, String)) -> (TempDir, PullRequestMetadataCache) {
-    let (temp_dir, database_url) = temp_db;
-    migrate_database(&database_url, &NoopTelemetrySink)
-        .unwrap_or_else(|error| panic!("migrations should run: {error}"));
+fn migrated_cache(
+    temp_db: FixtureResult<(TempDir, String)>,
+) -> FixtureResult<(TempDir, PullRequestMetadataCache)> {
+    let (temp_dir, database_url) = temp_db?;
+    migrate_database(&database_url, &NoopTelemetrySink)?;
 
-    let cache = PullRequestMetadataCache::new(database_url)
-        .unwrap_or_else(|error| panic!("cache should build: {error}"));
-    (temp_dir, cache)
+    let cache = PullRequestMetadataCache::new(database_url)?;
+    Ok((temp_dir, cache))
 }
 
 fn parse_locator(pr_number: u64) -> PullRequestLocator {
@@ -37,8 +38,8 @@ fn parse_locator(pr_number: u64) -> PullRequestLocator {
 }
 
 #[rstest]
-fn cache_round_trips_metadata(migrated_cache: (TempDir, PullRequestMetadataCache)) {
-    let (_temp_dir, cache) = migrated_cache;
+fn cache_round_trips_metadata(migrated_cache: FixtureResult<(TempDir, PullRequestMetadataCache)>) {
+    let (_temp_dir, cache) = migrated_cache.expect("fixture should succeed");
     let locator = parse_locator(42);
 
     let metadata = PullRequestMetadata {
@@ -83,8 +84,8 @@ fn cache_round_trips_metadata(migrated_cache: (TempDir, PullRequestMetadataCache
 }
 
 #[rstest]
-fn cache_touch_updates_expiry(migrated_cache: (TempDir, PullRequestMetadataCache)) {
-    let (_temp_dir, cache) = migrated_cache;
+fn cache_touch_updates_expiry(migrated_cache: FixtureResult<(TempDir, PullRequestMetadataCache)>) {
+    let (_temp_dir, cache) = migrated_cache.expect("fixture should succeed");
     let locator = parse_locator(1);
 
     let metadata = PullRequestMetadata {
@@ -121,8 +122,8 @@ fn cache_touch_updates_expiry(migrated_cache: (TempDir, PullRequestMetadataCache
 }
 
 #[rstest]
-fn cache_reports_missing_schema_when_unmigrated(temp_db: (TempDir, String)) {
-    let (_temp_dir, database_url) = temp_db;
+fn cache_reports_missing_schema_when_unmigrated(temp_db: FixtureResult<(TempDir, String)>) {
+    let (_temp_dir, database_url) = temp_db.expect("fixture should succeed");
     let cache = PullRequestMetadataCache::new(database_url)
         .unwrap_or_else(|error| panic!("cache should build: {error}"));
     let locator = parse_locator(1);
@@ -135,8 +136,10 @@ fn cache_reports_missing_schema_when_unmigrated(temp_db: (TempDir, String)) {
 }
 
 #[rstest]
-fn cache_distinguishes_missing_table_from_query_failures(temp_db: (TempDir, String)) {
-    let (_temp_dir, database_url) = temp_db;
+fn cache_distinguishes_missing_table_from_query_failures(
+    temp_db: FixtureResult<(TempDir, String)>,
+) {
+    let (_temp_dir, database_url) = temp_db.expect("fixture should succeed");
 
     let mut connection = SqliteConnection::establish(&database_url)
         .unwrap_or_else(|error| panic!("connection should succeed: {error}"));
