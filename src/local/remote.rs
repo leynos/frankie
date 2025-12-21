@@ -185,117 +185,142 @@ fn extract_owner_repo_from_path(host: &str, raw_path: &str) -> Option<GitHubOrig
 mod tests {
     use super::*;
 
-    #[test]
-    fn parse_ssh_scp_style_github_com() {
-        let result = parse_github_remote("git@github.com:owner/repo.git");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::GitHubCom {
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
+    /// Test case for successful parsing of a GitHub remote URL.
+    struct TestCase {
+        name: &'static str,
+        input: &'static str,
+        expected: GitHubOrigin,
+    }
+
+    /// Test case for parsing failures.
+    struct ErrorTestCase {
+        name: &'static str,
+        input: &'static str,
     }
 
     #[test]
-    fn parse_ssh_scp_style_no_git_suffix() {
-        let result = parse_github_remote("git@github.com:owner/repo");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::GitHubCom {
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
+    #[expect(clippy::too_many_lines, reason = "table-driven test with many cases")]
+    fn parse_github_remote_success_cases() {
+        let cases = vec![
+            TestCase {
+                name: "ssh_scp_style_github_com",
+                input: "git@github.com:owner/repo.git",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "ssh_scp_style_no_git_suffix",
+                input: "git@github.com:owner/repo",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "https_github_com",
+                input: "https://github.com/owner/repo.git",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "https_no_git_suffix",
+                input: "https://github.com/owner/repo",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "ssh_url_style",
+                input: "ssh://git@github.com/owner/repo.git",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "github_enterprise_ssh",
+                input: "git@ghe.example.com:owner/repo.git",
+                expected: GitHubOrigin::Enterprise {
+                    host: "ghe.example.com".to_owned(),
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "github_enterprise_https",
+                input: "https://ghe.example.com/owner/repo",
+                expected: GitHubOrigin::Enterprise {
+                    host: "ghe.example.com".to_owned(),
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "case_insensitive_github_com",
+                input: "git@GitHub.COM:owner/repo.git",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "with_trailing_slash",
+                input: "https://github.com/owner/repo/",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+        ];
+
+        for case in cases {
+            let result = parse_github_remote(case.input);
+            assert_eq!(
+                result,
+                Ok(case.expected),
+                "test case '{}' failed for input '{}'",
+                case.name,
+                case.input
+            );
+        }
     }
 
     #[test]
-    fn parse_https_github_com() {
-        let result = parse_github_remote("https://github.com/owner/repo.git");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::GitHubCom {
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
-    }
+    fn parse_github_remote_error_cases() {
+        let cases = vec![
+            ErrorTestCase {
+                name: "empty_url",
+                input: "",
+            },
+            ErrorTestCase {
+                name: "invalid_url",
+                input: "not-a-url",
+            },
+            ErrorTestCase {
+                name: "url_missing_repo",
+                input: "https://github.com/owner",
+            },
+            ErrorTestCase {
+                name: "too_many_path_segments",
+                input: "https://github.com/owner/repo/extra",
+            },
+        ];
 
-    #[test]
-    fn parse_https_no_git_suffix() {
-        let result = parse_github_remote("https://github.com/owner/repo");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::GitHubCom {
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn parse_ssh_url_style() {
-        let result = parse_github_remote("ssh://git@github.com/owner/repo.git");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::GitHubCom {
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn parse_github_enterprise_ssh() {
-        let result = parse_github_remote("git@ghe.example.com:owner/repo.git");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::Enterprise {
-                host: "ghe.example.com".to_owned(),
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn parse_github_enterprise_https() {
-        let result = parse_github_remote("https://ghe.example.com/owner/repo");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::Enterprise {
-                host: "ghe.example.com".to_owned(),
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn parse_empty_url_fails() {
-        let result = parse_github_remote("");
-        assert!(matches!(
-            result,
-            Err(LocalDiscoveryError::InvalidRemoteUrl { .. })
-        ));
-    }
-
-    #[test]
-    fn parse_invalid_url_fails() {
-        let result = parse_github_remote("not-a-url");
-        assert!(matches!(
-            result,
-            Err(LocalDiscoveryError::InvalidRemoteUrl { .. })
-        ));
-    }
-
-    #[test]
-    fn parse_url_missing_repo_fails() {
-        let result = parse_github_remote("https://github.com/owner");
-        assert!(matches!(
-            result,
-            Err(LocalDiscoveryError::InvalidRemoteUrl { .. })
-        ));
+        for case in cases {
+            let result = parse_github_remote(case.input);
+            assert!(
+                matches!(result, Err(LocalDiscoveryError::InvalidRemoteUrl { .. })),
+                "test case '{}' should fail for input '{}', but got {:?}",
+                case.name,
+                case.input,
+                result
+            );
+        }
     }
 
     #[test]
@@ -318,38 +343,5 @@ mod tests {
         assert_eq!(enterprise.repository(), "project");
         assert_eq!(enterprise.host(), "ghe.example.com");
         assert!(!enterprise.is_github_com());
-    }
-
-    #[test]
-    fn parse_case_insensitive_github_com() {
-        let result = parse_github_remote("git@GitHub.COM:owner/repo.git");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::GitHubCom {
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn parse_with_trailing_slash() {
-        let result = parse_github_remote("https://github.com/owner/repo/");
-        assert_eq!(
-            result,
-            Ok(GitHubOrigin::GitHubCom {
-                owner: "owner".to_owned(),
-                repository: "repo".to_owned(),
-            })
-        );
-    }
-
-    #[test]
-    fn parse_rejects_too_many_path_segments() {
-        let result = parse_github_remote("https://github.com/owner/repo/extra");
-        assert!(matches!(
-            result,
-            Err(LocalDiscoveryError::InvalidRemoteUrl { .. })
-        ));
     }
 }

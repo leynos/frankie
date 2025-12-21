@@ -119,37 +119,44 @@ fn assert_api_base(discovery_state: &DiscoveryState, expected_api_base: String) 
     );
 }
 
-#[then("the discovery fails with no remotes error")]
+/// Generic helper to assert that a discovery error matches an expected variant.
 #[expect(
     clippy::expect_used,
     reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
-fn assert_no_remotes_error(discovery_state: &DiscoveryState) {
+fn assert_discovery_error<F>(
+    discovery_state: &DiscoveryState,
+    predicate: F,
+    expected_description: &str,
+) where
+    F: FnOnce(&LocalDiscoveryError) -> bool,
+{
     let error = discovery_state
         .error
         .with_ref(Clone::clone)
         .expect("expected error but got success");
 
     assert!(
-        matches!(error, LocalDiscoveryError::NoRemotes),
-        "expected NoRemotes error, got {error:?}"
+        predicate(&error),
+        "expected {expected_description} error, got {error:?}"
+    );
+}
+
+#[then("the discovery fails with no remotes error")]
+fn assert_no_remotes_error(discovery_state: &DiscoveryState) {
+    assert_discovery_error(
+        discovery_state,
+        |e| matches!(e, LocalDiscoveryError::NoRemotes),
+        "NoRemotes",
     );
 }
 
 #[then("the discovery fails with not GitHub origin error")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_not_github_origin_error(discovery_state: &DiscoveryState) {
-    let error = discovery_state
-        .error
-        .with_ref(Clone::clone)
-        .expect("expected error but got success");
-
-    assert!(
-        matches!(error, LocalDiscoveryError::NotGitHubOrigin { .. }),
-        "expected NotGitHubOrigin error, got {error:?}"
+    assert_discovery_error(
+        discovery_state,
+        |e| matches!(e, LocalDiscoveryError::NotGitHubOrigin { .. }),
+        "NotGitHubOrigin",
     );
 }
 
