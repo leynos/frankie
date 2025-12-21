@@ -28,6 +28,33 @@ fn build_config_from_layers(layers: &[(&str, Value)]) -> FrankieConfig {
     FrankieConfig::merge_from_layers(composer.layers()).expect("merge should succeed")
 }
 
+/// Helper to test `pr_metadata_cache_ttl_seconds` loading from environment and/or CLI.
+fn test_pr_metadata_cache_ttl_seconds_loading(
+    env_ttl: Option<&str>,
+    cli_args: &[&str],
+    expected_ttl: u64,
+    description: &str,
+) {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
+    let home = temp_dir.path().to_string_lossy().to_string();
+
+    let _guard = env_lock::lock_env([
+        ("FRANKIE_PR_METADATA_CACHE_TTL_SECONDS", env_ttl),
+        ("HOME", Some(home.as_str())),
+        ("XDG_CONFIG_HOME", Some(home.as_str())),
+    ]);
+
+    let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
+    args.extend(cli_args.iter().map(std::ffi::OsString::from));
+
+    let config = FrankieConfig::load_from_iter(args).expect("config should load");
+
+    assert_eq!(
+        config.pr_metadata_cache_ttl_seconds, expected_ttl,
+        "{description}"
+    );
+}
+
 #[rstest]
 #[case::file_overrides_defaults(
     vec![("defaults", json!({"pr_url": "default-url"})), ("file", json!({"pr_url": "file-url"}))],
@@ -383,69 +410,31 @@ fn pr_metadata_cache_ttl_seconds_defaults_to_24_hours() {
 
 #[rstest]
 fn pr_metadata_cache_ttl_seconds_loads_from_environment_variable() {
-    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
-    let home = temp_dir.path().to_string_lossy().to_string();
-
-    let _guard = env_lock::lock_env([
-        ("FRANKIE_PR_METADATA_CACHE_TTL_SECONDS", Some("3600")),
-        ("HOME", Some(&home)),
-        ("XDG_CONFIG_HOME", Some(&home)),
-    ]);
-
-    let args = vec![std::ffi::OsString::from("frankie")];
-    let config = FrankieConfig::load_from_iter(args).expect("config should load");
-
-    assert_eq!(
-        config.pr_metadata_cache_ttl_seconds, 3600,
-        "expected FRANKIE_PR_METADATA_CACHE_TTL_SECONDS to set TTL"
+    test_pr_metadata_cache_ttl_seconds_loading(
+        Some("3600"),
+        &[],
+        3600,
+        "expected FRANKIE_PR_METADATA_CACHE_TTL_SECONDS to set TTL",
     );
 }
 
 #[rstest]
 fn pr_metadata_cache_ttl_seconds_loads_from_cli_flag() {
-    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
-    let home = temp_dir.path().to_string_lossy().to_string();
-
-    let _guard = env_lock::lock_env([
-        ("FRANKIE_PR_METADATA_CACHE_TTL_SECONDS", None::<&str>),
-        ("HOME", Some(&home)),
-        ("XDG_CONFIG_HOME", Some(&home)),
-    ]);
-
-    let args = vec![
-        std::ffi::OsString::from("frankie"),
-        std::ffi::OsString::from("--pr-metadata-cache-ttl-seconds"),
-        std::ffi::OsString::from("123"),
-    ];
-    let config = FrankieConfig::load_from_iter(args).expect("config should load");
-
-    assert_eq!(
-        config.pr_metadata_cache_ttl_seconds, 123,
-        "expected --pr-metadata-cache-ttl-seconds to set TTL"
+    test_pr_metadata_cache_ttl_seconds_loading(
+        None,
+        &["--pr-metadata-cache-ttl-seconds", "123"],
+        123,
+        "expected --pr-metadata-cache-ttl-seconds to set TTL",
     );
 }
 
 #[rstest]
 fn pr_metadata_cache_ttl_seconds_cli_overrides_environment() {
-    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
-    let home = temp_dir.path().to_string_lossy().to_string();
-
-    let _guard = env_lock::lock_env([
-        ("FRANKIE_PR_METADATA_CACHE_TTL_SECONDS", Some("3600")),
-        ("HOME", Some(&home)),
-        ("XDG_CONFIG_HOME", Some(&home)),
-    ]);
-
-    let args = vec![
-        std::ffi::OsString::from("frankie"),
-        std::ffi::OsString::from("--pr-metadata-cache-ttl-seconds"),
-        std::ffi::OsString::from("123"),
-    ];
-    let config = FrankieConfig::load_from_iter(args).expect("config should load");
-
-    assert_eq!(
-        config.pr_metadata_cache_ttl_seconds, 123,
-        "CLI should override environment for pr_metadata_cache_ttl_seconds"
+    test_pr_metadata_cache_ttl_seconds_loading(
+        Some("3600"),
+        &["--pr-metadata-cache-ttl-seconds", "123"],
+        123,
+        "CLI should override environment for pr_metadata_cache_ttl_seconds",
     );
 }
 
