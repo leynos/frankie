@@ -1316,12 +1316,12 @@ flowchart TD
 
 ### 3.5.2 Data Persistence Strategy
 
-| Data Type           | Storage Method               | Caching Strategy           | Retention Policy  |
-| ------------------- | ---------------------------- | -------------------------- | ----------------- |
-| GitHub PR Metadata  | SQLite with indexing         | 24-hour time-to-live (TTL) | 30-day cleanup    |
-| Review Comments     | SQLite with full-text search | Session-based              | User-configurable |
-| User Configuration  | TOML files                   | In-memory cache            | Persistent        |
-| AI Interaction Logs | SQLite with rotation         | No caching                 | 7-day retention   |
+| Data Type           | Storage Method               | Caching Strategy                                    | Retention Policy  |
+| ------------------- | ---------------------------- | --------------------------------------------------- | ----------------- |
+| GitHub PR Metadata  | SQLite with indexing         | Configurable time-to-live (TTL) (default: 24 hours) | 30-day cleanup    |
+| Review Comments     | SQLite with full-text search | Session-based                                       | User-configurable |
+| User Configuration  | TOML files                   | In-memory cache                                     | Persistent        |
+| AI Interaction Logs | SQLite with rotation         | No caching                                          | 7-day retention   |
 
 GitHub PR metadata caching uses a configurable TTL. The default is 24 hours,
 derived from `pr_metadata_cache_ttl_seconds` (set via

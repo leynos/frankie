@@ -3,7 +3,9 @@
 use rstest_bdd_macros::then;
 
 use crate::pr_metadata_cache_bdd_state::CacheState;
-use crate::support::pr_metadata_cache_helpers::assert_error_variant_contains;
+use crate::support::pr_metadata_cache_helpers::{
+    assert_api_error_contains, assert_configuration_error_contains,
+};
 
 #[then("the response includes the title {expected}")]
 fn assert_title(cache_state: &CacheState, expected: String) {
@@ -26,19 +28,24 @@ fn assert_title(cache_state: &CacheState, expected: String) {
 }
 
 #[then("the GitHub API mocks are satisfied")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn verify_mocks(cache_state: &CacheState) {
-    let runtime = cache_state
-        .runtime
-        .get()
-        .unwrap_or_else(|| panic!("runtime not initialised"));
+    let runtime = cache_state.runtime.get().expect("runtime not initialised");
     cache_state
         .server
         .with_ref(|server| runtime.block_on(server.verify()))
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+        .expect("mock server not initialised");
 }
 
 #[then(
     "the revalidation request includes If-None-Match {etag} and If-Modified-Since {last_modified}"
+)]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn assert_revalidation_request_headers(
     cache_state: &CacheState,
@@ -48,21 +55,18 @@ fn assert_revalidation_request_headers(
     let expected_etag = etag.trim_matches('"');
     let expected_last_modified = last_modified.trim_matches('"');
 
-    let runtime = cache_state
-        .runtime
-        .get()
-        .unwrap_or_else(|| panic!("runtime not initialised"));
+    let runtime = cache_state.runtime.get().expect("runtime not initialised");
 
     let requests = cache_state
         .server
         .with_ref(|server| runtime.block_on(server.received_requests()))
-        .unwrap_or_else(|| panic!("mock server not initialised"))
-        .unwrap_or_else(|| panic!("request recording is not enabled"));
+        .expect("mock server not initialised")
+        .expect("request recording is not enabled");
 
     let expected_path = cache_state
         .expected_metadata_path
         .get()
-        .unwrap_or_else(|| panic!("expected metadata request path missing from scenario state"));
+        .expect("expected metadata request path missing from scenario state");
 
     let metadata_requests: Vec<_> = requests
         .into_iter()
@@ -100,19 +104,27 @@ fn assert_revalidation_request_headers(
 }
 
 #[then("an API error mentions an unexpected 304 response")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_uncached_304_error(cache_state: &CacheState) {
     let error = cache_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected API error"));
-    assert_error_variant_contains(&error, "Api", "unexpected 304 for uncached pull request");
+        .expect("expected API error");
+    assert_api_error_contains(&error, "unexpected 304 for uncached pull request");
 }
 
 #[then("a configuration error mentions running migrations")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_schema_error(cache_state: &CacheState) {
     let error = cache_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected configuration error"));
-    assert_error_variant_contains(&error, "Configuration", "--migrate-db");
+        .expect("expected configuration error");
+    assert_configuration_error_contains(&error, "--migrate-db");
 }

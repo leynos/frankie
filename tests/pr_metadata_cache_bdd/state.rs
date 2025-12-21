@@ -3,13 +3,16 @@
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
-use frankie::telemetry::{TelemetryEvent, TelemetrySink};
 use frankie::{IntakeError, PullRequestDetails};
 use rstest_bdd::Slot;
-use rstest_bdd_macros::{ScenarioState, StepArgs};
+use rstest_bdd_macros::ScenarioState;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 use wiremock::MockServer;
+
+pub(crate) use crate::support::pr_metadata_cache_helpers::{
+    MockInvalidationConfig, MockRevalidationConfig,
+};
 
 /// Shared runtime wrapper that can be stored in an rstest-bdd Slot.
 #[derive(Clone)]
@@ -26,65 +29,6 @@ impl SharedRuntime {
 
     pub(crate) fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
         self.0.borrow().block_on(future)
-    }
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct NoopTelemetry;
-
-impl TelemetrySink for NoopTelemetry {
-    fn record(&self, _event: TelemetryEvent) {}
-}
-
-#[derive(Clone, Debug, StepArgs)]
-pub(crate) struct MockInvalidationConfig {
-    pub(crate) pr: u64,
-    pub(crate) old_title: String,
-    pub(crate) new_title: String,
-    pub(crate) etag1: String,
-    pub(crate) etag2: String,
-    pub(crate) count: u64,
-}
-
-impl MockInvalidationConfig {
-    pub(crate) fn new(
-        pr: u64,
-        titles: (String, String),
-        etag_values: (String, String),
-        count: u64,
-    ) -> Self {
-        let (old_title, new_title) = titles;
-        let (etag_one, etag_two) = etag_values;
-        Self {
-            pr,
-            old_title,
-            new_title,
-            etag1: etag_one.trim_matches('"').to_owned(),
-            etag2: etag_two.trim_matches('"').to_owned(),
-            count,
-        }
-    }
-}
-
-#[derive(Clone, Debug, StepArgs)]
-pub(crate) struct MockRevalidationConfig {
-    pub(crate) pr: u64,
-    pub(crate) title: String,
-    pub(crate) etag: String,
-    pub(crate) last_modified: String,
-    pub(crate) count: u64,
-}
-
-impl MockRevalidationConfig {
-    pub(crate) fn new(pr: u64, title: String, validators: (String, String), count: u64) -> Self {
-        let (etag, last_modified) = validators;
-        Self {
-            pr,
-            title,
-            etag: etag.trim_matches('"').to_owned(),
-            last_modified: last_modified.trim_matches('"').to_owned(),
-            count,
-        }
     }
 }
 

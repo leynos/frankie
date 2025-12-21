@@ -6,25 +6,77 @@ use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use frankie::IntakeError;
+use rstest_bdd_macros::StepArgs;
 use serde_json::json;
 
-#[derive(Clone, Debug)]
-pub struct RevalidationMocks {
+#[derive(Clone, Debug, StepArgs)]
+pub struct MockRevalidationConfig {
     pub pr: u64,
     pub title: String,
     pub etag: String,
     pub last_modified: String,
-    pub comment_count: u64,
+    pub count: u64,
 }
 
-#[derive(Clone, Debug)]
-pub struct InvalidationMocks {
+impl MockRevalidationConfig {
+    pub fn new(pr: u64, title: String, validators: (String, String), count: u64) -> Self {
+        let (etag, last_modified) = validators;
+        Self {
+            pr,
+            title,
+            etag: etag.trim_matches('"').to_owned(),
+            last_modified: last_modified.trim_matches('"').to_owned(),
+            count,
+        }
+    }
+
+    pub fn normalise(self) -> Self {
+        Self::new(
+            self.pr,
+            self.title,
+            (self.etag, self.last_modified),
+            self.count,
+        )
+    }
+}
+
+#[derive(Clone, Debug, StepArgs)]
+pub struct MockInvalidationConfig {
     pub pr: u64,
     pub old_title: String,
     pub new_title: String,
     pub etag1: String,
     pub etag2: String,
-    pub comment_count: u64,
+    pub count: u64,
+}
+
+impl MockInvalidationConfig {
+    pub fn new(
+        pr: u64,
+        titles: (String, String),
+        etag_values: (String, String),
+        count: u64,
+    ) -> Self {
+        let (old_title, new_title) = titles;
+        let (etag_one, etag_two) = etag_values;
+        Self {
+            pr,
+            old_title,
+            new_title,
+            etag1: etag_one.trim_matches('"').to_owned(),
+            etag2: etag_two.trim_matches('"').to_owned(),
+            count,
+        }
+    }
+
+    pub fn normalise(self) -> Self {
+        Self::new(
+            self.pr,
+            (self.old_title, self.new_title),
+            (self.etag1, self.etag2),
+            self.count,
+        )
+    }
 }
 
 pub fn create_database_path(temp_dir: &TempDir) -> String {
@@ -67,6 +119,14 @@ pub fn create_pr_body(pr: u64, title: &str) -> serde_json::Value {
     })
 }
 
+pub fn pull_request_path(pr: u64) -> String {
+    format!("/api/v3/repos/owner/repo/pulls/{pr}")
+}
+
+pub fn issue_comments_path(pr: u64) -> String {
+    format!("/api/v3/repos/owner/repo/issues/{pr}/comments")
+}
+
 pub fn mount_mocks(server: &MockServer, runtime: &Runtime, mocks: Vec<Mock>) {
     for mock in mocks {
         runtime.block_on(mock.mount(server));
@@ -75,31 +135,37 @@ pub fn mount_mocks(server: &MockServer, runtime: &Runtime, mocks: Vec<Mock>) {
 
 pub fn build_comments_mock(pr: u64, count: u64, expected_calls: u64) -> Mock {
     let comments = create_mock_comments(count);
-    let comments_path = format!("/api/v3/repos/owner/repo/issues/{pr}/comments");
+    let comments_path = issue_comments_path(pr);
 
-    Mock::given(method("GET"))
+    let mock = Mock::given(method("GET"))
         .and(path(comments_path))
         .respond_with(ResponseTemplate::new(200).set_body_json(comments))
-        .up_to_n_times(expected_calls)
         .expect(expected_calls)
-        .named("Issue comments (two loads)")
+        .named("Issue comments");
+
+    if expected_calls == 0 {
+        mock
+    } else {
+        mock.up_to_n_times(expected_calls)
+    }
 }
 
 pub fn mount_server_with_revalidation(
     server: &MockServer,
     runtime: &Runtime,
-    config: RevalidationMocks,
+    config: MockRevalidationConfig,
 ) {
-    let pr_body = create_pr_body(config.pr, &config.title);
-    let pr_path = format!("/api/v3/repos/owner/repo/pulls/{}", config.pr);
+    let normalised = config.normalise();
+    let pr_body = create_pr_body(normalised.pr, &normalised.title);
+    let pr_path = pull_request_path(normalised.pr);
 
     let initial = Mock::given(method("GET"))
         .and(path(pr_path.clone()))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&pr_body)
-                .insert_header("ETag", config.etag)
-                .insert_header("Last-Modified", config.last_modified),
+                .insert_header("ETag", normalised.etag)
+                .insert_header("Last-Modified", normalised.last_modified),
         )
         .up_to_n_times(1)
         .expect(1)
@@ -111,26 +177,27 @@ pub fn mount_server_with_revalidation(
         .expect(1)
         .named("PR metadata conditional 304");
 
-    let comments_mock = build_comments_mock(config.pr, config.comment_count, 2);
+    let comments_mock = build_comments_mock(normalised.pr, normalised.count, 2);
     mount_mocks(server, runtime, vec![initial, revalidated, comments_mock]);
 }
 
 pub fn mount_server_with_invalidation(
     server: &MockServer,
     runtime: &Runtime,
-    config: InvalidationMocks,
+    config: MockInvalidationConfig,
 ) {
-    let pr_path = format!("/api/v3/repos/owner/repo/pulls/{}", config.pr);
+    let normalised = config.normalise();
+    let pr_path = pull_request_path(normalised.pr);
 
-    let old_body = create_pr_body(config.pr, &config.old_title);
-    let new_body = create_pr_body(config.pr, &config.new_title);
+    let old_body = create_pr_body(normalised.pr, &normalised.old_title);
+    let new_body = create_pr_body(normalised.pr, &normalised.new_title);
 
     let initial = Mock::given(method("GET"))
         .and(path(pr_path.clone()))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&old_body)
-                .insert_header("ETag", config.etag1.clone()),
+                .insert_header("ETag", normalised.etag1.clone()),
         )
         .up_to_n_times(1)
         .expect(1)
@@ -138,57 +205,52 @@ pub fn mount_server_with_invalidation(
 
     let changed = Mock::given(method("GET"))
         .and(path(pr_path))
-        .and(header("if-none-match", config.etag1.clone()))
+        .and(header("if-none-match", normalised.etag1.clone()))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(&new_body)
-                .insert_header("ETag", config.etag2),
+                .insert_header("ETag", normalised.etag2),
         )
         .expect(1)
         .named("PR metadata refresh with new ETag");
 
-    let comments_mock = build_comments_mock(config.pr, config.comment_count, 2);
+    let comments_mock = build_comments_mock(normalised.pr, normalised.count, 2);
     mount_mocks(server, runtime, vec![initial, changed, comments_mock]);
 }
 
-pub fn assert_error_variant_contains(
-    error: &IntakeError,
-    variant_name: &str,
-    message_fragment: &str,
-) {
-    match variant_name {
-        "Api" => {
-            let IntakeError::Api { message } = error else {
-                panic!("expected Api variant, got {error:?}");
-            };
-            assert!(
-                message.contains(message_fragment),
-                "unexpected error message: {message}"
-            );
-        }
-        "Configuration" => {
-            let IntakeError::Configuration { message } = error else {
-                panic!("expected Configuration variant, got {error:?}");
-            };
-            assert!(
-                message.contains(message_fragment),
-                "expected error message to mention {message_fragment}, got: {message}"
-            );
-        }
-        _ => panic!("unknown error variant name: {variant_name}"),
-    }
+pub fn assert_api_error_contains(error: &IntakeError, message_fragment: &str) {
+    let IntakeError::Api { message } = error else {
+        panic!("expected Api variant, got {error:?}");
+    };
+    assert!(
+        message.contains(message_fragment),
+        "unexpected error message: {message}"
+    );
+}
+
+pub fn assert_configuration_error_contains(error: &IntakeError, message_fragment: &str) {
+    let IntakeError::Configuration { message } = error else {
+        panic!("expected Configuration variant, got {error:?}");
+    };
+    assert!(
+        message.contains(message_fragment),
+        "expected error message to mention {message_fragment}, got: {message}"
+    );
 }
 
 const _: () = {
-    let _revalidation_mocks_size = std::mem::size_of::<RevalidationMocks>();
-    let _invalidation_mocks_size = std::mem::size_of::<InvalidationMocks>();
+    let _revalidation_mocks_size = std::mem::size_of::<MockRevalidationConfig>();
+    let _invalidation_mocks_size = std::mem::size_of::<MockInvalidationConfig>();
     let _ = create_database_path;
     let _ = expected_request_path;
     let _ = create_mock_comments;
     let _ = create_pr_body;
+    let _ = pull_request_path;
+    let _ = issue_comments_path;
     let _ = mount_mocks;
     let _ = build_comments_mock;
     let _ = mount_server_with_revalidation;
     let _ = mount_server_with_invalidation;
-    let _ = assert_error_variant_contains;
+    let _ = assert_api_error_contains;
+    let _ = assert_configuration_error_contains;
 };

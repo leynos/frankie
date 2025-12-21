@@ -1,5 +1,7 @@
 //! Tests for the repository gateway.
 
+use rstest::{fixture, rstest};
+use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -8,14 +10,77 @@ use crate::github::error::IntakeError;
 use crate::github::gateway::RepositoryGateway;
 use crate::github::locator::{PersonalAccessToken, RepositoryLocator};
 
-#[tokio::test]
-async fn list_pull_requests_populates_page_info_from_page_response() {
-    let server = MockServer::start().await;
+struct RepositoryGatewayFixture {
+    runtime: Runtime,
+    server: MockServer,
+    locator: RepositoryLocator,
+    gateway: OctocrabRepositoryGateway,
+}
+
+impl RepositoryGatewayFixture {
+    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        self.runtime.block_on(future)
+    }
+}
+
+struct LocalGatewayFixture {
+    runtime: Runtime,
+    locator: RepositoryLocator,
+    gateway: OctocrabRepositoryGateway,
+}
+
+impl LocalGatewayFixture {
+    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
+        self.runtime.block_on(future)
+    }
+}
+
+#[fixture]
+fn token() -> PersonalAccessToken {
+    PersonalAccessToken::new("valid-token").expect("token should be valid")
+}
+
+#[fixture]
+fn gateway_fixture(token: PersonalAccessToken) -> RepositoryGatewayFixture {
+    let runtime = Runtime::new().expect("runtime should start");
+    let server = runtime.block_on(MockServer::start());
     let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))
         .expect("should create repository locator");
-    let token = PersonalAccessToken::new("valid-token").expect("token should be valid");
-    let gateway =
-        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway");
+    let gateway = {
+        let _guard = runtime.enter();
+        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway")
+    };
+    RepositoryGatewayFixture {
+        runtime,
+        server,
+        locator,
+        gateway,
+    }
+}
+
+#[fixture]
+fn local_gateway(token: PersonalAccessToken) -> LocalGatewayFixture {
+    let runtime = Runtime::new().expect("runtime should start");
+    let locator = RepositoryLocator::from_owner_repo("owner", "repo")
+        .expect("should create repository locator");
+    let gateway = {
+        let _guard = runtime.enter();
+        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway")
+    };
+    LocalGatewayFixture {
+        runtime,
+        locator,
+        gateway,
+    }
+}
+
+#[rstest]
+fn list_pull_requests_populates_page_info_from_page_response(
+    gateway_fixture: RepositoryGatewayFixture,
+) {
+    let server = &gateway_fixture.server;
+    let locator = &gateway_fixture.locator;
+    let gateway = &gateway_fixture.gateway;
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
     let page = 2_u32;
@@ -47,23 +112,23 @@ async fn list_pull_requests_populates_page_info_from_page_response() {
         }]))
         .insert_header("Link", link_header);
 
-    Mock::given(method("GET"))
-        .and(path(pulls_path))
-        .and(query_param("state", "all"))
-        .and(query_param("page", page.to_string()))
-        .and(query_param("per_page", per_page.to_string()))
-        .respond_with(response)
-        .mount(&server)
-        .await;
+    gateway_fixture.block_on(
+        Mock::given(method("GET"))
+            .and(path(pulls_path))
+            .and(query_param("state", "all"))
+            .and(query_param("page", page.to_string()))
+            .and(query_param("per_page", per_page.to_string()))
+            .respond_with(response)
+            .mount(server),
+    );
 
     let params = ListPullRequestsParams {
         state: Some(PullRequestState::All),
         page: Some(page),
         per_page: Some(per_page),
     };
-    let result = gateway
-        .list_pull_requests(&locator, &params)
-        .await
+    let result = gateway_fixture
+        .block_on(gateway.list_pull_requests(locator, &params))
         .expect("request should succeed");
 
     assert_eq!(result.items.len(), 1, "expected one item");
@@ -79,16 +144,13 @@ async fn list_pull_requests_populates_page_info_from_page_response() {
     assert!(info.has_prev());
 }
 
-#[tokio::test]
-async fn list_pull_requests_maps_rate_limit_errors() {
+#[rstest]
+fn list_pull_requests_maps_rate_limit_errors(gateway_fixture: RepositoryGatewayFixture) {
     const EXPECTED_RESET_AT: u64 = 1_700_000_000;
 
-    let server = MockServer::start().await;
-    let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))
-        .expect("should create repository locator");
-    let token = PersonalAccessToken::new("valid-token").expect("token should be valid");
-    let gateway =
-        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway");
+    let server = &gateway_fixture.server;
+    let locator = &gateway_fixture.locator;
+    let gateway = &gateway_fixture.gateway;
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
     let response = ResponseTemplate::new(403).set_body_json(serde_json::json!({
@@ -96,14 +158,15 @@ async fn list_pull_requests_maps_rate_limit_errors() {
         "documentation_url": "https://docs.github.com/rest/rate-limit"
     }));
 
-    Mock::given(method("GET"))
-        .and(path(pulls_path))
-        .and(query_param("state", "open"))
-        .and(query_param("page", "1"))
-        .and(query_param("per_page", "30"))
-        .respond_with(response)
-        .mount(&server)
-        .await;
+    gateway_fixture.block_on(
+        Mock::given(method("GET"))
+            .and(path(pulls_path))
+            .and(query_param("state", "open"))
+            .and(query_param("page", "1"))
+            .and(query_param("per_page", "30"))
+            .respond_with(response)
+            .mount(server),
+    );
 
     let rate_limit_response = ResponseTemplate::new(200).set_body_json(serde_json::json!({
         "resources": {
@@ -112,15 +175,15 @@ async fn list_pull_requests_maps_rate_limit_errors() {
         },
         "rate": { "limit": 5000, "used": 5000, "remaining": 0, "reset": EXPECTED_RESET_AT }
     }));
-    Mock::given(method("GET"))
-        .and(path("/api/v3/rate_limit"))
-        .respond_with(rate_limit_response)
-        .mount(&server)
-        .await;
+    gateway_fixture.block_on(
+        Mock::given(method("GET"))
+            .and(path("/api/v3/rate_limit"))
+            .respond_with(rate_limit_response)
+            .mount(server),
+    );
 
-    let error = gateway
-        .list_pull_requests(&locator, &ListPullRequestsParams::default())
-        .await
+    let error = gateway_fixture
+        .block_on(gateway.list_pull_requests(locator, &ListPullRequestsParams::default()))
         .expect_err("request should fail");
 
     match error {
@@ -147,22 +210,18 @@ async fn list_pull_requests_maps_rate_limit_errors() {
     }
 }
 
-#[tokio::test]
-async fn list_pull_requests_rejects_invalid_pagination_params() {
-    let locator = RepositoryLocator::from_owner_repo("owner", "repo")
-        .expect("should create repository locator");
-    let token = PersonalAccessToken::new("valid-token").expect("token should be valid");
-    let gateway =
-        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway");
+#[rstest]
+fn list_pull_requests_rejects_invalid_pagination_params(local_gateway: LocalGatewayFixture) {
+    let locator = &local_gateway.locator;
+    let gateway = &local_gateway.gateway;
 
     let params = ListPullRequestsParams {
         state: Some(PullRequestState::All),
         page: Some(0),
         per_page: Some(0),
     };
-    let error = gateway
-        .list_pull_requests(&locator, &params)
-        .await
+    let error = local_gateway
+        .block_on(gateway.list_pull_requests(locator, &params))
         .expect_err("invalid params should fail");
 
     assert!(
@@ -171,22 +230,18 @@ async fn list_pull_requests_rejects_invalid_pagination_params() {
     );
 }
 
-#[tokio::test]
-async fn list_pull_requests_rejects_per_page_over_maximum() {
-    let locator = RepositoryLocator::from_owner_repo("owner", "repo")
-        .expect("should create repository locator");
-    let token = PersonalAccessToken::new("valid-token").expect("token should be valid");
-    let gateway =
-        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway");
+#[rstest]
+fn list_pull_requests_rejects_per_page_over_maximum(local_gateway: LocalGatewayFixture) {
+    let locator = &local_gateway.locator;
+    let gateway = &local_gateway.gateway;
 
     let params = ListPullRequestsParams {
         state: Some(PullRequestState::All),
         page: Some(1),
         per_page: Some(101),
     };
-    let error = gateway
-        .list_pull_requests(&locator, &params)
-        .await
+    let error = local_gateway
+        .block_on(gateway.list_pull_requests(locator, &params))
         .expect_err("invalid per_page should fail");
 
     assert!(
@@ -195,30 +250,27 @@ async fn list_pull_requests_rejects_per_page_over_maximum() {
     );
 }
 
-#[tokio::test]
-async fn list_pull_requests_applies_default_query_params() {
-    let server = MockServer::start().await;
-    let locator = RepositoryLocator::parse(&format!("{}/owner/repo", server.uri()))
-        .expect("should create repository locator");
-    let token = PersonalAccessToken::new("valid-token").expect("token should be valid");
-    let gateway =
-        OctocrabRepositoryGateway::for_token(&token, &locator).expect("should create gateway");
+#[rstest]
+fn list_pull_requests_applies_default_query_params(gateway_fixture: RepositoryGatewayFixture) {
+    let server = &gateway_fixture.server;
+    let locator = &gateway_fixture.locator;
+    let gateway = &gateway_fixture.gateway;
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
     let response = ResponseTemplate::new(200).set_body_json(serde_json::json!([]));
 
-    Mock::given(method("GET"))
-        .and(path(pulls_path))
-        .and(query_param("state", "open"))
-        .and(query_param("page", "1"))
-        .and(query_param("per_page", "30"))
-        .respond_with(response)
-        .mount(&server)
-        .await;
+    gateway_fixture.block_on(
+        Mock::given(method("GET"))
+            .and(path(pulls_path))
+            .and(query_param("state", "open"))
+            .and(query_param("page", "1"))
+            .and(query_param("per_page", "30"))
+            .respond_with(response)
+            .mount(server),
+    );
 
-    let result = gateway
-        .list_pull_requests(&locator, &ListPullRequestsParams::default())
-        .await
+    let result = gateway_fixture
+        .block_on(gateway.list_pull_requests(locator, &ListPullRequestsParams::default()))
         .expect("request should succeed");
 
     assert_eq!(result.items.len(), 0, "expected no items");
