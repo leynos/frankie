@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 pub enum TelemetryEvent {
     /// Records the current database schema version after migrations apply.
     SchemaVersionRecorded {
-        /// Diesel migration version string (e.g. `20251214000000`).
+        /// Diesel migration version string (e.g. `20251220000000`).
         schema_version: String,
     },
 }
@@ -118,13 +118,13 @@ mod tests {
         let sink = RecordingTelemetrySink::default();
 
         sink.record(TelemetryEvent::SchemaVersionRecorded {
-            schema_version: "20251214000000".to_owned(),
+            schema_version: "20251220000000".to_owned(),
         });
 
         assert_eq!(
             sink.events(),
             vec![TelemetryEvent::SchemaVersionRecorded {
-                schema_version: "20251214000000".to_owned(),
+                schema_version: "20251220000000".to_owned(),
             }]
         );
     }

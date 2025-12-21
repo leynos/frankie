@@ -1316,12 +1316,16 @@ flowchart TD
 
 ### 3.5.2 Data Persistence Strategy
 
-| Data Type           | Storage Method               | Caching Strategy | Retention Policy  |
-| ------------------- | ---------------------------- | ---------------- | ----------------- |
-| GitHub PR Metadata  | SQLite with indexing         | 24-hour TTL      | 30-day cleanup    |
-| Review Comments     | SQLite with full-text search | Session-based    | User-configurable |
-| User Configuration  | TOML files                   | In-memory cache  | Persistent        |
-| AI Interaction Logs | SQLite with rotation         | No caching       | 7-day retention   |
+| Data Type           | Storage Method               | Caching Strategy                                    | Retention Policy  |
+| ------------------- | ---------------------------- | --------------------------------------------------- | ----------------- |
+| GitHub PR Metadata  | SQLite with indexing         | Configurable time-to-live (TTL) (default: 24 hours) | 30-day cleanup    |
+| Review Comments     | SQLite with full-text search | Session-based                                       | User-configurable |
+| User Configuration  | TOML files                   | In-memory cache                                     | Persistent        |
+| AI Interaction Logs | SQLite with rotation         | No caching                                          | 7-day retention   |
+
+GitHub PR metadata caching uses a configurable TTL. The default is 24 hours,
+derived from `pr_metadata_cache_ttl_seconds` (set via
+`FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` or `--pr-metadata-cache-ttl-seconds`).
 
 **Schema Design Principles:**
 
@@ -3142,7 +3146,7 @@ capabilities. Includes diesel_migrations = { version = "2.2.0", features =
 ```mermaid
 erDiagram
     REPOSITORIES {
-        PK id integer
+        id integer PK
         owner text
         name text
         remote_url text
@@ -3150,8 +3154,8 @@ erDiagram
         updated_at timestamp
     }
     PULL_REQUESTS {
-        PK id integer
-        FK repository_id integer
+        id integer PK
+        repository_id integer FK
         pr_number integer
         title text
         state text
@@ -3159,8 +3163,8 @@ erDiagram
         updated_at timestamp
     }
     REVIEW_COMMENTS {
-        PK id integer
-        FK pull_request_id integer
+        id integer PK
+        pull_request_id integer FK
         comment_id integer
         body text
         file_path text
@@ -3170,13 +3174,13 @@ erDiagram
         updated_at timestamp
     }
     USER_PREFERENCES {
-        PK id integer
+        id integer PK
         key text
         value text
         updated_at timestamp
     }
     AI_SESSIONS {
-        PK session_id text
+        session_id text PK
         command_data text
         results text
         status text
@@ -3643,7 +3647,7 @@ advantage of Rust's type system to create a low overhead query builder that
 ```mermaid
 erDiagram
     REPOSITORIES {
-        PK id integer
+        id integer PK
         owner text
         name text
         remote_url text
@@ -3653,8 +3657,8 @@ erDiagram
         last_synced timestamp
     }
     PULL_REQUESTS {
-        PK id integer
-        FK repository_id integer
+        id integer PK
+        repository_id integer FK
         pr_number integer
         title text
         body text
@@ -3667,8 +3671,8 @@ erDiagram
         last_synced timestamp
     }
     REVIEW_COMMENTS {
-        PK id integer
-        FK pull_request_id integer
+        id integer PK
+        pull_request_id integer FK
         github_comment_id integer
         body text
         file_path text
@@ -3681,7 +3685,7 @@ erDiagram
         updated_at timestamp
     }
     USERS {
-        PK id integer
+        id integer PK
         github_user_id integer
         login text
         name text
@@ -3690,8 +3694,8 @@ erDiagram
         updated_at timestamp
     }
     AI_SESSIONS {
-        PK session_id text
-        FK pull_request_id integer
+        session_id text PK
+        pull_request_id integer FK
         command_data text
         results text
         status text
@@ -3700,13 +3704,13 @@ erDiagram
         completed_at timestamp
     }
     USER_PREFERENCES {
-        PK id integer
+        id integer PK
         preference_key text
         preference_value text
         updated_at timestamp
     }
     CACHE_METADATA {
-        PK id integer
+        id integer PK
         cache_key text
         cache_type text
         expires_at timestamp
@@ -3899,17 +3903,79 @@ flowchart TD
 
 #### 6.6.3.1.1 Phase 1 implementation decisions
 
-The initial implementation in this repository starts with a single Diesel
-migration that creates the Phase 1 tables needed for local persistence:
+The initial implementation in this repository starts with Diesel migrations
+that create the Phase 1 tables needed for local persistence and caching:
 
 - `repositories`
 - `pull_requests`
 - `review_comments` (stores GitHub pull request review comments)
 - `sync_checkpoints`
+- `pr_metadata_cache` (stores cached pull request metadata with HTTP validators
+  and TTL expiry)
 
 The additional entities in the ER diagram (for example `users`, `ai_sessions`,
-and `cache_metadata`) are intentionally deferred until later roadmap slices to
-keep Phase 1 focused on foundations.
+and `cache_metadata`) are intentionally deferred until later roadmap slices.
+The `pr_metadata_cache` table is a pragmatic exception: it enables cache-first
+pull request intake without requiring repository discovery or the full PR data
+model to be populated in SQLite.
+
+`pr_metadata_cache` uses `id` as a surrogate primary key and enforces a
+uniqueness constraint on (`api_base`, `owner`, `repo`, `pr_number`) as the
+logical identity of a cached pull request. It stores:
+
+- Cached PR metadata fields needed by the CLI
+- Optional `ETag` / `Last-Modified` response headers for conditional requests
+- Unix timestamps for `fetched_at_unix` and `expires_at_unix`, derived from
+  `pr_metadata_cache_ttl_seconds` (default 24 hours), to implement a coherent
+  TTL policy
+
+The TTL can be configured via `pr_metadata_cache_ttl_seconds`
+(`FRANKIE_PR_METADATA_CACHE_TTL_SECONDS`, `--pr-metadata-cache-ttl-seconds`).
+
+Cache reads and writes treat the schema as missing only when the
+`pr_metadata_cache` table is absent in `sqlite_master`, avoiding brittle
+string-matching on SQLite error messages.
+
+Figure: PR metadata cache identity and relationships (identity keys only; see
+the main schema diagrams for full repository/pull request tables).
+
+```mermaid
+erDiagram
+    PR_METADATA_CACHE {
+        integer id PK
+        text api_base
+        text owner
+        text repo
+        integer pr_number
+        text title
+        text state
+        text html_url
+        text author
+        text etag
+        text last_modified
+        integer fetched_at_unix
+        integer expires_at_unix
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    PULL_REQUEST_IDENTITY {
+        text api_base
+        text owner
+        text repo
+        integer pr_number
+    }
+
+    REPOSITORY_IDENTITY {
+        text api_base
+        text owner
+        text repo
+    }
+
+    REPOSITORY_IDENTITY ||--o{ PULL_REQUEST_IDENTITY : has
+    PR_METADATA_CACHE }o--|| REPOSITORY_IDENTITY : caches_for
+    PR_METADATA_CACHE }o--|| PULL_REQUEST_IDENTITY : mirrors_identity_of
+```
 
 `sync_checkpoints` tracks incremental sync state per repository and resource
 using an opaque `checkpoint` string, allowing future implementations to store
@@ -3917,7 +3983,7 @@ GitHub cursors, ETags, timestamps, or other sync tokens without schema churn.
 
 When migrations are applied via the application, Frankie reads the latest
 `version` value from Diesel's `__diesel_schema_migrations` table (for example
-`20251214000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
+`20251220000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
 the stderr JSONL telemetry sink.
 
 #### 6.6.3.2 Versioning Strategy

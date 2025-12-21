@@ -4,7 +4,7 @@ mod support;
 
 use std::path::Path;
 
-use frankie::persistence::{INITIAL_SCHEMA_VERSION, PersistenceError, migrate_database};
+use frankie::persistence::{CURRENT_SCHEMA_VERSION, PersistenceError, migrate_database};
 use frankie::telemetry::TelemetryEvent;
 use frankie::telemetry::test_support::RecordingTelemetrySink;
 use rstest::fixture;
@@ -46,7 +46,8 @@ fn blank_database_url(migration_state: &MigrationState) {
 
 #[given("a directory database path")]
 fn directory_database_path(migration_state: &MigrationState) {
-    let temp_dir = create_temp_dir();
+    let temp_dir = create_temp_dir()
+        .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
     let database_url = path_to_string(temp_dir.path());
     migration_state.temp_dir.set(temp_dir);
     migration_state.database_url.set(database_url);
@@ -54,7 +55,8 @@ fn directory_database_path(migration_state: &MigrationState) {
 
 #[given("a temporary database file")]
 fn temporary_database_file(migration_state: &MigrationState) {
-    let temp_dir = create_temp_dir();
+    let temp_dir = create_temp_dir()
+        .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
     let db_path = temp_dir.path().join("frankie.sqlite");
     let database_url = path_to_string(&db_path);
     migration_state.temp_dir.set(temp_dir);
@@ -162,8 +164,8 @@ fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
 
     assert_eq!(
         schema_versions.first().copied(),
-        Some(INITIAL_SCHEMA_VERSION),
-        "expected recorded schema_version to match INITIAL_SCHEMA_VERSION"
+        Some(CURRENT_SCHEMA_VERSION),
+        "expected recorded schema_version to match CURRENT_SCHEMA_VERSION"
     );
 }
 

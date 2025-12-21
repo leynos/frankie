@@ -7,6 +7,12 @@
 
 mod error;
 mod migrator;
+mod pr_metadata_cache;
 
 pub use error::PersistenceError;
-pub use migrator::{INITIAL_SCHEMA_VERSION, SchemaVersion, migrate_database};
+pub use migrator::{
+    CURRENT_SCHEMA_VERSION, INITIAL_SCHEMA_VERSION, SchemaVersion, migrate_database,
+};
+pub use pr_metadata_cache::{
+    CachedPullRequestMetadata, PullRequestMetadataCache, PullRequestMetadataCacheWrite,
+};

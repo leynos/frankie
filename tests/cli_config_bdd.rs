@@ -29,7 +29,7 @@ fn config_state() -> ConfigState {
 }
 
 /// Builds and stores the configuration from the accumulated layers.
-fn build_config(state: &ConfigState) {
+fn build_config(state: &ConfigState) -> Result<(), std::sync::Arc<ortho_config::OrthoError>> {
     let mut composer = MergeComposer::new();
 
     // Always push base defaults with explicit null values to ensure merge succeeds.
@@ -50,14 +50,9 @@ fn build_config(state: &ConfigState) {
         composer.push_cli(cli);
     }
 
-    match FrankieConfig::merge_from_layers(composer.layers()) {
-        Ok(config) => {
-            state.config.set(config);
-        }
-        Err(error) => {
-            panic!("failed to merge configuration: {error}");
-        }
-    }
+    let config = FrankieConfig::merge_from_layers(composer.layers())?;
+    state.config.set(config);
+    Ok(())
 }
 
 /// Merges two JSON values, with `overlay` values taking precedence over `base`.
@@ -118,36 +113,41 @@ fn github_token_env_set(config_state: &ConfigState, token: String) {
 fn cli_receives_pr_url(config_state: &ConfigState, url: String) {
     let url_clean = url.trim_matches('"');
     config_state.cli_layer.set(json!({"pr_url": url_clean}));
-    build_config(config_state);
+    build_config(config_state)
+        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 #[when("the CLI receives token {token}")]
 fn cli_receives_token(config_state: &ConfigState, token: String) {
     let token_clean = token.trim_matches('"');
     config_state.cli_layer.set(json!({"token": token_clean}));
-    build_config(config_state);
+    build_config(config_state)
+        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 #[when("the CLI receives no pr_url")]
 fn cli_receives_no_pr_url(config_state: &ConfigState) {
-    build_config(config_state);
+    build_config(config_state)
+        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 #[when("the CLI receives no token")]
 fn cli_receives_no_token(config_state: &ConfigState) {
-    build_config(config_state);
+    build_config(config_state)
+        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 // --- Then steps ---
 
 #[then("the configuration pr_url is {expected}")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_pr_url(config_state: &ConfigState, expected: String) {
     let expected_clean = expected.trim_matches('"');
 
-    let config = config_state
-        .config
-        .get()
-        .unwrap_or_else(|| panic!("configuration not built"));
+    let config = config_state.config.get().expect("configuration not built");
 
     assert_eq!(
         config.pr_url.as_deref(),
@@ -157,13 +157,14 @@ fn assert_pr_url(config_state: &ConfigState, expected: String) {
 }
 
 #[then("the resolved token is {expected}")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_resolved_token(config_state: &ConfigState, expected: String) {
     let expected_clean = expected.trim_matches('"');
 
-    let config = config_state
-        .config
-        .get()
-        .unwrap_or_else(|| panic!("configuration not built"));
+    let config = config_state.config.get().expect("configuration not built");
 
     let resolved = config
         .resolve_token()
@@ -173,11 +174,12 @@ fn assert_resolved_token(config_state: &ConfigState, expected: String) {
 }
 
 #[then("requiring pr_url returns an error")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_pr_url_error(config_state: &ConfigState) {
-    let config = config_state
-        .config
-        .get()
-        .unwrap_or_else(|| panic!("configuration not built"));
+    let config = config_state.config.get().expect("configuration not built");
 
     let result = config.require_pr_url();
     assert!(result.is_err(), "expected pr_url to return error");
@@ -188,11 +190,12 @@ fn assert_pr_url_error(config_state: &ConfigState) {
 }
 
 #[then("resolving token returns an error")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_token_error(config_state: &ConfigState) {
-    let config = config_state
-        .config
-        .get()
-        .unwrap_or_else(|| panic!("configuration not built"));
+    let config = config_state.config.get().expect("configuration not built");
 
     let result = config.resolve_token();
 

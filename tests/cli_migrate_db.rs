@@ -103,7 +103,8 @@ fn migrate_db_succeeds_with_in_memory_database() {
 
 #[test]
 fn migrate_db_succeeds_with_file_database() {
-    let temp_dir = create_temp_dir();
+    let temp_dir = create_temp_dir()
+        .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
     let db_path = temp_dir.path().join("frankie.sqlite");
     let db_url = db_path.to_string_lossy().to_string();
 
@@ -126,7 +127,7 @@ fn migrate_db_emits_telemetry_to_stderr() {
         "expected telemetry on stderr, got: {stderr}"
     );
     assert!(
-        stderr.contains("20251214000000"),
+        stderr.contains("20251220000000"),
         "expected schema version in telemetry, got: {stderr}"
     );
 }
@@ -176,7 +177,8 @@ fn migrate_db_fails_with_invalid_database_url(
 
 #[test]
 fn migrate_db_fails_with_directory_path() {
-    let temp_dir = create_temp_dir();
+    let temp_dir = create_temp_dir()
+        .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
     let dir_path = temp_dir.path().to_string_lossy().to_string();
 
     assert_migrate_db_fails(
@@ -229,7 +231,8 @@ fn migrate_db_fails_with_blank_database_url_from_environment() {
 
 #[test]
 fn migrate_db_is_idempotent() {
-    let temp_dir = create_temp_dir();
+    let temp_dir = create_temp_dir()
+        .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
     let db_path = temp_dir.path().join("frankie.sqlite");
     let db_url = db_path.to_string_lossy().to_string();
 
@@ -251,11 +254,11 @@ fn migrate_db_is_idempotent() {
     let second_stderr = String::from_utf8_lossy(&second.stderr);
 
     assert!(
-        first_stderr.contains("20251214000000"),
+        first_stderr.contains("20251220000000"),
         "first run should emit schema version"
     );
     assert!(
-        second_stderr.contains("20251214000000"),
+        second_stderr.contains("20251220000000"),
         "second run should emit same schema version"
     );
 }

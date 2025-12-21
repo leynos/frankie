@@ -8,25 +8,13 @@ use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use serde_json::json;
-use std::cell::RefCell;
-use std::rc::Rc;
-use tokio::runtime::Runtime;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-/// Shared runtime wrapper that can be stored in rstest-bdd Slot.
-#[derive(Clone)]
-struct SharedRuntime(Rc<RefCell<Runtime>>);
+#[path = "support/runtime.rs"]
+mod runtime;
 
-impl SharedRuntime {
-    fn new(runtime: Runtime) -> Self {
-        Self(Rc::new(RefCell::new(runtime)))
-    }
-
-    fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.0.borrow().block_on(future)
-    }
-}
+use runtime::SharedRuntime;
 
 #[derive(ScenarioState, Default)]
 struct IntakeState {
@@ -42,38 +30,17 @@ fn intake_state() -> IntakeState {
     IntakeState::default()
 }
 
-/// Ensures the runtime and server are initialised in `IntakeState`.
-///
-/// # Panics
-///
-/// Panics if the Tokio runtime cannot be created.
-fn ensure_runtime_and_server(intake_state: &IntakeState) -> SharedRuntime {
-    if intake_state.runtime.with_ref(|_| ()).is_none() {
-        let runtime = Runtime::new()
-            .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
-        intake_state.runtime.set(SharedRuntime::new(runtime));
-    }
-
-    let shared_runtime = intake_state
-        .runtime
-        .get()
-        .unwrap_or_else(|| panic!("runtime not initialised after set"));
-
-    if intake_state.server.with_ref(|_| ()).is_none() {
-        intake_state
-            .server
-            .set(shared_runtime.block_on(MockServer::start()));
-    }
-
-    shared_runtime
-}
-
 #[given(
     "a mock GitHub API server with pull request {pr:u64} titled {title} and \
      {count:u64} comments"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, count: u64) {
-    let runtime = ensure_runtime_and_server(intake_state);
+    let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
+        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
 
     let comments: Vec<_> = (0..count)
         .map(|index| {
@@ -110,12 +77,17 @@ fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, co
             runtime.block_on(pr_mock.mount(server));
             runtime.block_on(comments_mock.mount(server));
         })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+        .expect("mock server not initialised");
 }
 
 #[given("a mock GitHub API server that rejects token for pull request {pr:u64}")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) {
-    let runtime = ensure_runtime_and_server(intake_state);
+    let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
+        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let response =
@@ -130,7 +102,7 @@ fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) {
         .with_ref(|server| {
             runtime.block_on(mock.mount(server));
         })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+        .expect("mock server not initialised");
 }
 
 #[given("a personal access token {token}")]
@@ -139,11 +111,15 @@ fn remember_token(intake_state: &IntakeState, token: String) {
 }
 
 #[when("the client loads pull request {pr_url}")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn load_pull_request(intake_state: &IntakeState, pr_url: String) {
     let server_url = intake_state
         .server
         .with_ref(MockServer::uri)
-        .unwrap_or_else(|| panic!("mock server URL missing"));
+        .expect("mock server URL missing");
 
     let cleaned_pr_url = pr_url.trim_matches('"');
 
@@ -159,10 +135,7 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) {
 
     let locator_clone = locator.clone();
 
-    let runtime = intake_state
-        .runtime
-        .get()
-        .unwrap_or_else(|| panic!("runtime not initialised"));
+    let runtime = intake_state.runtime.get().expect("runtime not initialised");
 
     let result = runtime.block_on(async {
         let token_value = intake_state.token.get().ok_or(IntakeError::MissingToken)?;
@@ -198,21 +171,29 @@ fn assert_title(intake_state: &IntakeState, expected: String) {
 }
 
 #[then("the response includes {count:u64} comments")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_comment_count(intake_state: &IntakeState, count: u64) {
     let actual = intake_state
         .details
         .with_ref(|details| details.comments.len() as u64)
-        .unwrap_or_else(|| panic!("pull request details missing"));
+        .expect("pull request details missing");
 
     assert_eq!(actual, count, "comment count mismatch");
 }
 
 #[then("the error message mentions authentication failure")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_authentication_error(intake_state: &IntakeState) {
     let error = intake_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected authentication error"));
+        .expect("expected authentication error");
 
     let IntakeError::Authentication { message } = error else {
         panic!("expected Authentication variant, got {error:?}");

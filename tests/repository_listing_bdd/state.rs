@@ -7,26 +7,10 @@ use frankie::{
 };
 use rstest_bdd::Slot;
 use rstest_bdd_macros::ScenarioState;
-use std::cell::RefCell;
-use std::rc::Rc;
-use tokio::runtime::Runtime;
 use wiremock::MockServer;
 
 use super::domain::PageNumber;
-
-/// Shared runtime wrapper that can be stored in rstest-bdd Slot.
-#[derive(Clone)]
-pub(crate) struct SharedRuntime(Rc<RefCell<Runtime>>);
-
-impl SharedRuntime {
-    pub(crate) fn new(runtime: Runtime) -> Self {
-        Self(Rc::new(RefCell::new(runtime)))
-    }
-
-    pub(crate) fn block_on<F: std::future::Future>(&self, future: F) -> F::Output {
-        self.0.borrow().block_on(future)
-    }
-}
+use super::runtime::SharedRuntime;
 
 #[derive(ScenarioState, Default)]
 pub(crate) struct ListingState {
@@ -39,25 +23,13 @@ pub(crate) struct ListingState {
 }
 
 /// Ensures the runtime and server are initialised in `ListingState`.
-pub(crate) fn ensure_runtime_and_server(listing_state: &ListingState) -> SharedRuntime {
-    if listing_state.runtime.with_ref(|_| ()).is_none() {
-        let runtime = Runtime::new()
-            .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
-        listing_state.runtime.set(SharedRuntime::new(runtime));
-    }
-
-    let shared_runtime = listing_state
-        .runtime
-        .get()
-        .unwrap_or_else(|| panic!("runtime not initialised after set"));
-
-    if listing_state.server.with_ref(|_| ()).is_none() {
-        listing_state
-            .server
-            .set(shared_runtime.block_on(MockServer::start()));
-    }
-
-    shared_runtime
+pub(crate) fn ensure_runtime_and_server(
+    listing_state: &ListingState,
+) -> Result<SharedRuntime, IntakeError> {
+    super::runtime::ensure_runtime_and_server(&listing_state.runtime, &listing_state.server)
+        .map_err(|error| IntakeError::Api {
+            message: format!("failed to create Tokio runtime: {error}"),
+        })
 }
 
 pub(crate) fn run_repository_listing(

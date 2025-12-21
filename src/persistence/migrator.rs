@@ -19,6 +19,9 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 /// Initial schema version recorded by the first migration in this repository.
 pub const INITIAL_SCHEMA_VERSION: &str = "20251214000000";
 
+/// Latest schema version recorded by the most recent embedded migration.
+pub const CURRENT_SCHEMA_VERSION: &str = "20251220000000";
+
 /// A Diesel migration version string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SchemaVersion(String);
@@ -108,7 +111,7 @@ fn read_schema_version(
 /// [`RecordingTelemetrySink`](crate::telemetry::test_support::RecordingTelemetrySink).
 #[cfg(all(test, feature = "test-support"))]
 mod tests {
-    use super::{INITIAL_SCHEMA_VERSION, migrate_database};
+    use super::{CURRENT_SCHEMA_VERSION, migrate_database};
     use crate::telemetry::TelemetryEvent;
     use crate::telemetry::test_support::RecordingTelemetrySink;
 
@@ -121,10 +124,9 @@ mod tests {
         assert_eq!(
             telemetry.events(),
             vec![TelemetryEvent::SchemaVersionRecorded {
-                schema_version: INITIAL_SCHEMA_VERSION.to_owned()
+                schema_version: CURRENT_SCHEMA_VERSION.to_owned()
             }]
         );
-
-        assert_eq!(schema_version.as_str(), INITIAL_SCHEMA_VERSION);
+        assert_eq!(schema_version.as_str(), CURRENT_SCHEMA_VERSION);
     }
 }

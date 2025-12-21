@@ -8,7 +8,7 @@ Feature: Database migrations
     Given an in-memory database
     And a telemetry sink
     When database migrations are run
-    Then the schema version is "20251214000000"
+    Then the schema version is "20251220000000"
     And telemetry records the schema version
 
   Scenario: Running migrations with a blank database URL fails fast
@@ -30,5 +30,5 @@ Feature: Database migrations
     And a telemetry sink
     When database migrations are run
     And database migrations are run again
-    Then the schema version is "20251214000000"
+    Then the schema version is "20251220000000"
     And telemetry records the schema version twice

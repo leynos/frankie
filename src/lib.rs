@@ -11,8 +11,8 @@ pub mod telemetry;
 
 pub use config::{FrankieConfig, OperationMode};
 pub use github::{
-    IntakeError, ListPullRequestsParams, OctocrabGateway, OctocrabRepositoryGateway, PageInfo,
-    PaginatedPullRequests, PersonalAccessToken, PullRequestDetails, PullRequestIntake,
-    PullRequestLocator, PullRequestState, PullRequestSummary, RateLimitInfo, RepositoryIntake,
-    RepositoryLocator,
+    IntakeError, ListPullRequestsParams, OctocrabCachingGateway, OctocrabGateway,
+    OctocrabRepositoryGateway, PageInfo, PaginatedPullRequests, PersonalAccessToken,
+    PullRequestDetails, PullRequestIntake, PullRequestLocator, PullRequestState,
+    PullRequestSummary, RateLimitInfo, RepositoryIntake, RepositoryLocator,
 };

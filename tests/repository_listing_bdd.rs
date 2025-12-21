@@ -20,8 +20,13 @@ fn listing_state() -> ListingState {
 }
 
 #[given("a mock GitHub API server with {count:PullRequestCount} open PRs for owner/repo")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn seed_server_with_prs(listing_state: &ListingState, count: PullRequestCount) {
-    let runtime = ensure_runtime_and_server(listing_state);
+    let runtime = ensure_runtime_and_server(listing_state)
+        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
 
     let prs = generate_pr_list(count, PageNumber::new(1), count);
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
@@ -35,7 +40,7 @@ fn seed_server_with_prs(listing_state: &ListingState, count: PullRequestCount) {
         .with_ref(|server| {
             runtime.block_on(mock.mount(server));
         })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+        .expect("mock server not initialised");
 }
 
 #[given(
@@ -46,12 +51,17 @@ fn seed_server_with_prs(listing_state: &ListingState, count: PullRequestCount) {
     clippy::integer_division_remainder_used,
     reason = "test data: exact division is intentional for page setup"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn seed_server_with_paginated_prs(
     listing_state: &ListingState,
     total: PullRequestCount,
     pages: PageCount,
 ) {
-    let runtime = ensure_runtime_and_server(listing_state);
+    let runtime = ensure_runtime_and_server(listing_state)
+        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
     let per_page = total.value() / pages.value();
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
@@ -65,7 +75,7 @@ fn seed_server_with_paginated_prs(
         let server_uri = listing_state
             .server
             .with_ref(MockServer::uri)
-            .unwrap_or_else(|| panic!("mock server URL missing"));
+            .expect("mock server URL missing");
 
         let mut response = ResponseTemplate::new(200).set_body_json(&prs);
 
@@ -103,15 +113,20 @@ fn seed_server_with_paginated_prs(
             .with_ref(|server| {
                 runtime.block_on(mock.mount(server));
             })
-            .unwrap_or_else(|| panic!("mock server not initialised"));
+            .expect("mock server not initialised");
     }
 }
 
 #[given(
     "a mock GitHub API server with rate limit headers showing {remaining:RateLimitCount} remaining"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: RateLimitCount) {
-    let runtime = ensure_runtime_and_server(listing_state);
+    let runtime = ensure_runtime_and_server(listing_state)
+        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
 
     let prs = generate_pr_list(
         PullRequestCount::new(10),
@@ -138,12 +153,17 @@ fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: 
         .with_ref(|server| {
             runtime.block_on(mock.mount(server));
         })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+        .expect("mock server not initialised");
 }
 
 #[given("a mock GitHub API server returning 403 rate limit exceeded")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn seed_server_with_rate_limit_error(listing_state: &ListingState) {
-    let runtime = ensure_runtime_and_server(listing_state);
+    let runtime = ensure_runtime_and_server(listing_state)
+        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
 
@@ -168,7 +188,7 @@ fn seed_server_with_rate_limit_error(listing_state: &ListingState) {
         .with_ref(|server| {
             runtime.block_on(mock.mount(server));
         })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+        .expect("mock server not initialised");
 
     let rate_limit_response = ResponseTemplate::new(200).set_body_json(json!({
         "resources": {
@@ -201,7 +221,7 @@ fn seed_server_with_rate_limit_error(listing_state: &ListingState) {
         .with_ref(|server| {
             runtime.block_on(rate_limit_mock.mount(server));
         })
-        .unwrap_or_else(|| panic!("mock server not initialised"));
+        .expect("mock server not initialised");
 }
 
 #[given("a personal access token {token}")]
@@ -228,26 +248,38 @@ fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, 
 }
 
 #[then("the response includes {count:PullRequestCount} pull requests")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_pr_count(listing_state: &ListingState, count: PullRequestCount) {
     let actual = listing_state
         .result
         .with_ref(|result| result.items.len())
-        .unwrap_or_else(|| panic!("pull request listing missing"));
+        .expect("pull request listing missing");
 
     assert_eq!(actual, count.value() as usize, "PR count mismatch");
 }
 
 #[then("the current page is {page:PageNumber}")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_current_page(listing_state: &ListingState, page: PageNumber) {
     let actual = listing_state
         .result
         .with_ref(|result| result.page_info.current_page())
-        .unwrap_or_else(|| panic!("pull request listing missing"));
+        .expect("pull request listing missing");
 
     assert_eq!(actual, page.value(), "current page mismatch");
 }
 
 #[then("the pagination indicates page {page:PageNumber} of {total:PageCount}")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_page_of_total(listing_state: &ListingState, page: PageNumber, total: PageCount) {
     let (actual_page, actual_total) = listing_state
         .result
@@ -257,28 +289,36 @@ fn assert_page_of_total(listing_state: &ListingState, page: PageNumber, total: P
                 result.page_info.total_pages(),
             )
         })
-        .unwrap_or_else(|| panic!("pull request listing missing"));
+        .expect("pull request listing missing");
 
     assert_eq!(actual_page, page.value(), "current page mismatch");
     assert_eq!(actual_total, Some(total.value()), "total pages mismatch");
 }
 
 #[then("pagination has next page")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_has_next_page(listing_state: &ListingState) {
     let has_next = listing_state
         .result
         .with_ref(|result| result.page_info.has_next())
-        .unwrap_or_else(|| panic!("pull request listing missing"));
+        .expect("pull request listing missing");
 
     assert!(has_next, "expected pagination to have next page");
 }
 
 #[then("pagination has previous page")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_has_prev_page(listing_state: &ListingState) {
     let has_prev = listing_state
         .result
         .with_ref(|result| result.page_info.has_prev())
-        .unwrap_or_else(|| panic!("pull request listing missing"));
+        .expect("pull request listing missing");
 
     assert!(has_prev, "expected pagination to have previous page");
 }
@@ -293,13 +333,17 @@ fn assert_no_error(listing_state: &ListingState) {
 }
 
 #[then("the error indicates rate limit exceeded")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_rate_limit_error(listing_state: &ListingState) {
     const EXPECTED_RATE_LIMIT_MESSAGE: &str = "API rate limit exceeded for user";
 
     let error = listing_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected rate limit error"));
+        .expect("expected rate limit error");
 
     match error {
         IntakeError::RateLimitExceeded {
@@ -322,11 +366,15 @@ fn assert_rate_limit_error(listing_state: &ListingState) {
 }
 
 #[then("the error includes rate limit reset information")]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_rate_limit_reset_information(listing_state: &ListingState) {
     let error = listing_state
         .error
         .with_ref(Clone::clone)
-        .unwrap_or_else(|| panic!("expected rate limit error"));
+        .expect("expected rate limit error");
 
     match error {
         IntakeError::RateLimitExceeded { rate_limit, .. } => {

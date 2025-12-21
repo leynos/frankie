@@ -62,12 +62,13 @@ pub enum OperationMode {
 ///
 /// ```no_run
 /// use frankie::FrankieConfig;
+/// use ortho_config::OrthoConfig;
 ///
 /// let config = FrankieConfig::load().expect("failed to load configuration");
 /// let pr_url = config.require_pr_url().expect("PR URL required");
 /// let token = config.resolve_token().expect("token required");
 /// ```
-#[derive(Debug, Clone, Default, Deserialize, Serialize, OrthoConfig)]
+#[derive(Debug, Clone, Deserialize, Serialize, OrthoConfig)]
 #[serde(default)]
 #[ortho_config(
     prefix = "FRANKIE",
@@ -138,6 +139,34 @@ pub struct FrankieConfig {
     /// - Config file: `migrate_db = true`
     #[ortho_config()]
     pub migrate_db: bool,
+
+    /// TTL for cached pull request metadata, in seconds.
+    ///
+    /// When `database_url` is set, Frankie can cache pull request metadata in
+    /// the local `SQLite` database and reuse it across sessions. Entries are
+    /// treated as fresh until this TTL expires, after which Frankie performs a
+    /// conditional request using stored `ETag` / `Last-Modified` validators when
+    /// available.
+    ///
+    /// Defaults to 24 hours.
+    #[ortho_config()]
+    pub pr_metadata_cache_ttl_seconds: u64,
+}
+
+const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
+
+impl Default for FrankieConfig {
+    fn default() -> Self {
+        Self {
+            pr_url: None,
+            token: None,
+            owner: None,
+            repo: None,
+            database_url: None,
+            migrate_db: false,
+            pr_metadata_cache_ttl_seconds: DEFAULT_PR_METADATA_CACHE_TTL_SECONDS,
+        }
+    }
 }
 
 impl FrankieConfig {

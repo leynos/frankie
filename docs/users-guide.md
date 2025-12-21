@@ -122,6 +122,9 @@ token = "ghp_example"
 # Local persistence (optional)
 database_url = "frankie.sqlite"
 
+# Pull request metadata cache time-to-live (TTL) (optional, seconds)
+pr_metadata_cache_ttl_seconds = 86400
+
 # Database migrations (set to true to run migrations and exit)
 migrate_db = true
 ```
@@ -135,14 +138,15 @@ Frankie searches for configuration files in this order:
 
 ### Environment variables
 
-| Variable               | Description                                         |
-| ---------------------- | --------------------------------------------------- |
-| `FRANKIE_PR_URL`       | Pull request URL (for single PR mode)               |
-| `FRANKIE_OWNER`        | Repository owner (for listing mode)                 |
-| `FRANKIE_REPO`         | Repository name (for listing mode)                  |
-| `FRANKIE_TOKEN`        | GitHub personal access token                        |
-| `FRANKIE_DATABASE_URL` | Local SQLite database path for persistence          |
-| `GITHUB_TOKEN`         | Legacy token variable (lower precedence than above) |
+| Variable                                | Description                                         |
+| --------------------------------------- | --------------------------------------------------- |
+| `FRANKIE_PR_URL`                        | Pull request URL (for single PR mode)               |
+| `FRANKIE_OWNER`                         | Repository owner (for listing mode)                 |
+| `FRANKIE_REPO`                          | Repository name (for listing mode)                  |
+| `FRANKIE_TOKEN`                         | GitHub personal access token                        |
+| `FRANKIE_DATABASE_URL`                  | Local SQLite database path for persistence          |
+| `FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` | PR metadata cache TTL (seconds)                     |
+| `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above) |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
 compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
@@ -150,15 +154,16 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 
 ### Command-line flags
 
-| Flag                    | Short | Description                             |
-| ----------------------- | ----- | --------------------------------------- |
-| `--pr-url <URL>`        | `-u`  | GitHub pull request URL                 |
-| `--owner <OWNER>`       | `-o`  | Repository owner (user or organization) |
-| `--repo <REPO>`         | `-r`  | Repository name                         |
-| `--token <TOKEN>`       | `-t`  | Personal access token                   |
-| `--database-url <PATH>` | —     | Local SQLite database path              |
-| `--migrate-db`          | —     | Run database migrations and exit        |
-| `--help`                | `-h`  | Show help information                   |
+| Flag                                        | Short | Description                             |
+| ------------------------------------------- | ----- | --------------------------------------- |
+| `--pr-url <URL>`                            | `-u`  | GitHub pull request URL                 |
+| `--owner <OWNER>`                           | `-o`  | Repository owner (user or organization) |
+| `--repo <REPO>`                             | `-r`  | Repository name                         |
+| `--token <TOKEN>`                           | `-t`  | Personal access token                   |
+| `--database-url <PATH>`                     | —     | Local SQLite database path              |
+| `--migrate-db`                              | —     | Run database migrations and exit        |
+| `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)         |
+| `--help`                                    | `-h`  | Show help information                   |
 
 Run `frankie --help` to see all available options and their descriptions.
 
@@ -181,6 +186,31 @@ special `:memory:` URL:
 ```bash
 frankie --migrate-db --database-url :memory:
 ```
+
+## Local caching
+
+When `--database-url` is set, Frankie caches pull request metadata in the
+SQLite database and reuses it across sessions. Cached metadata is treated as
+fresh until the configured TTL expires (default: 24 hours). Once expired,
+Frankie revalidates the cache using conditional requests based on `ETag` and
+`Last-Modified` headers when GitHub provides them.
+
+To enable caching:
+
+1. Run migrations once:
+
+   ```bash
+   frankie --migrate-db --database-url frankie.sqlite
+   ```
+
+2. Use the same database path when loading a pull request:
+
+   ```bash
+   frankie --pr-url https://github.com/owner/repo/pull/123 --database-url frankie.sqlite
+   ```
+
+To change the TTL, set `--pr-metadata-cache-ttl-seconds` (or
+`FRANKIE_PR_METADATA_CACHE_TTL_SECONDS`).
 
 ## Error handling
 
