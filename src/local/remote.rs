@@ -198,10 +198,9 @@ mod tests {
         input: &'static str,
     }
 
-    #[test]
-    #[expect(clippy::too_many_lines, reason = "table-driven test with many cases")]
-    fn parse_github_remote_success_cases() {
-        let cases = vec![
+    #[expect(clippy::too_many_lines, reason = "table-driven test data")]
+    fn success_test_cases() -> Vec<TestCase> {
+        vec![
             TestCase {
                 name: "ssh_scp_style_github_com",
                 input: "git@github.com:owner/repo.git",
@@ -276,9 +275,12 @@ mod tests {
                     repository: "repo".to_owned(),
                 },
             },
-        ];
+        ]
+    }
 
-        for case in cases {
+    #[test]
+    fn parse_github_remote_success_cases() {
+        for case in success_test_cases() {
             let result = parse_github_remote(case.input);
             assert_eq!(
                 result,
