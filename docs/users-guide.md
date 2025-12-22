@@ -36,7 +36,7 @@ information. Supported remote URL formats:
 - HTTPS: `https://github.com/owner/repo.git`
 - GitHub Enterprise: `git@ghe.example.com:org/project.git`
 
-### Expected output
+### Discovery output
 
 A successful call prints discovery information:
 
