@@ -198,8 +198,8 @@ mod tests {
         input: &'static str,
     }
 
-    #[expect(clippy::too_many_lines, reason = "table-driven test data")]
-    fn success_test_cases() -> Vec<TestCase> {
+    /// GitHub.com remote URL test cases.
+    fn github_com_test_cases() -> Vec<TestCase> {
         vec![
             TestCase {
                 name: "ssh_scp_style_github_com",
@@ -242,6 +242,28 @@ mod tests {
                 },
             },
             TestCase {
+                name: "case_insensitive_github_com",
+                input: "git@GitHub.COM:owner/repo.git",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "with_trailing_slash",
+                input: "https://github.com/owner/repo/",
+                expected: GitHubOrigin::GitHubCom {
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+        ]
+    }
+
+    /// GitHub Enterprise remote URL test cases.
+    fn github_enterprise_test_cases() -> Vec<TestCase> {
+        vec![
+            TestCase {
                 name: "github_enterprise_ssh",
                 input: "git@ghe.example.com:owner/repo.git",
                 expected: GitHubOrigin::Enterprise {
@@ -259,23 +281,14 @@ mod tests {
                     repository: "repo".to_owned(),
                 },
             },
-            TestCase {
-                name: "case_insensitive_github_com",
-                input: "git@GitHub.COM:owner/repo.git",
-                expected: GitHubOrigin::GitHubCom {
-                    owner: "owner".to_owned(),
-                    repository: "repo".to_owned(),
-                },
-            },
-            TestCase {
-                name: "with_trailing_slash",
-                input: "https://github.com/owner/repo/",
-                expected: GitHubOrigin::GitHubCom {
-                    owner: "owner".to_owned(),
-                    repository: "repo".to_owned(),
-                },
-            },
         ]
+    }
+
+    /// All successful parsing test cases (GitHub.com and Enterprise).
+    fn success_test_cases() -> Vec<TestCase> {
+        let mut cases = github_com_test_cases();
+        cases.extend(github_enterprise_test_cases());
+        cases
     }
 
     #[test]
