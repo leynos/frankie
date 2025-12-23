@@ -151,12 +151,12 @@ fn assert_no_remotes_error(discovery_state: &DiscoveryState) {
     );
 }
 
-#[then("the discovery fails with not GitHub origin error")]
-fn assert_not_github_origin_error(discovery_state: &DiscoveryState) {
+#[then("the discovery fails with invalid remote URL error")]
+fn assert_invalid_remote_url_error(discovery_state: &DiscoveryState) {
     assert_discovery_error(
         discovery_state,
-        |e| matches!(e, LocalDiscoveryError::NotGitHubOrigin { .. }),
-        "NotGitHubOrigin",
+        |e| matches!(e, LocalDiscoveryError::InvalidRemoteUrl { .. }),
+        "InvalidRemoteUrl",
     );
 }
 

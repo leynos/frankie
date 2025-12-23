@@ -21,7 +21,7 @@ Feature: Local repository discovery
   Scenario: Warn when origin is not parseable
     Given a Git repository with origin "not-a-valid-url"
     When the discovery is performed
-    Then the discovery fails with not GitHub origin error
+    Then the discovery fails with invalid remote URL error
 
   Scenario: Discover from GitHub Enterprise origin
     Given a Git repository with origin "git@ghe.example.com:org/project.git"

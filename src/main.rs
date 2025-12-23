@@ -76,13 +76,9 @@ async fn run_discovered_repository(
     let gateway = OctocrabRepositoryGateway::for_token(&token, &locator)?;
     let intake = RepositoryIntake::new(&gateway);
 
-    let params = ListPullRequestsParams {
-        state: Some(PullRequestState::All),
-        per_page: Some(50),
-        page: Some(1),
-    };
-
-    let result = intake.list_pull_requests(&locator, &params).await?;
+    let result = intake
+        .list_pull_requests(&locator, &default_listing_params())
+        .await?;
     let mut stdout = io::stdout().lock();
     write_listing_summary(&mut stdout, &result, owner, repo)
 }
@@ -134,6 +130,15 @@ fn missing_arguments_error() -> IntakeError {
             "Run 'frankie --help' for usage information"
         )
         .to_owned(),
+    }
+}
+
+/// Returns the default parameters for listing pull requests.
+const fn default_listing_params() -> ListPullRequestsParams {
+    ListPullRequestsParams {
+        state: Some(PullRequestState::All),
+        per_page: Some(50),
+        page: Some(1),
     }
 }
 
@@ -230,13 +235,9 @@ where
     let gateway = build_gateway(&token, &locator)?;
     let intake = RepositoryIntake::new(&gateway);
 
-    let params = ListPullRequestsParams {
-        state: Some(PullRequestState::All),
-        per_page: Some(50),
-        page: Some(1),
-    };
-
-    let result = intake.list_pull_requests(&locator, &params).await?;
+    let result = intake
+        .list_pull_requests(&locator, &default_listing_params())
+        .await?;
     write_listing_summary(writer, &result, owner, repo)
 }
 

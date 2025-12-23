@@ -73,7 +73,6 @@ impl LocalRepository {
 /// - The repository has no remotes configured (`NoRemotes`)
 /// - The "origin" remote does not exist (`RemoteNotFound`)
 /// - The remote URL cannot be parsed (`InvalidRemoteUrl`)
-/// - The remote is not a GitHub origin (`NotGitHubOrigin`)
 ///
 /// # Example
 ///
@@ -164,8 +163,5 @@ fn get_github_origin(
         })?;
 
     // Parse the URL as a GitHub origin
-    parse_github_remote(url).map_err(|_| LocalDiscoveryError::NotGitHubOrigin {
-        name: remote_name.to_owned(),
-        url: url.to_owned(),
-    })
+    parse_github_remote(url)
 }
