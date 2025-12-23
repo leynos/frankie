@@ -104,13 +104,6 @@ fn handle_discovery_error(error: LocalDiscoveryError) -> Result<(), IntakeError>
             ));
             Err(missing_arguments_error())
         }
-        LocalDiscoveryError::NotGitHubOrigin { name, url } => {
-            drop(writeln!(
-                io::stderr(),
-                "Warning: remote '{name}' ({url}) is not a GitHub origin"
-            ));
-            Err(missing_arguments_error())
-        }
         LocalDiscoveryError::InvalidRemoteUrl { url } => {
             drop(writeln!(
                 io::stderr(),
@@ -569,4 +562,88 @@ mod tests {
     }
 
     // RateLimitInfo unit tests live in `src/github/tests.rs`.
+
+    mod discovery_error_handling {
+        use frankie::IntakeError;
+        use frankie::local::LocalDiscoveryError;
+
+        use super::super::handle_discovery_error;
+
+        #[test]
+        fn not_a_repository_returns_configuration_error() {
+            let result = handle_discovery_error(LocalDiscoveryError::NotARepository);
+
+            assert!(
+                matches!(result, Err(IntakeError::Configuration { .. })),
+                "NotARepository should return Configuration error"
+            );
+        }
+
+        #[test]
+        fn no_remotes_returns_configuration_error() {
+            let result = handle_discovery_error(LocalDiscoveryError::NoRemotes);
+
+            assert!(
+                matches!(result, Err(IntakeError::Configuration { .. })),
+                "NoRemotes should return Configuration error"
+            );
+        }
+
+        #[test]
+        fn remote_not_found_returns_configuration_error() {
+            let result = handle_discovery_error(LocalDiscoveryError::RemoteNotFound {
+                name: "upstream".to_owned(),
+            });
+
+            assert!(
+                matches!(result, Err(IntakeError::Configuration { .. })),
+                "RemoteNotFound should return Configuration error"
+            );
+        }
+
+        #[test]
+        fn invalid_remote_url_returns_configuration_error() {
+            let result = handle_discovery_error(LocalDiscoveryError::InvalidRemoteUrl {
+                url: "not-a-url".to_owned(),
+            });
+
+            assert!(
+                matches!(result, Err(IntakeError::Configuration { .. })),
+                "InvalidRemoteUrl should return Configuration error"
+            );
+        }
+
+        #[test]
+        fn git_error_returns_local_discovery_error() {
+            let result = handle_discovery_error(LocalDiscoveryError::Git {
+                message: "repository corrupt".to_owned(),
+            });
+
+            assert!(
+                matches!(result, Err(IntakeError::LocalDiscovery { .. })),
+                "Git error should return LocalDiscovery error"
+            );
+        }
+    }
+
+    mod interactive_mode {
+        use frankie::IntakeError;
+
+        use super::super::FrankieConfig;
+
+        #[tokio::test]
+        async fn no_local_discovery_returns_configuration_error() {
+            let config = FrankieConfig {
+                no_local_discovery: true,
+                ..Default::default()
+            };
+
+            let result = super::super::run_interactive(&config).await;
+
+            assert!(
+                matches!(result, Err(IntakeError::Configuration { .. })),
+                "no_local_discovery=true should return Configuration error"
+            );
+        }
+    }
 }

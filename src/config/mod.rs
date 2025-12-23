@@ -159,9 +159,8 @@ pub struct FrankieConfig {
     ///
     /// Can be provided via:
     /// - CLI: `--no-local-discovery`
-    /// - Environment: `FRANKIE_NO_LOCAL_DISCOVERY`
     /// - Config file: `no_local_discovery = true`
-    #[ortho_config()]
+    #[ortho_config(cli_short = 'n')]
     pub no_local_discovery: bool,
 }
 

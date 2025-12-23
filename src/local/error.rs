@@ -27,15 +27,6 @@ pub enum LocalDiscoveryError {
         url: String,
     },
 
-    /// The remote URL is not a GitHub origin.
-    #[error("remote '{name}' is not a GitHub origin: {url}")]
-    NotGitHubOrigin {
-        /// Name of the remote.
-        name: String,
-        /// The non-GitHub URL.
-        url: String,
-    },
-
     /// Git operation failed.
     #[error("git error: {message}")]
     Git {

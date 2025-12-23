@@ -381,8 +381,7 @@ classDiagram
 - The `GitHubOrigin` enum distinguishes `github.com` origins from Enterprise
   hosts, allowing correct API base URL derivation.
 - Discovery errors map to `LocalDiscoveryError` variants: `NotARepository`,
-  `NoRemotes`, `RemoteNotFound`, `InvalidRemoteUrl`, `NotGitHubOrigin`, and
-  `Git`.
+  `NoRemotes`, `RemoteNotFound`, `InvalidRemoteUrl`, and `Git`.
 - The `RepositoryLocator::from_github_origin` method bridges local discovery to
   the existing intake infrastructure.
 - Integration with `FrankieConfig` uses the `no_local_discovery` flag to allow
@@ -418,7 +417,6 @@ classDiagram
         +NoRemotes
         +RemoteNotFound(name)
         +InvalidRemoteUrl(url)
-        +NotGitHubOrigin(name, url)
         +Git(message)
     }
 

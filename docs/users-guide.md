@@ -25,7 +25,7 @@ When invoked without `--pr-url`, `--owner`, or `--repo`, Frankie automatically
 discovers the GitHub repository from the current directory's Git configuration:
 
 ```bash
-cd /path/to/your-repo
+cd /path/to/the-repo
 frankie --token ghp_example
 ```
 
@@ -42,7 +42,6 @@ A successful call prints discovery information:
 
 ```text
 Discovered repository from local Git: owner/repo
-(Loaded from origin: git@github.com:owner/repo.git)
 ```
 
 ### Disabling local discovery
@@ -60,8 +59,8 @@ frankie --no-local-discovery --owner octocat --repo hello-world --token ghp_exam
   working tree.
 - **Repository has no remotes configured** — The Git repository has no remote
   URLs configured.
-- **Remote is not a GitHub origin** — The `origin` remote URL does not point to
-  a GitHub host.
+- **Could not parse remote URL** — The `origin` remote URL is not a valid Git
+  remote URL.
 
 ## Single pull request mode
 
@@ -191,7 +190,6 @@ Frankie searches for configuration files in this order:
 | `FRANKIE_TOKEN`                         | GitHub personal access token                        |
 | `FRANKIE_DATABASE_URL`                  | Local SQLite database path for persistence          |
 | `FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` | PR metadata cache TTL (seconds)                     |
-| `FRANKIE_NO_LOCAL_DISCOVERY`            | Disable automatic local Git discovery               |
 | `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above) |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
