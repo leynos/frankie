@@ -158,8 +158,11 @@ pub struct FrankieConfig {
     /// the current Git repository even when running in Interactive mode.
     ///
     /// Can be provided via:
-    /// - CLI: `--no-local-discovery`
+    /// - CLI: `--no-local-discovery` / `-n`
     /// - Config file: `no_local_discovery = true`
+    ///
+    /// Note: Environment variable `FRANKIE_NO_LOCAL_DISCOVERY` is not supported
+    /// because `ortho_config` does not load boolean values from the environment.
     #[ortho_config(cli_short = 'n')]
     pub no_local_discovery: bool,
 }

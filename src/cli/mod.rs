@@ -8,8 +8,19 @@
 //!
 //! Output formatting utilities are in [`output`].
 
+use frankie::{ListPullRequestsParams, PullRequestState};
+
 pub mod interactive;
 pub mod migrations;
 pub mod output;
 pub mod repository_listing;
 pub mod single_pr;
+
+/// Returns the default parameters for listing pull requests.
+pub const fn default_listing_params() -> ListPullRequestsParams {
+    ListPullRequestsParams {
+        state: Some(PullRequestState::All),
+        per_page: Some(50),
+        page: Some(1),
+    }
+}

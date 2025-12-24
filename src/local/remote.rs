@@ -22,6 +22,8 @@ pub enum GitHubOrigin {
     Enterprise {
         /// The GitHub Enterprise host (e.g., `ghe.example.com`).
         host: String,
+        /// Optional port number for non-default HTTPS ports.
+        port: Option<u16>,
         /// Repository owner (user or organisation).
         owner: String,
         /// Repository name.
@@ -59,6 +61,18 @@ impl GitHubOrigin {
     #[must_use]
     pub const fn is_github_com(&self) -> bool {
         matches!(self, Self::GitHubCom { .. })
+    }
+
+    /// Returns the port for this origin, if any.
+    ///
+    /// Returns `None` for `github.com` origins and Enterprise origins using
+    /// the default HTTPS port.
+    #[must_use]
+    pub const fn port(&self) -> Option<u16> {
+        match self {
+            Self::GitHubCom { .. } => None,
+            Self::Enterprise { port, .. } => *port,
+        }
     }
 }
 
@@ -101,6 +115,8 @@ pub fn parse_github_remote(url: &str) -> Result<GitHubOrigin, LocalDiscoveryErro
 }
 
 /// Attempts to parse SCP-style SSH URL: `git@host:owner/repo.git`
+///
+/// SCP-style URLs do not support port numbers, so port is always `None`.
 fn try_parse_scp_style(url: &str) -> Option<GitHubOrigin> {
     // Pattern: user@host:path
     let at_pos = url.find('@')?;
@@ -119,7 +135,8 @@ fn try_parse_scp_style(url: &str) -> Option<GitHubOrigin> {
     let host = url.get(at_pos.saturating_add(1)..colon_pos)?;
     let path = url.get(colon_pos.saturating_add(1)..)?;
 
-    extract_owner_repo_from_path(host, path)
+    // SCP-style URLs don't have port numbers
+    extract_owner_repo_from_path(host, None, path)
 }
 
 /// Attempts to parse URL-style remote: `https://host/owner/repo.git`
@@ -128,14 +145,19 @@ fn try_parse_url_style(url: &str) -> Option<GitHubOrigin> {
     let parsed = url::Url::parse(url).ok()?;
 
     let host = parsed.host_str()?;
+    let port = parsed.port();
     // Path should start with /
     let path_stripped = parsed.path().strip_prefix('/')?;
 
-    extract_owner_repo_from_path(host, path_stripped)
+    extract_owner_repo_from_path(host, port, path_stripped)
 }
 
 /// Extracts owner and repository from a path like `owner/repo.git`.
-fn extract_owner_repo_from_path(host: &str, raw_path: &str) -> Option<GitHubOrigin> {
+fn extract_owner_repo_from_path(
+    host: &str,
+    port: Option<u16>,
+    raw_path: &str,
+) -> Option<GitHubOrigin> {
     let trimmed_path = raw_path.trim_matches('/');
 
     if trimmed_path.is_empty() {
@@ -175,6 +197,7 @@ fn extract_owner_repo_from_path(host: &str, raw_path: &str) -> Option<GitHubOrig
     } else {
         Some(GitHubOrigin::Enterprise {
             host: host.to_owned(),
+            port,
             owner,
             repository,
         })
@@ -268,6 +291,7 @@ mod tests {
                 input: "git@ghe.example.com:owner/repo.git",
                 expected: GitHubOrigin::Enterprise {
                     host: "ghe.example.com".to_owned(),
+                    port: None,
                     owner: "owner".to_owned(),
                     repository: "repo".to_owned(),
                 },
@@ -277,6 +301,17 @@ mod tests {
                 input: "https://ghe.example.com/owner/repo",
                 expected: GitHubOrigin::Enterprise {
                     host: "ghe.example.com".to_owned(),
+                    port: None,
+                    owner: "owner".to_owned(),
+                    repository: "repo".to_owned(),
+                },
+            },
+            TestCase {
+                name: "github_enterprise_https_with_port",
+                input: "https://ghe.example.com:8443/owner/repo.git",
+                expected: GitHubOrigin::Enterprise {
+                    host: "ghe.example.com".to_owned(),
+                    port: Some(8443),
                     owner: "owner".to_owned(),
                     repository: "repo".to_owned(),
                 },
@@ -339,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn github_origin_accessors() {
+    fn github_com_origin_accessors() {
         let origin = GitHubOrigin::GitHubCom {
             owner: "octo".to_owned(),
             repository: "cat".to_owned(),
@@ -348,9 +383,14 @@ mod tests {
         assert_eq!(origin.repository(), "cat");
         assert_eq!(origin.host(), "github.com");
         assert!(origin.is_github_com());
+        assert_eq!(origin.port(), None);
+    }
 
+    #[test]
+    fn enterprise_origin_accessors() {
         let enterprise = GitHubOrigin::Enterprise {
             host: "ghe.example.com".to_owned(),
+            port: None,
             owner: "org".to_owned(),
             repository: "project".to_owned(),
         };
@@ -358,5 +398,17 @@ mod tests {
         assert_eq!(enterprise.repository(), "project");
         assert_eq!(enterprise.host(), "ghe.example.com");
         assert!(!enterprise.is_github_com());
+        assert_eq!(enterprise.port(), None);
+    }
+
+    #[test]
+    fn enterprise_origin_with_port_accessor() {
+        let enterprise_with_port = GitHubOrigin::Enterprise {
+            host: "ghe.example.com".to_owned(),
+            port: Some(8443),
+            owner: "org".to_owned(),
+            repository: "project".to_owned(),
+        };
+        assert_eq!(enterprise_with_port.port(), Some(8443));
     }
 }

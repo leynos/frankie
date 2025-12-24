@@ -358,11 +358,15 @@ impl RepositoryLocator {
             }
             crate::local::GitHubOrigin::Enterprise {
                 host,
+                port,
                 owner,
                 repository,
             } => {
-                // Build a URL to parse and derive API base
-                let url = format!("https://{host}/{owner}/{repository}");
+                // Build a URL to parse and derive API base, preserving port if present
+                let url = port.map_or_else(
+                    || format!("https://{host}/{owner}/{repository}"),
+                    |p| format!("https://{host}:{p}/{owner}/{repository}"),
+                );
                 Self::parse(&url)
             }
         }

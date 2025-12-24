@@ -4,10 +4,11 @@ use std::io::{self, Write};
 
 use frankie::github::RepositoryGateway;
 use frankie::{
-    FrankieConfig, IntakeError, ListPullRequestsParams, OctocrabRepositoryGateway,
-    PersonalAccessToken, PullRequestState, RepositoryIntake, RepositoryLocator,
+    FrankieConfig, IntakeError, OctocrabRepositoryGateway, PersonalAccessToken, RepositoryIntake,
+    RepositoryLocator,
 };
 
+use super::default_listing_params;
 use super::output::write_listing_summary;
 
 /// Lists pull requests for a repository.
@@ -47,15 +48,6 @@ where
         .list_pull_requests(&locator, &default_listing_params())
         .await?;
     write_listing_summary(writer, &result, owner, repo)
-}
-
-/// Returns the default parameters for listing pull requests.
-const fn default_listing_params() -> ListPullRequestsParams {
-    ListPullRequestsParams {
-        state: Some(PullRequestState::All),
-        per_page: Some(50),
-        page: Some(1),
-    }
 }
 
 #[cfg(test)]

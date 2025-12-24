@@ -7,6 +7,14 @@ use frankie::{IntakeError, PaginatedPullRequests, PullRequestDetails};
 /// Writes a summary of pull request details to stdout.
 pub fn write_pr_summary(details: &PullRequestDetails) -> Result<(), IntakeError> {
     let mut stdout = io::stdout().lock();
+    write_pr_summary_to(&mut stdout, details)
+}
+
+/// Writes a summary of pull request details to the given writer.
+pub fn write_pr_summary_to<W: Write>(
+    writer: &mut W,
+    details: &PullRequestDetails,
+) -> Result<(), IntakeError> {
     let title = details
         .metadata
         .title
@@ -28,7 +36,7 @@ pub fn write_pr_summary(details: &PullRequestDetails) -> Result<(), IntakeError>
         details.comments.len()
     );
 
-    writeln!(stdout, "{message}").map_err(|error| IntakeError::Io {
+    writeln!(writer, "{message}").map_err(|error| IntakeError::Io {
         message: error.to_string(),
     })
 }
@@ -79,10 +87,10 @@ pub fn io_error(error: &io::Error) -> IntakeError {
 
 #[cfg(test)]
 mod tests {
-    use frankie::github::PageInfo;
-    use frankie::{PaginatedPullRequests, PullRequestSummary, RateLimitInfo};
+    use frankie::github::{PageInfo, PullRequestMetadata};
+    use frankie::{PaginatedPullRequests, PullRequestDetails, PullRequestSummary, RateLimitInfo};
 
-    use super::write_listing_summary;
+    use super::{write_listing_summary, write_pr_summary_to};
 
     #[test]
     fn write_listing_summary_includes_items_and_pagination() {
@@ -144,6 +152,41 @@ mod tests {
         assert!(
             output.contains("Page 1 of 1 (0 PRs shown)"),
             "expected default total pages of 1, got: {output}"
+        );
+    }
+
+    #[test]
+    fn write_pr_summary_to_includes_pr_details() {
+        let details = PullRequestDetails {
+            metadata: PullRequestMetadata {
+                number: 123,
+                title: Some("Fix critical bug".to_owned()),
+                author: Some("contributor".to_owned()),
+                html_url: Some("https://github.com/octo/cat/pull/123".to_owned()),
+                ..Default::default()
+            },
+            comments: vec![],
+        };
+
+        let mut buffer = Vec::new();
+        write_pr_summary_to(&mut buffer, &details).expect("should write PR summary");
+
+        let output = String::from_utf8(buffer).expect("output should be valid UTF-8");
+        assert!(
+            output.contains("Loaded PR #123 by contributor"),
+            "missing PR number and author: {output}"
+        );
+        assert!(
+            output.contains("Fix critical bug"),
+            "missing title: {output}"
+        );
+        assert!(
+            output.contains("https://github.com/octo/cat/pull/123"),
+            "missing URL: {output}"
+        );
+        assert!(
+            output.contains("Comments: 0"),
+            "missing comment count: {output}"
         );
     }
 }
