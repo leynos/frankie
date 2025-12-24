@@ -569,60 +569,91 @@ mod tests {
 
         use super::super::handle_discovery_error;
 
+        /// Returns the expected error message for missing arguments.
+        fn expected_missing_args_message() -> &'static str {
+            "either --pr-url/-u or --owner/-o with --repo/-r is required"
+        }
+
         #[test]
-        fn not_a_repository_returns_configuration_error() {
+        fn not_a_repository_returns_missing_arguments_error() {
             let result = handle_discovery_error(LocalDiscoveryError::NotARepository);
 
-            assert!(
-                matches!(result, Err(IntakeError::Configuration { .. })),
-                "NotARepository should return Configuration error"
-            );
+            match result {
+                Err(IntakeError::Configuration { message }) => {
+                    assert!(
+                        message.contains(expected_missing_args_message()),
+                        "NotARepository should return missing arguments error, got: {message}"
+                    );
+                }
+                other => panic!("expected Configuration error, got: {other:?}"),
+            }
         }
 
         #[test]
-        fn no_remotes_returns_configuration_error() {
+        fn no_remotes_returns_missing_arguments_error() {
             let result = handle_discovery_error(LocalDiscoveryError::NoRemotes);
 
-            assert!(
-                matches!(result, Err(IntakeError::Configuration { .. })),
-                "NoRemotes should return Configuration error"
-            );
+            match result {
+                Err(IntakeError::Configuration { message }) => {
+                    assert!(
+                        message.contains(expected_missing_args_message()),
+                        "NoRemotes should return missing arguments error, got: {message}"
+                    );
+                }
+                other => panic!("expected Configuration error, got: {other:?}"),
+            }
         }
 
         #[test]
-        fn remote_not_found_returns_configuration_error() {
+        fn remote_not_found_returns_missing_arguments_error() {
             let result = handle_discovery_error(LocalDiscoveryError::RemoteNotFound {
                 name: "upstream".to_owned(),
             });
 
-            assert!(
-                matches!(result, Err(IntakeError::Configuration { .. })),
-                "RemoteNotFound should return Configuration error"
-            );
+            match result {
+                Err(IntakeError::Configuration { message }) => {
+                    assert!(
+                        message.contains(expected_missing_args_message()),
+                        "RemoteNotFound should return missing arguments error, got: {message}"
+                    );
+                }
+                other => panic!("expected Configuration error, got: {other:?}"),
+            }
         }
 
         #[test]
-        fn invalid_remote_url_returns_configuration_error() {
+        fn invalid_remote_url_returns_missing_arguments_error() {
             let result = handle_discovery_error(LocalDiscoveryError::InvalidRemoteUrl {
                 url: "not-a-url".to_owned(),
             });
 
-            assert!(
-                matches!(result, Err(IntakeError::Configuration { .. })),
-                "InvalidRemoteUrl should return Configuration error"
-            );
+            match result {
+                Err(IntakeError::Configuration { message }) => {
+                    assert!(
+                        message.contains(expected_missing_args_message()),
+                        "InvalidRemoteUrl should return missing arguments error, got: {message}"
+                    );
+                }
+                other => panic!("expected Configuration error, got: {other:?}"),
+            }
         }
 
         #[test]
-        fn git_error_returns_local_discovery_error() {
+        fn git_error_returns_local_discovery_error_with_message() {
+            let error_message = "repository corrupt";
             let result = handle_discovery_error(LocalDiscoveryError::Git {
-                message: "repository corrupt".to_owned(),
+                message: error_message.to_owned(),
             });
 
-            assert!(
-                matches!(result, Err(IntakeError::LocalDiscovery { .. })),
-                "Git error should return LocalDiscovery error"
-            );
+            match result {
+                Err(IntakeError::LocalDiscovery { message }) => {
+                    assert_eq!(
+                        message, error_message,
+                        "Git error should preserve original message"
+                    );
+                }
+                other => panic!("expected LocalDiscovery error, got: {other:?}"),
+            }
         }
     }
 
@@ -632,18 +663,61 @@ mod tests {
         use super::super::FrankieConfig;
 
         #[tokio::test]
-        async fn no_local_discovery_returns_configuration_error() {
+        #[expect(
+            clippy::excessive_nesting,
+            reason = "nested test module structure"
+        )]
+        async fn no_local_discovery_returns_missing_arguments_error() {
             let config = FrankieConfig {
                 no_local_discovery: true,
                 ..Default::default()
             };
 
             let result = super::super::run_interactive(&config).await;
+            let Err(IntakeError::Configuration { message }) = result else {
+                panic!("expected Configuration error, got: {result:?}");
+            };
 
             assert!(
-                matches!(result, Err(IntakeError::Configuration { .. })),
-                "no_local_discovery=true should return Configuration error"
+                message.contains("--pr-url"),
+                "error should mention --pr-url: {message}"
             );
+            assert!(
+                message.contains("--owner"),
+                "error should mention --owner: {message}"
+            );
+            assert!(
+                message.contains("--repo"),
+                "error should mention --repo: {message}"
+            );
+        }
+    }
+
+    mod default_listing_params {
+        use frankie::github::PullRequestState;
+
+        use super::super::default_listing_params;
+
+        #[test]
+        fn returns_all_state() {
+            let params = default_listing_params();
+            assert_eq!(
+                params.state,
+                Some(PullRequestState::All),
+                "default state should be All"
+            );
+        }
+
+        #[test]
+        fn returns_page_size_of_50() {
+            let params = default_listing_params();
+            assert_eq!(params.per_page, Some(50), "default per_page should be 50");
+        }
+
+        #[test]
+        fn returns_first_page() {
+            let params = default_listing_params();
+            assert_eq!(params.page, Some(1), "default page should be 1");
         }
     }
 
