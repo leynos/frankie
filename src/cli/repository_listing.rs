@@ -54,40 +54,11 @@ where
 mod tests {
     use std::sync::{Arc, Mutex};
 
-    use async_trait::async_trait;
-    use frankie::github::{PageInfo, RepositoryGateway};
-    use frankie::{
-        FrankieConfig, IntakeError, ListPullRequestsParams, PaginatedPullRequests,
-        PullRequestState, RepositoryLocator,
-    };
+    use frankie::github::PageInfo;
+    use frankie::{FrankieConfig, IntakeError, PaginatedPullRequests, PullRequestState};
 
     use super::run_with_gateway_builder;
-
-    #[derive(Clone)]
-    struct CapturingGateway {
-        captured: Arc<Mutex<Option<(RepositoryLocator, ListPullRequestsParams)>>>,
-        response: Arc<Mutex<Option<Result<PaginatedPullRequests, IntakeError>>>>,
-    }
-
-    #[async_trait]
-    impl RepositoryGateway for CapturingGateway {
-        async fn list_pull_requests(
-            &self,
-            locator: &RepositoryLocator,
-            params: &ListPullRequestsParams,
-        ) -> Result<PaginatedPullRequests, IntakeError> {
-            self.captured
-                .lock()
-                .expect("captured mutex should be available")
-                .replace((locator.clone(), params.clone()));
-
-            self.response
-                .lock()
-                .expect("response mutex should be available")
-                .take()
-                .expect("response should only be consumed once")
-        }
-    }
+    use crate::cli::test_utils::CapturingGateway;
 
     #[tokio::test]
     async fn run_repository_listing_uses_expected_params_and_writes_output() {

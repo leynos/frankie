@@ -16,6 +16,9 @@ pub mod output;
 pub mod repository_listing;
 pub mod single_pr;
 
+#[cfg(test)]
+pub mod test_utils;
+
 /// Returns the default parameters for listing pull requests.
 pub const fn default_listing_params() -> ListPullRequestsParams {
     ListPullRequestsParams {

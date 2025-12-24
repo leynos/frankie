@@ -79,7 +79,7 @@ pub fn write_listing_summary<W: Write>(
 }
 
 /// Converts an I/O error to an [`IntakeError::Io`].
-pub fn io_error(error: &io::Error) -> IntakeError {
+pub(crate) fn io_error(error: &io::Error) -> IntakeError {
     IntakeError::Io {
         message: error.to_string(),
     }

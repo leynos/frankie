@@ -99,24 +99,15 @@ mod default_listing_params {
     use crate::cli::default_listing_params;
 
     #[test]
-    fn returns_all_state() {
+    fn returns_expected_defaults() {
         let params = default_listing_params();
+
         assert_eq!(
             params.state,
             Some(PullRequestState::All),
             "default state should be All"
         );
-    }
-
-    #[test]
-    fn returns_page_size_of_50() {
-        let params = default_listing_params();
         assert_eq!(params.per_page, Some(50), "default per_page should be 50");
-    }
-
-    #[test]
-    fn returns_first_page() {
-        let params = default_listing_params();
         assert_eq!(params.page, Some(1), "default page should be 1");
     }
 }
@@ -124,6 +115,7 @@ mod default_listing_params {
 mod repository_locator_from_github_origin {
     use frankie::RepositoryLocator;
     use frankie::local::GitHubOrigin;
+    use rstest::rstest;
 
     #[test]
     fn github_com_origin_produces_github_api_locator() {
@@ -140,11 +132,16 @@ mod repository_locator_from_github_origin {
         assert_eq!(locator.api_base().as_str(), "https://api.github.com/");
     }
 
-    #[test]
-    fn enterprise_origin_produces_enterprise_api_locator() {
+    #[rstest]
+    #[case::no_port(None, "https://ghe.example.com/api/v3")]
+    #[case::custom_port(Some(8443), "https://ghe.example.com:8443/api/v3")]
+    fn enterprise_origin_produces_correct_api_locator(
+        #[case] port: Option<u16>,
+        #[case] expected_api_prefix: &str,
+    ) {
         let origin = GitHubOrigin::Enterprise {
             host: "ghe.example.com".to_owned(),
-            port: None,
+            port,
             owner: "org".to_owned(),
             repository: "project".to_owned(),
         };
@@ -155,33 +152,8 @@ mod repository_locator_from_github_origin {
         assert_eq!(locator.owner().as_str(), "org");
         assert_eq!(locator.repository().as_str(), "project");
         assert!(
-            locator
-                .api_base()
-                .as_str()
-                .starts_with("https://ghe.example.com/api/v3"),
-            "API base should point to Enterprise server: {}",
-            locator.api_base()
-        );
-    }
-
-    #[test]
-    fn enterprise_origin_preserves_custom_port_in_api_base() {
-        let origin = GitHubOrigin::Enterprise {
-            host: "ghe.example.com".to_owned(),
-            port: Some(8443),
-            owner: "org".to_owned(),
-            repository: "project".to_owned(),
-        };
-
-        let locator = RepositoryLocator::from_github_origin(&origin)
-            .expect("should create locator from Enterprise origin with port");
-
-        assert!(
-            locator
-                .api_base()
-                .as_str()
-                .starts_with("https://ghe.example.com:8443/api/v3"),
-            "API base should preserve custom port: {}",
+            locator.api_base().as_str().starts_with(expected_api_prefix),
+            "API base should start with {expected_api_prefix}: {}",
             locator.api_base()
         );
     }
