@@ -371,7 +371,7 @@ classDiagram
 - Local discovery uses git2 to detect the Git repository from the current
   working directory and extract GitHub remote information.
 - The `discover_repository` function walks up from the current path to find the
-  `.git` directory, then inspects the `origin` remote URL.
+  `.git` directory, then inspects the configured remote URL (default: `origin`).
 - Supported URL formats:
   - SSH SCP-style: `git@github.com:owner/repo.git`
   - SSH URL-style: `ssh://git@github.com/owner/repo.git`

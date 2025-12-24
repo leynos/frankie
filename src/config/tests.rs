@@ -510,12 +510,18 @@ fn no_local_discovery_layer_precedence(#[case] layers: Vec<(&str, Value)>, #[cas
     );
 }
 
-/// Helper to test `no_local_discovery` loading from CLI.
-fn test_no_local_discovery_loading(cli_args: &[&str], expected: bool, description: &str) {
+/// Helper to test `no_local_discovery` loading from environment and CLI.
+fn test_no_local_discovery_loading(
+    env_value: Option<&str>,
+    cli_args: &[&str],
+    expected: bool,
+    description: &str,
+) {
     let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
     let home = temp_dir.path().to_string_lossy().to_string();
 
     let _guard = env_lock::lock_env([
+        ("FRANKIE_NO_LOCAL_DISCOVERY", env_value),
         ("HOME", Some(home.as_str())),
         ("XDG_CONFIG_HOME", Some(home.as_str())),
     ]);
@@ -531,6 +537,7 @@ fn test_no_local_discovery_loading(cli_args: &[&str], expected: bool, descriptio
 #[rstest]
 fn no_local_discovery_loads_from_cli_flag() {
     test_no_local_discovery_loading(
+        None,
         &["--no-local-discovery"],
         true,
         "expected --no-local-discovery to set flag",
@@ -539,5 +546,10 @@ fn no_local_discovery_loads_from_cli_flag() {
 
 #[rstest]
 fn no_local_discovery_absent_flag_defaults_to_false() {
-    test_no_local_discovery_loading(&[], false, "missing --no-local-discovery should be false");
+    test_no_local_discovery_loading(
+        None,
+        &[],
+        false,
+        "missing --no-local-discovery should be false",
+    );
 }
