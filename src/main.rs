@@ -663,10 +663,7 @@ mod tests {
         use super::super::FrankieConfig;
 
         #[tokio::test]
-        #[expect(
-            clippy::excessive_nesting,
-            reason = "nested test module structure"
-        )]
+        #[expect(clippy::excessive_nesting, reason = "nested test module structure")]
         async fn no_local_discovery_returns_missing_arguments_error() {
             let config = FrankieConfig {
                 no_local_discovery: true,

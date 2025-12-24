@@ -81,41 +81,23 @@ fn create_temp_repo_no_remotes() -> TempDir {
 
 #[rstest]
 fn no_local_discovery_flag_requires_explicit_arguments() {
-    let temp_dir = create_temp_repo_with_origin("git@github.com:octo/cat.git");
-
-    let output = run_frankie_in_dir(
+    assert_interactive_mode_error(
+        || create_temp_repo_with_origin("git@github.com:octo/cat.git"),
         &["--no-local-discovery", "--token", "ghp_test"],
-        &[],
-        temp_dir.path(),
-    );
-
-    assert!(
-        !output.status.success(),
-        "should fail when --no-local-discovery is set without explicit arguments"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("--pr-url") || stderr.contains("--owner"),
-        "error message should mention required arguments: {stderr}"
+        "--no-local-discovery is set without explicit arguments",
+        |stderr| stderr.contains("--pr-url") || stderr.contains("--owner"),
+        "error message should mention required arguments",
     );
 }
 
 #[rstest]
 fn no_local_discovery_short_flag_requires_explicit_arguments() {
-    let temp_dir = create_temp_repo_with_origin("git@github.com:octo/cat.git");
-
-    let output = run_frankie_in_dir(&["-n", "--token", "ghp_test"], &[], temp_dir.path());
-
-    assert!(
-        !output.status.success(),
-        "should fail when -n is set without explicit arguments"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("--pr-url") || stderr.contains("--owner"),
-        "error message should mention required arguments: {stderr}"
+    assert_interactive_mode_error(
+        || create_temp_repo_with_origin("git@github.com:octo/cat.git"),
+        &["-n", "--token", "ghp_test"],
+        "-n is set without explicit arguments",
+        |stderr| stderr.contains("--pr-url") || stderr.contains("--owner"),
+        "error message should mention required arguments",
     );
 }
 
@@ -134,19 +116,12 @@ fn interactive_mode_discovers_repository_from_git_directory() {
 
 #[rstest]
 fn interactive_mode_warns_when_no_remotes() {
-    let temp_dir = create_temp_repo_no_remotes();
-
-    let output = run_frankie_in_dir(&["--token", "ghp_test"], &[], temp_dir.path());
-
-    assert!(
-        !output.status.success(),
-        "should fail when repository has no remotes"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("no remotes"),
-        "should warn about missing remotes: {stderr}"
+    assert_interactive_mode_error(
+        create_temp_repo_no_remotes,
+        &["--token", "ghp_test"],
+        "repository has no remotes",
+        |stderr| stderr.contains("no remotes"),
+        "should warn about missing remotes",
     );
 }
 
@@ -159,39 +134,60 @@ fn create_temp_non_git_dir() -> TempDir {
     TempDir::new().expect("should create temp directory")
 }
 
-#[rstest]
-fn interactive_mode_warns_when_not_in_git_repo() {
-    let temp_dir = create_temp_non_git_dir();
-    // Don't initialize git repo
+/// Asserts that running Frankie in interactive mode with the given setup produces an error.
+///
+/// # Parameters
+/// - `setup`: A closure that creates and returns a temporary directory for the test.
+/// - `args`: Command-line arguments to pass to Frankie.
+/// - `failure_reason`: A human-readable description of why the command should fail.
+/// - `stderr_predicate`: A closure that returns `true` if stderr contains the expected content.
+/// - `stderr_context`: A description of what stderr should contain (for assertion messages).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "test helper with descriptive parameters; clarity outweighs argument count"
+)]
+fn assert_interactive_mode_error<F>(
+    setup: F,
+    args: &[&str],
+    failure_reason: &str,
+    stderr_predicate: impl Fn(&str) -> bool,
+    stderr_context: &str,
+) where
+    F: FnOnce() -> TempDir,
+{
+    let temp_dir = setup();
 
-    let output = run_frankie_in_dir(&["--token", "ghp_test"], &[], temp_dir.path());
+    let output = run_frankie_in_dir(args, &[], temp_dir.path());
 
     assert!(
         !output.status.success(),
-        "should fail when not in a Git repository"
+        "should fail when {failure_reason}"
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("--pr-url") || stderr.contains("--owner"),
-        "error message should mention required arguments: {stderr}"
+    assert!(stderr_predicate(&stderr), "{stderr_context}: {stderr}");
+}
+
+#[rstest]
+fn interactive_mode_warns_when_not_in_git_repo() {
+    assert_interactive_mode_error(
+        create_temp_non_git_dir,
+        &["--token", "ghp_test"],
+        "not in a Git repository",
+        |stderr| stderr.contains("--pr-url") || stderr.contains("--owner"),
+        "error message should mention required arguments",
     );
 }
 
 #[rstest]
 fn interactive_mode_warns_when_origin_url_invalid() {
-    let temp_dir = create_temp_repo_with_origin("not-a-valid-url");
-
-    let output = run_frankie_in_dir(&["--token", "ghp_test"], &[], temp_dir.path());
-
-    assert!(
-        !output.status.success(),
-        "should fail when origin URL is invalid"
-    );
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("could not parse remote URL") || stderr.contains("not-a-valid-url"),
-        "should warn about invalid URL: {stderr}"
+    assert_interactive_mode_error(
+        || create_temp_repo_with_origin("not-a-valid-url"),
+        &["--token", "ghp_test"],
+        "origin URL is invalid",
+        |stderr| {
+            stderr.contains("could not parse remote URL") || stderr.contains("not-a-valid-url")
+        },
+        "should warn about invalid URL",
     );
 }
