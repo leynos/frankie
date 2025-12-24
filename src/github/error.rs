@@ -84,4 +84,11 @@ pub enum IntakeError {
         /// Description of the invalid parameter.
         message: String,
     },
+
+    /// Local repository discovery failed.
+    #[error("local discovery: {message}")]
+    LocalDiscovery {
+        /// Details about the discovery failure.
+        message: String,
+    },
 }

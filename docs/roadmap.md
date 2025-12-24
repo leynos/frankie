@@ -32,7 +32,7 @@ support later workflow features.
 - [x] Implement owner/repository discovery with paginated PR listing;
       acceptance: repository selection lists at least 50 PRs with pagination
       controls and asserts rate-limit headers are handled without panics.
-- [ ] Add local repository discovery via git2 that maps remotes to GitHub
+- [x] Add local repository discovery via git2 that maps remotes to GitHub
       origins; acceptance: running in a Git repo pre-fills owner/repo details
       and warns when remote origin is missing.
 

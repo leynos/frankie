@@ -7,7 +7,7 @@
 use serde::Deserialize;
 
 /// Minimal pull request metadata used by the CLI.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PullRequestMetadata {
     /// Pull request number.
     pub number: u64,

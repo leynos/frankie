@@ -366,6 +366,76 @@ classDiagram
   `PullRequestDetails`
 - `src/lib.rs` — public re-exports forming the `FrankieLibFacade`
 
+### 1.2.5 Local repository discovery implementation (December 2025)
+
+- Local discovery uses git2 to detect the Git repository from the current
+  working directory and extract GitHub remote information.
+- The `discover_repository` function walks up from the current path to find the
+  `.git` directory, then inspects the configured remote URL (default: `origin`).
+- Supported URL formats:
+  - SSH SCP-style: `git@github.com:owner/repo.git`
+  - SSH URL-style: `ssh://git@github.com/owner/repo.git`
+  - HTTPS: `https://github.com/owner/repo.git`
+  - GitHub Enterprise SSH: `git@ghe.example.com:org/project.git`
+  - GitHub Enterprise HTTPS: `https://ghe.example.com/org/project.git`
+- The `GitHubOrigin` enum distinguishes `github.com` origins from Enterprise
+  hosts, allowing correct API base URL derivation.
+- Discovery errors map to `LocalDiscoveryError` variants: `NotARepository`,
+  `NoRemotes`, `RemoteNotFound`, `InvalidRemoteUrl`, and `Git`.
+- The `RepositoryLocator::from_github_origin` method bridges local discovery to
+  the existing intake infrastructure.
+- Integration with `FrankieConfig` uses the `no_local_discovery` flag to allow
+  users to disable automatic discovery when explicit arguments are preferred.
+
+#### Local discovery class diagram
+
+```mermaid
+classDiagram
+    class GitHubOrigin {
+        <<enum>>
+        +GitHubCom(owner, repository)
+        +Enterprise(host, owner, repository)
+        +owner() &str
+        +repository() &str
+        +is_github_com() bool
+    }
+
+    class LocalRepository {
+        -workdir: PathBuf
+        -remote_name: String
+        -github_origin: GitHubOrigin
+        +workdir() &Path
+        +remote_name() &str
+        +owner() &str
+        +repository() &str
+        +github_origin() &GitHubOrigin
+    }
+
+    class LocalDiscoveryError {
+        <<enum>>
+        +NotARepository
+        +NoRemotes
+        +RemoteNotFound(name)
+        +InvalidRemoteUrl(url)
+        +Git(message)
+    }
+
+    class RepositoryLocator {
+        +from_github_origin(origin: &GitHubOrigin) Result
+    }
+
+    LocalRepository --> GitHubOrigin
+    RepositoryLocator ..> GitHubOrigin : uses
+```
+
+**Reference:** The types and relationships above are implemented in:
+
+- `src/local/mod.rs` — module exports
+- `src/local/error.rs` — `LocalDiscoveryError` enum
+- `src/local/remote.rs` — `GitHubOrigin` enum and `parse_github_remote`
+- `src/local/discovery.rs` — `LocalRepository`, `discover_repository`
+- `src/github/locator.rs` — `RepositoryLocator::from_github_origin`
+
 ## 1.3 Scope
 
 ### 1.3.1 In-scope
