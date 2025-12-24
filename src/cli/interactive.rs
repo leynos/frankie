@@ -131,6 +131,7 @@ mod tests {
     mod discovery_error_handling {
         use frankie::IntakeError;
         use frankie::local::LocalDiscoveryError;
+        use rstest::rstest;
 
         use super::super::handle_discovery_error;
 
@@ -139,7 +140,21 @@ mod tests {
             "either --pr-url/-u or --owner/-o with --repo/-r is required"
         }
 
-        fn assert_returns_missing_arguments_error(error: LocalDiscoveryError, variant_name: &str) {
+        #[rstest]
+        #[case::not_a_repository(LocalDiscoveryError::NotARepository, "NotARepository")]
+        #[case::no_remotes(LocalDiscoveryError::NoRemotes, "NoRemotes")]
+        #[case::remote_not_found(
+            LocalDiscoveryError::RemoteNotFound { name: "upstream".to_owned() },
+            "RemoteNotFound"
+        )]
+        #[case::invalid_remote_url(
+            LocalDiscoveryError::InvalidRemoteUrl { url: "not-a-url".to_owned() },
+            "InvalidRemoteUrl"
+        )]
+        fn discovery_errors_return_missing_arguments_error(
+            #[case] error: LocalDiscoveryError,
+            #[case] variant_name: &str,
+        ) {
             let result = handle_discovery_error(error);
 
             match result {
@@ -153,40 +168,7 @@ mod tests {
             }
         }
 
-        #[test]
-        fn not_a_repository_returns_missing_arguments_error() {
-            assert_returns_missing_arguments_error(
-                LocalDiscoveryError::NotARepository,
-                "NotARepository",
-            );
-        }
-
-        #[test]
-        fn no_remotes_returns_missing_arguments_error() {
-            assert_returns_missing_arguments_error(LocalDiscoveryError::NoRemotes, "NoRemotes");
-        }
-
-        #[test]
-        fn remote_not_found_returns_missing_arguments_error() {
-            assert_returns_missing_arguments_error(
-                LocalDiscoveryError::RemoteNotFound {
-                    name: "upstream".to_owned(),
-                },
-                "RemoteNotFound",
-            );
-        }
-
-        #[test]
-        fn invalid_remote_url_returns_missing_arguments_error() {
-            assert_returns_missing_arguments_error(
-                LocalDiscoveryError::InvalidRemoteUrl {
-                    url: "not-a-url".to_owned(),
-                },
-                "InvalidRemoteUrl",
-            );
-        }
-
-        #[test]
+        #[rstest]
         fn git_error_returns_local_discovery_error_with_message() {
             let error_message = "repository corrupt";
             let result = handle_discovery_error(LocalDiscoveryError::Git {
