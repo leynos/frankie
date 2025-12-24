@@ -646,4 +646,47 @@ mod tests {
             );
         }
     }
+
+    mod repository_locator_from_github_origin {
+        use frankie::RepositoryLocator;
+        use frankie::local::GitHubOrigin;
+
+        #[test]
+        fn github_com_origin_produces_github_api_locator() {
+            let origin = GitHubOrigin::GitHubCom {
+                owner: "octo".to_owned(),
+                repository: "cat".to_owned(),
+            };
+
+            let locator = RepositoryLocator::from_github_origin(&origin)
+                .expect("should create locator from GitHubCom origin");
+
+            assert_eq!(locator.owner().as_str(), "octo");
+            assert_eq!(locator.repository().as_str(), "cat");
+            assert_eq!(locator.api_base().as_str(), "https://api.github.com/");
+        }
+
+        #[test]
+        fn enterprise_origin_produces_enterprise_api_locator() {
+            let origin = GitHubOrigin::Enterprise {
+                host: "ghe.example.com".to_owned(),
+                owner: "org".to_owned(),
+                repository: "project".to_owned(),
+            };
+
+            let locator = RepositoryLocator::from_github_origin(&origin)
+                .expect("should create locator from Enterprise origin");
+
+            assert_eq!(locator.owner().as_str(), "org");
+            assert_eq!(locator.repository().as_str(), "project");
+            assert!(
+                locator
+                    .api_base()
+                    .as_str()
+                    .starts_with("https://ghe.example.com/api/v3"),
+                "API base should point to Enterprise server: {}",
+                locator.api_base()
+            );
+        }
+    }
 }
