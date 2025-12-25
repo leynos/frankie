@@ -41,6 +41,36 @@ pub struct PullRequestDetails {
     pub comments: Vec<PullRequestComment>,
 }
 
+/// Pull request review comment (distinct from issue comments).
+///
+/// Review comments are attached to specific lines in a pull request diff,
+/// whereas issue comments are general discussion on the PR.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewComment {
+    /// Comment identifier.
+    pub id: u64,
+    /// Comment body.
+    pub body: Option<String>,
+    /// Author login.
+    pub author: Option<String>,
+    /// File path the comment is attached to.
+    pub file_path: Option<String>,
+    /// Line number in the diff the comment refers to.
+    pub line_number: Option<u32>,
+    /// Original line number before any changes.
+    pub original_line_number: Option<u32>,
+    /// Diff hunk context for this comment.
+    pub diff_hunk: Option<String>,
+    /// Commit SHA this comment was made against.
+    pub commit_sha: Option<String>,
+    /// ID of the comment this is replying to, if any.
+    pub in_reply_to_id: Option<u64>,
+    /// Creation timestamp (ISO 8601 format).
+    pub created_at: Option<String>,
+    /// Last update timestamp (ISO 8601 format).
+    pub updated_at: Option<String>,
+}
+
 /// Lightweight pull request summary for listing views.
 ///
 /// Contains only the fields needed for PR listing, reducing payload size
@@ -93,6 +123,22 @@ pub(super) struct ApiPullRequestSummary {
     pub(super) updated_at: Option<String>,
 }
 
+/// API response type for PR review comments.
+#[derive(Debug, Clone, Deserialize)]
+pub(super) struct ApiReviewComment {
+    pub(super) id: u64,
+    pub(super) body: Option<String>,
+    pub(super) user: Option<ApiUser>,
+    pub(super) path: Option<String>,
+    pub(super) line: Option<u32>,
+    pub(super) original_line: Option<u32>,
+    pub(super) diff_hunk: Option<String>,
+    pub(super) commit_id: Option<String>,
+    pub(super) in_reply_to_id: Option<u64>,
+    pub(super) created_at: Option<String>,
+    pub(super) updated_at: Option<String>,
+}
+
 impl From<ApiPullRequest> for PullRequestMetadata {
     fn from(value: ApiPullRequest) -> Self {
         Self {
@@ -122,6 +168,24 @@ impl From<ApiPullRequestSummary> for PullRequestSummary {
             title: value.title,
             state: value.state,
             author: value.user.and_then(|user| user.login),
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+impl From<ApiReviewComment> for ReviewComment {
+    fn from(value: ApiReviewComment) -> Self {
+        Self {
+            id: value.id,
+            body: value.body,
+            author: value.user.and_then(|user| user.login),
+            file_path: value.path,
+            line_number: value.line,
+            original_line_number: value.original_line,
+            diff_hunk: value.diff_hunk,
+            commit_sha: value.commit_id,
+            in_reply_to_id: value.in_reply_to_id,
             created_at: value.created_at,
             updated_at: value.updated_at,
         }

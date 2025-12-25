@@ -12,12 +12,14 @@ including loading individual pull requests and listing PRs for a repository.
 
 ## Operation modes
 
-Frankie supports three operation modes:
+Frankie supports four operation modes:
 
 1. **Interactive mode** — Auto-detect repository from local Git directory
 2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
 3. **Repository listing mode** — List PRs for a repository using `--owner` and
    `--repo`
+4. **Review TUI mode** — Interactive terminal interface for navigating and
+   filtering review comments using `--tui` with `--pr-url`
 
 ## Interactive mode (local discovery)
 
@@ -132,6 +134,58 @@ Frankie handles GitHub API rate limits gracefully:
 - The error includes information about when the rate limit resets, if
   available.
 
+## Review TUI mode
+
+Launch an interactive terminal interface for navigating and filtering review
+comments on a pull request:
+
+```bash
+frankie --tui --pr-url https://github.com/owner/repo/pull/123 --token ghp_example
+```
+
+The TUI uses bubbletea-rs to provide a keyboard-driven experience for reviewing
+comments.
+
+### Keyboard shortcuts
+
+| Key        | Action                    |
+| ---------- | ------------------------- |
+| `j`, `↓`   | Move cursor down          |
+| `k`, `↑`   | Move cursor up            |
+| `PgDn`     | Page down                 |
+| `PgUp`     | Page up                   |
+| `Home`, `g`| Go to first item          |
+| `End`, `G` | Go to last item           |
+| `f`        | Cycle filter (All/Unresolved) |
+| `Esc`      | Clear filter              |
+| `r`        | Refresh from GitHub       |
+| `?`        | Toggle help overlay       |
+| `q`        | Quit                      |
+
+### Filters
+
+The TUI supports filtering review comments by several criteria:
+
+- **All** — Show all review comments
+- **Unresolved** — Show only comments that are not replies (root comments)
+- **By file** — Show comments on a specific file path
+- **By reviewer** — Show comments from a specific author
+- **By commit range** — Show comments within a commit range
+
+Filters execute locally without requiring a full reload from GitHub. The cursor
+position is preserved when changing filters (clamped to valid range if the
+filtered list is shorter).
+
+### TUI display
+
+The TUI displays:
+
+- **Header** — Application name with loading indicator when refreshing
+- **Filter bar** — Active filter with count of filtered vs total comments
+- **Review list** — Scrollable list with cursor indicator showing author, file,
+  line number, and a preview of the comment body
+- **Status bar** — Keyboard shortcut hints or error message if present
+
 ## Configuration
 
 Frankie supports configuration through multiple sources with the following
@@ -208,6 +262,7 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--migrate-db`                              | —     | Run database migrations and exit        |
 | `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)         |
 | `--no-local-discovery`                      | —     | Disable automatic local Git discovery   |
+| `--tui`                                     | —     | Launch interactive TUI for review comments |
 | `--help`                                    | `-h`  | Show help information                   |
 
 Run `frankie --help` to see all available options and their descriptions.

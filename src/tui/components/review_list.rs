@@ -1,0 +1,220 @@
+//! Review list component for displaying filtered review comments.
+//!
+//! This component renders a scrollable list of review comments with cursor
+//! highlighting and displays relevant metadata for each comment.
+
+use crate::github::models::ReviewComment;
+
+/// Component for displaying a list of review comments.
+#[derive(Debug, Clone, Default)]
+pub struct ReviewListComponent {
+    /// Visible height in lines (for scrolling calculations).
+    visible_height: usize,
+}
+
+impl ReviewListComponent {
+    /// Creates a new review list component.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self { visible_height: 20 }
+    }
+
+    /// Updates the visible height for scrolling calculations.
+    pub const fn set_visible_height(&mut self, height: usize) {
+        self.visible_height = height;
+    }
+
+    /// Returns the visible height.
+    #[must_use]
+    pub const fn visible_height(&self) -> usize {
+        self.visible_height
+    }
+
+    /// Renders the review list as a string.
+    ///
+    /// # Arguments
+    ///
+    /// * `reviews` - Slice of review comments to display
+    /// * `cursor_position` - Current cursor position (0-indexed)
+    /// * `scroll_offset` - Number of lines scrolled from top
+    #[must_use]
+    pub fn view(
+        &self,
+        reviews: &[&ReviewComment],
+        cursor_position: usize,
+        _scroll_offset: usize,
+    ) -> String {
+        if reviews.is_empty() {
+            return "  No review comments match the current filter.\n".to_owned();
+        }
+
+        let mut output = String::new();
+
+        for (index, review) in reviews.iter().enumerate() {
+            let is_selected = index == cursor_position;
+            let prefix = if is_selected { ">" } else { " " };
+            let line = Self::format_review_line(review, prefix);
+            output.push_str(&line);
+            output.push('\n');
+        }
+
+        output
+    }
+
+    /// Formats a single review line for display.
+    fn format_review_line(review: &ReviewComment, prefix: &str) -> String {
+        let author = review.author.as_deref().unwrap_or("unknown");
+        let file = review.file_path.as_deref().unwrap_or("(no file)");
+        let line_num = review
+            .line_number
+            .map_or_else(String::new, |n| format!(":{n}"));
+
+        let body_preview = review
+            .body
+            .as_ref()
+            .map(|b| truncate_body(b, 50))
+            .unwrap_or_default();
+
+        format!("{prefix} [{author}] {file}{line_num}: {body_preview}")
+    }
+}
+
+/// Truncates body text to a maximum length, adding ellipsis if needed.
+fn truncate_body(body: &str, max_len: usize) -> String {
+    // Take first line only and truncate
+    let first_line = body.lines().next().unwrap_or("");
+    let trimmed = first_line.trim();
+
+    if trimmed.len() <= max_len {
+        trimmed.to_owned()
+    } else if let Some(truncated) = trimmed.get(..max_len.saturating_sub(3)) {
+        format!("{truncated}...")
+    } else {
+        trimmed.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test fixture for creating review comments.
+    struct ReviewBuilder {
+        id: u64,
+        author: String,
+        file_path: String,
+        line_number: u32,
+        body: String,
+    }
+
+    impl ReviewBuilder {
+        fn new(id: u64, author: &str) -> Self {
+            Self {
+                id,
+                author: author.to_owned(),
+                file_path: "src/main.rs".to_owned(),
+                line_number: 1,
+                body: "comment".to_owned(),
+            }
+        }
+
+        fn file(mut self, path: &str) -> Self {
+            self.file_path = path.to_owned();
+            self
+        }
+
+        fn line(mut self, num: u32) -> Self {
+            self.line_number = num;
+            self
+        }
+
+        fn body(mut self, text: &str) -> Self {
+            self.body = text.to_owned();
+            self
+        }
+
+        fn build(self) -> ReviewComment {
+            ReviewComment {
+                id: self.id,
+                body: Some(self.body),
+                author: Some(self.author),
+                file_path: Some(self.file_path),
+                line_number: Some(self.line_number),
+                original_line_number: None,
+                diff_hunk: None,
+                commit_sha: None,
+                in_reply_to_id: None,
+                created_at: None,
+                updated_at: None,
+            }
+        }
+    }
+
+    #[test]
+    fn view_shows_empty_message_when_no_reviews() {
+        let component = ReviewListComponent::new();
+        let review_list: Vec<&ReviewComment> = vec![];
+        let output = component.view(&review_list, 0, 0);
+        assert!(output.contains("No review comments"));
+    }
+
+    #[test]
+    fn view_shows_cursor_indicator() {
+        let first = ReviewBuilder::new(1, "alice")
+            .file("src/main.rs")
+            .line(10)
+            .body("Fix this")
+            .build();
+        let second = ReviewBuilder::new(2, "bob")
+            .file("src/lib.rs")
+            .line(20)
+            .body("Looks good")
+            .build();
+        let review_list: Vec<&ReviewComment> = vec![&first, &second];
+
+        let component = ReviewListComponent::new();
+        let output = component.view(&review_list, 1, 0);
+
+        // First line should not have cursor
+        assert!(output.contains("  [alice]"));
+        // Second line should have cursor
+        assert!(output.contains("> [bob]"));
+    }
+
+    #[test]
+    fn format_review_line_includes_all_fields() {
+        let comment = ReviewBuilder::new(1, "alice")
+            .file("src/main.rs")
+            .line(42)
+            .body("Consider refactoring")
+            .build();
+        let line = ReviewListComponent::format_review_line(&comment, " ");
+
+        assert!(line.contains("[alice]"));
+        assert!(line.contains("src/main.rs"));
+        assert!(line.contains(":42"));
+        assert!(line.contains("Consider refactoring"));
+    }
+
+    #[test]
+    fn truncate_body_shortens_long_text() {
+        let long_text = "This is a very long comment that should be truncated";
+        let truncated = truncate_body(long_text, 20);
+        assert_eq!(truncated.len(), 20);
+        assert!(truncated.ends_with("..."));
+    }
+
+    #[test]
+    fn truncate_body_preserves_short_text() {
+        let short_text = "Short";
+        let result = truncate_body(short_text, 20);
+        assert_eq!(result, "Short");
+    }
+
+    #[test]
+    fn truncate_body_takes_first_line_only() {
+        let multiline = "First line\nSecond line\nThird line";
+        let result = truncate_body(multiline, 50);
+        assert_eq!(result, "First line");
+    }
+}
