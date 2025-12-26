@@ -69,9 +69,8 @@ mod tests {
 
     use crate::github::models::ApiReviewComment;
 
-    #[test]
-    fn api_review_comment_deserialises_from_json() {
-        let value = json!({
+    fn sample_review_comment_json() -> serde_json::Value {
+        json!({
             "id": 456,
             "body": "Consider using a constant here.",
             "user": { "login": "reviewer" },
@@ -83,10 +82,13 @@ mod tests {
             "in_reply_to_id": null,
             "created_at": "2025-01-01T00:00:00Z",
             "updated_at": "2025-01-02T00:00:00Z"
-        });
+        })
+    }
 
-        let api: ApiReviewComment =
-            serde_json::from_value(value).expect("ApiReviewComment should deserialise");
+    #[test]
+    fn api_review_comment_deserialises_core_fields() {
+        let api: ApiReviewComment = serde_json::from_value(sample_review_comment_json())
+            .expect("ApiReviewComment should deserialise");
         assert_eq!(api.id, 456);
         assert_eq!(api.body.as_deref(), Some("Consider using a constant here."));
         assert_eq!(
@@ -96,7 +98,19 @@ mod tests {
         assert_eq!(api.path.as_deref(), Some("src/main.rs"));
         assert_eq!(api.line, Some(42));
         assert_eq!(api.original_line, Some(40));
+    }
+
+    #[test]
+    fn api_review_comment_deserialises_metadata_fields() {
+        let api: ApiReviewComment = serde_json::from_value(sample_review_comment_json())
+            .expect("ApiReviewComment should deserialise");
         assert_eq!(api.commit_id.as_deref(), Some("abc123"));
         assert!(api.in_reply_to_id.is_none());
+        assert_eq!(
+            api.diff_hunk.as_deref(),
+            Some("@@ -38,6 +38,8 @@\n+    let x = 1;")
+        );
+        assert_eq!(api.created_at.as_deref(), Some("2025-01-01T00:00:00Z"));
+        assert_eq!(api.updated_at.as_deref(), Some("2025-01-02T00:00:00Z"));
     }
 }
