@@ -24,7 +24,7 @@ pub(super) async fn fetch_review_comments(
     client
         .all_pages(page)
         .await
-        .map(|comments| comments.into_iter().map(ApiReviewComment::into).collect())
+        .map(|comments| comments.into_iter().map(Into::into).collect())
         .map_err(|error| map_octocrab_error("review comments", &error))
 }
 
@@ -34,16 +34,18 @@ pub struct OctocrabReviewCommentGateway {
 }
 
 impl OctocrabReviewCommentGateway {
-    /// Creates a new gateway for the given token and PR locator.
+    /// Creates a new gateway for the given token and API base URL.
+    ///
+    /// # Arguments
+    ///
+    /// * `token` - Personal access token for authentication.
+    /// * `api_base` - Base URL for the GitHub API (e.g. `https://api.github.com`).
     ///
     /// # Errors
     ///
     /// Returns an error if the Octocrab client cannot be built.
-    pub fn new(
-        token: &PersonalAccessToken,
-        locator: &PullRequestLocator,
-    ) -> Result<Self, IntakeError> {
-        let client = build_octocrab_client(token, locator.api_base().as_str())?;
+    pub fn new(token: &PersonalAccessToken, api_base: &str) -> Result<Self, IntakeError> {
+        let client = build_octocrab_client(token, api_base)?;
         Ok(Self { client })
     }
 }

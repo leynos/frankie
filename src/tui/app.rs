@@ -11,6 +11,7 @@ use bubbletea_rs::{Cmd, Model};
 use crate::github::models::ReviewComment;
 
 use super::components::ReviewListComponent;
+use super::input::map_key_to_message;
 use super::messages::AppMsg;
 use super::state::{FilterState, ReviewFilter};
 
@@ -19,6 +20,9 @@ use super::state::{FilterState, ReviewFilter};
 pub struct ReviewApp {
     /// All review comments (unfiltered).
     reviews: Vec<ReviewComment>,
+    /// Cached indices of reviews matching the current filter.
+    /// Invalidated when reviews or filter change.
+    filtered_indices: Vec<usize>,
     /// Filter and cursor state.
     filter_state: FilterState,
     /// Whether data is currently loading.
@@ -38,8 +42,11 @@ impl ReviewApp {
     /// Creates a new application with the given review comments.
     #[must_use]
     pub fn new(reviews: Vec<ReviewComment>) -> Self {
+        // Build initial cache with all indices (default filter is All)
+        let filtered_indices = (0..reviews.len()).collect();
         Self {
             reviews,
+            filtered_indices,
             filter_state: FilterState::new(),
             loading: false,
             error: None,
@@ -59,13 +66,27 @@ impl ReviewApp {
     /// Returns the currently filtered reviews.
     #[must_use]
     pub fn filtered_reviews(&self) -> Vec<&ReviewComment> {
-        self.filter_state.apply_filter(&self.reviews)
+        self.filtered_indices
+            .iter()
+            .filter_map(|&i| self.reviews.get(i))
+            .collect()
     }
 
     /// Returns the count of filtered reviews.
     #[must_use]
-    pub fn filtered_count(&self) -> usize {
-        self.filtered_reviews().len()
+    pub const fn filtered_count(&self) -> usize {
+        self.filtered_indices.len()
+    }
+
+    /// Rebuilds the filtered indices cache based on the current filter.
+    fn rebuild_filter_cache(&mut self) {
+        self.filtered_indices = self
+            .reviews
+            .iter()
+            .enumerate()
+            .filter(|(_, review)| self.filter_state.active_filter.matches(review))
+            .map(|(i, _)| i)
+            .collect();
     }
 
     /// Returns the current cursor position.
@@ -153,14 +174,16 @@ impl ReviewApp {
     // Filter handlers
 
     fn handle_set_filter(&mut self, filter: &ReviewFilter) -> Option<Cmd> {
-        let new_count = self.reviews.iter().filter(|r| filter.matches(r)).count();
-        self.filter_state.set_filter(filter.clone(), new_count);
+        self.filter_state.active_filter = filter.clone();
+        self.rebuild_filter_cache();
+        self.filter_state.clamp_cursor(self.filtered_count());
         None
     }
 
     fn handle_clear_filter(&mut self) -> Option<Cmd> {
-        let count = self.reviews.len();
-        self.filter_state.set_filter(ReviewFilter::All, count);
+        self.filter_state.active_filter = ReviewFilter::All;
+        self.rebuild_filter_cache();
+        self.filter_state.clamp_cursor(self.filtered_count());
         None
     }
 
@@ -169,25 +192,38 @@ impl ReviewApp {
             ReviewFilter::All => ReviewFilter::Unresolved,
             _ => ReviewFilter::All,
         };
-        let new_count = self
-            .reviews
-            .iter()
-            .filter(|r| next_filter.matches(r))
-            .count();
-        self.filter_state.set_filter(next_filter, new_count);
+        self.filter_state.active_filter = next_filter;
+        self.rebuild_filter_cache();
+        self.filter_state.clamp_cursor(self.filtered_count());
         None
     }
 
     // Data loading handlers
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "Returns Option<Cmd> for consistency with other message handlers"
+    )]
     fn handle_refresh_requested(&mut self) -> Option<Cmd> {
         self.loading = true;
         self.error = None;
-        None
+
+        // Return a command that fetches reviews asynchronously
+        Some(Box::pin(async {
+            match super::fetch_reviews().await {
+                Ok(reviews) => {
+                    Some(Box::new(AppMsg::RefreshComplete(reviews)) as Box<dyn Any + Send>)
+                }
+                Err(error) => {
+                    Some(Box::new(AppMsg::RefreshFailed(error.to_string())) as Box<dyn Any + Send>)
+                }
+            }
+        }))
     }
 
     fn handle_refresh_complete(&mut self, new_reviews: &[ReviewComment]) -> Option<Cmd> {
         self.reviews = new_reviews.to_vec();
+        self.rebuild_filter_cache();
         self.loading = false;
         self.error = None;
         self.filter_state.clamp_cursor(self.filtered_count());
@@ -268,7 +304,7 @@ Press any key to close this help.
 impl Model for ReviewApp {
     fn init() -> (Self, Option<Cmd>) {
         // Retrieve initial data from module-level storage
-        let reviews = super::take_initial_reviews();
+        let reviews = super::get_initial_reviews();
         (Self::new(reviews), None)
     }
 
@@ -325,148 +361,6 @@ impl Model for ReviewApp {
     }
 }
 
-/// Maps a key event to an application message.
-#[expect(
-    clippy::missing_const_for_fn,
-    reason = "KeyCode match patterns prevent const evaluation"
-)]
-fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
-    use crossterm::event::KeyCode;
-
-    match key.key {
-        KeyCode::Char('q') => Some(AppMsg::Quit),
-        KeyCode::Char('j') | KeyCode::Down => Some(AppMsg::CursorDown),
-        KeyCode::Char('k') | KeyCode::Up => Some(AppMsg::CursorUp),
-        KeyCode::PageDown => Some(AppMsg::PageDown),
-        KeyCode::PageUp => Some(AppMsg::PageUp),
-        KeyCode::Home | KeyCode::Char('g') => Some(AppMsg::Home),
-        KeyCode::End | KeyCode::Char('G') => Some(AppMsg::End),
-        KeyCode::Char('f') => Some(AppMsg::CycleFilter),
-        KeyCode::Esc => Some(AppMsg::ClearFilter),
-        KeyCode::Char('r') => Some(AppMsg::RefreshRequested),
-        KeyCode::Char('?') => Some(AppMsg::ToggleHelp),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn make_reviews() -> Vec<ReviewComment> {
-        vec![
-            ReviewComment {
-                id: 1,
-                body: Some("First comment".to_owned()),
-                author: Some("alice".to_owned()),
-                file_path: Some("src/main.rs".to_owned()),
-                line_number: Some(10),
-                original_line_number: None,
-                diff_hunk: None,
-                commit_sha: None,
-                in_reply_to_id: None,
-                created_at: None,
-                updated_at: None,
-            },
-            ReviewComment {
-                id: 2,
-                body: Some("Second comment".to_owned()),
-                author: Some("bob".to_owned()),
-                file_path: Some("src/lib.rs".to_owned()),
-                line_number: Some(20),
-                original_line_number: None,
-                diff_hunk: None,
-                commit_sha: None,
-                in_reply_to_id: Some(1), // This is a reply
-                created_at: None,
-                updated_at: None,
-            },
-        ]
-    }
-
-    #[test]
-    fn new_app_has_all_reviews() {
-        let reviews = make_reviews();
-        let app = ReviewApp::new(reviews.clone());
-        assert_eq!(app.filtered_count(), 2);
-    }
-
-    #[test]
-    fn cursor_navigation_works() {
-        let reviews = make_reviews();
-        let mut app = ReviewApp::new(reviews);
-
-        assert_eq!(app.cursor_position(), 0);
-
-        app.handle_message(&AppMsg::CursorDown);
-        assert_eq!(app.cursor_position(), 1);
-
-        app.handle_message(&AppMsg::CursorDown);
-        assert_eq!(app.cursor_position(), 1); // Cannot go past end
-
-        app.handle_message(&AppMsg::CursorUp);
-        assert_eq!(app.cursor_position(), 0);
-
-        app.handle_message(&AppMsg::CursorUp);
-        assert_eq!(app.cursor_position(), 0); // Cannot go below 0
-    }
-
-    #[test]
-    fn filter_changes_preserve_valid_cursor() {
-        let reviews = make_reviews();
-        let mut app = ReviewApp::new(reviews);
-
-        app.handle_message(&AppMsg::CursorDown);
-        assert_eq!(app.cursor_position(), 1);
-
-        // Switch to unresolved filter - only 1 item matches
-        app.handle_message(&AppMsg::SetFilter(ReviewFilter::Unresolved));
-        assert_eq!(app.filtered_count(), 1);
-        assert_eq!(app.cursor_position(), 0); // Clamped to valid range
-    }
-
-    #[test]
-    fn view_renders_without_panic() {
-        let reviews = make_reviews();
-        let app = ReviewApp::new(reviews);
-        let output = app.view();
-
-        assert!(output.contains("Frankie"));
-        assert!(output.contains("Filter:"));
-        assert!(output.contains("alice"));
-    }
-
-    #[test]
-    fn quit_message_returns_quit_command() {
-        let mut app = ReviewApp::empty();
-        let cmd = app.handle_message(&AppMsg::Quit);
-        assert!(cmd.is_some());
-    }
-
-    #[test]
-    fn refresh_complete_updates_data() {
-        let mut app = ReviewApp::empty();
-        assert_eq!(app.filtered_count(), 0);
-
-        let new_reviews = make_reviews();
-        app.handle_message(&AppMsg::RefreshComplete(new_reviews));
-
-        assert_eq!(app.filtered_count(), 2);
-        assert!(!app.loading);
-    }
-
-    #[test]
-    fn toggle_help_shows_and_hides_overlay() {
-        let mut app = ReviewApp::empty();
-        assert!(!app.show_help);
-
-        app.handle_message(&AppMsg::ToggleHelp);
-        assert!(app.show_help);
-
-        let view = app.view();
-        assert!(view.contains("Keyboard Shortcuts"));
-
-        app.handle_message(&AppMsg::ToggleHelp);
-        assert!(!app.show_help);
-    }
-}
+#[path = "app_tests.rs"]
+mod tests;

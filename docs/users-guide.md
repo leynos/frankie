@@ -148,19 +148,19 @@ comments.
 
 ### Keyboard shortcuts
 
-| Key        | Action                    |
-| ---------- | ------------------------- |
-| `j`, `↓`   | Move cursor down          |
-| `k`, `↑`   | Move cursor up            |
-| `PgDn`     | Page down                 |
-| `PgUp`     | Page up                   |
-| `Home`, `g`| Go to first item          |
-| `End`, `G` | Go to last item           |
-| `f`        | Cycle filter (All/Unresolved) |
-| `Esc`      | Clear filter              |
-| `r`        | Refresh from GitHub       |
-| `?`        | Toggle help overlay       |
-| `q`        | Quit                      |
+| Key         | Action                        |
+| ----------- | ----------------------------- |
+| `j`, `↓`    | Move cursor down              |
+| `k`, `↑`    | Move cursor up                |
+| `PgDn`      | Page down                     |
+| `PgUp`      | Page up                       |
+| `Home`, `g` | Go to first item              |
+| `End`, `G`  | Go to last item               |
+| `f`         | Cycle filter (All/Unresolved) |
+| `Esc`       | Clear filter                  |
+| `r`         | Refresh from GitHub           |
+| `?`         | Toggle help overlay           |
+| `q`         | Quit                          |
 
 ### Filters
 
@@ -252,18 +252,18 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 
 ### Command-line flags
 
-| Flag                                        | Short | Description                             |
-| ------------------------------------------- | ----- | --------------------------------------- |
-| `--pr-url <URL>`                            | `-u`  | GitHub pull request URL                 |
-| `--owner <OWNER>`                           | `-o`  | Repository owner (user or organization) |
-| `--repo <REPO>`                             | `-r`  | Repository name                         |
-| `--token <TOKEN>`                           | `-t`  | Personal access token                   |
-| `--database-url <PATH>`                     | —     | Local SQLite database path              |
-| `--migrate-db`                              | —     | Run database migrations and exit        |
-| `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)         |
-| `--no-local-discovery`                      | —     | Disable automatic local Git discovery   |
-| `--tui`                                     | —     | Launch interactive TUI for review comments |
-| `--help`                                    | `-h`  | Show help information                   |
+| Flag                                        | Short | Description                                |
+| ------------------------------------------- | ----- | ------------------------------------------ |
+| `--pr-url <URL>`                            | `-u`  | GitHub pull request URL                    |
+| `--owner <OWNER>`                           | `-o`  | Repository owner (user or organization)    |
+| `--repo <REPO>`                             | `-r`  | Repository name                            |
+| `--token <TOKEN>`                           | `-t`  | Personal access token                      |
+| `--database-url <PATH>`                     | —     | Local SQLite database path                 |
+| `--migrate-db`                              | —     | Run database migrations and exit           |
+| `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)            |
+| `--no-local-discovery`                      | `-n`  | Disable automatic local Git discovery      |
+| `--tui`                                     | `-T`  | Launch interactive TUI for review comments |
+| `--help`                                    | `-h`  | Show help information                      |
 
 Run `frankie --help` to see all available options and their descriptions.
 

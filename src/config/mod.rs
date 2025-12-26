@@ -174,9 +174,9 @@ pub struct FrankieConfig {
     /// and filtering review comments on a pull request.
     ///
     /// Can be provided via:
-    /// - CLI: `--tui`
+    /// - CLI: `--tui` / `-T`
     /// - Config file: `tui = true`
-    #[ortho_config()]
+    #[ortho_config(cli_short = 'T')]
     pub tui: bool,
 }
 

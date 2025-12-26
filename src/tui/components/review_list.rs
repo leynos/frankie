@@ -5,18 +5,29 @@
 
 use crate::github::models::ReviewComment;
 
+/// Default visible height for the review list component.
+const DEFAULT_VISIBLE_HEIGHT: usize = 20;
+
 /// Component for displaying a list of review comments.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ReviewListComponent {
     /// Visible height in lines (for scrolling calculations).
     visible_height: usize,
+}
+
+impl Default for ReviewListComponent {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ReviewListComponent {
     /// Creates a new review list component.
     #[must_use]
     pub const fn new() -> Self {
-        Self { visible_height: 20 }
+        Self {
+            visible_height: DEFAULT_VISIBLE_HEIGHT,
+        }
     }
 
     /// Updates the visible height for scrolling calculations.
@@ -32,6 +43,9 @@ impl ReviewListComponent {
 
     /// Renders the review list as a string.
     ///
+    /// Only renders reviews within the visible window (based on scroll offset
+    /// and visible height) for performance with large lists.
+    ///
     /// # Arguments
     ///
     /// * `reviews` - Slice of review comments to display
@@ -42,7 +56,7 @@ impl ReviewListComponent {
         &self,
         reviews: &[&ReviewComment],
         cursor_position: usize,
-        _scroll_offset: usize,
+        scroll_offset: usize,
     ) -> String {
         if reviews.is_empty() {
             return "  No review comments match the current filter.\n".to_owned();
@@ -50,7 +64,11 @@ impl ReviewListComponent {
 
         let mut output = String::new();
 
-        for (index, review) in reviews.iter().enumerate() {
+        // Calculate visible range based on scroll offset and visible height
+        let start = scroll_offset;
+        let end = (scroll_offset + self.visible_height).min(reviews.len());
+
+        for (index, review) in reviews.iter().enumerate().skip(start).take(end - start) {
             let is_selected = index == cursor_position;
             let prefix = if is_selected { ">" } else { " " };
             let line = Self::format_review_line(review, prefix);

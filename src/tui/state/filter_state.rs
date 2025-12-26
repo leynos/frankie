@@ -12,10 +12,16 @@ pub enum ReviewFilter {
     /// Show all review comments.
     #[default]
     All,
-    /// Show only unresolved review comments.
+    /// Show only top-level (non-reply) review comments.
     ///
-    /// Note: Resolution status is determined by absence of a reply or explicit
-    /// resolution marker in the comment thread.
+    /// This filter shows comments that are not replies to other comments,
+    /// i.e., those with no `in_reply_to_id`. Top-level comments represent
+    /// the start of a review thread and are typically the primary feedback
+    /// points requiring attention.
+    ///
+    /// Note: This filter does not track actual resolution status (e.g., via
+    /// GitHub's "Resolve conversation" feature). True resolution tracking
+    /// would require additional API data not currently fetched.
     Unresolved,
     /// Show only comments on a specific file path.
     ByFile(String),
@@ -115,11 +121,7 @@ impl FilterState {
     ///
     /// If the list is empty, cursor is set to 0. If cursor exceeds the list
     /// length, it is set to the last valid index.
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "saturating_sub is not const-stable"
-    )]
-    pub fn clamp_cursor(&mut self, count: usize) {
+    pub const fn clamp_cursor(&mut self, count: usize) {
         if count == 0 {
             self.cursor_position = 0;
             self.scroll_offset = 0;
@@ -129,31 +131,19 @@ impl FilterState {
     }
 
     /// Moves the cursor up by one position if possible.
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "saturating_sub is not const-stable"
-    )]
-    pub fn cursor_up(&mut self) {
+    pub const fn cursor_up(&mut self) {
         self.cursor_position = self.cursor_position.saturating_sub(1);
     }
 
     /// Moves the cursor down by one position if within bounds.
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "saturating_add is not const-stable"
-    )]
-    pub fn cursor_down(&mut self, max_index: usize) {
+    pub const fn cursor_down(&mut self, max_index: usize) {
         if self.cursor_position < max_index {
             self.cursor_position = self.cursor_position.saturating_add(1);
         }
     }
 
     /// Moves the cursor up by a page (visible height).
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "saturating_sub is not const-stable"
-    )]
-    pub fn page_up(&mut self, page_size: usize) {
+    pub const fn page_up(&mut self, page_size: usize) {
         self.cursor_position = self.cursor_position.saturating_sub(page_size);
     }
 
@@ -180,13 +170,12 @@ impl FilterState {
 }
 
 /// Truncates a SHA to first 7 characters for display.
+///
+/// SHA strings are ASCII hex digits, but we use `get()` for safety in case
+/// the input contains unexpected characters.
 fn truncate_sha(sha: &str) -> &str {
     const SHA_DISPLAY_LEN: usize = 7;
-    if sha.len() > SHA_DISPLAY_LEN {
-        sha.get(..SHA_DISPLAY_LEN).unwrap_or(sha)
-    } else {
-        sha
-    }
+    sha.get(..SHA_DISPLAY_LEN).unwrap_or(sha)
 }
 
 #[cfg(test)]
