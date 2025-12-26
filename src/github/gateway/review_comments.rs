@@ -12,6 +12,9 @@ use super::client::build_octocrab_client;
 use super::error_mapping::map_octocrab_error;
 
 /// Fetches all review comments for a pull request.
+///
+/// This function automatically handles pagination, fetching all pages of
+/// comments from the GitHub API and combining them into a single vector.
 pub(super) async fn fetch_review_comments(
     client: &Octocrab,
     locator: &PullRequestLocator,
