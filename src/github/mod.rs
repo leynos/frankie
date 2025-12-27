@@ -17,20 +17,23 @@ pub mod repository_intake;
 pub use error::IntakeError;
 pub use gateway::{
     ListPullRequestsParams, OctocrabCachingGateway, OctocrabGateway, OctocrabRepositoryGateway,
-    PaginatedPullRequests, PullRequestGateway, PullRequestState, RepositoryGateway,
+    OctocrabReviewCommentGateway, PaginatedPullRequests, PullRequestGateway, PullRequestState,
+    RepositoryGateway, ReviewCommentGateway,
 };
 pub use intake::PullRequestIntake;
 pub use locator::{
     PersonalAccessToken, PullRequestLocator, PullRequestNumber, RepositoryLocator, RepositoryName,
     RepositoryOwner,
 };
-pub use models::{PullRequestComment, PullRequestDetails, PullRequestMetadata, PullRequestSummary};
+pub use models::{
+    PullRequestComment, PullRequestDetails, PullRequestMetadata, PullRequestSummary, ReviewComment,
+};
 pub use pagination::PageInfo;
 pub use rate_limit::RateLimitInfo;
 pub use repository_intake::RepositoryIntake;
 
 #[cfg(test)]
-pub use gateway::{MockPullRequestGateway, MockRepositoryGateway};
+pub use gateway::{MockPullRequestGateway, MockRepositoryGateway, MockReviewCommentGateway};
 
 #[cfg(test)]
 mod tests;

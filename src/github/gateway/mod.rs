@@ -11,18 +11,20 @@ mod error_mapping;
 mod http_utils;
 mod pull_request;
 mod repository;
+mod review_comments;
 
 pub use caching::OctocrabCachingGateway;
 pub use pull_request::OctocrabGateway;
 pub use repository::{
     ListPullRequestsParams, OctocrabRepositoryGateway, PaginatedPullRequests, PullRequestState,
 };
+pub use review_comments::OctocrabReviewCommentGateway;
 
 use async_trait::async_trait;
 
 use crate::github::error::IntakeError;
 use crate::github::locator::{PullRequestLocator, RepositoryLocator};
-use crate::github::models::{PullRequestComment, PullRequestMetadata};
+use crate::github::models::{PullRequestComment, PullRequestMetadata, ReviewComment};
 
 /// Gateway that can load pull request data.
 #[cfg_attr(test, mockall::automock)]
@@ -51,4 +53,15 @@ pub trait RepositoryGateway: Send + Sync {
         locator: &RepositoryLocator,
         params: &ListPullRequestsParams,
     ) -> Result<PaginatedPullRequests, IntakeError>;
+}
+
+/// Gateway for fetching PR review comments.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ReviewCommentGateway: Send + Sync {
+    /// Fetch all review comments for the pull request.
+    async fn list_review_comments(
+        &self,
+        locator: &PullRequestLocator,
+    ) -> Result<Vec<ReviewComment>, IntakeError>;
 }

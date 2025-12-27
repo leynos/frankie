@@ -225,6 +225,16 @@ impl PullRequestLocator {
             self.number.get()
         )
     }
+
+    /// Returns the API path for listing PR review comments.
+    pub(crate) fn review_comments_path(&self) -> String {
+        format!(
+            "/repos/{}/{}/pulls/{}/comments",
+            self.owner.as_str(),
+            self.repository.as_str(),
+            self.number.get()
+        )
+    }
 }
 
 /// Parsed repository URL with derived API base.

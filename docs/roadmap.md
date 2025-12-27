@@ -55,7 +55,7 @@ context.
 
 ### Step: Review listing and filtering
 
-- [ ] Build review listing view with filters (all, unresolved, by file, by
+- [x] Build review listing view with filters (all, unresolved, by file, by
       reviewer, by commit range); acceptance: filters execute without full
       reloads, retain cursor position, and are covered by state update tests.
 - [ ] Implement incremental sync to keep review lists up to date; acceptance:
