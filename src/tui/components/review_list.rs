@@ -8,6 +8,22 @@ use crate::github::models::ReviewComment;
 /// Default visible height for the review list component.
 const DEFAULT_VISIBLE_HEIGHT: usize = 20;
 
+/// Context for rendering the review list view.
+///
+/// Bundles the data needed to render a filtered list of reviews without
+/// requiring per-frame allocations.
+#[derive(Debug, Clone)]
+pub struct ReviewListViewContext<'a> {
+    /// Full slice of all review comments.
+    pub reviews: &'a [ReviewComment],
+    /// Indices of reviews matching the current filter.
+    pub filtered_indices: &'a [usize],
+    /// Current cursor position (0-indexed).
+    pub cursor_position: usize,
+    /// Number of lines scrolled from top.
+    pub scroll_offset: usize,
+}
+
 /// Component for displaying a list of review comments.
 #[derive(Debug, Clone)]
 pub struct ReviewListComponent {
@@ -46,30 +62,31 @@ impl ReviewListComponent {
     /// Only renders reviews within the visible window (based on scroll offset
     /// and visible height) for performance with large lists.
     ///
-    /// # Arguments
-    ///
-    /// * `reviews` - Slice of review comments to display
-    /// * `cursor_position` - Current cursor position (0-indexed)
-    /// * `scroll_offset` - Number of lines scrolled from top
+    /// This method accepts a context containing the full reviews slice and
+    /// filtered indices, avoiding per-frame allocation.
     #[must_use]
-    pub fn view(
-        &self,
-        reviews: &[&ReviewComment],
-        cursor_position: usize,
-        scroll_offset: usize,
-    ) -> String {
-        if reviews.is_empty() {
+    pub fn view(&self, ctx: &ReviewListViewContext<'_>) -> String {
+        if ctx.filtered_indices.is_empty() {
             return "  No review comments match the current filter.\n".to_owned();
         }
 
         let mut output = String::new();
 
         // Calculate visible range based on scroll offset and visible height
-        let start = scroll_offset;
-        let end = (scroll_offset + self.visible_height).min(reviews.len());
+        let start = ctx.scroll_offset;
+        let end = (ctx.scroll_offset + self.visible_height).min(ctx.filtered_indices.len());
 
-        for (index, review) in reviews.iter().enumerate().skip(start).take(end - start) {
-            let is_selected = index == cursor_position;
+        for (display_index, &review_index) in ctx
+            .filtered_indices
+            .iter()
+            .enumerate()
+            .skip(start)
+            .take(end - start)
+        {
+            let Some(review) = ctx.reviews.get(review_index) else {
+                continue;
+            };
+            let is_selected = display_index == ctx.cursor_position;
             let prefix = if is_selected { ">" } else { " " };
             let line = Self::format_review_line(review, prefix);
             output.push_str(&line);
@@ -171,8 +188,15 @@ mod tests {
     #[test]
     fn view_shows_empty_message_when_no_reviews() {
         let component = ReviewListComponent::new();
-        let review_list: Vec<&ReviewComment> = vec![];
-        let output = component.view(&review_list, 0, 0);
+        let reviews: Vec<ReviewComment> = vec![];
+        let filtered_indices: Vec<usize> = vec![];
+        let ctx = ReviewListViewContext {
+            reviews: &reviews,
+            filtered_indices: &filtered_indices,
+            cursor_position: 0,
+            scroll_offset: 0,
+        };
+        let output = component.view(&ctx);
         assert!(output.contains("No review comments"));
     }
 
@@ -188,10 +212,17 @@ mod tests {
             .line(20)
             .body("Looks good")
             .build();
-        let review_list: Vec<&ReviewComment> = vec![&first, &second];
+        let reviews = vec![first, second];
+        let filtered_indices = vec![0, 1];
 
         let component = ReviewListComponent::new();
-        let output = component.view(&review_list, 1, 0);
+        let ctx = ReviewListViewContext {
+            reviews: &reviews,
+            filtered_indices: &filtered_indices,
+            cursor_position: 1,
+            scroll_offset: 0,
+        };
+        let output = component.view(&ctx);
 
         // First line should not have cursor
         assert!(output.contains("  [alice]"));

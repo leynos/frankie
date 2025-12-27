@@ -68,8 +68,10 @@ fn filter_changes_preserve_valid_cursor() {
     app.handle_message(&AppMsg::CursorDown);
     assert_eq!(app.cursor_position(), 1);
 
-    // Switch to unresolved filter - only 1 item matches
-    app.handle_message(&AppMsg::SetFilter(ReviewFilter::Unresolved));
+    // Switch to ByFile filter - only 1 item matches (src/main.rs)
+    app.handle_message(&AppMsg::SetFilter(ReviewFilter::ByFile(
+        "src/main.rs".to_owned(),
+    )));
     assert_eq!(app.filtered_count(), 1);
     assert_eq!(app.cursor_position(), 0); // Clamped to valid range
 }

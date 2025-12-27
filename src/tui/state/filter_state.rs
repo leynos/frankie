@@ -12,16 +12,17 @@ pub enum ReviewFilter {
     /// Show all review comments.
     #[default]
     All,
-    /// Show only top-level (non-reply) review comments.
+    /// Show only unresolved review comments (root comments without replies).
     ///
-    /// This filter shows comments that are not replies to other comments,
-    /// i.e., those with no `in_reply_to_id`. Top-level comments represent
-    /// the start of a review thread and are typically the primary feedback
-    /// points requiring attention.
+    /// A comment is considered unresolved if it meets both conditions:
+    /// 1. It is a root comment (has no `in_reply_to_id`)
+    /// 2. It has no replies (no other comment has `in_reply_to_id` pointing to it)
     ///
-    /// Note: This filter does not track actual resolution status (e.g., via
-    /// GitHub's "Resolve conversation" feature). True resolution tracking
-    /// would require additional API data not currently fetched.
+    /// This approximates "unresolved" as "unanswered thread starters". Comments
+    /// that have received at least one reply are considered addressed.
+    ///
+    /// Note: This filter does not track GitHub's explicit "Resolve conversation"
+    /// feature, which requires additional API data not currently fetched.
     Unresolved,
     /// Show only comments on a specific file path.
     ByFile(String),
@@ -54,15 +55,25 @@ impl ReviewFilter {
     }
 
     /// Returns true if this filter matches the given review comment.
+    ///
+    /// The `all_reviews` parameter is required for filters that need thread
+    /// analysis (e.g., `Unresolved` checks if a comment has replies).
     #[must_use]
-    pub fn matches(&self, review: &ReviewComment) -> bool {
+    pub fn matches(&self, review: &ReviewComment, all_reviews: &[ReviewComment]) -> bool {
         match self {
             Self::All => true,
             Self::Unresolved => {
-                // A comment is considered unresolved if it has no reply.
-                // This is a simplification; real resolution tracking would
-                // require thread analysis.
-                review.in_reply_to_id.is_none()
+                // A comment is unresolved if:
+                // 1. It is a root comment (not a reply to another comment)
+                // 2. It has no replies (no comment in the collection replies to it)
+                let is_root = review.in_reply_to_id.is_none();
+                if !is_root {
+                    return false;
+                }
+                let has_replies = all_reviews
+                    .iter()
+                    .any(|r| r.in_reply_to_id == Some(review.id));
+                !has_replies
             }
             Self::ByFile(path) => review.file_path.as_ref().is_some_and(|p| p == path),
             Self::ByReviewer(name) => review.author.as_ref().is_some_and(|a| a == name),
@@ -104,7 +115,7 @@ impl FilterState {
     pub fn apply_filter<'a>(&self, reviews: &'a [ReviewComment]) -> Vec<&'a ReviewComment> {
         reviews
             .iter()
-            .filter(|review| self.active_filter.matches(review))
+            .filter(|review| self.active_filter.matches(review, reviews))
             .collect()
     }
 
@@ -201,33 +212,47 @@ mod tests {
     #[test]
     fn filter_all_matches_everything() {
         let review = make_review(1, Some("alice"), Some("src/main.rs"));
-        assert!(ReviewFilter::All.matches(&review));
+        let reviews = [review.clone()];
+        assert!(ReviewFilter::All.matches(&review, &reviews));
     }
 
     #[test]
     fn filter_by_file_matches_correct_path() {
         let review = make_review(1, Some("alice"), Some("src/main.rs"));
-        assert!(ReviewFilter::ByFile("src/main.rs".to_owned()).matches(&review));
-        assert!(!ReviewFilter::ByFile("src/lib.rs".to_owned()).matches(&review));
+        let reviews = [review.clone()];
+        assert!(ReviewFilter::ByFile("src/main.rs".to_owned()).matches(&review, &reviews));
+        assert!(!ReviewFilter::ByFile("src/lib.rs".to_owned()).matches(&review, &reviews));
     }
 
     #[test]
     fn filter_by_reviewer_matches_correct_author() {
         let review = make_review(1, Some("alice"), Some("src/main.rs"));
-        assert!(ReviewFilter::ByReviewer("alice".to_owned()).matches(&review));
-        assert!(!ReviewFilter::ByReviewer("bob".to_owned()).matches(&review));
+        let reviews = [review.clone()];
+        assert!(ReviewFilter::ByReviewer("alice".to_owned()).matches(&review, &reviews));
+        assert!(!ReviewFilter::ByReviewer("bob".to_owned()).matches(&review, &reviews));
     }
 
     #[test]
-    fn filter_unresolved_matches_root_comments() {
-        let root = make_review(1, Some("alice"), Some("src/main.rs"));
-        let reply = ReviewComment {
-            in_reply_to_id: Some(1),
-            ..make_review(2, Some("bob"), Some("src/main.rs"))
+    fn filter_unresolved_matches_unanswered_root_comments() {
+        let root_unanswered = make_review(1, Some("alice"), Some("src/main.rs"));
+        let root_answered = make_review(2, Some("alice"), Some("src/lib.rs"));
+        let reply_to_root2 = ReviewComment {
+            in_reply_to_id: Some(2),
+            ..make_review(3, Some("bob"), Some("src/lib.rs"))
         };
 
-        assert!(ReviewFilter::Unresolved.matches(&root));
-        assert!(!ReviewFilter::Unresolved.matches(&reply));
+        let reviews = [
+            root_unanswered.clone(),
+            root_answered.clone(),
+            reply_to_root2.clone(),
+        ];
+
+        // Root comment with no replies is unresolved
+        assert!(ReviewFilter::Unresolved.matches(&root_unanswered, &reviews));
+        // Root comment with a reply is NOT unresolved (it has been answered)
+        assert!(!ReviewFilter::Unresolved.matches(&root_answered, &reviews));
+        // Reply comments are never considered unresolved
+        assert!(!ReviewFilter::Unresolved.matches(&reply_to_root2, &reviews));
     }
 
     #[test]

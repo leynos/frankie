@@ -10,7 +10,7 @@ use bubbletea_rs::{Cmd, Model};
 
 use crate::github::models::ReviewComment;
 
-use super::components::ReviewListComponent;
+use super::components::{ReviewListComponent, ReviewListViewContext};
 use super::input::map_key_to_message;
 use super::messages::AppMsg;
 use super::state::{FilterState, ReviewFilter};
@@ -84,7 +84,11 @@ impl ReviewApp {
             .reviews
             .iter()
             .enumerate()
-            .filter(|(_, review)| self.filter_state.active_filter.matches(review))
+            .filter(|(_, review)| {
+                self.filter_state
+                    .active_filter
+                    .matches(review, &self.reviews)
+            })
             .map(|(i, _)| i)
             .collect();
     }
@@ -346,12 +350,13 @@ impl Model for ReviewApp {
         output.push_str(&self.render_filter_bar());
         output.push('\n');
 
-        let filtered = self.filtered_reviews();
-        let list_view = self.review_list.view(
-            &filtered,
-            self.filter_state.cursor_position,
-            self.filter_state.scroll_offset,
-        );
+        let ctx = ReviewListViewContext {
+            reviews: &self.reviews,
+            filtered_indices: &self.filtered_indices,
+            cursor_position: self.filter_state.cursor_position,
+            scroll_offset: self.filter_state.scroll_offset,
+        };
+        let list_view = self.review_list.view(&ctx);
         output.push_str(&list_view);
 
         output.push('\n');

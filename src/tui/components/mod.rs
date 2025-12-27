@@ -5,4 +5,4 @@
 
 mod review_list;
 
-pub use review_list::ReviewListComponent;
+pub use review_list::{ReviewListComponent, ReviewListViewContext};
