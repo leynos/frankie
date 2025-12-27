@@ -32,12 +32,21 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     let reviews = gateway.list_review_comments(&locator).await?;
 
     // Store reviews in global state for Model::init() to retrieve.
-    // If already set (e.g. re-running TUI in same process), this is a no-op
-    // and the existing data remains.
-    let _ = set_initial_reviews(reviews);
+    // Returns false if already set (e.g. re-running TUI in same process).
+    let review_count = reviews.len();
+    if !set_initial_reviews(reviews) {
+        return Err(IntakeError::Api {
+            message: format!(
+                "TUI already initialised with reviews from a previous run. \
+                 Cannot proceed with {review_count} newly fetched review(s) as stale data may be displayed. \
+                 Restart the process to view fresh data."
+            ),
+        });
+    }
 
     // Store refresh context for the refresh feature.
-    // Same semantics as above: if already set, we keep the existing context.
+    // Returns false if already set; this is non-fatal since refresh will
+    // simply use the existing context (which may reference a different PR).
     let _ = set_refresh_context(locator, token);
 
     // Run the TUI program
