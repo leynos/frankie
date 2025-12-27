@@ -15,6 +15,24 @@ use super::error_mapping::map_octocrab_error;
 ///
 /// This function automatically handles pagination, fetching all pages of
 /// comments from the GitHub API and combining them into a single vector.
+///
+/// # Errors
+///
+/// Returns [`IntakeError`] when any of the following conditions occur:
+///
+/// - **Network/HTTP failures**: Connection errors, timeouts, or other transport
+///   issues when communicating with the GitHub API.
+/// - **Authentication/authorization errors**: Invalid or expired personal access
+///   token, or insufficient permissions to access the repository.
+/// - **Rate limiting**: GitHub API rate limit exceeded, requiring the caller to
+///   wait before retrying.
+/// - **Pagination failures**: Errors encountered while fetching subsequent pages
+///   of results via [`Octocrab::all_pages`].
+/// - **Deserialization errors**: Malformed JSON responses or unexpected response
+///   structure from the GitHub API.
+///
+/// All errors are propagated from the underlying Octocrab HTTP client and mapped
+/// to [`IntakeError`] via [`map_octocrab_error`].
 pub(super) async fn fetch_review_comments(
     client: &Octocrab,
     locator: &PullRequestLocator,
