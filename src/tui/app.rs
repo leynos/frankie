@@ -191,6 +191,16 @@ impl ReviewApp {
         None
     }
 
+    /// Cycles the active filter between `All` and `Unresolved`.
+    ///
+    /// This method only toggles between the two primary filter modes:
+    /// - From `All` → switches to `Unresolved`
+    /// - From any other filter (including `ByFile`, `ByReviewer`, `ByCommitRange`)
+    ///   → resets to `All`
+    ///
+    /// This simplified cycling is intentional: other filter variants require
+    /// parameters (file path, reviewer name, commit range) that cannot be
+    /// cycled through without additional user input.
     fn handle_cycle_filter(&mut self) -> Option<Cmd> {
         let next_filter = match &self.filter_state.active_filter {
             ReviewFilter::All => ReviewFilter::Unresolved,

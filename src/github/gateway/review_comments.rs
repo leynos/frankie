@@ -150,4 +150,40 @@ mod tests {
             Some("2025-01-02T00:00:00Z")
         );
     }
+
+    #[rstest]
+    #[case::all_optional_fields_null(json!({
+        "id": 789,
+        "body": null,
+        "user": null,
+        "path": null,
+        "line": null,
+        "original_line": null,
+        "diff_hunk": null,
+        "commit_id": null,
+        "in_reply_to_id": null,
+        "created_at": null,
+        "updated_at": null
+    }))]
+    #[case::optional_fields_absent(json!({
+        "id": 789
+    }))]
+    fn api_review_comment_deserialises_with_missing_optional_fields(
+        #[case] value: serde_json::Value,
+    ) {
+        let comment: ApiReviewComment =
+            serde_json::from_value(value).expect("should deserialise with missing fields");
+
+        assert_eq!(comment.id, 789);
+        assert!(comment.body.is_none());
+        assert!(comment.user.is_none());
+        assert!(comment.path.is_none());
+        assert!(comment.line.is_none());
+        assert!(comment.original_line.is_none());
+        assert!(comment.diff_hunk.is_none());
+        assert!(comment.commit_id.is_none());
+        assert!(comment.in_reply_to_id.is_none());
+        assert!(comment.created_at.is_none());
+        assert!(comment.updated_at.is_none());
+    }
 }

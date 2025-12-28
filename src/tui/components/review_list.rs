@@ -131,58 +131,48 @@ fn truncate_body(body: &str, max_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+    use rstest::{fixture, rstest};
+
     use super::*;
 
-    /// Test fixture for creating review comments.
-    struct ReviewBuilder {
+    /// Creates a review comment with common defaults for testing.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Test helper function intentionally accepts many parameters for flexible test data construction"
+    )]
+    fn make_review(
         id: u64,
-        author: String,
-        file_path: String,
+        author: &str,
+        file_path: &str,
         line_number: u32,
-        body: String,
+        body: &str,
+    ) -> ReviewComment {
+        ReviewComment {
+            id,
+            body: Some(body.to_owned()),
+            author: Some(author.to_owned()),
+            file_path: Some(file_path.to_owned()),
+            line_number: Some(line_number),
+            original_line_number: None,
+            diff_hunk: None,
+            commit_sha: None,
+            in_reply_to_id: None,
+            created_at: None,
+            updated_at: None,
+        }
     }
 
-    impl ReviewBuilder {
-        fn new(id: u64, author: &str) -> Self {
-            Self {
-                id,
-                author: author.to_owned(),
-                file_path: "src/main.rs".to_owned(),
-                line_number: 1,
-                body: "comment".to_owned(),
-            }
-        }
+    #[fixture]
+    fn two_reviews() -> Vec<ReviewComment> {
+        vec![
+            make_review(1, "alice", "src/main.rs", 10, "Fix this"),
+            make_review(2, "bob", "src/lib.rs", 20, "Looks good"),
+        ]
+    }
 
-        fn file(mut self, path: &str) -> Self {
-            self.file_path = path.to_owned();
-            self
-        }
-
-        fn line(mut self, num: u32) -> Self {
-            self.line_number = num;
-            self
-        }
-
-        fn body(mut self, text: &str) -> Self {
-            self.body = text.to_owned();
-            self
-        }
-
-        fn build(self) -> ReviewComment {
-            ReviewComment {
-                id: self.id,
-                body: Some(self.body),
-                author: Some(self.author),
-                file_path: Some(self.file_path),
-                line_number: Some(self.line_number),
-                original_line_number: None,
-                diff_hunk: None,
-                commit_sha: None,
-                in_reply_to_id: None,
-                created_at: None,
-                updated_at: None,
-            }
-        }
+    #[fixture]
+    fn sample_review() -> ReviewComment {
+        make_review(1, "alice", "src/main.rs", 42, "Consider refactoring")
     }
 
     #[test]
@@ -200,24 +190,13 @@ mod tests {
         assert!(output.contains("No review comments"));
     }
 
-    #[test]
-    fn view_shows_cursor_indicator() {
-        let first = ReviewBuilder::new(1, "alice")
-            .file("src/main.rs")
-            .line(10)
-            .body("Fix this")
-            .build();
-        let second = ReviewBuilder::new(2, "bob")
-            .file("src/lib.rs")
-            .line(20)
-            .body("Looks good")
-            .build();
-        let reviews = vec![first, second];
+    #[rstest]
+    fn view_shows_cursor_indicator(two_reviews: Vec<ReviewComment>) {
         let filtered_indices = vec![0, 1];
 
         let component = ReviewListComponent::new();
         let ctx = ReviewListViewContext {
-            reviews: &reviews,
+            reviews: &two_reviews,
             filtered_indices: &filtered_indices,
             cursor_position: 1,
             scroll_offset: 0,
@@ -230,14 +209,9 @@ mod tests {
         assert!(output.contains("> [bob]"));
     }
 
-    #[test]
-    fn format_review_line_includes_all_fields() {
-        let comment = ReviewBuilder::new(1, "alice")
-            .file("src/main.rs")
-            .line(42)
-            .body("Consider refactoring")
-            .build();
-        let line = ReviewListComponent::format_review_line(&comment, " ");
+    #[rstest]
+    fn format_review_line_includes_all_fields(sample_review: ReviewComment) {
+        let line = ReviewListComponent::format_review_line(&sample_review, " ");
 
         assert!(line.contains("[alice]"));
         assert!(line.contains("src/main.rs"));

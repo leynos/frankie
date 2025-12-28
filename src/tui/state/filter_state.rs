@@ -191,8 +191,11 @@ fn truncate_sha(sha: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+    use rstest::{fixture, rstest};
+
     use super::*;
 
+    /// Creates a review comment with configurable author and file path.
     fn make_review(id: u64, author: Option<&str>, file: Option<&str>) -> ReviewComment {
         ReviewComment {
             id,
@@ -209,27 +212,33 @@ mod tests {
         }
     }
 
-    #[test]
-    fn filter_all_matches_everything() {
-        let review = make_review(1, Some("alice"), Some("src/main.rs"));
-        let reviews = [review.clone()];
-        assert!(ReviewFilter::All.matches(&review, &reviews));
+    #[fixture]
+    fn alice_main_review() -> ReviewComment {
+        make_review(1, Some("alice"), Some("src/main.rs"))
     }
 
-    #[test]
-    fn filter_by_file_matches_correct_path() {
-        let review = make_review(1, Some("alice"), Some("src/main.rs"));
-        let reviews = [review.clone()];
-        assert!(ReviewFilter::ByFile("src/main.rs".to_owned()).matches(&review, &reviews));
-        assert!(!ReviewFilter::ByFile("src/lib.rs".to_owned()).matches(&review, &reviews));
+    #[rstest]
+    fn filter_all_matches_everything(alice_main_review: ReviewComment) {
+        let reviews = [alice_main_review.clone()];
+        assert!(ReviewFilter::All.matches(&alice_main_review, &reviews));
     }
 
-    #[test]
-    fn filter_by_reviewer_matches_correct_author() {
-        let review = make_review(1, Some("alice"), Some("src/main.rs"));
-        let reviews = [review.clone()];
-        assert!(ReviewFilter::ByReviewer("alice".to_owned()).matches(&review, &reviews));
-        assert!(!ReviewFilter::ByReviewer("bob".to_owned()).matches(&review, &reviews));
+    #[rstest]
+    fn filter_by_file_matches_correct_path(alice_main_review: ReviewComment) {
+        let reviews = [alice_main_review.clone()];
+        assert!(
+            ReviewFilter::ByFile("src/main.rs".to_owned()).matches(&alice_main_review, &reviews)
+        );
+        assert!(
+            !ReviewFilter::ByFile("src/lib.rs".to_owned()).matches(&alice_main_review, &reviews)
+        );
+    }
+
+    #[rstest]
+    fn filter_by_reviewer_matches_correct_author(alice_main_review: ReviewComment) {
+        let reviews = [alice_main_review.clone()];
+        assert!(ReviewFilter::ByReviewer("alice".to_owned()).matches(&alice_main_review, &reviews));
+        assert!(!ReviewFilter::ByReviewer("bob".to_owned()).matches(&alice_main_review, &reviews));
     }
 
     #[test]

@@ -1,8 +1,11 @@
 //! Tests for the review TUI application model.
 
+use rstest::{fixture, rstest};
+
 use super::*;
 
-fn make_reviews() -> Vec<ReviewComment> {
+#[fixture]
+fn sample_reviews() -> Vec<ReviewComment> {
     vec![
         ReviewComment {
             id: 1,
@@ -33,17 +36,15 @@ fn make_reviews() -> Vec<ReviewComment> {
     ]
 }
 
-#[test]
-fn new_app_has_all_reviews() {
-    let reviews = make_reviews();
-    let app = ReviewApp::new(reviews.clone());
+#[rstest]
+fn new_app_has_all_reviews(sample_reviews: Vec<ReviewComment>) {
+    let app = ReviewApp::new(sample_reviews);
     assert_eq!(app.filtered_count(), 2);
 }
 
-#[test]
-fn cursor_navigation_works() {
-    let reviews = make_reviews();
-    let mut app = ReviewApp::new(reviews);
+#[rstest]
+fn cursor_navigation_works(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
 
     assert_eq!(app.cursor_position(), 0);
 
@@ -60,10 +61,9 @@ fn cursor_navigation_works() {
     assert_eq!(app.cursor_position(), 0); // Cannot go below 0
 }
 
-#[test]
-fn filter_changes_preserve_valid_cursor() {
-    let reviews = make_reviews();
-    let mut app = ReviewApp::new(reviews);
+#[rstest]
+fn filter_changes_preserve_valid_cursor(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
 
     app.handle_message(&AppMsg::CursorDown);
     assert_eq!(app.cursor_position(), 1);
@@ -76,10 +76,9 @@ fn filter_changes_preserve_valid_cursor() {
     assert_eq!(app.cursor_position(), 0); // Clamped to valid range
 }
 
-#[test]
-fn view_renders_without_panic() {
-    let reviews = make_reviews();
-    let app = ReviewApp::new(reviews);
+#[rstest]
+fn view_renders_without_panic(sample_reviews: Vec<ReviewComment>) {
+    let app = ReviewApp::new(sample_reviews);
     let output = app.view();
 
     assert!(output.contains("Frankie"));
@@ -94,13 +93,12 @@ fn quit_message_returns_quit_command() {
     assert!(cmd.is_some());
 }
 
-#[test]
-fn refresh_complete_updates_data() {
+#[rstest]
+fn refresh_complete_updates_data(sample_reviews: Vec<ReviewComment>) {
     let mut app = ReviewApp::empty();
     assert_eq!(app.filtered_count(), 0);
 
-    let new_reviews = make_reviews();
-    app.handle_message(&AppMsg::RefreshComplete(new_reviews));
+    app.handle_message(&AppMsg::RefreshComplete(sample_reviews));
 
     assert_eq!(app.filtered_count(), 2);
     assert!(!app.loading);
