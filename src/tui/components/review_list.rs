@@ -135,44 +135,66 @@ mod tests {
 
     use super::*;
 
-    /// Creates a review comment with common defaults for testing.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Test helper function intentionally accepts many parameters for flexible test data construction"
-    )]
-    fn make_review(
+    /// Builder for creating test review comments with struct initialization syntax.
+    #[derive(Default)]
+    struct ReviewBuilder {
         id: u64,
-        author: &str,
-        file_path: &str,
-        line_number: u32,
-        body: &str,
-    ) -> ReviewComment {
-        ReviewComment {
-            id,
-            body: Some(body.to_owned()),
-            author: Some(author.to_owned()),
-            file_path: Some(file_path.to_owned()),
-            line_number: Some(line_number),
-            original_line_number: None,
-            diff_hunk: None,
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: None,
-            updated_at: None,
+        author: Option<String>,
+        file_path: Option<String>,
+        line_number: Option<u32>,
+        body: Option<String>,
+    }
+
+    impl ReviewBuilder {
+        fn build(self) -> ReviewComment {
+            ReviewComment {
+                id: self.id,
+                body: self.body,
+                author: self.author,
+                file_path: self.file_path,
+                line_number: self.line_number,
+                original_line_number: None,
+                diff_hunk: None,
+                commit_sha: None,
+                in_reply_to_id: None,
+                created_at: None,
+                updated_at: None,
+            }
         }
     }
 
     #[fixture]
     fn two_reviews() -> Vec<ReviewComment> {
         vec![
-            make_review(1, "alice", "src/main.rs", 10, "Fix this"),
-            make_review(2, "bob", "src/lib.rs", 20, "Looks good"),
+            ReviewBuilder {
+                id: 1,
+                author: Some("alice".to_owned()),
+                file_path: Some("src/main.rs".to_owned()),
+                line_number: Some(10),
+                body: Some("Fix this".to_owned()),
+            }
+            .build(),
+            ReviewBuilder {
+                id: 2,
+                author: Some("bob".to_owned()),
+                file_path: Some("src/lib.rs".to_owned()),
+                line_number: Some(20),
+                body: Some("Looks good".to_owned()),
+            }
+            .build(),
         ]
     }
 
     #[fixture]
     fn sample_review() -> ReviewComment {
-        make_review(1, "alice", "src/main.rs", 42, "Consider refactoring")
+        ReviewBuilder {
+            id: 1,
+            author: Some("alice".to_owned()),
+            file_path: Some("src/main.rs".to_owned()),
+            line_number: Some(42),
+            body: Some("Consider refactoring".to_owned()),
+        }
+        .build()
     }
 
     #[test]
