@@ -194,9 +194,10 @@ impl From<ApiReviewComment> for ReviewComment {
 
 #[cfg(test)]
 mod tests {
+    use rstest::{fixture, rstest};
     use serde_json::json;
 
-    use super::{ApiPullRequestSummary, ApiUser, PullRequestSummary};
+    use super::{ApiPullRequestSummary, ApiReviewComment, ApiUser, PullRequestSummary};
 
     #[test]
     fn api_pull_request_summary_deserializes_from_json() {
@@ -242,5 +243,104 @@ mod tests {
         assert_eq!(summary.author.as_deref(), Some("alice"));
         assert_eq!(summary.created_at, None);
         assert_eq!(summary.updated_at.as_deref(), Some("2025-01-03T00:00:00Z"));
+    }
+
+    #[fixture]
+    fn sample_api_review_comment() -> ApiReviewComment {
+        let value = json!({
+            "id": 456,
+            "body": "Consider using a constant here.",
+            "user": { "login": "reviewer" },
+            "path": "src/main.rs",
+            "line": 42,
+            "original_line": 40,
+            "diff_hunk": "@@ -38,6 +38,8 @@\n+    let x = 1;",
+            "commit_id": "abc123",
+            "in_reply_to_id": null,
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-02T00:00:00Z"
+        });
+        serde_json::from_value(value).expect("ApiReviewComment should deserialise")
+    }
+
+    #[rstest]
+    fn api_review_comment_deserialises_core_fields(sample_api_review_comment: ApiReviewComment) {
+        assert_eq!(sample_api_review_comment.id, 456);
+        assert_eq!(
+            sample_api_review_comment.body.as_deref(),
+            Some("Consider using a constant here.")
+        );
+        assert_eq!(
+            sample_api_review_comment
+                .user
+                .as_ref()
+                .and_then(|u| u.login.as_deref()),
+            Some("reviewer")
+        );
+        assert_eq!(
+            sample_api_review_comment.path.as_deref(),
+            Some("src/main.rs")
+        );
+        assert_eq!(sample_api_review_comment.line, Some(42));
+        assert_eq!(sample_api_review_comment.original_line, Some(40));
+    }
+
+    #[rstest]
+    fn api_review_comment_deserialises_metadata_fields(
+        sample_api_review_comment: ApiReviewComment,
+    ) {
+        assert_eq!(
+            sample_api_review_comment.commit_id.as_deref(),
+            Some("abc123")
+        );
+        assert!(sample_api_review_comment.in_reply_to_id.is_none());
+        assert_eq!(
+            sample_api_review_comment.diff_hunk.as_deref(),
+            Some("@@ -38,6 +38,8 @@\n+    let x = 1;")
+        );
+        assert_eq!(
+            sample_api_review_comment.created_at.as_deref(),
+            Some("2025-01-01T00:00:00Z")
+        );
+        assert_eq!(
+            sample_api_review_comment.updated_at.as_deref(),
+            Some("2025-01-02T00:00:00Z")
+        );
+    }
+
+    #[rstest]
+    #[case::all_optional_fields_null(json!({
+        "id": 789,
+        "body": null,
+        "user": null,
+        "path": null,
+        "line": null,
+        "original_line": null,
+        "diff_hunk": null,
+        "commit_id": null,
+        "in_reply_to_id": null,
+        "created_at": null,
+        "updated_at": null
+    }))]
+    #[case::optional_fields_absent(json!({
+        "id": 789
+    }))]
+    fn api_review_comment_deserialises_with_missing_optional_fields(
+        #[case] value: serde_json::Value,
+    ) {
+        let comment: ApiReviewComment =
+            serde_json::from_value(value).expect("should deserialise with missing fields");
+
+        assert_eq!(comment.id, 789);
+        assert!(comment.body.is_none());
+        assert!(comment.user.is_none());
+        assert!(comment.path.is_none());
+        assert!(comment.line.is_none());
+        assert!(comment.original_line.is_none());
+        assert!(comment.diff_hunk.is_none());
+        assert!(comment.commit_id.is_none());
+        assert!(comment.in_reply_to_id.is_none());
+        assert!(comment.created_at.is_none());
+        assert!(comment.updated_at.is_none());
     }
 }
