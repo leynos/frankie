@@ -31,7 +31,7 @@ crossterm = "0.29"
 frankie = { path = ".", features = ["test-support"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"
-rstest = "0.22.0"
+rstest = "0.26.1"
 rstest-bdd = "0.2.0"
 rstest-bdd-macros = { version = "0.2.0", features = ["compile-time-validation"] }
 tempfile = "3.15.0"
