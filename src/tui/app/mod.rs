@@ -3,9 +3,13 @@
 //! This module provides the core application state and update logic for the
 //! review listing TUI. It coordinates between components, manages filter state,
 //! and handles async data loading.
+//!
+//! # Module Structure
+//!
+//! - `rendering`: View rendering methods for terminal output
+//! - `sync_handlers`: Background sync and refresh handling
 
 use std::any::Any;
-use std::time::Duration;
 
 use bubbletea_rs::{Cmd, Model};
 
@@ -16,32 +20,32 @@ use super::input::map_key_to_message;
 use super::messages::AppMsg;
 use super::state::{FilterState, ReviewFilter};
 
-/// Default interval between background syncs.
-const SYNC_INTERVAL: Duration = Duration::from_secs(30);
+mod rendering;
+mod sync_handlers;
 
 /// Main application model for the review listing TUI.
 #[derive(Debug, Clone)]
 pub struct ReviewApp {
     /// All review comments (unfiltered).
-    reviews: Vec<ReviewComment>,
+    pub(crate) reviews: Vec<ReviewComment>,
     /// Cached indices of reviews matching the current filter.
     /// Invalidated when reviews or filter change.
     filtered_indices: Vec<usize>,
     /// Filter and cursor state.
-    filter_state: FilterState,
+    pub(crate) filter_state: FilterState,
     /// Whether data is currently loading.
-    loading: bool,
+    pub(crate) loading: bool,
     /// Current error message, if any.
-    error: Option<String>,
+    pub(crate) error: Option<String>,
     /// Terminal dimensions.
     width: u16,
     height: u16,
     /// Whether help overlay is visible.
-    show_help: bool,
+    pub(crate) show_help: bool,
     /// Review list component.
     review_list: ReviewListComponent,
     /// ID of the currently selected comment, used to restore cursor after sync.
-    selected_comment_id: Option<u64>,
+    pub(crate) selected_comment_id: Option<u64>,
 }
 
 impl ReviewApp {
@@ -91,7 +95,7 @@ impl ReviewApp {
     }
 
     /// Rebuilds the filtered indices cache based on the current filter.
-    fn rebuild_filter_cache(&mut self) {
+    pub(crate) fn rebuild_filter_cache(&mut self) {
         self.filtered_indices = self
             .reviews
             .iter()
@@ -127,14 +131,14 @@ impl ReviewApp {
     }
 
     /// Finds the filtered index for a comment by ID.
-    fn find_filtered_index_by_id(&self, id: u64) -> Option<usize> {
+    pub(crate) fn find_filtered_index_by_id(&self, id: u64) -> Option<usize> {
         self.filtered_indices
             .iter()
             .position(|&idx| self.reviews.get(idx).is_some_and(|r| r.id == id))
     }
 
     /// Updates the selected comment ID from the current cursor position.
-    fn update_selected_id(&mut self) {
+    pub(crate) fn update_selected_id(&mut self) {
         self.selected_comment_id = self.current_selected_id();
     }
 
@@ -252,9 +256,9 @@ impl ReviewApp {
     /// Cycles the active filter between `All` and `Unresolved`.
     ///
     /// This method only toggles between the two primary filter modes:
-    /// - From `All` → switches to `Unresolved`
+    /// - From `All` -> switches to `Unresolved`
     /// - From any other filter (including `ByFile`, `ByReviewer`, `ByCommitRange`)
-    ///   → resets to `All`
+    ///   -> resets to `All`
     ///
     /// This simplified cycling is intentional: other filter variants require
     /// parameters (file path, reviewer name, commit range) that cannot be
@@ -270,68 +274,7 @@ impl ReviewApp {
         None
     }
 
-    // Data loading handlers
-
-    /// Handles a manual refresh request by delegating to sync logic.
-    ///
-    /// This ensures consistent behaviour between manual refresh and
-    /// background sync, including selection preservation.
-    fn handle_refresh_requested(&mut self) -> Option<Cmd> {
-        // Delegate to sync tick for consistent behaviour
-        self.handle_sync_tick()
-    }
-
-    /// Applies new reviews with incremental merge and selection preservation.
-    ///
-    /// This is the shared logic for both manual refresh and background sync:
-    /// 1. Captures current selection by ID
-    /// 2. Merges reviews using ID-based tracking
-    /// 3. Rebuilds filter cache
-    /// 4. Restores selection by ID, or clamps if deleted
-    /// 5. Clears loading state and error
-    fn apply_new_reviews(&mut self, new_reviews: &[ReviewComment]) {
-        // Capture current selection
-        let selected_id = self.selected_comment_id;
-
-        // Merge reviews using incremental sync
-        let merge_result = super::sync::merge_reviews(&self.reviews, new_reviews.to_vec());
-        self.reviews = merge_result.reviews;
-
-        // Rebuild filter cache
-        self.rebuild_filter_cache();
-
-        // Restore selection by ID, or clamp if deleted
-        if let Some(id) = selected_id {
-            if let Some(new_index) = self.find_filtered_index_by_id(id) {
-                self.filter_state.cursor_position = new_index;
-            } else {
-                self.filter_state.clamp_cursor(self.filtered_count());
-            }
-        }
-
-        // Update selected_comment_id to match new cursor position
-        self.update_selected_id();
-
-        self.loading = false;
-        self.error = None;
-    }
-
-    /// Handles legacy refresh complete (for backward compatibility).
-    fn handle_refresh_complete(&mut self, new_reviews: &[ReviewComment]) -> Option<Cmd> {
-        self.apply_new_reviews(new_reviews);
-        None
-    }
-
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "Returns Option<Cmd> for consistency with other message handlers"
-    )]
-    fn handle_refresh_failed(&mut self, error_msg: &str) -> Option<Cmd> {
-        self.loading = false;
-        self.error = Some(error_msg.to_owned());
-        // Re-arm the sync timer so that transient failures don't stop periodic sync
-        Some(Self::arm_sync_timer())
-    }
+    // Window event handlers
 
     fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
         self.width = width;
@@ -339,132 +282,6 @@ impl ReviewApp {
         let list_height = height.saturating_sub(4) as usize;
         self.review_list.set_visible_height(list_height);
         None
-    }
-
-    // Background sync handlers
-
-    /// Handles a background sync timer tick.
-    ///
-    /// Skips the sync if already loading to prevent duplicate requests.
-    /// Returns a command that fetches reviews and records timing.
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "Returns Option<Cmd> for consistency with other message handlers"
-    )]
-    fn handle_sync_tick(&mut self) -> Option<Cmd> {
-        // Don't start new sync if already loading
-        if self.loading {
-            return Some(Self::arm_sync_timer());
-        }
-
-        self.loading = true;
-        self.error = None;
-
-        Some(Box::pin(async {
-            let start = std::time::Instant::now();
-            match super::fetch_reviews().await {
-                Ok(reviews) => {
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "Latency over u64::MAX milliseconds is unrealistic"
-                    )]
-                    let latency_ms = start.elapsed().as_millis() as u64;
-                    Some(Box::new(AppMsg::SyncComplete {
-                        reviews,
-                        latency_ms,
-                    }) as Box<dyn Any + Send>)
-                }
-                Err(error) => {
-                    Some(Box::new(AppMsg::RefreshFailed(error.to_string())) as Box<dyn Any + Send>)
-                }
-            }
-        }))
-    }
-
-    /// Handles successful sync completion with incremental merge.
-    ///
-    /// Delegates to `apply_new_reviews` for the merge/selection logic,
-    /// then records telemetry and re-arms the sync timer.
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "Returns Option<Cmd> for consistency with other message handlers"
-    )]
-    fn handle_sync_complete(
-        &mut self,
-        new_reviews: &[ReviewComment],
-        latency_ms: u64,
-    ) -> Option<Cmd> {
-        self.apply_new_reviews(new_reviews);
-
-        // Log telemetry
-        super::record_sync_telemetry(latency_ms, self.reviews.len(), true);
-
-        // Re-arm sync timer
-        Some(Self::arm_sync_timer())
-    }
-
-    /// Creates a command that triggers a sync tick after the sync interval.
-    fn arm_sync_timer() -> Cmd {
-        Box::pin(async {
-            tokio::time::sleep(SYNC_INTERVAL).await;
-            Some(Box::new(AppMsg::SyncTick) as Box<dyn Any + Send>)
-        })
-    }
-
-    /// Renders the header bar.
-    fn render_header(&self) -> String {
-        let title = "Frankie - Review Comments";
-        let loading_indicator = if self.loading { " [Loading...]" } else { "" };
-        format!("{title}{loading_indicator}\n")
-    }
-
-    /// Renders the filter bar showing active filter.
-    fn render_filter_bar(&self) -> String {
-        let label = self.filter_state.active_filter.label();
-        let count = self.filtered_count();
-        let total = self.reviews.len();
-        format!("Filter: {label} ({count}/{total})\n")
-    }
-
-    /// Renders the status bar with help hints.
-    fn render_status_bar(&self) -> String {
-        if let Some(error) = &self.error {
-            return format!("Error: {error}\n");
-        }
-
-        let hints = "j/k:navigate  f:filter  r:refresh  ?:help  q:quit";
-        format!("{hints}\n")
-    }
-
-    /// Renders the help overlay if visible.
-    fn render_help_overlay(&self) -> String {
-        if !self.show_help {
-            return String::new();
-        }
-
-        let help_text = r"
-=== Keyboard Shortcuts ===
-
-Navigation:
-  j, Down    Move cursor down
-  k, Up      Move cursor up
-  PgDn       Page down
-  PgUp       Page up
-  Home, g    Go to first item
-  End, G     Go to last item
-
-Filtering:
-  f          Cycle filter (All/Unresolved)
-  Esc        Clear filter
-
-Other:
-  r          Refresh from GitHub
-  ?          Toggle this help
-  q          Quit
-
-Press any key to close this help.
-";
-        help_text.to_owned()
     }
 }
 
@@ -535,5 +352,5 @@ impl Model for ReviewApp {
 }
 
 #[cfg(test)]
-#[path = "app_tests.rs"]
+#[path = "tests.rs"]
 mod tests;

@@ -3,26 +3,21 @@
 use rstest::{fixture, rstest};
 
 use super::*;
+use crate::github::models::test_support::minimal_review;
 
 #[fixture]
 fn sample_reviews() -> Vec<ReviewComment> {
     vec![
         ReviewComment {
-            id: 1,
-            body: Some("First comment".to_owned()),
-            author: Some("alice".to_owned()),
             file_path: Some("src/main.rs".to_owned()),
             line_number: Some(10),
-            ..Default::default()
+            ..minimal_review(1, "First comment", "alice")
         },
         ReviewComment {
-            id: 2,
-            body: Some("Second comment".to_owned()),
-            author: Some("bob".to_owned()),
             file_path: Some("src/lib.rs".to_owned()),
             line_number: Some(20),
             in_reply_to_id: Some(1), // This is a reply
-            ..Default::default()
+            ..minimal_review(2, "Second comment", "bob")
         },
     ]
 }
@@ -162,12 +157,7 @@ fn sync_complete_adds_new_comments(sample_reviews: Vec<ReviewComment>) {
 
     // Add a third comment
     let mut with_new = sample_reviews;
-    with_new.push(ReviewComment {
-        id: 3,
-        body: Some("Third comment".to_owned()),
-        author: Some("charlie".to_owned()),
-        ..Default::default()
-    });
+    with_new.push(minimal_review(3, "Third comment", "charlie"));
 
     app.handle_message(&AppMsg::SyncComplete {
         reviews: with_new,

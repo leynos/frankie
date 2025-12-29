@@ -6,6 +6,9 @@
 
 use serde::Deserialize;
 
+#[cfg(feature = "test-support")]
+pub mod test_support;
+
 /// Minimal pull request metadata used by the CLI.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PullRequestMetadata {

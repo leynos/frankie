@@ -87,33 +87,9 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use super::*;
-
-    // --- Review construction helpers ---
-
-    /// Constructs a minimal `ReviewComment` with only id, body, and author set.
-    fn minimal_review(id: u64, body: &str, author: &str) -> ReviewComment {
-        ReviewComment {
-            id,
-            body: Some(body.to_owned()),
-            author: Some(author.to_owned()),
-            file_path: None,
-            line_number: None,
-            original_line_number: None,
-            diff_hunk: None,
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: None,
-            updated_at: None,
-        }
-    }
-
-    /// Clones a `ReviewComment` with a different ID.
-    fn review_with_different_id(base: &ReviewComment, new_id: u64) -> ReviewComment {
-        ReviewComment {
-            id: new_id,
-            ..base.clone()
-        }
-    }
+    use crate::github::models::test_support::{
+        minimal_review, review_with_different_id, review_with_id,
+    };
 
     #[fixture]
     fn base_review() -> ReviewComment {
@@ -122,10 +98,6 @@ mod tests {
             line_number: Some(10),
             ..minimal_review(1, "Test comment", "alice")
         }
-    }
-
-    fn review_with_id(id: u64) -> ReviewComment {
-        minimal_review(id, &format!("Comment {id}"), "alice")
     }
 
     // --- Assertion helpers ---
