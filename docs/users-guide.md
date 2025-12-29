@@ -170,9 +170,9 @@ During a background sync:
 - New comments are added to the list
 - Updated comments are refreshed
 - Deleted comments are removed
-- Your current selection is preserved (unless the selected comment was deleted)
+- The current selection is preserved (unless the selected comment was deleted)
 
-A `[Loading...]` indicator appears in the header during sync. Manual refresh
+A `[Loading…]` indicator appears in the header during sync. Manual refresh
 with `r` uses the same incremental sync logic.
 
 ### Filters

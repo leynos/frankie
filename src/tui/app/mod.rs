@@ -154,43 +154,69 @@ impl ReviewApp {
     /// Handles a message and updates state accordingly.
     ///
     /// This method is the core update function that processes all application
-    /// messages and returns any resulting commands.
+    /// messages and returns any resulting commands. It delegates to specialised
+    /// handlers for each message category to keep cyclomatic complexity low.
     pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        if msg.is_navigation() {
+            return self.handle_navigation_msg(msg);
+        }
+        if msg.is_filter() {
+            return self.handle_filter_msg(msg);
+        }
+        if msg.is_data() {
+            return self.handle_data_msg(msg);
+        }
+        self.handle_lifecycle_msg(msg)
+    }
+
+    /// Dispatches navigation messages to their handlers.
+    fn handle_navigation_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
         match msg {
-            // Navigation
             AppMsg::CursorUp => self.handle_cursor_up(),
             AppMsg::CursorDown => self.handle_cursor_down(),
             AppMsg::PageUp => self.handle_page_up(),
             AppMsg::PageDown => self.handle_page_down(),
             AppMsg::Home => self.handle_home(),
             AppMsg::End => self.handle_end(),
+            _ => None,
+        }
+    }
 
-            // Filter changes
+    /// Dispatches filter messages to their handlers.
+    fn handle_filter_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
             AppMsg::SetFilter(filter) => self.handle_set_filter(filter),
             AppMsg::ClearFilter => self.handle_clear_filter(),
             AppMsg::CycleFilter => self.handle_cycle_filter(),
+            _ => None,
+        }
+    }
 
-            // Data loading
+    /// Dispatches data loading and sync messages to their handlers.
+    fn handle_data_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
             AppMsg::RefreshRequested => self.handle_refresh_requested(),
             AppMsg::RefreshComplete(new_reviews) => self.handle_refresh_complete(new_reviews),
             AppMsg::RefreshFailed(error_msg) => self.handle_refresh_failed(error_msg),
-
-            // Background sync
             AppMsg::SyncTick => self.handle_sync_tick(),
             AppMsg::SyncComplete {
                 reviews,
                 latency_ms,
             } => self.handle_sync_complete(reviews, *latency_ms),
+            _ => None,
+        }
+    }
 
-            // Application lifecycle
+    /// Dispatches lifecycle and window messages to their handlers.
+    fn handle_lifecycle_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
             AppMsg::Quit => Some(bubbletea_rs::quit()),
             AppMsg::ToggleHelp => {
                 self.show_help = !self.show_help;
                 None
             }
-
-            // Window events
             AppMsg::WindowResized { width, height } => self.handle_resize(*width, *height),
+            _ => None,
         }
     }
 

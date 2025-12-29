@@ -2812,7 +2812,7 @@ flowchart LR
     N --> W
 ```
 
-#### ADR-001: Incremental Sync for Review Comments
+#### ADR-001: incremental sync for review comments
 
 **Context**: The TUI needs to keep review comments up to date without losing the
 user's current selection or requiring manual refresh.

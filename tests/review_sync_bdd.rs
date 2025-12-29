@@ -128,19 +128,9 @@ fn when_sync_completes_with_latency(sync_state: &SyncState, latency_ms: u64, cou
 // Then steps
 
 #[then("the cursor remains on comment {id:u64}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
-fn then_cursor_on_comment(sync_state: &SyncState, id: u64) {
-    let actual_id = sync_state
-        .app
-        .with_ref(ReviewApp::current_selected_id)
-        .expect("app not initialised");
-
-    assert_eq!(actual_id, Some(id), "cursor should be on comment {id}");
-}
-
 #[then("the cursor is on comment {id:u64}")]
 #[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
-fn then_cursor_is_on_comment(sync_state: &SyncState, id: u64) {
+fn then_cursor_on_comment(sync_state: &SyncState, id: u64) {
     let actual_id = sync_state
         .app
         .with_ref(ReviewApp::current_selected_id)
