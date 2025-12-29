@@ -13,12 +13,7 @@ fn sample_reviews() -> Vec<ReviewComment> {
             author: Some("alice".to_owned()),
             file_path: Some("src/main.rs".to_owned()),
             line_number: Some(10),
-            original_line_number: None,
-            diff_hunk: None,
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: None,
-            updated_at: None,
+            ..Default::default()
         },
         ReviewComment {
             id: 2,
@@ -26,12 +21,8 @@ fn sample_reviews() -> Vec<ReviewComment> {
             author: Some("bob".to_owned()),
             file_path: Some("src/lib.rs".to_owned()),
             line_number: Some(20),
-            original_line_number: None,
-            diff_hunk: None,
-            commit_sha: None,
             in_reply_to_id: Some(1), // This is a reply
-            created_at: None,
-            updated_at: None,
+            ..Default::default()
         },
     ]
 }
@@ -203,4 +194,25 @@ fn navigation_updates_selected_id(sample_reviews: Vec<ReviewComment>) {
 
     app.handle_message(&AppMsg::Home);
     assert_eq!(app.current_selected_id(), Some(1));
+}
+
+#[rstest]
+fn sync_complete_clamps_cursor_when_all_comments_removed(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+
+    // Move cursor to ensure we start from a non-zero position in a non-empty list
+    app.handle_message(&AppMsg::CursorDown);
+    assert!(app.filtered_count() > 0);
+    assert!(app.current_selected_id().is_some());
+
+    // Sync with an empty list of reviews (all comments removed)
+    app.handle_message(&AppMsg::SyncComplete {
+        reviews: Vec::new(),
+        latency_ms: 50,
+    });
+
+    // Cursor and selection should be reset/clamped for the empty list
+    assert_eq!(app.filtered_count(), 0);
+    assert_eq!(app.cursor_position(), 0);
+    assert!(app.current_selected_id().is_none());
 }

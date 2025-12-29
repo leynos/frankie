@@ -138,6 +138,15 @@ impl ReviewApp {
         self.selected_comment_id = self.current_selected_id();
     }
 
+    /// Clamps the cursor to valid bounds and updates the selected comment ID.
+    ///
+    /// This helper centralises the common pattern of clamping the cursor after
+    /// filter changes and then updating the tracked selection.
+    fn clamp_cursor_and_update_selection(&mut self) {
+        self.filter_state.clamp_cursor(self.filtered_count());
+        self.update_selected_id();
+    }
+
     /// Handles a message and updates state accordingly.
     ///
     /// This method is the core update function that processes all application
@@ -229,16 +238,14 @@ impl ReviewApp {
     fn handle_set_filter(&mut self, filter: &ReviewFilter) -> Option<Cmd> {
         self.filter_state.active_filter = filter.clone();
         self.rebuild_filter_cache();
-        self.filter_state.clamp_cursor(self.filtered_count());
-        self.update_selected_id();
+        self.clamp_cursor_and_update_selection();
         None
     }
 
     fn handle_clear_filter(&mut self) -> Option<Cmd> {
         self.filter_state.active_filter = ReviewFilter::All;
         self.rebuild_filter_cache();
-        self.filter_state.clamp_cursor(self.filtered_count());
-        self.update_selected_id();
+        self.clamp_cursor_and_update_selection();
         None
     }
 
@@ -259,8 +266,7 @@ impl ReviewApp {
         };
         self.filter_state.active_filter = next_filter;
         self.rebuild_filter_cache();
-        self.filter_state.clamp_cursor(self.filtered_count());
-        self.update_selected_id();
+        self.clamp_cursor_and_update_selection();
         None
     }
 
@@ -275,11 +281,15 @@ impl ReviewApp {
         self.handle_sync_tick()
     }
 
-    /// Handles legacy refresh complete (for backward compatibility).
+    /// Applies new reviews with incremental merge and selection preservation.
     ///
-    /// Uses the same incremental merge and selection preservation logic
-    /// as `handle_sync_complete`.
-    fn handle_refresh_complete(&mut self, new_reviews: &[ReviewComment]) -> Option<Cmd> {
+    /// This is the shared logic for both manual refresh and background sync:
+    /// 1. Captures current selection by ID
+    /// 2. Merges reviews using ID-based tracking
+    /// 3. Rebuilds filter cache
+    /// 4. Restores selection by ID, or clamps if deleted
+    /// 5. Clears loading state and error
+    fn apply_new_reviews(&mut self, new_reviews: &[ReviewComment]) {
         // Capture current selection
         let selected_id = self.selected_comment_id;
 
@@ -299,16 +309,28 @@ impl ReviewApp {
             }
         }
 
+        // Update selected_comment_id to match new cursor position
         self.update_selected_id();
+
         self.loading = false;
         self.error = None;
+    }
+
+    /// Handles legacy refresh complete (for backward compatibility).
+    fn handle_refresh_complete(&mut self, new_reviews: &[ReviewComment]) -> Option<Cmd> {
+        self.apply_new_reviews(new_reviews);
         None
     }
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "Returns Option<Cmd> for consistency with other message handlers"
+    )]
     fn handle_refresh_failed(&mut self, error_msg: &str) -> Option<Cmd> {
         self.loading = false;
         self.error = Some(error_msg.to_owned());
-        None
+        // Re-arm the sync timer so that transient failures don't stop periodic sync
+        Some(Self::arm_sync_timer())
     }
 
     fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
@@ -361,9 +383,8 @@ impl ReviewApp {
 
     /// Handles successful sync completion with incremental merge.
     ///
-    /// Preserves the current selection by tracking comment ID rather than
-    /// cursor position. If the selected comment was deleted, clamps the
-    /// cursor to a valid position.
+    /// Delegates to `apply_new_reviews` for the merge/selection logic,
+    /// then records telemetry and re-arms the sync timer.
     #[expect(
         clippy::unnecessary_wraps,
         reason = "Returns Option<Cmd> for consistency with other message handlers"
@@ -373,31 +394,7 @@ impl ReviewApp {
         new_reviews: &[ReviewComment],
         latency_ms: u64,
     ) -> Option<Cmd> {
-        // Capture current selection
-        let selected_id = self.selected_comment_id;
-
-        // Merge reviews using incremental sync
-        let merge_result = super::sync::merge_reviews(&self.reviews, new_reviews.to_vec());
-        self.reviews = merge_result.reviews;
-
-        // Rebuild filter cache
-        self.rebuild_filter_cache();
-
-        // Restore selection by ID, or clamp if deleted
-        if let Some(id) = selected_id {
-            if let Some(new_index) = self.find_filtered_index_by_id(id) {
-                self.filter_state.cursor_position = new_index;
-            } else {
-                // Selected comment was deleted; clamp cursor
-                self.filter_state.clamp_cursor(self.filtered_count());
-            }
-        }
-
-        // Update selected_comment_id to match new cursor position
-        self.update_selected_id();
-
-        self.loading = false;
-        self.error = None;
+        self.apply_new_reviews(new_reviews);
 
         // Log telemetry
         super::record_sync_telemetry(latency_ms, self.reviews.len(), true);

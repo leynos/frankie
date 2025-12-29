@@ -24,6 +24,8 @@ fn sync_state() -> SyncState {
 #[given("a recording telemetry sink")]
 fn given_recording_telemetry_sink(sync_state: &SyncState) {
     let sink = Arc::new(RecordingTelemetrySink::default());
+    // Wire the sink into the global TUI telemetry so handle_sync_complete records to it
+    frankie::tui::set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
     sync_state.telemetry_sink.set(sink);
 }
 
@@ -109,20 +111,9 @@ fn when_sync_completes_without_comment(sync_state: &SyncState, count: usize, exc
 fn when_sync_completes_with_latency(sync_state: &SyncState, latency_ms: u64, count: usize) {
     let reviews = create_reviews(count);
 
-    // Record telemetry manually since we're not running the full app
-    let sink = sync_state
-        .telemetry_sink
-        .with_ref(Clone::clone)
-        .expect("telemetry sink not initialised");
-
-    sink.record(TelemetryEvent::SyncLatencyRecorded {
-        latency_ms,
-        comment_count: count,
-        incremental: true,
-    });
-
     sync_state.last_latency_ms.set(latency_ms);
 
+    // Telemetry is now recorded by handle_sync_complete via the wired sink
     sync_state
         .app
         .with_mut(|app| {
