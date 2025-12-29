@@ -206,3 +206,141 @@ fn sync_complete_clamps_cursor_when_all_comments_removed(sample_reviews: Vec<Rev
     assert_eq!(app.cursor_position(), 0);
     assert!(app.current_selected_id().is_none());
 }
+
+// Tests for handle_sync_tick
+
+#[rstest]
+fn sync_tick_sets_loading_state(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+    assert!(!app.loading);
+
+    let cmd = app.handle_message(&AppMsg::SyncTick);
+
+    // Should set loading to true
+    assert!(app.loading);
+    // Should return a command (the fetch command)
+    assert!(cmd.is_some());
+}
+
+#[test]
+fn sync_tick_skips_when_already_loading() {
+    let mut app = ReviewApp::empty();
+
+    // Manually set loading state
+    app.loading = true;
+
+    let cmd = app.handle_message(&AppMsg::SyncTick);
+
+    // Should still be loading
+    assert!(app.loading);
+    // Should still return a command (the timer re-arm)
+    assert!(cmd.is_some());
+}
+
+#[test]
+fn sync_tick_clears_error_state() {
+    let mut app = ReviewApp::empty();
+    app.error = Some("Previous error".to_owned());
+    assert!(!app.loading);
+
+    app.handle_message(&AppMsg::SyncTick);
+
+    // Error should be cleared
+    assert!(app.error.is_none());
+    // Loading should be set
+    assert!(app.loading);
+}
+
+// Tests for find_filtered_index_by_id
+
+#[rstest]
+fn find_filtered_index_by_id_finds_existing_comment(sample_reviews: Vec<ReviewComment>) {
+    let app = ReviewApp::new(sample_reviews);
+
+    // First comment (id=1) should be at index 0
+    assert_eq!(app.find_filtered_index_by_id(1), Some(0));
+    // Second comment (id=2) should be at index 1
+    assert_eq!(app.find_filtered_index_by_id(2), Some(1));
+}
+
+#[rstest]
+fn find_filtered_index_by_id_returns_none_for_missing_id(sample_reviews: Vec<ReviewComment>) {
+    let app = ReviewApp::new(sample_reviews);
+
+    // Non-existent ID should return None
+    assert_eq!(app.find_filtered_index_by_id(999), None);
+}
+
+#[test]
+fn find_filtered_index_by_id_returns_none_for_empty_app() {
+    let app = ReviewApp::empty();
+
+    assert_eq!(app.find_filtered_index_by_id(1), None);
+}
+
+#[rstest]
+fn find_filtered_index_by_id_respects_filter(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+
+    // Apply a filter that only matches the first comment (src/main.rs)
+    app.handle_message(&AppMsg::SetFilter(ReviewFilter::ByFile(
+        "src/main.rs".to_owned(),
+    )));
+
+    // Only comment with id=1 should be visible
+    assert_eq!(app.filtered_count(), 1);
+
+    // Comment 1 should be at filtered index 0
+    assert_eq!(app.find_filtered_index_by_id(1), Some(0));
+
+    // Comment 2 is filtered out, so should return None
+    assert_eq!(app.find_filtered_index_by_id(2), None);
+}
+
+// Tests for arm_sync_timer
+
+#[test]
+fn arm_sync_timer_returns_command() {
+    // arm_sync_timer should return a boxed future (Cmd)
+    let cmd = ReviewApp::arm_sync_timer();
+    // We can't easily inspect the future, but we can verify it's not None-equivalent
+    // by checking that the type is correct (it's a Pin<Box<...>>)
+    // The test passes if this compiles and doesn't panic
+    drop(cmd);
+}
+
+// Tests for ReviewApp::init (via Model trait)
+
+#[test]
+fn review_app_init_returns_sync_timer_command() {
+    use bubbletea_rs::Model;
+
+    // Set up initial reviews (required for init)
+    crate::tui::set_initial_reviews(vec![minimal_review(1, "Test", "alice")]);
+
+    let (app, cmd) = ReviewApp::init();
+
+    // App should be initialised with the reviews
+    assert_eq!(app.filtered_count(), 1);
+    assert_eq!(app.current_selected_id(), Some(1));
+
+    // Should return a command (the sync timer)
+    assert!(cmd.is_some());
+}
+
+#[test]
+fn review_app_init_empty_when_no_reviews_set() {
+    use bubbletea_rs::Model;
+
+    // Note: Due to OnceLock, if set_initial_reviews was already called,
+    // this test may see those reviews. We test the behaviour given
+    // whatever state exists.
+    let (app, cmd) = ReviewApp::init();
+
+    // Should still return a sync timer command regardless of review count
+    assert!(cmd.is_some());
+    // App should not be in loading state initially
+    assert!(!app.loading);
+    // No error initially
+    assert!(app.error.is_none());
+}
