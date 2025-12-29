@@ -46,6 +46,8 @@ pub enum OperationMode {
     RepositoryListing,
     /// Interactive repository discovery (future).
     Interactive,
+    /// Interactive TUI for reviewing PR comments.
+    ReviewTui,
 }
 
 /// Application configuration supporting CLI, environment, and file sources.
@@ -165,6 +167,17 @@ pub struct FrankieConfig {
     /// because `ortho_config` does not load boolean values from the environment.
     #[ortho_config(cli_short = 'n')]
     pub no_local_discovery: bool,
+
+    /// Enables interactive TUI mode for reviewing PR comments.
+    ///
+    /// When set, Frankie launches a terminal user interface for navigating
+    /// and filtering review comments on a pull request.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--tui` / `-T`
+    /// - Config file: `tui = true`
+    #[ortho_config(cli_short = 'T')]
+    pub tui: bool,
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
@@ -180,6 +193,7 @@ impl Default for FrankieConfig {
             migrate_db: false,
             pr_metadata_cache_ttl_seconds: DEFAULT_PR_METADATA_CACHE_TTL_SECONDS,
             no_local_discovery: false,
+            tui: false,
         }
     }
 }
@@ -216,11 +230,14 @@ impl FrankieConfig {
 
     /// Determines the operation mode based on provided configuration.
     ///
-    /// Returns `SinglePullRequest` if a PR URL is provided, `RepositoryListing`
-    /// if both owner and repo are provided, or `Interactive` otherwise.
+    /// Returns `ReviewTui` if TUI mode is enabled with a PR URL, `SinglePullRequest`
+    /// if a PR URL is provided without TUI, `RepositoryListing` if both owner and
+    /// repo are provided, or `Interactive` otherwise.
     #[must_use]
     pub const fn operation_mode(&self) -> OperationMode {
-        if self.pr_url.is_some() {
+        if self.tui && self.pr_url.is_some() {
+            OperationMode::ReviewTui
+        } else if self.pr_url.is_some() {
             OperationMode::SinglePullRequest
         } else if self.owner.is_some() && self.repo.is_some() {
             OperationMode::RepositoryListing

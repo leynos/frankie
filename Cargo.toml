@@ -22,6 +22,11 @@ tokio = { version = "1.41.1", features = ["macros", "rt-multi-thread"] }
 url = "2.5.4"
 git2 = "0.20.3"
 
+# TUI framework
+bubbletea-rs = "0.0.9"
+bubbletea-widgets = "0.1.12"
+crossterm = "0.29"
+
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
 env-lock = "0.1.0"

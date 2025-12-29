@@ -9,12 +9,14 @@ pub mod github;
 pub mod local;
 pub mod persistence;
 pub mod telemetry;
+pub mod tui;
 
 pub use config::{FrankieConfig, OperationMode};
 pub use github::{
     IntakeError, ListPullRequestsParams, OctocrabCachingGateway, OctocrabGateway,
-    OctocrabRepositoryGateway, PageInfo, PaginatedPullRequests, PersonalAccessToken,
-    PullRequestDetails, PullRequestIntake, PullRequestLocator, PullRequestState,
-    PullRequestSummary, RateLimitInfo, RepositoryIntake, RepositoryLocator,
+    OctocrabRepositoryGateway, OctocrabReviewCommentGateway, PageInfo, PaginatedPullRequests,
+    PersonalAccessToken, PullRequestDetails, PullRequestIntake, PullRequestLocator,
+    PullRequestState, PullRequestSummary, RateLimitInfo, RepositoryIntake, RepositoryLocator,
+    ReviewComment, ReviewCommentGateway,
 };
 pub use local::{GitHubOrigin, LocalDiscoveryError, LocalRepository, discover_repository};
