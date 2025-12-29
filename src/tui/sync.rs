@@ -130,38 +130,49 @@ mod tests {
 
     // --- Assertion helpers ---
 
+    /// Expected counts for merge result assertions.
+    #[derive(Debug, Clone, Copy)]
+    struct ExpectedCounts {
+        reviews: usize,
+        added: usize,
+        updated: usize,
+        removed: usize,
+    }
+
+    impl ExpectedCounts {
+        fn new(reviews: usize, added: usize, updated: usize, removed: usize) -> Self {
+            Self {
+                reviews,
+                added,
+                updated,
+                removed,
+            }
+        }
+    }
+
     /// Asserts that a `MergeResult` has the expected review count and change counts.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Test helper groups related assertions; parameters map directly to MergeResult fields"
-    )]
-    fn assert_merge_result(
-        result: &MergeResult,
-        expected_len: usize,
-        expected_added: usize,
-        expected_updated: usize,
-        expected_removed: usize,
-    ) {
+    fn assert_merge_result(result: &MergeResult, expected: ExpectedCounts) {
         assert_eq!(
             result.reviews.len(),
-            expected_len,
-            "review count mismatch: expected {expected_len}, got {}",
+            expected.reviews,
+            "review count mismatch: expected {}, got {}",
+            expected.reviews,
             result.reviews.len()
         );
         assert_eq!(
-            result.added, expected_added,
-            "added count mismatch: expected {expected_added}, got {}",
-            result.added
+            result.added, expected.added,
+            "added count mismatch: expected {}, got {}",
+            expected.added, result.added
         );
         assert_eq!(
-            result.updated, expected_updated,
-            "updated count mismatch: expected {expected_updated}, got {}",
-            result.updated
+            result.updated, expected.updated,
+            "updated count mismatch: expected {}, got {}",
+            expected.updated, result.updated
         );
         assert_eq!(
-            result.removed, expected_removed,
-            "removed count mismatch: expected {expected_removed}, got {}",
-            result.removed
+            result.removed, expected.removed,
+            "removed count mismatch: expected {}, got {}",
+            expected.removed, result.removed
         );
     }
 
@@ -183,7 +194,7 @@ mod tests {
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_merge_result(&result, 1, 0, 1, 0);
+        assert_merge_result(&result, ExpectedCounts::new(1, 0, 1, 0));
     }
 
     #[rstest]
@@ -194,7 +205,7 @@ mod tests {
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_merge_result(&result, 2, 1, 1, 0);
+        assert_merge_result(&result, ExpectedCounts::new(2, 1, 1, 0));
     }
 
     #[rstest]
@@ -205,7 +216,7 @@ mod tests {
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_merge_result(&result, 1, 0, 1, 1);
+        assert_merge_result(&result, ExpectedCounts::new(1, 0, 1, 1));
     }
 
     #[rstest]
@@ -223,7 +234,7 @@ mod tests {
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_merge_result(&result, 1, 0, 1, 0);
+        assert_merge_result(&result, ExpectedCounts::new(1, 0, 1, 0));
         assert_eq!(result.reviews[0].body, Some("Updated body".to_owned()));
     }
 
@@ -247,7 +258,7 @@ mod tests {
 
         let result = merge_reviews(&[], vec![r1, r2]);
 
-        assert_merge_result(&result, 2, 2, 0, 0);
+        assert_merge_result(&result, ExpectedCounts::new(2, 2, 0, 0));
     }
 
     #[rstest]
@@ -256,7 +267,7 @@ mod tests {
 
         let result = merge_reviews(&existing, vec![]);
 
-        assert_merge_result(&result, 0, 0, 0, 1);
+        assert_merge_result(&result, ExpectedCounts::new(0, 0, 0, 1));
     }
 
     #[rstest]
@@ -268,7 +279,7 @@ mod tests {
 
         let result = merge_reviews(&[old1, old2], vec![new1, new2]);
 
-        assert_merge_result(&result, 2, 2, 0, 2);
+        assert_merge_result(&result, ExpectedCounts::new(2, 2, 0, 2));
         assert_review_ids(&result, &[3, 4]);
     }
 }
