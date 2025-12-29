@@ -5,6 +5,7 @@
 //! and handles async data loading.
 
 use std::any::Any;
+use std::time::Duration;
 
 use bubbletea_rs::{Cmd, Model};
 
@@ -14,6 +15,9 @@ use super::components::{ReviewListComponent, ReviewListViewContext};
 use super::input::map_key_to_message;
 use super::messages::AppMsg;
 use super::state::{FilterState, ReviewFilter};
+
+/// Default interval between background syncs.
+const SYNC_INTERVAL: Duration = Duration::from_secs(30);
 
 /// Main application model for the review listing TUI.
 #[derive(Debug, Clone)]
@@ -36,6 +40,8 @@ pub struct ReviewApp {
     show_help: bool,
     /// Review list component.
     review_list: ReviewListComponent,
+    /// ID of the currently selected comment, used to restore cursor after sync.
+    selected_comment_id: Option<u64>,
 }
 
 impl ReviewApp {
@@ -43,7 +49,12 @@ impl ReviewApp {
     #[must_use]
     pub fn new(reviews: Vec<ReviewComment>) -> Self {
         // Build initial cache with all indices (default filter is All)
-        let filtered_indices = (0..reviews.len()).collect();
+        let filtered_indices: Vec<usize> = (0..reviews.len()).collect();
+        // Track ID of first comment for selection preservation
+        let selected_comment_id = filtered_indices
+            .first()
+            .and_then(|&i| reviews.get(i))
+            .map(|r| r.id);
         Self {
             reviews,
             filtered_indices,
@@ -54,6 +65,7 @@ impl ReviewApp {
             height: 24,
             show_help: false,
             review_list: ReviewListComponent::new(),
+            selected_comment_id,
         }
     }
 
@@ -105,8 +117,32 @@ impl ReviewApp {
         &self.filter_state.active_filter
     }
 
+    /// Returns the ID of the currently selected comment, if any.
+    #[must_use]
+    pub fn current_selected_id(&self) -> Option<u64> {
+        self.filtered_indices
+            .get(self.filter_state.cursor_position)
+            .and_then(|&idx| self.reviews.get(idx))
+            .map(|r| r.id)
+    }
+
+    /// Finds the filtered index for a comment by ID.
+    fn find_filtered_index_by_id(&self, id: u64) -> Option<usize> {
+        self.filtered_indices
+            .iter()
+            .position(|&idx| self.reviews.get(idx).is_some_and(|r| r.id == id))
+    }
+
+    /// Updates the selected comment ID from the current cursor position.
+    fn update_selected_id(&mut self) {
+        self.selected_comment_id = self.current_selected_id();
+    }
+
     /// Handles a message and updates state accordingly.
-    fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+    ///
+    /// This method is the core update function that processes all application
+    /// messages and returns any resulting commands.
+    pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
         match msg {
             // Navigation
             AppMsg::CursorUp => self.handle_cursor_up(),
@@ -126,6 +162,13 @@ impl ReviewApp {
             AppMsg::RefreshComplete(new_reviews) => self.handle_refresh_complete(new_reviews),
             AppMsg::RefreshFailed(error_msg) => self.handle_refresh_failed(error_msg),
 
+            // Background sync
+            AppMsg::SyncTick => self.handle_sync_tick(),
+            AppMsg::SyncComplete {
+                reviews,
+                latency_ms,
+            } => self.handle_sync_complete(reviews, *latency_ms),
+
             // Application lifecycle
             AppMsg::Quit => Some(bubbletea_rs::quit()),
             AppMsg::ToggleHelp => {
@@ -142,18 +185,21 @@ impl ReviewApp {
 
     fn handle_cursor_up(&mut self) -> Option<Cmd> {
         self.filter_state.cursor_up();
+        self.update_selected_id();
         None
     }
 
     fn handle_cursor_down(&mut self) -> Option<Cmd> {
         let max_index = self.filtered_count().saturating_sub(1);
         self.filter_state.cursor_down(max_index);
+        self.update_selected_id();
         None
     }
 
     fn handle_page_up(&mut self) -> Option<Cmd> {
         let page_size = self.review_list.visible_height();
         self.filter_state.page_up(page_size);
+        self.update_selected_id();
         None
     }
 
@@ -161,17 +207,20 @@ impl ReviewApp {
         let page_size = self.review_list.visible_height();
         let max_index = self.filtered_count().saturating_sub(1);
         self.filter_state.page_down(page_size, max_index);
+        self.update_selected_id();
         None
     }
 
     fn handle_home(&mut self) -> Option<Cmd> {
         self.filter_state.home();
+        self.update_selected_id();
         None
     }
 
     fn handle_end(&mut self) -> Option<Cmd> {
         let max_index = self.filtered_count().saturating_sub(1);
         self.filter_state.end(max_index);
+        self.update_selected_id();
         None
     }
 
@@ -181,6 +230,7 @@ impl ReviewApp {
         self.filter_state.active_filter = filter.clone();
         self.rebuild_filter_cache();
         self.filter_state.clamp_cursor(self.filtered_count());
+        self.update_selected_id();
         None
     }
 
@@ -188,6 +238,7 @@ impl ReviewApp {
         self.filter_state.active_filter = ReviewFilter::All;
         self.rebuild_filter_cache();
         self.filter_state.clamp_cursor(self.filtered_count());
+        self.update_selected_id();
         None
     }
 
@@ -209,38 +260,48 @@ impl ReviewApp {
         self.filter_state.active_filter = next_filter;
         self.rebuild_filter_cache();
         self.filter_state.clamp_cursor(self.filtered_count());
+        self.update_selected_id();
         None
     }
 
     // Data loading handlers
 
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "Returns Option<Cmd> for consistency with other message handlers"
-    )]
+    /// Handles a manual refresh request by delegating to sync logic.
+    ///
+    /// This ensures consistent behaviour between manual refresh and
+    /// background sync, including selection preservation.
     fn handle_refresh_requested(&mut self) -> Option<Cmd> {
-        self.loading = true;
-        self.error = None;
-
-        // Return a command that fetches reviews asynchronously
-        Some(Box::pin(async {
-            match super::fetch_reviews().await {
-                Ok(reviews) => {
-                    Some(Box::new(AppMsg::RefreshComplete(reviews)) as Box<dyn Any + Send>)
-                }
-                Err(error) => {
-                    Some(Box::new(AppMsg::RefreshFailed(error.to_string())) as Box<dyn Any + Send>)
-                }
-            }
-        }))
+        // Delegate to sync tick for consistent behaviour
+        self.handle_sync_tick()
     }
 
+    /// Handles legacy refresh complete (for backward compatibility).
+    ///
+    /// Uses the same incremental merge and selection preservation logic
+    /// as `handle_sync_complete`.
     fn handle_refresh_complete(&mut self, new_reviews: &[ReviewComment]) -> Option<Cmd> {
-        self.reviews = new_reviews.to_vec();
+        // Capture current selection
+        let selected_id = self.selected_comment_id;
+
+        // Merge reviews using incremental sync
+        let merge_result = super::sync::merge_reviews(&self.reviews, new_reviews.to_vec());
+        self.reviews = merge_result.reviews;
+
+        // Rebuild filter cache
         self.rebuild_filter_cache();
+
+        // Restore selection by ID, or clamp if deleted
+        if let Some(id) = selected_id {
+            if let Some(new_index) = self.find_filtered_index_by_id(id) {
+                self.filter_state.cursor_position = new_index;
+            } else {
+                self.filter_state.clamp_cursor(self.filtered_count());
+            }
+        }
+
+        self.update_selected_id();
         self.loading = false;
         self.error = None;
-        self.filter_state.clamp_cursor(self.filtered_count());
         None
     }
 
@@ -256,6 +317,101 @@ impl ReviewApp {
         let list_height = height.saturating_sub(4) as usize;
         self.review_list.set_visible_height(list_height);
         None
+    }
+
+    // Background sync handlers
+
+    /// Handles a background sync timer tick.
+    ///
+    /// Skips the sync if already loading to prevent duplicate requests.
+    /// Returns a command that fetches reviews and records timing.
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "Returns Option<Cmd> for consistency with other message handlers"
+    )]
+    fn handle_sync_tick(&mut self) -> Option<Cmd> {
+        // Don't start new sync if already loading
+        if self.loading {
+            return Some(Self::arm_sync_timer());
+        }
+
+        self.loading = true;
+        self.error = None;
+
+        Some(Box::pin(async {
+            let start = std::time::Instant::now();
+            match super::fetch_reviews().await {
+                Ok(reviews) => {
+                    #[expect(
+                        clippy::cast_possible_truncation,
+                        reason = "Latency over u64::MAX milliseconds is unrealistic"
+                    )]
+                    let latency_ms = start.elapsed().as_millis() as u64;
+                    Some(Box::new(AppMsg::SyncComplete {
+                        reviews,
+                        latency_ms,
+                    }) as Box<dyn Any + Send>)
+                }
+                Err(error) => {
+                    Some(Box::new(AppMsg::RefreshFailed(error.to_string())) as Box<dyn Any + Send>)
+                }
+            }
+        }))
+    }
+
+    /// Handles successful sync completion with incremental merge.
+    ///
+    /// Preserves the current selection by tracking comment ID rather than
+    /// cursor position. If the selected comment was deleted, clamps the
+    /// cursor to a valid position.
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "Returns Option<Cmd> for consistency with other message handlers"
+    )]
+    fn handle_sync_complete(
+        &mut self,
+        new_reviews: &[ReviewComment],
+        latency_ms: u64,
+    ) -> Option<Cmd> {
+        // Capture current selection
+        let selected_id = self.selected_comment_id;
+
+        // Merge reviews using incremental sync
+        let merge_result = super::sync::merge_reviews(&self.reviews, new_reviews.to_vec());
+        self.reviews = merge_result.reviews;
+
+        // Rebuild filter cache
+        self.rebuild_filter_cache();
+
+        // Restore selection by ID, or clamp if deleted
+        if let Some(id) = selected_id {
+            if let Some(new_index) = self.find_filtered_index_by_id(id) {
+                self.filter_state.cursor_position = new_index;
+            } else {
+                // Selected comment was deleted; clamp cursor
+                self.filter_state.clamp_cursor(self.filtered_count());
+            }
+        }
+
+        // Update selected_comment_id to match new cursor position
+        self.update_selected_id();
+
+        self.loading = false;
+        self.error = None;
+
+        // Log telemetry
+        super::record_sync_telemetry(latency_ms, self.reviews.len(), true);
+
+        // Re-arm sync timer
+        Some(Self::arm_sync_timer())
+    }
+
+    /// Creates a command that triggers a sync tick after the sync interval.
+    fn arm_sync_timer() -> Cmd {
+        Box::pin(async {
+            tokio::time::sleep(SYNC_INTERVAL).await;
+            Some(Box::new(AppMsg::SyncTick) as Box<dyn Any + Send>)
+        })
     }
 
     /// Renders the header bar.
@@ -319,7 +475,12 @@ impl Model for ReviewApp {
     fn init() -> (Self, Option<Cmd>) {
         // Retrieve initial data from module-level storage
         let reviews = super::get_initial_reviews();
-        (Self::new(reviews), None)
+        let model = Self::new(reviews);
+
+        // Start the background sync timer
+        let cmd = Self::arm_sync_timer();
+
+        (model, Some(cmd))
     }
 
     fn update(&mut self, msg: Box<dyn Any + Send>) -> Option<Cmd> {

@@ -118,3 +118,89 @@ fn toggle_help_shows_and_hides_overlay() {
     app.handle_message(&AppMsg::ToggleHelp);
     assert!(!app.show_help);
 }
+
+// Background sync tests
+
+#[rstest]
+fn sync_complete_preserves_selection_by_id(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews.clone());
+
+    // Select second item (id=2)
+    app.handle_message(&AppMsg::CursorDown);
+    assert_eq!(app.cursor_position(), 1);
+    assert_eq!(app.current_selected_id(), Some(2));
+
+    // Simulate sync with same data (order may differ internally after merge)
+    let cmd = app.handle_message(&AppMsg::SyncComplete {
+        reviews: sample_reviews,
+        latency_ms: 100,
+    });
+
+    // Selection should still be on comment with id=2
+    assert_eq!(app.current_selected_id(), Some(2));
+    // Command should be returned (re-armed timer)
+    assert!(cmd.is_some());
+}
+
+#[rstest]
+fn sync_complete_clamps_cursor_when_selected_deleted(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews.clone());
+
+    // Select second item (id=2)
+    app.handle_message(&AppMsg::CursorDown);
+    assert_eq!(app.cursor_position(), 1);
+    assert_eq!(app.current_selected_id(), Some(2));
+
+    // Sync with first comment only (second deleted)
+    let remaining: Vec<ReviewComment> = sample_reviews.into_iter().take(1).collect();
+
+    app.handle_message(&AppMsg::SyncComplete {
+        reviews: remaining,
+        latency_ms: 50,
+    });
+
+    // Cursor should be clamped to 0 (only item)
+    assert_eq!(app.cursor_position(), 0);
+    assert_eq!(app.filtered_count(), 1);
+}
+
+#[rstest]
+fn sync_complete_adds_new_comments(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews.clone());
+    assert_eq!(app.filtered_count(), 2);
+
+    // Add a third comment
+    let mut with_new = sample_reviews;
+    with_new.push(ReviewComment {
+        id: 3,
+        body: Some("Third comment".to_owned()),
+        author: Some("charlie".to_owned()),
+        ..Default::default()
+    });
+
+    app.handle_message(&AppMsg::SyncComplete {
+        reviews: with_new,
+        latency_ms: 75,
+    });
+
+    assert_eq!(app.filtered_count(), 3);
+}
+
+#[rstest]
+fn navigation_updates_selected_id(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+
+    assert_eq!(app.current_selected_id(), Some(1));
+
+    app.handle_message(&AppMsg::CursorDown);
+    assert_eq!(app.current_selected_id(), Some(2));
+
+    app.handle_message(&AppMsg::CursorUp);
+    assert_eq!(app.current_selected_id(), Some(1));
+
+    app.handle_message(&AppMsg::End);
+    assert_eq!(app.current_selected_id(), Some(2));
+
+    app.handle_message(&AppMsg::Home);
+    assert_eq!(app.current_selected_id(), Some(1));
+}

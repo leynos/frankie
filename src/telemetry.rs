@@ -17,6 +17,15 @@ pub enum TelemetryEvent {
         /// Diesel migration version string (e.g. `20251220000000`).
         schema_version: String,
     },
+    /// Records the latency of a sync operation.
+    SyncLatencyRecorded {
+        /// Duration of the sync operation in milliseconds.
+        latency_ms: u64,
+        /// Number of comments fetched.
+        comment_count: usize,
+        /// Whether the sync was incremental (merged) or full refresh.
+        incremental: bool,
+    },
 }
 
 /// A sink that can record telemetry events.
@@ -126,6 +135,32 @@ mod tests {
             vec![TelemetryEvent::SchemaVersionRecorded {
                 schema_version: "20251220000000".to_owned(),
             }]
+        );
+    }
+
+    #[test]
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "Test asserts length before indexing"
+    )]
+    fn recording_sink_captures_sync_latency_events() {
+        let sink = RecordingTelemetrySink::default();
+
+        sink.record(TelemetryEvent::SyncLatencyRecorded {
+            latency_ms: 150,
+            comment_count: 42,
+            incremental: true,
+        });
+
+        let events = sink.events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            TelemetryEvent::SyncLatencyRecorded {
+                latency_ms: 150,
+                comment_count: 42,
+                incremental: true,
+            }
         );
     }
 }

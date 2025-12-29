@@ -32,17 +32,19 @@
 //! feature. This stores the necessary context (locator, token) for fetching
 //! fresh review data from the GitHub API.
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
+use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 
 pub mod app;
 pub mod components;
 pub mod input;
 pub mod messages;
 pub mod state;
+pub mod sync;
 
 pub use app::ReviewApp;
 
@@ -55,6 +57,11 @@ static INITIAL_REVIEWS: OnceLock<Vec<ReviewComment>> = OnceLock::new();
 ///
 /// This is set before the TUI program starts to enable refresh functionality.
 static REFRESH_CONTEXT: OnceLock<RefreshContext> = OnceLock::new();
+
+/// Global storage for telemetry sink.
+///
+/// This is set before the TUI program starts to enable sync latency metrics.
+static TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
 
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
@@ -96,6 +103,41 @@ pub fn set_refresh_context(locator: PullRequestLocator, token: PersonalAccessTok
     REFRESH_CONTEXT
         .set(RefreshContext { locator, token })
         .is_ok()
+}
+
+/// Sets the telemetry sink for the TUI application.
+///
+/// This must be called before starting the bubbletea-rs program to enable
+/// sync latency metrics. Without this, a no-op sink is used.
+///
+/// # Arguments
+///
+/// * `sink` - The telemetry sink to use for recording events.
+///
+/// # Returns
+///
+/// `true` if the sink was set, `false` if it was already set.
+pub fn set_telemetry_sink(sink: Arc<dyn TelemetrySink>) -> bool {
+    TELEMETRY_SINK.set(sink).is_ok()
+}
+
+/// Gets the telemetry sink, returning a no-op sink if not configured.
+fn get_telemetry_sink() -> Arc<dyn TelemetrySink> {
+    TELEMETRY_SINK
+        .get()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(NoopTelemetrySink))
+}
+
+/// Records sync telemetry for a completed sync operation.
+///
+/// Called internally by the app after a successful sync.
+pub(crate) fn record_sync_telemetry(latency_ms: u64, comment_count: usize, incremental: bool) {
+    get_telemetry_sink().record(TelemetryEvent::SyncLatencyRecorded {
+        latency_ms,
+        comment_count,
+        incremental,
+    });
 }
 
 /// Gets a clone of the initial reviews from storage.

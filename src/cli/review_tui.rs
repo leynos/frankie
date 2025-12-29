@@ -4,10 +4,12 @@
 //! interface that allows users to navigate and filter review comments.
 
 use std::io::{self, Write};
+use std::sync::Arc;
 
 use bubbletea_rs::Program;
 
-use frankie::tui::{ReviewApp, set_initial_reviews, set_refresh_context};
+use frankie::telemetry::StderrJsonlTelemetrySink;
+use frankie::tui::{ReviewApp, set_initial_reviews, set_refresh_context, set_telemetry_sink};
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
     PullRequestLocator, ReviewCommentGateway,
@@ -48,6 +50,10 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     // Returns false if already set; this is non-fatal since refresh will
     // simply use the existing context (which may reference a different PR).
     let _ = set_refresh_context(locator, token);
+
+    // Configure telemetry for sync latency metrics.
+    // Returns false if already set; this is non-fatal.
+    let _ = set_telemetry_sink(Arc::new(StderrJsonlTelemetrySink));
 
     // Run the TUI program
     run_tui().await.map_err(|error| IntakeError::Api {

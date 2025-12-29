@@ -42,6 +42,17 @@ pub enum AppMsg {
     /// Refresh failed with an error.
     RefreshFailed(String),
 
+    // Background sync
+    /// Timer tick for background sync.
+    SyncTick,
+    /// Incremental sync completed successfully with new data and timing.
+    SyncComplete {
+        /// Fresh reviews from the API.
+        reviews: Vec<ReviewComment>,
+        /// Duration of the sync operation in milliseconds.
+        latency_ms: u64,
+    },
+
     // Application lifecycle
     /// Quit the application.
     Quit,
