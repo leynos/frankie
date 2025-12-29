@@ -29,7 +29,7 @@ crossterm = "0.29"
 
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
-env-lock = "0.1.0"
+env-lock = "1.0.1"
 mockall = "0.12.1"
 rstest = "0.22.0"
 rstest-bdd = "0.2.0"
