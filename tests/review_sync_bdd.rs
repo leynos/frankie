@@ -184,63 +184,59 @@ fn then_sync_latency_event_logged(sync_state: &SyncState) {
     assert!(has_sync_event, "expected SyncLatencyRecorded event");
 }
 
-#[then("the event shows latency_ms {expected:u64}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
-fn then_event_shows_latency(sync_state: &SyncState, expected: u64) {
+/// Helper to assert a field value from a `SyncLatencyRecorded` telemetry event.
+#[expect(clippy::expect_used, reason = "BDD test helper; panics are acceptable")]
+fn assert_sync_event_field<T, F>(
+    sync_state: &SyncState,
+    field_name: &str,
+    expected: T,
+    extractor: F,
+) where
+    T: std::fmt::Debug + PartialEq,
+    F: Fn(&TelemetryEvent) -> Option<T>,
+{
     let events = sync_state
         .telemetry_sink
         .with_ref(|sink| sink.events())
         .expect("telemetry sink not initialised");
 
-    let sync_event = events.iter().find_map(|e| {
+    let actual = events.iter().find_map(&extractor);
+
+    assert_eq!(actual, Some(expected), "{field_name} mismatch");
+}
+
+#[then("the event shows latency_ms {expected:u64}")]
+fn then_event_shows_latency(sync_state: &SyncState, expected: u64) {
+    assert_sync_event_field(sync_state, "latency_ms", expected, |e| {
         if let TelemetryEvent::SyncLatencyRecorded { latency_ms, .. } = e {
             Some(*latency_ms)
         } else {
             None
         }
     });
-
-    assert_eq!(sync_event, Some(expected), "latency_ms mismatch");
 }
 
 #[then("the event shows comment_count {expected:usize}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_event_shows_comment_count(sync_state: &SyncState, expected: usize) {
-    let events = sync_state
-        .telemetry_sink
-        .with_ref(|sink| sink.events())
-        .expect("telemetry sink not initialised");
-
-    let sync_event = events.iter().find_map(|e| {
+    assert_sync_event_field(sync_state, "comment_count", expected, |e| {
         if let TelemetryEvent::SyncLatencyRecorded { comment_count, .. } = e {
             Some(*comment_count)
         } else {
             None
         }
     });
-
-    assert_eq!(sync_event, Some(expected), "comment_count mismatch");
 }
 
 #[then("the event shows incremental {expected}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_event_shows_incremental(sync_state: &SyncState, expected: String) {
     let expected_bool = expected == "true";
-
-    let events = sync_state
-        .telemetry_sink
-        .with_ref(|sink| sink.events())
-        .expect("telemetry sink not initialised");
-
-    let sync_event = events.iter().find_map(|e| {
+    assert_sync_event_field(sync_state, "incremental", expected_bool, |e| {
         if let TelemetryEvent::SyncLatencyRecorded { incremental, .. } = e {
             Some(*incremental)
         } else {
             None
         }
     });
-
-    assert_eq!(sync_event, Some(expected_bool), "incremental mismatch");
 }
 
 // Scenario bindings

@@ -88,28 +88,14 @@ mod tests {
 
     use super::*;
 
-    #[fixture]
-    fn base_review() -> ReviewComment {
-        ReviewComment {
-            id: 1,
-            body: Some("Test comment".to_owned()),
-            author: Some("alice".to_owned()),
-            file_path: Some("src/main.rs".to_owned()),
-            line_number: Some(10),
-            original_line_number: None,
-            diff_hunk: None,
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: None,
-            updated_at: None,
-        }
-    }
+    // --- Review construction helpers ---
 
-    fn review_with_id(id: u64) -> ReviewComment {
+    /// Constructs a minimal `ReviewComment` with only id, body, and author set.
+    fn minimal_review(id: u64, body: &str, author: &str) -> ReviewComment {
         ReviewComment {
             id,
-            body: Some(format!("Comment {id}")),
-            author: Some("alice".to_owned()),
+            body: Some(body.to_owned()),
+            author: Some(author.to_owned()),
             file_path: None,
             line_number: None,
             original_line_number: None,
@@ -121,6 +107,75 @@ mod tests {
         }
     }
 
+    /// Clones a `ReviewComment` with a different ID.
+    fn review_with_different_id(base: &ReviewComment, new_id: u64) -> ReviewComment {
+        ReviewComment {
+            id: new_id,
+            ..base.clone()
+        }
+    }
+
+    #[fixture]
+    fn base_review() -> ReviewComment {
+        ReviewComment {
+            file_path: Some("src/main.rs".to_owned()),
+            line_number: Some(10),
+            ..minimal_review(1, "Test comment", "alice")
+        }
+    }
+
+    fn review_with_id(id: u64) -> ReviewComment {
+        minimal_review(id, &format!("Comment {id}"), "alice")
+    }
+
+    // --- Assertion helpers ---
+
+    /// Asserts that a `MergeResult` has the expected review count and change counts.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Test helper groups related assertions; parameters map directly to MergeResult fields"
+    )]
+    fn assert_merge_result(
+        result: &MergeResult,
+        expected_len: usize,
+        expected_added: usize,
+        expected_updated: usize,
+        expected_removed: usize,
+    ) {
+        assert_eq!(
+            result.reviews.len(),
+            expected_len,
+            "review count mismatch: expected {expected_len}, got {}",
+            result.reviews.len()
+        );
+        assert_eq!(
+            result.added, expected_added,
+            "added count mismatch: expected {expected_added}, got {}",
+            result.added
+        );
+        assert_eq!(
+            result.updated, expected_updated,
+            "updated count mismatch: expected {expected_updated}, got {}",
+            result.updated
+        );
+        assert_eq!(
+            result.removed, expected_removed,
+            "removed count mismatch: expected {expected_removed}, got {}",
+            result.removed
+        );
+    }
+
+    /// Asserts that the review IDs in a `MergeResult` match the expected slice.
+    fn assert_review_ids(result: &MergeResult, expected_ids: &[u64]) {
+        let actual_ids: Vec<u64> = result.reviews.iter().map(|r| r.id).collect();
+        assert_eq!(
+            actual_ids, expected_ids,
+            "review IDs mismatch: expected {expected_ids:?}, got {actual_ids:?}"
+        );
+    }
+
+    // --- Tests ---
+
     #[rstest]
     fn merge_with_no_changes_returns_same_count(base_review: ReviewComment) {
         let existing = vec![base_review.clone()];
@@ -128,44 +183,29 @@ mod tests {
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_eq!(result.reviews.len(), 1);
-        assert_eq!(result.added, 0);
-        assert_eq!(result.updated, 1);
-        assert_eq!(result.removed, 0);
+        assert_merge_result(&result, 1, 0, 1, 0);
     }
 
     #[rstest]
     fn merge_adds_new_comments(base_review: ReviewComment) {
         let existing = vec![base_review.clone()];
-        let new_review = ReviewComment {
-            id: 2,
-            ..base_review.clone()
-        };
+        let new_review = review_with_different_id(&base_review, 2);
         let incoming = vec![base_review, new_review];
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_eq!(result.reviews.len(), 2);
-        assert_eq!(result.added, 1);
-        assert_eq!(result.updated, 1);
-        assert_eq!(result.removed, 0);
+        assert_merge_result(&result, 2, 1, 1, 0);
     }
 
     #[rstest]
     fn merge_removes_deleted_comments(base_review: ReviewComment) {
-        let review2 = ReviewComment {
-            id: 2,
-            ..base_review.clone()
-        };
+        let review2 = review_with_different_id(&base_review, 2);
         let existing = vec![base_review.clone(), review2];
         let incoming = vec![base_review]; // review2 removed
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_eq!(result.reviews.len(), 1);
-        assert_eq!(result.added, 0);
-        assert_eq!(result.updated, 1);
-        assert_eq!(result.removed, 1);
+        assert_merge_result(&result, 1, 0, 1, 1);
     }
 
     #[rstest]
@@ -183,11 +223,8 @@ mod tests {
 
         let result = merge_reviews(&existing, incoming);
 
-        assert_eq!(result.reviews.len(), 1);
+        assert_merge_result(&result, 1, 0, 1, 0);
         assert_eq!(result.reviews[0].body, Some("Updated body".to_owned()));
-        assert_eq!(result.added, 0);
-        assert_eq!(result.updated, 1);
-        assert_eq!(result.removed, 0);
     }
 
     #[rstest]
@@ -200,8 +237,7 @@ mod tests {
         let result = merge_reviews(&[], vec![r1, r2, r3]);
 
         // Result should be sorted by ID
-        let ids: Vec<u64> = result.reviews.iter().map(|r| r.id).collect();
-        assert_eq!(ids, vec![1, 2, 3]);
+        assert_review_ids(&result, &[1, 2, 3]);
     }
 
     #[rstest]
@@ -211,10 +247,7 @@ mod tests {
 
         let result = merge_reviews(&[], vec![r1, r2]);
 
-        assert_eq!(result.reviews.len(), 2);
-        assert_eq!(result.added, 2);
-        assert_eq!(result.updated, 0);
-        assert_eq!(result.removed, 0);
+        assert_merge_result(&result, 2, 2, 0, 0);
     }
 
     #[rstest]
@@ -223,10 +256,7 @@ mod tests {
 
         let result = merge_reviews(&existing, vec![]);
 
-        assert_eq!(result.reviews.len(), 0);
-        assert_eq!(result.added, 0);
-        assert_eq!(result.updated, 0);
-        assert_eq!(result.removed, 1);
+        assert_merge_result(&result, 0, 0, 0, 1);
     }
 
     #[rstest]
@@ -238,12 +268,7 @@ mod tests {
 
         let result = merge_reviews(&[old1, old2], vec![new1, new2]);
 
-        assert_eq!(result.reviews.len(), 2);
-        assert_eq!(result.added, 2);
-        assert_eq!(result.updated, 0);
-        assert_eq!(result.removed, 2);
-
-        let ids: Vec<u64> = result.reviews.iter().map(|r| r.id).collect();
-        assert_eq!(ids, vec![3, 4]);
+        assert_merge_result(&result, 2, 2, 0, 2);
+        assert_review_ids(&result, &[3, 4]);
     }
 }
