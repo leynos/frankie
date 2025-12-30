@@ -35,6 +35,7 @@ rstest = "0.22.0"
 rstest-bdd = "0.2.0"
 rstest-bdd-macros = { version = "0.2.0", features = ["compile-time-validation"] }
 tempfile = "3.15.0"
+tokio = { version = "1.41.1", features = ["test-util", "time"] }
 wiremock = "0.6.5"
 
 [lints.clippy]

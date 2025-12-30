@@ -90,11 +90,16 @@ mod tests {
     /// Verifies that `StderrJsonlTelemetrySink` implements `TelemetrySink`
     /// and can be used with `set_telemetry_sink`, demonstrating the CLI
     /// telemetry wiring pattern used in the `run` function.
+    ///
+    /// This test covers the CLI side of telemetry wiring. For the full
+    /// end-to-end integration test demonstrating events flowing from TUI
+    /// sync handlers through to the telemetry sink, see the BDD scenario
+    /// "Sync latency is logged to telemetry" in `tests/review_sync_bdd.rs`.
     #[test]
-    fn stderr_jsonl_sink_can_be_wired_to_tui() {
+    fn cli_telemetry_wiring_pattern_is_valid() {
         use frankie::telemetry::TelemetrySink;
 
-        // Create the sink as done in run()
+        // Create the sink exactly as done in run() at line 56
         let sink: Arc<dyn TelemetrySink> = Arc::new(StderrJsonlTelemetrySink);
 
         // Verify it implements TelemetrySink and can record events without panic
@@ -104,7 +109,8 @@ mod tests {
             incremental: true,
         });
 
-        // The set_telemetry_sink call may fail due to OnceLock (if already set),
+        // Wire it to the TUI module (same call as in run())
+        // The call may fail due to OnceLock if already set by another test,
         // but we verify the wiring pattern compiles and the sink is usable.
         let _ = set_telemetry_sink(sink);
     }

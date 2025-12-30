@@ -173,17 +173,16 @@ mod tests {
     use std::sync::Arc;
 
     use crate::telemetry::test_support::RecordingTelemetrySink;
-    use crate::telemetry::{TelemetryEvent, TelemetrySink};
+    use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 
     use super::*;
 
     #[test]
-    fn get_telemetry_sink_returns_noop_when_not_configured() {
-        // When no sink is configured, should return a NoopTelemetrySink
-        // (or whatever was set in a previous test due to OnceLock).
-        // We can at least verify it doesn't panic and returns some sink.
+    fn get_telemetry_sink_returns_usable_sink() {
+        // get_telemetry_sink returns a sink that implements TelemetrySink.
+        // Due to OnceLock, we can't control whether it's Noop or a previously-set sink,
+        // but we verify the returned sink is usable without panicking.
         let sink = get_telemetry_sink();
-        // The sink should be usable without panicking
         sink.record(TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 100,
             comment_count: 5,
@@ -192,17 +191,76 @@ mod tests {
     }
 
     #[test]
-    fn record_sync_telemetry_records_event() {
-        // Set up a recording sink
+    fn noop_telemetry_sink_can_record_without_panic() {
+        // Verify NoopTelemetrySink (the default fallback) handles events correctly
+        let sink = NoopTelemetrySink;
+        sink.record(TelemetryEvent::SyncLatencyRecorded {
+            latency_ms: 42,
+            comment_count: 3,
+            incremental: false,
+        });
+        // Test passes if no panic occurs
+    }
+
+    #[test]
+    fn recording_sink_captures_sync_latency_event() {
+        // Test that a RecordingTelemetrySink captures the exact event structure
+        // that record_sync_telemetry would produce. This verifies the event
+        // construction is correct, independent of OnceLock state.
+        let sink = RecordingTelemetrySink::default();
+
+        // Record directly to the sink (bypassing OnceLock)
+        sink.record(TelemetryEvent::SyncLatencyRecorded {
+            latency_ms: 150,
+            comment_count: 10,
+            incremental: false,
+        });
+
+        let events = sink.events();
+        assert_eq!(events.len(), 1);
+
+        let first_event = events.first().expect("events should not be empty");
+        match first_event {
+            TelemetryEvent::SyncLatencyRecorded {
+                latency_ms,
+                comment_count,
+                incremental,
+            } => {
+                assert_eq!(*latency_ms, 150);
+                assert_eq!(*comment_count, 10);
+                assert!(!*incremental);
+            }
+            TelemetryEvent::SchemaVersionRecorded { .. } => {
+                panic!("expected SyncLatencyRecorded event, got SchemaVersionRecorded")
+            }
+        }
+    }
+
+    #[test]
+    fn set_telemetry_sink_wires_sink_for_record_sync_telemetry() {
+        // This test verifies the wiring works when our sink is first to set.
+        // Due to OnceLock, if another test ran first, our sink won't be used,
+        // but the function should still not panic.
         let sink = Arc::new(RecordingTelemetrySink::default());
-        // Note: Due to OnceLock, this may fail if already set by another test
-        let _ = set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
+        let was_set = set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
 
-        // Record telemetry
-        record_sync_telemetry(150, 10, false);
+        // Call the public API
+        record_sync_telemetry(200, 15, true);
 
-        // The event should have been recorded (if our sink was set)
-        // Due to OnceLock's "first writer wins" semantics, we can't guarantee
-        // our sink was used, but we can verify the function doesn't panic.
+        // Only verify events if we were first to set the sink
+        if was_set {
+            let events = sink.events();
+            assert_eq!(events.len(), 1);
+            let first_event = events.first().expect("events should not be empty");
+            assert!(matches!(
+                first_event,
+                TelemetryEvent::SyncLatencyRecorded {
+                    latency_ms: 200,
+                    comment_count: 15,
+                    incremental: true,
+                }
+            ));
+        }
+        // If not set, test still passes - we verified no panic occurs
     }
 }

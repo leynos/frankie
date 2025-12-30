@@ -299,14 +299,30 @@ fn find_filtered_index_by_id_respects_filter(sample_reviews: Vec<ReviewComment>)
 
 // Tests for arm_sync_timer
 
-#[test]
-fn arm_sync_timer_returns_command() {
-    // arm_sync_timer should return a boxed future (Cmd)
+#[tokio::test]
+async fn arm_sync_timer_schedules_sync_tick_after_interval() {
+    use std::time::Duration;
+
+    // Pause time so we can control advancement
+    tokio::time::pause();
+
     let cmd = ReviewApp::arm_sync_timer();
-    // We can't easily inspect the future, but we can verify it's not None-equivalent
-    // by checking that the type is correct (it's a Pin<Box<...>>)
-    // The test passes if this compiles and doesn't panic
-    drop(cmd);
+
+    // Advance time past the sync interval (30 seconds)
+    tokio::time::advance(Duration::from_secs(31)).await;
+
+    // Poll the future to completion
+    let result = cmd.await;
+
+    // The future should resolve to Some(Box<AppMsg::SyncTick>)
+    assert!(result.is_some(), "arm_sync_timer should return a message");
+
+    let msg = result.expect("result should be Some");
+    let app_msg = msg.downcast_ref::<AppMsg>();
+    assert!(
+        matches!(app_msg, Some(AppMsg::SyncTick)),
+        "arm_sync_timer should schedule a SyncTick message"
+    );
 }
 
 // Tests for ReviewApp::init (via Model trait)

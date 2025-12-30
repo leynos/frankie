@@ -151,6 +151,15 @@ impl ReviewApp {
         self.update_selected_id();
     }
 
+    /// Sets the cursor position and updates the selected comment ID.
+    ///
+    /// This helper centralises the common pattern of moving the cursor and
+    /// updating the tracked selection in navigation handlers.
+    fn set_cursor(&mut self, position: usize) {
+        self.filter_state.cursor_position = position;
+        self.update_selected_id();
+    }
+
     /// Handles a message and updates state accordingly.
     ///
     /// This method is the core update function that processes all application
@@ -221,45 +230,56 @@ impl ReviewApp {
     }
 
     // Navigation handlers
+    //
+    // Each navigation method updates the cursor position and then calls
+    // `update_selected_id()` via the centralised `set_cursor` helper to
+    // ensure selection tracking stays synchronised with cursor position.
 
     fn handle_cursor_up(&mut self) -> Option<Cmd> {
-        self.filter_state.cursor_up();
-        self.update_selected_id();
+        let new_pos = self.filter_state.cursor_position.saturating_sub(1);
+        self.set_cursor(new_pos);
         None
     }
 
     fn handle_cursor_down(&mut self) -> Option<Cmd> {
         let max_index = self.filtered_count().saturating_sub(1);
-        self.filter_state.cursor_down(max_index);
-        self.update_selected_id();
+        let new_pos = self
+            .filter_state
+            .cursor_position
+            .saturating_add(1)
+            .min(max_index);
+        self.set_cursor(new_pos);
         None
     }
 
     fn handle_page_up(&mut self) -> Option<Cmd> {
         let page_size = self.review_list.visible_height();
-        self.filter_state.page_up(page_size);
-        self.update_selected_id();
+        let new_pos = self.filter_state.cursor_position.saturating_sub(page_size);
+        self.set_cursor(new_pos);
         None
     }
 
     fn handle_page_down(&mut self) -> Option<Cmd> {
         let page_size = self.review_list.visible_height();
         let max_index = self.filtered_count().saturating_sub(1);
-        self.filter_state.page_down(page_size, max_index);
-        self.update_selected_id();
+        let new_pos = self
+            .filter_state
+            .cursor_position
+            .saturating_add(page_size)
+            .min(max_index);
+        self.set_cursor(new_pos);
         None
     }
 
     fn handle_home(&mut self) -> Option<Cmd> {
-        self.filter_state.home();
-        self.update_selected_id();
+        self.filter_state.scroll_offset = 0;
+        self.set_cursor(0);
         None
     }
 
     fn handle_end(&mut self) -> Option<Cmd> {
         let max_index = self.filtered_count().saturating_sub(1);
-        self.filter_state.end(max_index);
-        self.update_selected_id();
+        self.set_cursor(max_index);
         None
     }
 
