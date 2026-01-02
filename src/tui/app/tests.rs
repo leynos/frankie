@@ -345,15 +345,15 @@ fn review_app_init_returns_sync_timer_command() {
 }
 
 #[test]
-fn review_app_init_empty_when_no_reviews_set() {
+fn review_app_init_returns_valid_initial_state() {
     use bubbletea_rs::Model;
 
     // Note: Due to OnceLock, if set_initial_reviews was already called,
-    // this test may see those reviews. We test the behaviour given
-    // whatever state exists.
+    // this test may see those reviews. The test verifies behavioural
+    // invariants that hold regardless of initial review data.
     let (app, cmd) = ReviewApp::init();
 
-    // Should still return a sync timer command regardless of review count
+    // Should return a sync timer command regardless of review count
     assert!(cmd.is_some());
     // App should not be in loading state initially
     assert!(!app.loading);

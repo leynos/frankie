@@ -2832,9 +2832,9 @@ ID-based selection tracking.
    ordering.
 
 3. **Selection Preservation**: Instead of tracking cursor position (which
-   becomes invalid after data changes), we track `selected_comment_id`. After
-   merge, the cursor is restored to the new index of the selected ID, or
-   clamped if the comment was deleted.
+   becomes invalid after data changes), the TUI tracks `selected_comment_id`.
+   After merge, the cursor is restored to the new index of the selected ID,
+   or clamped if the comment was deleted.
 
 4. **Telemetry Integration**: Sync latency is recorded via the
    `SyncLatencyRecorded` telemetry event, including duration, comment count,

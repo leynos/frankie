@@ -63,6 +63,12 @@ static REFRESH_CONTEXT: OnceLock<RefreshContext> = OnceLock::new();
 /// This is set before the TUI program starts to enable sync latency metrics.
 static TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
 
+/// Static fallback telemetry sink to avoid allocations on each call.
+///
+/// This is used by `get_telemetry_sink` when no sink has been configured,
+/// avoiding repeated `Arc::new` allocations.
+static DEFAULT_TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
+
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
     locator: PullRequestLocator,
@@ -122,11 +128,13 @@ pub fn set_telemetry_sink(sink: Arc<dyn TelemetrySink>) -> bool {
 }
 
 /// Gets the telemetry sink, returning a no-op sink if not configured.
+///
+/// Uses a static fallback sink to avoid allocating a new `Arc` on each call
+/// when no sink has been configured.
 fn get_telemetry_sink() -> Arc<dyn TelemetrySink> {
-    TELEMETRY_SINK
-        .get()
-        .cloned()
-        .unwrap_or_else(|| Arc::new(NoopTelemetrySink))
+    TELEMETRY_SINK.get().cloned().unwrap_or_else(|| {
+        Arc::clone(DEFAULT_TELEMETRY_SINK.get_or_init(|| Arc::new(NoopTelemetrySink)))
+    })
 }
 
 /// Records sync telemetry for a completed sync operation.

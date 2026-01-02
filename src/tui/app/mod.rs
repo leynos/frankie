@@ -53,7 +53,7 @@ impl ReviewApp {
     #[must_use]
     pub fn new(reviews: Vec<ReviewComment>) -> Self {
         // Build initial cache with all indices (default filter is All)
-        let filtered_indices: Vec<usize> = (0..reviews.len()).collect();
+        let filtered_indices = (0..reviews.len()).collect::<Vec<_>>();
         // Track ID of first comment for selection preservation
         let selected_comment_id = filtered_indices
             .first()
@@ -272,6 +272,9 @@ impl ReviewApp {
     }
 
     fn handle_home(&mut self) -> Option<Cmd> {
+        // Reset scroll offset to ensure the view starts at the top.
+        // This is unique to Home; other navigation handlers rely on
+        // scroll adjustment happening during view rendering.
         self.filter_state.scroll_offset = 0;
         self.set_cursor(0);
         None
