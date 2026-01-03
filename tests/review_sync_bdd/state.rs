@@ -17,4 +17,6 @@ pub(crate) struct SyncState {
     pub(crate) telemetry_sink: Slot<Arc<RecordingTelemetrySink>>,
     /// Last recorded latency in milliseconds.
     pub(crate) last_latency_ms: Slot<u64>,
+    /// Whether the telemetry sink was successfully wired (`OnceLock` first-writer wins).
+    pub(crate) telemetry_wired: Slot<bool>,
 }

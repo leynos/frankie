@@ -345,11 +345,10 @@ fn review_app_init_returns_sync_timer_command() {
 }
 
 #[test]
-fn review_app_init_returns_valid_initial_state() {
+fn init_returns_expected_commands_and_state_regardless_of_prior_reviews() {
     use bubbletea_rs::Model;
 
-    // Note: Due to OnceLock, if set_initial_reviews was already called,
-    // this test may see those reviews. The test verifies behavioural
+    // OnceLock may retain reviews from prior tests - this test verifies
     // invariants that hold regardless of initial review data.
     let (app, cmd) = ReviewApp::init();
 
@@ -359,4 +358,6 @@ fn review_app_init_returns_valid_initial_state() {
     assert!(!app.loading);
     // No error initially
     assert!(app.error.is_none());
+    // Help should not be shown initially
+    assert!(!app.show_help);
 }

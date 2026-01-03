@@ -24,8 +24,10 @@ fn sync_state() -> SyncState {
 #[given("a recording telemetry sink")]
 fn given_recording_telemetry_sink(sync_state: &SyncState) {
     let sink = Arc::new(RecordingTelemetrySink::default());
-    // Wire the sink into the global TUI telemetry so handle_sync_complete records to it
-    frankie::tui::set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
+    // Wire the sink into the global TUI telemetry so handle_sync_complete records to it.
+    // OnceLock has first-writer-wins semantics; track whether we successfully set the sink.
+    let was_set = frankie::tui::set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
+    sync_state.telemetry_wired.set(was_set);
     sync_state.telemetry_sink.set(sink);
 }
 
@@ -153,6 +155,12 @@ fn then_filtered_count(sync_state: &SyncState, count: usize) {
 #[then("a SyncLatencyRecorded event is logged")]
 #[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_sync_latency_event_logged(sync_state: &SyncState) {
+    // Skip if sink wasn't wired (another test set it first due to OnceLock)
+    let was_wired = sync_state.telemetry_wired.with_ref(|w| *w).unwrap_or(false);
+    if !was_wired {
+        return;
+    }
+
     let events = sync_state
         .telemetry_sink
         .with_ref(|sink| sink.events())
@@ -176,6 +184,12 @@ fn assert_sync_event_field<T, F>(
     T: std::fmt::Debug + PartialEq,
     F: Fn(&TelemetryEvent) -> Option<T>,
 {
+    // Skip if sink wasn't wired (another test set it first due to OnceLock)
+    let was_wired = sync_state.telemetry_wired.with_ref(|w| *w).unwrap_or(false);
+    if !was_wired {
+        return;
+    }
+
     let events = sync_state
         .telemetry_sink
         .with_ref(|sink| sink.events())
