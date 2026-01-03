@@ -52,8 +52,6 @@ impl ReviewApp {
     /// Handles Home key navigation.
     pub(super) fn handle_home(&mut self) -> Option<Cmd> {
         // Reset scroll offset to ensure the view starts at the top.
-        // This is unique to Home; other navigation handlers rely on
-        // scroll adjustment happening during view rendering.
         self.filter_state.scroll_offset = 0;
         self.set_cursor(0);
         None
@@ -62,6 +60,11 @@ impl ReviewApp {
     /// Handles End key navigation.
     pub(super) fn handle_end(&mut self) -> Option<Cmd> {
         let max_index = self.filtered_count().saturating_sub(1);
+        // Adjust scroll offset so the last item is visible at the bottom.
+        // This mirrors handle_home which resets scroll_offset to 0.
+        let visible_height = self.review_list.visible_height();
+        self.filter_state.scroll_offset =
+            max_index.saturating_sub(visible_height.saturating_sub(1));
         self.set_cursor(max_index);
         None
     }

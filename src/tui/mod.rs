@@ -227,21 +227,21 @@ mod tests {
         let events = sink.events();
         assert_eq!(events.len(), 1);
 
-        let first_event = events.first().expect("events should not be empty");
-        match first_event {
-            TelemetryEvent::SyncLatencyRecorded {
-                latency_ms,
-                comment_count,
-                incremental,
-            } => {
-                assert_eq!(*latency_ms, 150);
-                assert_eq!(*comment_count, 10);
-                assert!(!*incremental);
-            }
-            TelemetryEvent::SchemaVersionRecorded { .. } => {
-                panic!("expected SyncLatencyRecorded event, got SchemaVersionRecorded")
-            }
-        }
+        let TelemetryEvent::SyncLatencyRecorded {
+            latency_ms,
+            comment_count,
+            incremental,
+        } = events.first().expect("events should not be empty")
+        else {
+            panic!(
+                "expected SyncLatencyRecorded event, got {:?}",
+                events.first()
+            );
+        };
+
+        assert_eq!(*latency_ms, 150);
+        assert_eq!(*comment_count, 10);
+        assert!(!*incremental);
     }
 
     #[test]

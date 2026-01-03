@@ -73,9 +73,14 @@ fn given_cursor_on_comment(sync_state: &SyncState, id: u64) {
 #[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_sync_completes_with_comments_including(sync_state: &SyncState, count: usize, id: u64) {
     let mut reviews = create_reviews(count);
-    // Ensure the specified comment ID is present
+    // Ensure the specified comment ID is present while maintaining the exact count.
+    // If the ID isn't already in the reviews, replace the first one with the target ID.
     if !reviews.iter().any(|r| r.id == id) {
-        reviews.push(review_with_id(id));
+        if let Some(first) = reviews.first_mut() {
+            *first = review_with_id(id);
+        } else {
+            reviews.push(review_with_id(id));
+        }
     }
 
     sync_state
@@ -155,7 +160,12 @@ fn then_filtered_count(sync_state: &SyncState, count: usize) {
 #[then("a SyncLatencyRecorded event is logged")]
 #[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_sync_latency_event_logged(sync_state: &SyncState) {
-    // Skip if sink wasn't wired (another test set it first due to OnceLock)
+    // LIMITATION: Due to `OnceLock` "first writer wins" semantics, the recording
+    // sink we set up may not be the one actually used if another test ran first.
+    // When `telemetry_wired` is false, we skip assertions rather than fail,
+    // accepting that telemetry recording is verified only when this test suite
+    // runs first. The unit tests in `src/tui/mod.rs` provide deterministic
+    // coverage for the telemetry recording logic itself.
     let was_wired = sync_state.telemetry_wired.with_ref(|w| *w).unwrap_or(false);
     if !was_wired {
         return;

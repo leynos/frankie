@@ -96,6 +96,10 @@ impl ReviewApp {
     }
 
     /// Rebuilds the filtered indices cache based on the current filter.
+    ///
+    /// This method iterates through all reviews and updates `filtered_indices`
+    /// to contain only the indices of reviews matching the active filter.
+    /// Call this after modifying `reviews` or changing the active filter.
     pub(crate) fn rebuild_filter_cache(&mut self) {
         self.filtered_indices = self
             .reviews
@@ -131,14 +135,22 @@ impl ReviewApp {
             .map(|r| r.id)
     }
 
-    /// Finds the filtered index for a comment by ID.
+    /// Finds the position within the filtered list for a comment by its ID.
+    ///
+    /// Returns `Some(index)` if a comment with the given `id` exists in the
+    /// current filtered view, or `None` if not found or filtered out.
+    /// Used to restore cursor position after sync operations.
     pub(crate) fn find_filtered_index_by_id(&self, id: u64) -> Option<usize> {
         self.filtered_indices
             .iter()
             .position(|&idx| self.reviews.get(idx).is_some_and(|r| r.id == id))
     }
 
-    /// Updates the selected comment ID from the current cursor position.
+    /// Updates the tracked `selected_comment_id` from the current cursor position.
+    ///
+    /// Synchronises `selected_comment_id` with whatever comment is currently
+    /// under the cursor. Call this after any cursor movement to maintain
+    /// selection tracking for sync operations.
     pub(crate) fn update_selected_id(&mut self) {
         self.selected_comment_id = self.current_selected_id();
     }
@@ -188,7 +200,13 @@ impl ReviewApp {
             AppMsg::PageDown => self.handle_page_down(),
             AppMsg::Home => self.handle_home(),
             AppMsg::End => self.handle_end(),
-            _ => None,
+            _ => {
+                debug_assert!(
+                    false,
+                    "non-navigation message routed to handle_navigation_msg"
+                );
+                None
+            }
         }
     }
 
@@ -198,7 +216,10 @@ impl ReviewApp {
             AppMsg::SetFilter(filter) => self.handle_set_filter(filter),
             AppMsg::ClearFilter => self.handle_clear_filter(),
             AppMsg::CycleFilter => self.handle_cycle_filter(),
-            _ => None,
+            _ => {
+                debug_assert!(false, "non-filter message routed to handle_filter_msg");
+                None
+            }
         }
     }
 
@@ -213,7 +234,10 @@ impl ReviewApp {
                 reviews,
                 latency_ms,
             } => self.handle_sync_complete(reviews, *latency_ms),
-            _ => None,
+            _ => {
+                debug_assert!(false, "non-data message routed to handle_data_msg");
+                None
+            }
         }
     }
 
@@ -226,7 +250,13 @@ impl ReviewApp {
                 None
             }
             AppMsg::WindowResized { width, height } => self.handle_resize(*width, *height),
-            _ => None,
+            _ => {
+                debug_assert!(
+                    false,
+                    "non-lifecycle message routed to handle_lifecycle_msg"
+                );
+                None
+            }
         }
     }
 
