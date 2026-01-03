@@ -58,7 +58,7 @@ context.
 - [x] Build review listing view with filters (all, unresolved, by file, by
       reviewer, by commit range); acceptance: filters execute without full
       reloads, retain cursor position, and are covered by state update tests.
-- [ ] Implement incremental sync to keep review lists up to date; acceptance:
+- [x] Implement incremental sync to keep review lists up to date; acceptance:
       background refresh merges new comments without losing selection state and
       logs sync latency metrics locally.
 

@@ -4,10 +4,12 @@
 //! interface that allows users to navigate and filter review comments.
 
 use std::io::{self, Write};
+use std::sync::Arc;
 
 use bubbletea_rs::Program;
 
-use frankie::tui::{ReviewApp, set_initial_reviews, set_refresh_context};
+use frankie::telemetry::StderrJsonlTelemetrySink;
+use frankie::tui::{ReviewApp, set_initial_reviews, set_refresh_context, set_telemetry_sink};
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
     PullRequestLocator, ReviewCommentGateway,
@@ -49,6 +51,10 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     // simply use the existing context (which may reference a different PR).
     let _ = set_refresh_context(locator, token);
 
+    // Configure telemetry for sync latency metrics.
+    // Returns false if already set; this is non-fatal.
+    let _ = set_telemetry_sink(Arc::new(StderrJsonlTelemetrySink));
+
     // Run the TUI program
     run_tui().await.map_err(|error| IntakeError::Api {
         message: format!("TUI error: {error}"),
@@ -79,5 +85,33 @@ mod tests {
     fn review_app_can_be_created_empty() {
         let app = ReviewApp::empty();
         assert_eq!(app.filtered_count(), 0);
+    }
+
+    /// Verifies that `StderrJsonlTelemetrySink` implements `TelemetrySink`
+    /// and can be used with `set_telemetry_sink`, demonstrating the CLI
+    /// telemetry wiring pattern used in the `run` function.
+    ///
+    /// This test covers the CLI side of telemetry wiring. For the full
+    /// end-to-end integration test demonstrating events flowing from TUI
+    /// sync handlers through to the telemetry sink, see the BDD scenario
+    /// "Sync latency is logged to telemetry" in `tests/review_sync_bdd.rs`.
+    #[test]
+    fn cli_telemetry_wiring_pattern_is_valid() {
+        use frankie::telemetry::TelemetrySink;
+
+        // Create the sink exactly as done in run() at line 56
+        let sink: Arc<dyn TelemetrySink> = Arc::new(StderrJsonlTelemetrySink);
+
+        // Verify it implements TelemetrySink and can record events without panic
+        sink.record(frankie::telemetry::TelemetryEvent::SyncLatencyRecorded {
+            latency_ms: 42,
+            comment_count: 5,
+            incremental: true,
+        });
+
+        // Wire it to the TUI module (same call as in run())
+        // The call may fail due to OnceLock if already set by another test,
+        // but we verify the wiring pattern compiles and the sink is usable.
+        let _ = set_telemetry_sink(sink);
     }
 }

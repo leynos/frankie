@@ -6,6 +6,9 @@
 
 use serde::Deserialize;
 
+#[cfg(feature = "test-support")]
+pub mod test_support;
+
 /// Minimal pull request metadata used by the CLI.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PullRequestMetadata {
@@ -45,7 +48,7 @@ pub struct PullRequestDetails {
 ///
 /// Review comments are attached to specific lines in a pull request diff,
 /// whereas issue comments are general discussion on the PR.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ReviewComment {
     /// Comment identifier.
     pub id: u64,

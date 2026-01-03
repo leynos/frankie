@@ -145,8 +145,11 @@ fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
 
     let schema_versions: Vec<&str> = events
         .iter()
-        .map(|event| match event {
-            TelemetryEvent::SchemaVersionRecorded { schema_version } => schema_version.as_str(),
+        .filter_map(|event| match event {
+            TelemetryEvent::SchemaVersionRecorded { schema_version } => {
+                Some(schema_version.as_str())
+            }
+            TelemetryEvent::SyncLatencyRecorded { .. } => None,
         })
         .collect();
 
