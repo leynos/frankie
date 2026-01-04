@@ -172,8 +172,8 @@ During a background sync:
 - Deleted comments are removed
 - The current selection is preserved (unless the selected comment was deleted)
 
-A `[Loading…]` indicator appears in the header during sync. Manual refresh
-with `r` uses the same incremental sync logic.
+A `[Loading…]` indicator appears in the header during sync. Manual refresh with
+`r` uses the same incremental sync logic.
 
 ### Filters
 

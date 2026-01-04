@@ -2814,8 +2814,8 @@ flowchart LR
 
 #### ADR-001: incremental sync for review comments
 
-**Context**: The TUI needs to keep review comments up to date without losing the
-user's current selection or requiring manual refresh.
+**Context**: The TUI needs to keep review comments up to date without losing
+the user's current selection or requiring manual refresh.
 
 **Decision**: Implement timer-based background sync (30-second interval) with
 ID-based selection tracking.
@@ -2833,8 +2833,8 @@ ID-based selection tracking.
 
 3. **Selection Preservation**: Instead of tracking cursor position (which
    becomes invalid after data changes), the TUI tracks `selected_comment_id`.
-   After merge, the cursor is restored to the new index of the selected ID,
-   or clamped if the comment was deleted.
+   After merge, the cursor is restored to the new index of the selected ID, or
+   clamped if the comment was deleted.
 
 4. **Telemetry Integration**: Sync latency is recorded via the
    `SyncLatencyRecorded` telemetry event, including duration, comment count,
