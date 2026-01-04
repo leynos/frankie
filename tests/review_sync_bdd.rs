@@ -141,6 +141,7 @@ fn then_filtered_count(sync_state: &SyncState, count: usize) {
 
 #[then("a SyncLatencyRecorded event is logged")]
 #[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
+#[expect(clippy::print_stderr, reason = "intentional test-time warning for CI visibility")]
 fn then_sync_latency_event_logged(sync_state: &SyncState) {
     // LIMITATION: Due to `OnceLock` "first writer wins" semantics, the recording
     // sink we set up may not be the one actually used if another test ran first.
@@ -150,6 +151,7 @@ fn then_sync_latency_event_logged(sync_state: &SyncState) {
     // coverage for the telemetry recording logic itself.
     let was_wired = sync_state.telemetry_wired.with_ref(|w| *w).unwrap_or(false);
     if !was_wired {
+        eprintln!("⚠️  Telemetry assertions skipped (sink already set by another scenario)");
         return;
     }
 
