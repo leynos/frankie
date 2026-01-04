@@ -135,6 +135,16 @@ impl ReviewApp {
             .map(|r| r.id)
     }
 
+    /// Selects the comment with the given ID by moving the cursor to it.
+    ///
+    /// Returns `true` if the comment was found and selected, or `false`
+    /// if no comment with the given ID exists in the current filtered view.
+    pub fn select_by_id(&mut self, id: u64) -> bool {
+        self.find_filtered_index_by_id(id)
+            .map(|index| self.set_cursor(index))
+            .is_some()
+    }
+
     /// Finds the position within the filtered list for a comment by its ID.
     ///
     /// Returns `Some(index)` if a comment with the given `id` exists in the

@@ -44,27 +44,9 @@ fn given_cursor_on_comment(sync_state: &SyncState, id: u64) {
     sync_state
         .app
         .with_mut(|app| {
-            // Move cursor until we find the comment with this ID
-            while app.current_selected_id() != Some(id) {
-                app.handle_message(&AppMsg::CursorDown);
-                // Safety: prevent infinite loop if ID not found
-                if app.cursor_position() >= app.filtered_count().saturating_sub(1) {
-                    break;
-                }
-            }
+            assert!(app.select_by_id(id), "comment {id} not found");
         })
         .expect("app not initialised");
-
-    let actual_id = sync_state
-        .app
-        .with_ref(ReviewApp::current_selected_id)
-        .expect("app not initialised");
-
-    assert_eq!(
-        actual_id,
-        Some(id),
-        "failed to position cursor on comment {id}"
-    );
 }
 
 // When steps
