@@ -77,9 +77,18 @@ fn when_sync_completes_with_comments_including(sync_state: &SyncState, count: us
 #[when("a sync completes with {count:usize} comments without comment {excluded_id:u64}")]
 #[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_sync_completes_without_comment(sync_state: &SyncState, count: usize, excluded_id: u64) {
-    let reviews: Vec<_> = create_reviews(count)
+    // Generate enough reviews to guarantee `count` remain after excluding `excluded_id`.
+    // If `excluded_id` falls within the generated range (1..=count), we need count+1 reviews
+    // so that after filtering we still have exactly `count` reviews.
+    let generate_count = if excluded_id >= 1 && excluded_id <= count as u64 {
+        count + 1
+    } else {
+        count
+    };
+    let reviews: Vec<_> = create_reviews(generate_count)
         .into_iter()
         .filter(|r| r.id != excluded_id)
+        .take(count)
         .collect();
 
     sync_state
@@ -219,7 +228,9 @@ fn then_event_shows_comment_count(sync_state: &SyncState, expected: usize) {
 
 #[then("the event shows incremental {expected}")]
 fn then_event_shows_incremental(sync_state: &SyncState, expected: String) {
-    let expected_bool = expected == "true";
+    let expected_bool = expected
+        .parse::<bool>()
+        .unwrap_or_else(|_| panic!("invalid boolean in feature file: {expected:?}"));
     assert_sync_event_field(sync_state, "incremental", expected_bool, |e| {
         if let TelemetryEvent::SyncLatencyRecorded { incremental, .. } = e {
             Some(*incremental)
