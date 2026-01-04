@@ -57,12 +57,10 @@ fn when_sync_completes_with_comments_including(sync_state: &SyncState, count: us
     let mut reviews = create_reviews(count);
     // Ensure the specified comment ID is present while maintaining the exact count.
     // If the ID isn't already in the reviews, replace the first one with the target ID.
-    if !reviews.iter().any(|r| r.id == id) {
-        if let Some(first) = reviews.first_mut() {
-            *first = review_with_id(id);
-        } else {
-            reviews.push(review_with_id(id));
-        }
+    if !reviews.iter().any(|r| r.id == id)
+        && let Some(first) = reviews.first_mut()
+    {
+        *first = review_with_id(id);
     }
 
     sync_state
