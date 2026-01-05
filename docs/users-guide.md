@@ -162,6 +162,19 @@ comments.
 | `?`         | Toggle help overlay           |
 | `q`         | Quit                          |
 
+### Background sync
+
+The TUI automatically refreshes review comments from GitHub every 30 seconds.
+During a background sync:
+
+- New comments are added to the list
+- Updated comments are refreshed
+- Deleted comments are removed
+- The current selection is preserved (unless the selected comment was deleted)
+
+A `[Loading…]` indicator appears in the header during sync. Manual refresh with
+`r` uses the same incremental sync logic.
+
 ### Filters
 
 The TUI supports filtering review comments by several criteria:

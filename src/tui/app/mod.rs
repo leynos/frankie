@@ -3,6 +3,11 @@
 //! This module provides the core application state and update logic for the
 //! review listing TUI. It coordinates between components, manages filter state,
 //! and handles async data loading.
+//!
+//! # Module Structure
+//!
+//! - `rendering`: View rendering methods for terminal output
+//! - `sync_handlers`: Background sync and refresh handling
 
 use std::any::Any;
 
@@ -15,27 +20,33 @@ use super::input::map_key_to_message;
 use super::messages::AppMsg;
 use super::state::{FilterState, ReviewFilter};
 
+mod navigation;
+mod rendering;
+mod sync_handlers;
+
 /// Main application model for the review listing TUI.
 #[derive(Debug, Clone)]
 pub struct ReviewApp {
     /// All review comments (unfiltered).
-    reviews: Vec<ReviewComment>,
+    pub(crate) reviews: Vec<ReviewComment>,
     /// Cached indices of reviews matching the current filter.
     /// Invalidated when reviews or filter change.
     filtered_indices: Vec<usize>,
     /// Filter and cursor state.
-    filter_state: FilterState,
+    pub(crate) filter_state: FilterState,
     /// Whether data is currently loading.
-    loading: bool,
+    pub(crate) loading: bool,
     /// Current error message, if any.
-    error: Option<String>,
+    pub(crate) error: Option<String>,
     /// Terminal dimensions.
     width: u16,
     height: u16,
     /// Whether help overlay is visible.
-    show_help: bool,
+    pub(crate) show_help: bool,
     /// Review list component.
     review_list: ReviewListComponent,
+    /// ID of the currently selected comment, used to restore cursor after sync.
+    pub(crate) selected_comment_id: Option<u64>,
 }
 
 impl ReviewApp {
@@ -43,7 +54,12 @@ impl ReviewApp {
     #[must_use]
     pub fn new(reviews: Vec<ReviewComment>) -> Self {
         // Build initial cache with all indices (default filter is All)
-        let filtered_indices = (0..reviews.len()).collect();
+        let filtered_indices: Vec<_> = (0..reviews.len()).collect();
+        // Track ID of first comment for selection preservation
+        let selected_comment_id = filtered_indices
+            .first()
+            .and_then(|&i| reviews.get(i))
+            .map(|r| r.id);
         Self {
             reviews,
             filtered_indices,
@@ -54,6 +70,7 @@ impl ReviewApp {
             height: 24,
             show_help: false,
             review_list: ReviewListComponent::new(),
+            selected_comment_id,
         }
     }
 
@@ -79,7 +96,11 @@ impl ReviewApp {
     }
 
     /// Rebuilds the filtered indices cache based on the current filter.
-    fn rebuild_filter_cache(&mut self) {
+    ///
+    /// This method iterates through all reviews and updates `filtered_indices`
+    /// to contain only the indices of reviews matching the active filter.
+    /// Call this after modifying `reviews` or changing the active filter.
+    pub(crate) fn rebuild_filter_cache(&mut self) {
         self.filtered_indices = self
             .reviews
             .iter()
@@ -105,74 +126,148 @@ impl ReviewApp {
         &self.filter_state.active_filter
     }
 
+    /// Returns the ID of the currently selected comment, if any.
+    #[must_use]
+    pub fn current_selected_id(&self) -> Option<u64> {
+        self.filtered_indices
+            .get(self.filter_state.cursor_position)
+            .and_then(|&idx| self.reviews.get(idx))
+            .map(|r| r.id)
+    }
+
+    /// Selects the comment with the given ID by moving the cursor to it.
+    ///
+    /// Returns `true` if the comment was found and selected, or `false`
+    /// if no comment with the given ID exists in the current filtered view.
+    pub fn select_by_id(&mut self, id: u64) -> bool {
+        self.find_filtered_index_by_id(id)
+            .map(|index| self.set_cursor(index))
+            .is_some()
+    }
+
+    /// Finds the position within the filtered list for a comment by its ID.
+    ///
+    /// Returns `Some(index)` if a comment with the given `id` exists in the
+    /// current filtered view, or `None` if not found or filtered out.
+    /// Used to restore cursor position after sync operations.
+    pub(crate) fn find_filtered_index_by_id(&self, id: u64) -> Option<usize> {
+        self.filtered_indices
+            .iter()
+            .position(|&idx| self.reviews.get(idx).is_some_and(|r| r.id == id))
+    }
+
+    /// Updates the tracked `selected_comment_id` from the current cursor position.
+    ///
+    /// Synchronises `selected_comment_id` with whatever comment is currently
+    /// under the cursor. Call this after any cursor movement to maintain
+    /// selection tracking for sync operations.
+    pub(crate) fn update_selected_id(&mut self) {
+        self.selected_comment_id = self.current_selected_id();
+    }
+
+    /// Clamps the cursor to valid bounds and updates the selected comment ID.
+    ///
+    /// This helper centralises the common pattern of clamping the cursor after
+    /// filter changes and then updating the tracked selection.
+    fn clamp_cursor_and_update_selection(&mut self) {
+        self.filter_state.clamp_cursor(self.filtered_count());
+        self.update_selected_id();
+    }
+
+    /// Sets the cursor position and updates the selected comment ID.
+    ///
+    /// This helper centralises the common pattern of moving the cursor and
+    /// updating the tracked selection in navigation handlers.
+    fn set_cursor(&mut self, position: usize) {
+        self.filter_state.cursor_position = position;
+        self.update_selected_id();
+    }
+
     /// Handles a message and updates state accordingly.
-    fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+    ///
+    /// This method is the core update function that processes all application
+    /// messages and returns any resulting commands. It delegates to specialised
+    /// handlers for each message category to keep cyclomatic complexity low.
+    pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        if msg.is_navigation() {
+            return self.handle_navigation_msg(msg);
+        }
+        if msg.is_filter() {
+            return self.handle_filter_msg(msg);
+        }
+        if msg.is_data() {
+            return self.handle_data_msg(msg);
+        }
+        self.handle_lifecycle_msg(msg)
+    }
+
+    /// Dispatches navigation messages to their handlers.
+    fn handle_navigation_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
         match msg {
-            // Navigation
             AppMsg::CursorUp => self.handle_cursor_up(),
             AppMsg::CursorDown => self.handle_cursor_down(),
             AppMsg::PageUp => self.handle_page_up(),
             AppMsg::PageDown => self.handle_page_down(),
             AppMsg::Home => self.handle_home(),
             AppMsg::End => self.handle_end(),
+            _ => {
+                debug_assert!(
+                    false,
+                    "non-navigation message routed to handle_navigation_msg"
+                );
+                None
+            }
+        }
+    }
 
-            // Filter changes
+    /// Dispatches filter messages to their handlers.
+    fn handle_filter_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
             AppMsg::SetFilter(filter) => self.handle_set_filter(filter),
             AppMsg::ClearFilter => self.handle_clear_filter(),
             AppMsg::CycleFilter => self.handle_cycle_filter(),
+            _ => {
+                debug_assert!(false, "non-filter message routed to handle_filter_msg");
+                None
+            }
+        }
+    }
 
-            // Data loading
+    /// Dispatches data loading and sync messages to their handlers.
+    fn handle_data_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
             AppMsg::RefreshRequested => self.handle_refresh_requested(),
             AppMsg::RefreshComplete(new_reviews) => self.handle_refresh_complete(new_reviews),
             AppMsg::RefreshFailed(error_msg) => self.handle_refresh_failed(error_msg),
+            AppMsg::SyncTick => self.handle_sync_tick(),
+            AppMsg::SyncComplete {
+                reviews,
+                latency_ms,
+            } => self.handle_sync_complete(reviews, *latency_ms),
+            _ => {
+                debug_assert!(false, "non-data message routed to handle_data_msg");
+                None
+            }
+        }
+    }
 
-            // Application lifecycle
+    /// Dispatches lifecycle and window messages to their handlers.
+    fn handle_lifecycle_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
             AppMsg::Quit => Some(bubbletea_rs::quit()),
             AppMsg::ToggleHelp => {
                 self.show_help = !self.show_help;
                 None
             }
-
-            // Window events
             AppMsg::WindowResized { width, height } => self.handle_resize(*width, *height),
+            _ => {
+                debug_assert!(
+                    false,
+                    "non-lifecycle message routed to handle_lifecycle_msg"
+                );
+                None
+            }
         }
-    }
-
-    // Navigation handlers
-
-    fn handle_cursor_up(&mut self) -> Option<Cmd> {
-        self.filter_state.cursor_up();
-        None
-    }
-
-    fn handle_cursor_down(&mut self) -> Option<Cmd> {
-        let max_index = self.filtered_count().saturating_sub(1);
-        self.filter_state.cursor_down(max_index);
-        None
-    }
-
-    fn handle_page_up(&mut self) -> Option<Cmd> {
-        let page_size = self.review_list.visible_height();
-        self.filter_state.page_up(page_size);
-        None
-    }
-
-    fn handle_page_down(&mut self) -> Option<Cmd> {
-        let page_size = self.review_list.visible_height();
-        let max_index = self.filtered_count().saturating_sub(1);
-        self.filter_state.page_down(page_size, max_index);
-        None
-    }
-
-    fn handle_home(&mut self) -> Option<Cmd> {
-        self.filter_state.home();
-        None
-    }
-
-    fn handle_end(&mut self) -> Option<Cmd> {
-        let max_index = self.filtered_count().saturating_sub(1);
-        self.filter_state.end(max_index);
-        None
     }
 
     // Filter handlers
@@ -180,23 +275,23 @@ impl ReviewApp {
     fn handle_set_filter(&mut self, filter: &ReviewFilter) -> Option<Cmd> {
         self.filter_state.active_filter = filter.clone();
         self.rebuild_filter_cache();
-        self.filter_state.clamp_cursor(self.filtered_count());
+        self.clamp_cursor_and_update_selection();
         None
     }
 
     fn handle_clear_filter(&mut self) -> Option<Cmd> {
         self.filter_state.active_filter = ReviewFilter::All;
         self.rebuild_filter_cache();
-        self.filter_state.clamp_cursor(self.filtered_count());
+        self.clamp_cursor_and_update_selection();
         None
     }
 
     /// Cycles the active filter between `All` and `Unresolved`.
     ///
     /// This method only toggles between the two primary filter modes:
-    /// - From `All` → switches to `Unresolved`
+    /// - From `All` -> switches to `Unresolved`
     /// - From any other filter (including `ByFile`, `ByReviewer`, `ByCommitRange`)
-    ///   → resets to `All`
+    ///   -> resets to `All`
     ///
     /// This simplified cycling is intentional: other filter variants require
     /// parameters (file path, reviewer name, commit range) that cannot be
@@ -208,47 +303,11 @@ impl ReviewApp {
         };
         self.filter_state.active_filter = next_filter;
         self.rebuild_filter_cache();
-        self.filter_state.clamp_cursor(self.filtered_count());
+        self.clamp_cursor_and_update_selection();
         None
     }
 
-    // Data loading handlers
-
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "Returns Option<Cmd> for consistency with other message handlers"
-    )]
-    fn handle_refresh_requested(&mut self) -> Option<Cmd> {
-        self.loading = true;
-        self.error = None;
-
-        // Return a command that fetches reviews asynchronously
-        Some(Box::pin(async {
-            match super::fetch_reviews().await {
-                Ok(reviews) => {
-                    Some(Box::new(AppMsg::RefreshComplete(reviews)) as Box<dyn Any + Send>)
-                }
-                Err(error) => {
-                    Some(Box::new(AppMsg::RefreshFailed(error.to_string())) as Box<dyn Any + Send>)
-                }
-            }
-        }))
-    }
-
-    fn handle_refresh_complete(&mut self, new_reviews: &[ReviewComment]) -> Option<Cmd> {
-        self.reviews = new_reviews.to_vec();
-        self.rebuild_filter_cache();
-        self.loading = false;
-        self.error = None;
-        self.filter_state.clamp_cursor(self.filtered_count());
-        None
-    }
-
-    fn handle_refresh_failed(&mut self, error_msg: &str) -> Option<Cmd> {
-        self.loading = false;
-        self.error = Some(error_msg.to_owned());
-        None
-    }
+    // Window event handlers
 
     fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
         self.width = width;
@@ -257,69 +316,18 @@ impl ReviewApp {
         self.review_list.set_visible_height(list_height);
         None
     }
-
-    /// Renders the header bar.
-    fn render_header(&self) -> String {
-        let title = "Frankie - Review Comments";
-        let loading_indicator = if self.loading { " [Loading...]" } else { "" };
-        format!("{title}{loading_indicator}\n")
-    }
-
-    /// Renders the filter bar showing active filter.
-    fn render_filter_bar(&self) -> String {
-        let label = self.filter_state.active_filter.label();
-        let count = self.filtered_count();
-        let total = self.reviews.len();
-        format!("Filter: {label} ({count}/{total})\n")
-    }
-
-    /// Renders the status bar with help hints.
-    fn render_status_bar(&self) -> String {
-        if let Some(error) = &self.error {
-            return format!("Error: {error}\n");
-        }
-
-        let hints = "j/k:navigate  f:filter  r:refresh  ?:help  q:quit";
-        format!("{hints}\n")
-    }
-
-    /// Renders the help overlay if visible.
-    fn render_help_overlay(&self) -> String {
-        if !self.show_help {
-            return String::new();
-        }
-
-        let help_text = r"
-=== Keyboard Shortcuts ===
-
-Navigation:
-  j, Down    Move cursor down
-  k, Up      Move cursor up
-  PgDn       Page down
-  PgUp       Page up
-  Home, g    Go to first item
-  End, G     Go to last item
-
-Filtering:
-  f          Cycle filter (All/Unresolved)
-  Esc        Clear filter
-
-Other:
-  r          Refresh from GitHub
-  ?          Toggle this help
-  q          Quit
-
-Press any key to close this help.
-";
-        help_text.to_owned()
-    }
 }
 
 impl Model for ReviewApp {
     fn init() -> (Self, Option<Cmd>) {
         // Retrieve initial data from module-level storage
         let reviews = super::get_initial_reviews();
-        (Self::new(reviews), None)
+        let model = Self::new(reviews);
+
+        // Start the background sync timer
+        let cmd = Self::arm_sync_timer();
+
+        (model, Some(cmd))
     }
 
     fn update(&mut self, msg: Box<dyn Any + Send>) -> Option<Cmd> {
@@ -377,5 +385,5 @@ impl Model for ReviewApp {
 }
 
 #[cfg(test)]
-#[path = "app_tests.rs"]
+#[path = "tests.rs"]
 mod tests;

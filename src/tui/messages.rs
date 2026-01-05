@@ -42,6 +42,17 @@ pub enum AppMsg {
     /// Refresh failed with an error.
     RefreshFailed(String),
 
+    // Background sync
+    /// Timer tick for background sync.
+    SyncTick,
+    /// Incremental sync completed successfully with new data and timing.
+    SyncComplete {
+        /// Fresh reviews from the API.
+        reviews: Vec<ReviewComment>,
+        /// Duration of the sync operation in milliseconds.
+        latency_ms: u64,
+    },
+
     // Application lifecycle
     /// Quit the application.
     Quit,
@@ -63,5 +74,41 @@ impl AppMsg {
     #[must_use]
     pub fn from_error(error: &IntakeError) -> Self {
         Self::RefreshFailed(error.to_string())
+    }
+
+    /// Returns `true` if this is a navigation message.
+    #[must_use]
+    pub const fn is_navigation(&self) -> bool {
+        matches!(
+            self,
+            Self::CursorUp
+                | Self::CursorDown
+                | Self::PageUp
+                | Self::PageDown
+                | Self::Home
+                | Self::End
+        )
+    }
+
+    /// Returns `true` if this is a filter message.
+    #[must_use]
+    pub const fn is_filter(&self) -> bool {
+        matches!(
+            self,
+            Self::SetFilter(_) | Self::ClearFilter | Self::CycleFilter
+        )
+    }
+
+    /// Returns `true` if this is a data loading or sync message.
+    #[must_use]
+    pub const fn is_data(&self) -> bool {
+        matches!(
+            self,
+            Self::RefreshRequested
+                | Self::RefreshComplete(_)
+                | Self::RefreshFailed(_)
+                | Self::SyncTick
+                | Self::SyncComplete { .. }
+        )
     }
 }
