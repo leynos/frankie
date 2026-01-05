@@ -179,6 +179,10 @@ fn then_sync_latency_event_logged(sync_state: &SyncState) {
 
 /// Helper to assert a field value from a `SyncLatencyRecorded` telemetry event.
 #[expect(clippy::expect_used, reason = "BDD test helper; panics are acceptable")]
+#[expect(
+    clippy::print_stderr,
+    reason = "intentional test-time warning for CI visibility"
+)]
 fn assert_sync_event_field<T, F>(
     sync_state: &SyncState,
     field_name: &str,
@@ -191,6 +195,7 @@ fn assert_sync_event_field<T, F>(
     // Skip if sink wasn't wired (another test set it first due to OnceLock)
     let was_wired = sync_state.telemetry_wired.with_ref(|w| *w).unwrap_or(false);
     if !was_wired {
+        eprintln!("⚠️  Telemetry assertions skipped (sink already set by another scenario)");
         return;
     }
 
