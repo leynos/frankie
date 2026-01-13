@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 PLANS.md is not present in the repository root, so no additional plan governance
 applies.
@@ -14,11 +14,11 @@ applies.
 
 Deliver a comment detail view in the review terminal user interface (TUI) that
 shows the selected review comment together with inline code context. Code
-context should be syntax
-highlighted with syntect when possible, wrapped at 80 columns, and rendered as
-plain text when highlighting fails. Success is visible when selecting a comment
-in the TUI shows a detail pane with a code block that wraps at 80 columns and
-still renders when the highlighter cannot load.
+context should be syntax highlighted with syntect when possible, wrapped to a
+maximum of 80 columns (using the terminal width if it is narrower), and
+rendered as plain text when highlighting fails. Success is visible when
+selecting a comment in the TUI shows a detail pane with a code block that wraps
+to a maximum of 80 columns and still renders when the highlighter cannot load.
 
 ## Constraints
 
@@ -30,7 +30,8 @@ still renders when the highlighter cannot load.
 - Documentation must use en-GB-oxendict spelling, 80-column wrapping, and the
   documentation style guide in `docs/documentation-style-guide.md`.
 - Use `rstest` for unit tests and `rstest-bdd` (v0.3.2) for behavioural tests.
-- Avoid adding dependencies other than syntect, which is already specified in
+- Avoid adding dependencies other than syntect. Syntect is not yet listed in
+  `Cargo.toml`, so adding it is part of this plan to match
   `docs/frankie-design.md`.
 - Use Makefile targets for validation (`make check-fmt`, `make lint`,
   `make test`).
@@ -52,7 +53,7 @@ still renders when the highlighter cannot load.
 ## Risks
 
 - Risk: syntect highlighting can introduce ANSI (American National Standards
-  Institute) escape codes that complicate wrapping at 80 columns.
+  Institute) escape codes that complicate wrapping to a maximum of 80 columns.
   Severity: medium
   Likelihood: medium
   Mitigation: wrap source lines to 80 columns before highlighting, and test
@@ -66,12 +67,13 @@ still renders when the highlighter cannot load.
   terminal sizes.
   Severity: medium
   Likelihood: low
-  Mitigation: clamp panel heights, and prioritise code context when space is
+  Mitigation: clamp panel heights, and prioritize code context when space is
   limited.
 
 ## Progress
 
 - [x] (2026-01-11 00:00Z) Draft ExecPlan created.
+- [x] (2026-01-13 00:10Z) ExecPlan approved; implementation started.
 - [ ] Add unit tests for code context rendering, wrapping, and fallback.
 - [ ] Add rstest-bdd scenario and feature file for comment detail view.
 - [ ] Implement comment detail component with syntect highlighting and 80-column
@@ -92,6 +94,10 @@ still renders when the highlighter cannot load.
   Rationale: It is already populated from the GitHub review comment payload and
   available without additional API calls.
   Date/Author: 2026-01-11, plan author.
+- Decision: Add syntect to `Cargo.toml` because it is not currently listed.
+  Rationale: The plan requires syntect for syntax highlighting and
+  `docs/frankie-design.md` specifies it as a dependency.
+  Date/Author: 2026-01-13, plan author.
 
 ## Outcomes & retrospective
 
@@ -120,14 +126,14 @@ Stage A: confirm layout and data inputs (no code changes). Review the existing
 TUI rendering pipeline in `src/tui/app/rendering.rs`, the review list component
 in `src/tui/components/review_list.rs`, and the `ReviewComment` fields in
 `src/github/models/mod.rs`. Decide on a layout strategy (split pane versus
-stacked detail) that preserves existing list navigation and makes room for an
-80-column code block. If the layout decision is ambiguous, stop and confirm per
-`Tolerances`.
+stacked detail) that preserves existing list navigation and makes room for a
+code block wrapped to a maximum of 80 columns. If the layout decision is
+ambiguous, stop and confirm per `Tolerances`.
 
 Stage B: scaffolding and tests. Add unit tests using `rstest` for the new
 comment detail component. Tests should cover: rendering with a diff hunk,
-wrapping long code lines to 80 columns, and a highlighter failure path that
-falls back to plain text. Add a new `rstest-bdd` feature file under
+wrapping long code lines to a maximum of 80 columns, and a highlighter failure
+path that falls back to plain text. Add a new `rstest-bdd` feature file under
 `tests/features/` and a matching scenario module under `tests/` that exercises
 selecting a comment and observing the detail pane output (both highlighted and
 fallback paths). Fixtures should be reused via `rstest` to avoid duplication.
@@ -135,10 +141,11 @@ fallback paths). Fixtures should be reused via `rstest` to avoid duplication.
 Stage C: implementation. Add a new TUI component (for example,
 `src/tui/components/comment_detail.rs`) that renders the selected comment's
 metadata, body, and code context. Introduce a small highlighting adapter that
-uses syntect to colourise code based on `file_path`, returning a `Result` so
+uses syntect to colourize code based on `file_path`, returning a `Result` so
 errors can fall back to plain text. Add a wrapping helper that enforces an
-80-column maximum for code lines (using a consistent, character-counted wrap),
-with behaviour documented in unit tests. Wire the new component into
+80-column maximum (or terminal width if narrower) for code lines (using a
+consistent, character-counted wrap), with behaviour documented in unit tests.
+Wire the new component into
 `ReviewApp::view()` by rendering the list and detail panes together, ensuring
 cursor movement updates the selected comment detail. Keep the rendering
 functions in query-only paths.
@@ -198,8 +205,8 @@ Acceptance is satisfied when the following are true:
 
 - The TUI renders a comment detail view that shows the selected comment and an
   inline code context block.
-- Code blocks are wrapped to 80 columns (or the terminal width when narrower),
-  verified via unit tests that check line lengths.
+- Code blocks are wrapped to a maximum of 80 columns (using the terminal width
+  if it is narrower), verified via unit tests that check line lengths.
 - Syntax highlighting uses syntect when available, and when highlighting fails
   the code block still renders as plain text with the same wrapping rules.
 - Behavioural tests in `rstest-bdd` demonstrate both the highlighted and
@@ -248,8 +255,8 @@ Example acceptance check for 80-column wrapping in unit tests:
 - Update `src/tui/components/mod.rs` to export the new component.
 - Update `src/tui/app/rendering.rs` and `src/tui/app/mod.rs` to render the
   detail view alongside the list.
-- Add syntect to `Cargo.toml` under `[dependencies]` using the caret version
-  requirement `syntect = "5.2"`.
+- Confirm syntect is listed in `Cargo.toml` under `[dependencies]`. If it is
+  missing, add it using the caret version requirement `syntect = "5.2"`.
 
 The detail view should use `ReviewComment.file_path` to select a syntax where
 possible, and fall back to plain text when no syntax is found or highlighting
@@ -257,7 +264,9 @@ fails.
 
 ## Revision note
 
-Updated terminology to follow en-GB-oxendict spelling and expanded acronyms on
-first use (ExecPlan, TUI, MVU, ANSI, UI, and BDD). This keeps the document
-aligned with the documentation style guide and does not alter the planned
-implementation steps.
+Updated en-GB-oxendict spellings, aligned the wrapping rule to a single
+definition, clarified syntect dependency guidance (now noting syntect is not
+listed in `Cargo.toml`), and expanded acronyms on first use (ExecPlan, TUI,
+MVU, ANSI, UI, and BDD). This keeps the document aligned with the
+documentation style guide and does not alter the planned implementation
+steps.
