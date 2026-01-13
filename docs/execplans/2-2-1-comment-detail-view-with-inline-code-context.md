@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: DONE
 
 PLANS.md is not present in the repository root, so no additional plan governance
 applies.
@@ -74,18 +74,24 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
 
 - [x] (2026-01-11 00:00Z) Draft ExecPlan created.
 - [x] (2026-01-13 00:10Z) ExecPlan approved; implementation started.
-- [ ] Add unit tests for code context rendering, wrapping, and fallback.
-- [ ] Add rstest-bdd scenario and feature file for comment detail view.
-- [ ] Implement comment detail component with syntect highlighting and 80-column
-  wrapping.
-- [ ] Integrate detail view into TUI rendering and update layout.
-- [ ] Update design documentation and user guide.
-- [ ] Run formatting, linting, tests, and documentation validators.
-- [ ] Mark roadmap entry complete and record outcomes.
+- [x] (2026-01-13 01:00Z) Add unit tests for code context rendering, wrapping,
+  and fallback.
+- [x] (2026-01-13 01:15Z) Add rstest-bdd scenario and feature file for comment
+  detail view.
+- [x] (2026-01-13 01:30Z) Implement comment detail component with syntect
+  highlighting and 80-column wrapping.
+- [x] (2026-01-13 01:45Z) Integrate detail view into TUI rendering and update
+  layout.
+- [x] (2026-01-13 02:00Z) Update design documentation and user guide.
+- [x] (2026-01-13 02:30Z) Run formatting, linting, tests, and documentation validators.
+- [x] (2026-01-13 02:45Z) Mark roadmap entry complete and record outcomes.
 
 ## Surprises & discoveries
 
-- None yet.
+- `ThemeSet` from syntect does not implement `Clone`, requiring removal of the
+  `Clone` derive from `CodeHighlighter`, `CommentDetailComponent`, and
+  `ReviewApp`. This had no impact on the application because `Clone` was not
+  actually used on these types.
 
 ## Decision log
 
@@ -101,7 +107,21 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
 
 ## Outcomes & retrospective
 
-- Pending.
+- All acceptance criteria met: comment detail view renders with author, file,
+  line number, body text, and inline code context from the `diff_hunk` field.
+- Syntax highlighting uses syntect with automatic language detection based on
+  file extension; plain text fallback works when highlighting fails.
+- 80-column wrapping enforced via `wrap_to_width()` helper that wraps before
+  highlighting to avoid ANSI escape code complexity.
+- Test coverage: 280 tests pass, including unit tests for wrapping and
+  highlighting, and 7 BDD scenarios covering display, wrapping, and fallback.
+- No tolerance triggers hit: implementation touched 10 files with approximately
+  450 net new lines, within the 14-file and 500-line limits.
+- `make check-fmt`, `make lint`, and `make test` all pass.
+- Documentation validation (`nixie`) passes for all modified files.
+- Retrospective: removing `Clone` from `ReviewApp` due to syntect's `ThemeSet`
+  had no impact on the application. The wrap-before-highlight strategy proved
+  effective for maintaining width guarantees.
 
 ## Context and orientation
 

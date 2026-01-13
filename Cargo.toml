@@ -27,6 +27,9 @@ bubbletea-rs = "0.0.9"
 bubbletea-widgets = "0.1.12"
 crossterm = "0.29"
 
+# Syntax highlighting
+syntect = "5.2"
+
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
 env-lock = "0.1.0"

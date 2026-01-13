@@ -197,7 +197,25 @@ The TUI displays:
 - **Filter bar** — Active filter with count of filtered vs total comments
 - **Review list** — Scrollable list with cursor indicator showing author, file,
   line number, and a preview of the comment body
+- **Comment detail pane** — Displays the selected comment with full body text
+  and inline code context
 - **Status bar** — Keyboard shortcut hints or error message if present
+
+### Comment detail view
+
+When a comment is selected in the review list, the detail pane displays:
+
+- **Comment header** — Author name, file path, and line number
+- **Comment body** — Full text of the review comment
+- **Code context** — The diff hunk showing the code being reviewed, with syntax
+  highlighting when available
+
+Code context is extracted from the GitHub review comment's `diff_hunk` field and
+rendered with syntax highlighting based on the file extension. If the file type
+is not recognised or highlighting fails, the code is displayed as plain text.
+
+Long code lines are wrapped to a maximum of 80 columns (or the terminal width if
+narrower) to ensure readability without horizontal scrolling.
 
 ## Configuration
 

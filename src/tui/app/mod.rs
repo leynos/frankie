@@ -15,7 +15,9 @@ use bubbletea_rs::{Cmd, Model};
 
 use crate::github::models::ReviewComment;
 
-use super::components::{ReviewListComponent, ReviewListViewContext};
+use super::components::{
+    CommentDetailComponent, CommentDetailViewContext, ReviewListComponent, ReviewListViewContext,
+};
 use super::input::map_key_to_message;
 use super::messages::AppMsg;
 use super::state::{FilterState, ReviewFilter};
@@ -25,7 +27,7 @@ mod rendering;
 mod sync_handlers;
 
 /// Main application model for the review listing TUI.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ReviewApp {
     /// All review comments (unfiltered).
     pub(crate) reviews: Vec<ReviewComment>,
@@ -45,6 +47,8 @@ pub struct ReviewApp {
     pub(crate) show_help: bool,
     /// Review list component.
     review_list: ReviewListComponent,
+    /// Comment detail component.
+    comment_detail: CommentDetailComponent,
     /// ID of the currently selected comment, used to restore cursor after sync.
     pub(crate) selected_comment_id: Option<u64>,
 }
@@ -70,6 +74,7 @@ impl ReviewApp {
             height: 24,
             show_help: false,
             review_list: ReviewListComponent::new(),
+            comment_detail: CommentDetailComponent::new(),
             selected_comment_id,
         }
     }
@@ -133,6 +138,14 @@ impl ReviewApp {
             .get(self.filter_state.cursor_position)
             .and_then(|&idx| self.reviews.get(idx))
             .map(|r| r.id)
+    }
+
+    /// Returns a reference to the currently selected comment, if any.
+    #[must_use]
+    pub fn selected_comment(&self) -> Option<&ReviewComment> {
+        self.filtered_indices
+            .get(self.filter_state.cursor_position)
+            .and_then(|&idx| self.reviews.get(idx))
     }
 
     /// Selects the comment with the given ID by moving the cursor to it.
@@ -368,14 +381,22 @@ impl Model for ReviewApp {
         output.push_str(&self.render_filter_bar());
         output.push('\n');
 
-        let ctx = ReviewListViewContext {
+        let list_ctx = ReviewListViewContext {
             reviews: &self.reviews,
             filtered_indices: &self.filtered_indices,
             cursor_position: self.filter_state.cursor_position,
             scroll_offset: self.filter_state.scroll_offset,
         };
-        let list_view = self.review_list.view(&ctx);
+        let list_view = self.review_list.view(&list_ctx);
         output.push_str(&list_view);
+
+        // Render comment detail pane
+        let detail_ctx = CommentDetailViewContext {
+            selected_comment: self.selected_comment(),
+            max_width: 80.min(self.width as usize),
+            available_height: self.height.saturating_sub(10) as usize,
+        };
+        output.push_str(&self.comment_detail.view(&detail_ctx));
 
         output.push('\n');
         output.push_str(&self.render_status_bar());

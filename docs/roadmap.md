@@ -64,7 +64,7 @@ context.
 
 ### Step: Contextual comment exploration
 
-- [ ] Implement comment detail view with inline code context and syntax
+- [x] Implement comment detail view with inline code context and syntax
       highlighting via syntect; acceptance: code blocks render with 80-column
       wrapping and fallback to plain text when highlighting fails.
 - [ ] Provide full-screen diff context with jump-to-change navigation; accept-
