@@ -1,6 +1,7 @@
 # Implement comment detail view with inline code context
 
-This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
+This execution plan (ExecPlan) is a living document. The sections
+`Constraints`, `Tolerances`,
 `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
 `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
@@ -11,8 +12,9 @@ applies.
 
 ## Purpose / Big picture
 
-Deliver a comment detail view in the review TUI that shows the selected review
-comment together with inline code context. Code context should be syntax
+Deliver a comment detail view in the review terminal user interface (TUI) that
+shows the selected review comment together with inline code context. Code
+context should be syntax
 highlighted with syntect when possible, wrapped at 80 columns, and rendered as
 plain text when highlighting fails. Success is visible when selecting a comment
 in the TUI shows a detail pane with a code block that wraps at 80 columns and
@@ -20,7 +22,8 @@ still renders when the highlighter cannot load.
 
 ## Constraints
 
-- Follow the MVU structure already used in `src/tui/app/mod.rs` and keep view
+- Follow the model-view-update (MVU) structure already used in
+  `src/tui/app/mod.rs` and keep view
   rendering in query methods, not update handlers.
 - Every new module must begin with a `//!` module-level comment.
 - No single code file may exceed 400 lines.
@@ -48,8 +51,8 @@ still renders when the highlighter cannot load.
 
 ## Risks
 
-- Risk: syntect highlighting can introduce ANSI escape codes that complicate
-  wrapping at 80 columns.
+- Risk: syntect highlighting can introduce ANSI (American National Standards
+  Institute) escape codes that complicate wrapping at 80 columns.
   Severity: medium
   Likelihood: medium
   Mitigation: wrap source lines to 80 columns before highlighting, and test
@@ -98,7 +101,8 @@ still renders when the highlighter cannot load.
 
 The review TUI is implemented under `src/tui/`. The model and update logic live
 in `src/tui/app/mod.rs`, with view rendering split into
-`src/tui/app/rendering.rs`. The current UI only renders a review list via the
+`src/tui/app/rendering.rs`. The current user interface (UI) only renders a
+review list via the
 `ReviewListComponent` in `src/tui/components/review_list.rs`. Review comments
 are represented by `ReviewComment` in `src/github/models/mod.rs`, which includes
 `diff_hunk`, `file_path`, and line numbers required for inline context. Unit
@@ -205,8 +209,8 @@ Acceptance is satisfied when the following are true:
 
 Quality criteria:
 
-- Tests: unit tests for the detail renderer and wrapping; BDD scenario for
-  comment detail view behaviour.
+- Tests: unit tests for the detail renderer and wrapping; behaviour-driven
+  development (BDD) scenario for comment detail view behaviour.
 - Lint/typecheck: `make lint` clean.
 - Formatting: `make check-fmt` clean.
 
@@ -217,7 +221,7 @@ All steps are re-runnable. If a test run fails, inspect the logged output in
 choice proves unsuitable, revert only the view composition changes and iterate
 on the component in isolation before re-integrating.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Example detail rendering (illustrative, not a snapshot):
 
@@ -250,3 +254,10 @@ Example acceptance check for 80-column wrapping in unit tests:
 The detail view should use `ReviewComment.file_path` to select a syntax where
 possible, and fall back to plain text when no syntax is found or highlighting
 fails.
+
+## Revision note
+
+Updated terminology to follow en-GB-oxendict spelling and expanded acronyms on
+first use (ExecPlan, TUI, MVU, ANSI, UI, and BDD). This keeps the document
+aligned with the documentation style guide and does not alter the planned
+implementation steps.
