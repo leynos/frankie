@@ -255,8 +255,8 @@ Example acceptance check for 80-column wrapping in unit tests:
 - Update `src/tui/components/mod.rs` to export the new component.
 - Update `src/tui/app/rendering.rs` and `src/tui/app/mod.rs` to render the
   detail view alongside the list.
-- Confirm syntect is listed in `Cargo.toml` under `[dependencies]`. If it is
-  missing, add it using the caret version requirement `syntect = "5.2"`.
+- Add syntect to `Cargo.toml` under `[dependencies]` using the caret version
+  requirement `syntect = "5.2"`.
 
 The detail view should use `ReviewComment.file_path` to select a syntax where
 possible, and fall back to plain text when no syntax is found or highlighting
