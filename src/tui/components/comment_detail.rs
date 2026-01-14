@@ -144,44 +144,60 @@ fn wrap_text(text: &str, max_width: usize) -> String {
         return text.to_owned();
     }
 
-    let mut result = String::new();
+    text.split('\n')
+        .map(|paragraph| wrap_paragraph(paragraph, max_width))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
-    for paragraph in text.split('\n') {
-        if !result.is_empty() {
-            result.push('\n');
-        }
+/// Wraps a single paragraph to the specified maximum width.
+///
+/// Handles word-by-word wrapping, collecting lines into a vector
+/// and joining them with newlines.
+fn wrap_paragraph(paragraph: &str, max_width: usize) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let mut current_line = String::new();
+    let mut current_width = 0;
 
-        let mut current_line = String::new();
-        let mut current_width = 0;
+    for word in paragraph.split_whitespace() {
+        let word_len = word.chars().count();
 
-        for word in paragraph.split_whitespace() {
-            let word_len = word.chars().count();
-
-            if current_width == 0 {
-                // First word on line
-                current_line.push_str(word);
-                current_width = word_len;
-            } else if current_width + 1 + word_len <= max_width {
-                // Word fits on current line
-                current_line.push(' ');
-                current_line.push_str(word);
-                current_width += 1 + word_len;
-            } else {
-                // Start new line
-                result.push_str(&current_line);
-                result.push('\n');
-                current_line.clear();
-                current_line.push_str(word);
-                current_width = word_len;
+        if should_start_new_line(current_width, word_len, max_width) {
+            if !current_line.is_empty() {
+                lines.push(current_line);
+                current_line = String::new();
             }
+            current_width = 0;
         }
 
-        if !current_line.is_empty() {
-            result.push_str(&current_line);
-        }
+        append_word_to_line(word, &mut current_line, &mut current_width);
     }
 
-    result
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    lines.join("\n")
+}
+
+/// Determines if a new line should be started before adding a word.
+///
+/// Returns true if the current line is non-empty and adding the word
+/// (plus a space separator) would exceed the maximum width.
+const fn should_start_new_line(current_width: usize, word_len: usize, max_width: usize) -> bool {
+    current_width > 0 && current_width + 1 + word_len > max_width
+}
+
+/// Appends a word to the current line, updating the width.
+///
+/// Adds a space separator if the line already has content.
+fn append_word_to_line(word: &str, line: &mut String, width: &mut usize) {
+    if *width > 0 {
+        line.push(' ');
+        *width += 1;
+    }
+    line.push_str(word);
+    *width += word.chars().count();
 }
 
 #[cfg(test)]
@@ -244,6 +260,20 @@ mod tests {
         }
     }
 
+    /// Renders a comment detail view for testing.
+    ///
+    /// Creates a `CommentDetailComponent` and renders the given comment
+    /// with standard test dimensions (80 width, 20 height).
+    fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
+        let component = CommentDetailComponent::new();
+        let ctx = CommentDetailViewContext {
+            selected_comment: comment,
+            max_width: 80,
+            available_height: 20,
+        };
+        component.view(&ctx)
+    }
+
     #[fixture]
     fn sample_comment() -> ReviewComment {
         ReviewBuilder::default()
@@ -267,14 +297,7 @@ mod tests {
 
     #[test]
     fn view_renders_placeholder_when_no_comment() {
-        let component = CommentDetailComponent::new();
-        let ctx = CommentDetailViewContext {
-            selected_comment: None,
-            max_width: 80,
-            available_height: 20,
-        };
-
-        let output = component.view(&ctx);
+        let output = render_comment_detail(None);
 
         assert!(
             output.contains(NO_SELECTION_PLACEHOLDER),
@@ -300,14 +323,7 @@ mod tests {
 
     #[rstest]
     fn view_includes_body_text(sample_comment: ReviewComment) {
-        let component = CommentDetailComponent::new();
-        let ctx = CommentDetailViewContext {
-            selected_comment: Some(&sample_comment),
-            max_width: 80,
-            available_height: 20,
-        };
-
-        let output = component.view(&ctx);
+        let output = render_comment_detail(Some(&sample_comment));
 
         assert!(
             output.contains("Please extract this helper"),
@@ -317,14 +333,7 @@ mod tests {
 
     #[rstest]
     fn view_includes_code_context(sample_comment: ReviewComment) {
-        let component = CommentDetailComponent::new();
-        let ctx = CommentDetailViewContext {
-            selected_comment: Some(&sample_comment),
-            max_width: 80,
-            available_height: 20,
-        };
-
-        let output = component.view(&ctx);
+        let output = render_comment_detail(Some(&sample_comment));
 
         // The diff hunk should be visible (may have ANSI codes)
         assert!(
@@ -335,14 +344,7 @@ mod tests {
 
     #[rstest]
     fn view_shows_placeholder_when_no_diff_hunk(comment_without_hunk: ReviewComment) {
-        let component = CommentDetailComponent::new();
-        let ctx = CommentDetailViewContext {
-            selected_comment: Some(&comment_without_hunk),
-            max_width: 80,
-            available_height: 20,
-        };
-
-        let output = component.view(&ctx);
+        let output = render_comment_detail(Some(&comment_without_hunk));
 
         assert!(
             output.contains(NO_CONTEXT_PLACEHOLDER),
@@ -371,7 +373,10 @@ mod tests {
         // Strip ANSI codes and check line widths
         let stripped = strip_ansi_codes(&output);
         for line in stripped.lines() {
-            assert!(line.chars().count() <= 80, "line exceeds 80 chars: '{line}'");
+            assert!(
+                line.chars().count() <= 80,
+                "line exceeds 80 chars: '{line}'"
+            );
         }
     }
 

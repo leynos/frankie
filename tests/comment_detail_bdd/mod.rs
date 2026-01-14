@@ -3,3 +3,4 @@
 pub(crate) mod state;
 
 pub(crate) use state::DetailState;
+pub(crate) use state::ReviewCommentBuilder;

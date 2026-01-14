@@ -180,7 +180,10 @@ pub fn wrap_to_width(line: &str, max_width: usize) -> String {
     }
 
     // Estimate extra capacity for newlines: one per max_width chars
-    let extra_newlines = char_count.saturating_sub(1).checked_div(max_width).unwrap_or(0);
+    let extra_newlines = char_count
+        .saturating_sub(1)
+        .checked_div(max_width)
+        .unwrap_or(0);
     let mut result = String::with_capacity(line.len() + extra_newlines);
     let mut current_width = 0;
 

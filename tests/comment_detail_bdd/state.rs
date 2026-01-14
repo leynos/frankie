@@ -16,31 +16,80 @@ pub(crate) struct DetailState {
     pub(crate) max_width: Slot<usize>,
 }
 
-/// Creates a review comment with the specified fields.
-#[must_use]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "test helper function with many optional fields"
-)]
-pub(crate) fn create_review_comment(
+/// Builder for creating test `ReviewComment` instances.
+///
+/// Provides a fluent API for constructing review comments with only
+/// the fields relevant to each test case.
+#[derive(Default)]
+pub(crate) struct ReviewCommentBuilder {
     id: u64,
-    author: Option<&str>,
-    file_path: Option<&str>,
+    author: Option<String>,
+    file_path: Option<String>,
     line_number: Option<u32>,
-    body: Option<&str>,
-    diff_hunk: Option<&str>,
-) -> ReviewComment {
-    ReviewComment {
-        id,
-        body: body.map(ToOwned::to_owned),
-        author: author.map(ToOwned::to_owned),
-        file_path: file_path.map(ToOwned::to_owned),
-        line_number,
-        original_line_number: None,
-        diff_hunk: diff_hunk.map(ToOwned::to_owned),
-        commit_sha: None,
-        in_reply_to_id: None,
-        created_at: None,
-        updated_at: None,
+    body: Option<String>,
+    diff_hunk: Option<String>,
+}
+
+impl ReviewCommentBuilder {
+    /// Creates a new builder with the specified comment ID.
+    #[must_use]
+    pub(crate) fn new(id: u64) -> Self {
+        Self {
+            id,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the comment author.
+    #[must_use]
+    pub(crate) fn author(mut self, author: &str) -> Self {
+        self.author = Some(author.to_owned());
+        self
+    }
+
+    /// Sets the file path for the comment.
+    #[must_use]
+    pub(crate) fn file_path(mut self, path: &str) -> Self {
+        self.file_path = Some(path.to_owned());
+        self
+    }
+
+    /// Sets the line number for the comment.
+    #[must_use]
+    pub(crate) const fn line_number(mut self, line: u32) -> Self {
+        self.line_number = Some(line);
+        self
+    }
+
+    /// Sets the comment body text.
+    #[must_use]
+    pub(crate) fn body(mut self, body: &str) -> Self {
+        self.body = Some(body.to_owned());
+        self
+    }
+
+    /// Sets the diff hunk for inline code context.
+    #[must_use]
+    pub(crate) fn diff_hunk(mut self, hunk: &str) -> Self {
+        self.diff_hunk = Some(hunk.to_owned());
+        self
+    }
+
+    /// Builds the `ReviewComment` instance.
+    #[must_use]
+    pub(crate) fn build(self) -> ReviewComment {
+        ReviewComment {
+            id: self.id,
+            body: self.body,
+            author: self.author,
+            file_path: self.file_path,
+            line_number: self.line_number,
+            original_line_number: None,
+            diff_hunk: self.diff_hunk,
+            commit_sha: None,
+            in_reply_to_id: None,
+            created_at: None,
+            updated_at: None,
+        }
     }
 }
