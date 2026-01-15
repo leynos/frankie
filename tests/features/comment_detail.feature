@@ -19,7 +19,7 @@ Feature: Comment detail view with inline code context
 
   Scenario: Code context wraps long lines to 80 columns
     Given a TUI with a review comment with a 120-character code line
-    When the view is rendered with max width 80
+    When the view is rendered
     Then all code lines are at most 80 characters wide
 
   Scenario: Fallback to plain text when highlighting fails

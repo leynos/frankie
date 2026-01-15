@@ -25,8 +25,6 @@ pub struct CommentDetailViewContext<'a> {
     pub selected_comment: Option<&'a ReviewComment>,
     /// Maximum width for code block wrapping (typically 80).
     pub max_width: usize,
-    /// Terminal height available for the detail pane.
-    pub available_height: usize,
 }
 
 /// Component for displaying a single review comment with code context.
@@ -90,8 +88,11 @@ impl CommentDetailComponent {
     }
 
     /// Renders a horizontal separator line.
+    ///
+    /// Trusts the caller to provide an appropriate width (already clamped
+    /// to 80 or terminal width by the caller).
     fn render_separator(width: usize) -> String {
-        "\u{2500}".repeat(width.min(80))
+        "\u{2500}".repeat(width)
     }
 
     /// Renders the comment header with author, file path, and line number.
@@ -263,13 +264,12 @@ mod tests {
     /// Renders a comment detail view for testing.
     ///
     /// Creates a `CommentDetailComponent` and renders the given comment
-    /// with standard test dimensions (80 width, 20 height).
+    /// with standard test width (80 columns).
     fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
         let component = CommentDetailComponent::new();
         let ctx = CommentDetailViewContext {
             selected_comment: comment,
             max_width: 80,
-            available_height: 20,
         };
         component.view(&ctx)
     }
@@ -307,14 +307,7 @@ mod tests {
 
     #[rstest]
     fn view_includes_author_and_file(sample_comment: ReviewComment) {
-        let component = CommentDetailComponent::new();
-        let ctx = CommentDetailViewContext {
-            selected_comment: Some(&sample_comment),
-            max_width: 80,
-            available_height: 20,
-        };
-
-        let output = component.view(&ctx);
+        let output = render_comment_detail(Some(&sample_comment));
 
         assert!(output.contains("[alice]"), "should include author");
         assert!(output.contains("src/main.rs"), "should include file path");
@@ -361,14 +354,7 @@ mod tests {
             .diff_hunk(&long_code)
             .build();
 
-        let component = CommentDetailComponent::new();
-        let ctx = CommentDetailViewContext {
-            selected_comment: Some(&comment),
-            max_width: 80,
-            available_height: 20,
-        };
-
-        let output = component.view(&ctx);
+        let output = render_comment_detail(Some(&comment));
 
         // Strip ANSI codes and check line widths
         let stripped = strip_ansi_codes(&output);
@@ -421,18 +407,20 @@ mod tests {
             "separator should be 80 chars wide"
         );
 
-        let sep_120 = CommentDetailComponent::render_separator(120);
-        assert_eq!(
-            sep_120.chars().count(),
-            80,
-            "separator should cap at 80 chars"
-        );
-
         let sep_40 = CommentDetailComponent::render_separator(40);
         assert_eq!(
             sep_40.chars().count(),
             40,
             "separator should respect narrower width"
+        );
+
+        // Separator trusts the caller to clamp width; width >80 is allowed
+        // if caller provides it (e.g., for wide terminals)
+        let sep_100 = CommentDetailComponent::render_separator(100);
+        assert_eq!(
+            sep_100.chars().count(),
+            100,
+            "separator should use provided width"
         );
     }
 

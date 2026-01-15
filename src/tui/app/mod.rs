@@ -394,7 +394,6 @@ impl Model for ReviewApp {
         let detail_ctx = CommentDetailViewContext {
             selected_comment: self.selected_comment(),
             max_width: 80.min(self.width as usize),
-            available_height: self.height.saturating_sub(10) as usize,
         };
         output.push_str(&self.comment_detail.view(&detail_ctx));
 

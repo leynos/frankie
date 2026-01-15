@@ -12,8 +12,6 @@ pub(crate) struct DetailState {
     pub(crate) app: Slot<ReviewApp>,
     /// The rendered view output.
     pub(crate) rendered_view: Slot<String>,
-    /// Maximum width used for rendering.
-    pub(crate) max_width: Slot<usize>,
 }
 
 /// Builder for creating test `ReviewComment` instances.

@@ -103,7 +103,6 @@ fn given_review_comment_with_long_code_line(detail_state: &DetailState) {
         .body("Long line")
         .diff_hunk(&diff_hunk);
     detail_state.setup_app_with_comment(builder);
-    detail_state.max_width.set(80);
 }
 
 #[given("a TUI with a review comment on a file with unknown extension")]
@@ -115,7 +114,6 @@ fn given_review_comment_with_unknown_extension(detail_state: &DetailState) {
         .body("Check this data")
         .diff_hunk("@@ -1,1 +1,1 @@\n+some data content");
     detail_state.setup_app_with_comment(builder);
-    detail_state.max_width.set(80);
 }
 
 #[given("a TUI with a review comment without diff hunk")]
@@ -138,17 +136,6 @@ fn given_tui_with_no_comments(detail_state: &DetailState) {
 #[when("the view is rendered")]
 #[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_view_is_rendered(detail_state: &DetailState) {
-    let view = detail_state
-        .app
-        .with_ref(ReviewApp::view)
-        .expect("app not initialised");
-    detail_state.rendered_view.set(view);
-}
-
-#[when("the view is rendered with max width {width:usize}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
-fn when_view_is_rendered_with_max_width(detail_state: &DetailState, width: usize) {
-    detail_state.max_width.set(width);
     let view = detail_state
         .app
         .with_ref(ReviewApp::view)
@@ -208,10 +195,15 @@ fn then_code_lines_within_width(detail_state: &DetailState, max: usize) {
 #[then("the code context is displayed as plain text")]
 fn then_code_is_plain_text(detail_state: &DetailState) {
     let view = detail_state.get_rendered_view();
-    // Plain text means the content is visible
+    // Plain text means the content is visible and not syntax highlighted
     assert!(
         view.contains("some data content") || view.contains("data"),
         "expected plain text code in view:\n{view}"
+    );
+    // Verify no ANSI escape codes are present (proves plain text fallback)
+    assert!(
+        !view.contains("\x1b["),
+        "expected no ANSI codes for plain text fallback:\n{view}"
     );
 }
 
