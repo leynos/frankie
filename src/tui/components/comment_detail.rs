@@ -176,10 +176,12 @@ fn truncate_to_height(output: &mut String, max_height: usize) {
     }
 }
 
-/// Finds the byte position of the (n+1)th newline in a string (0-indexed).
+/// Finds the byte index of the nth newline character in a string (0-indexed).
 ///
-/// Returns the byte index of the newline character itself, not the position
-/// after it. Callers typically add +1 to get the start of the next line.
+/// Given `n`, returns the byte position of the `(n+1)`th newline when counting
+/// from one, i.e. `n=0` returns the position of the first newline, `n=1` the
+/// second, and so on. Callers should add 1 to the result to obtain the byte
+/// position immediately after that newline (the start of the following line).
 fn find_nth_newline_position(s: &str, n: usize) -> Option<usize> {
     let mut count = 0;
     for (i, ch) in s.char_indices() {
