@@ -134,10 +134,7 @@ impl ReviewApp {
     /// Returns the ID of the currently selected comment, if any.
     #[must_use]
     pub fn current_selected_id(&self) -> Option<u64> {
-        self.filtered_indices
-            .get(self.filter_state.cursor_position)
-            .and_then(|&idx| self.reviews.get(idx))
-            .map(|r| r.id)
+        self.selected_comment().map(|r| r.id)
     }
 
     /// Returns a reference to the currently selected comment, if any.

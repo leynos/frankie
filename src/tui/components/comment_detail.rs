@@ -184,61 +184,7 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use super::*;
-    use crate::tui::components::test_utils::strip_ansi_codes;
-
-    /// Builder for creating test review comments.
-    #[derive(Default)]
-    struct ReviewBuilder {
-        id: u64,
-        author: Option<String>,
-        file_path: Option<String>,
-        line_number: Option<u32>,
-        body: Option<String>,
-        diff_hunk: Option<String>,
-    }
-
-    impl ReviewBuilder {
-        fn author(mut self, author: &str) -> Self {
-            self.author = Some(author.to_owned());
-            self
-        }
-
-        fn file_path(mut self, path: &str) -> Self {
-            self.file_path = Some(path.to_owned());
-            self
-        }
-
-        fn line_number(mut self, line: u32) -> Self {
-            self.line_number = Some(line);
-            self
-        }
-
-        fn body(mut self, body: &str) -> Self {
-            self.body = Some(body.to_owned());
-            self
-        }
-
-        fn diff_hunk(mut self, hunk: &str) -> Self {
-            self.diff_hunk = Some(hunk.to_owned());
-            self
-        }
-
-        fn build(self) -> ReviewComment {
-            ReviewComment {
-                id: self.id,
-                body: self.body,
-                author: self.author,
-                file_path: self.file_path,
-                line_number: self.line_number,
-                original_line_number: None,
-                diff_hunk: self.diff_hunk,
-                commit_sha: None,
-                in_reply_to_id: None,
-                created_at: None,
-                updated_at: None,
-            }
-        }
-    }
+    use crate::tui::components::test_utils::{ReviewCommentBuilder, strip_ansi_codes};
 
     /// Renders a comment detail view for testing.
     ///
@@ -256,7 +202,7 @@ mod tests {
 
     #[fixture]
     fn sample_comment() -> ReviewComment {
-        ReviewBuilder::default()
+        ReviewCommentBuilder::new(0)
             .author("alice")
             .file_path("src/main.rs")
             .line_number(42)
@@ -267,7 +213,7 @@ mod tests {
 
     #[fixture]
     fn comment_without_hunk() -> ReviewComment {
-        ReviewBuilder::default()
+        ReviewCommentBuilder::new(0)
             .author("bob")
             .file_path("src/lib.rs")
             .line_number(10)
@@ -328,7 +274,7 @@ mod tests {
     #[test]
     fn view_wraps_code_to_max_width() {
         let long_code = format!("@@ -1,1 +1,1 @@\n+{}", "x".repeat(120));
-        let comment = ReviewBuilder::default()
+        let comment = ReviewCommentBuilder::new(0)
             .author("alice")
             .file_path("src/main.rs")
             .diff_hunk(&long_code)

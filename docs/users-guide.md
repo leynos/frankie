@@ -212,7 +212,7 @@ When a comment is selected in the review list, the detail pane displays:
 
 Code context is extracted from the GitHub review comment's `diff_hunk` field and
 rendered with syntax highlighting based on the file extension. If the file type
-is not recognised or highlighting fails, the code is displayed as plain text.
+is not recognized or highlighting fails, the code is displayed as plain text.
 
 Long code lines are wrapped to a maximum of 80 columns (or the terminal width if
 narrower) to ensure readability without horizontal scrolling.
