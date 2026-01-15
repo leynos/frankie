@@ -197,7 +197,7 @@ exploring how to build developer tools for an AI-assisted future.
 
 Copyright © 2025 [df12 Productions](https://df12.studio)
 
-Licensed under the ISC Licence. See [LICENCE](LICENSE) for details.
+Licensed under the ISC Licence. See [LICENSE](LICENSE) for details.
 
 ______________________________________________________________________
 
