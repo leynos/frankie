@@ -82,7 +82,7 @@ cd /path/to/your/repo
    `repo` access
 2. **Set your token**: Export as `FRANKIE_TOKEN` or `GITHUB_TOKEN` environment
    variable
-3. **Optional - Enable caching**:
+3. **Optional—Enable caching**:
 
    ```bash
    ./target/debug/frankie --migrate-db --database-url frankie.sqlite
