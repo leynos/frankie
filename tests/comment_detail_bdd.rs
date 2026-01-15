@@ -18,38 +18,11 @@ fn detail_state() -> DetailState {
 // Helper methods for DetailState
 
 impl DetailState {
-    /// Sets up the app with a review comment using the builder pattern.
+    /// Sets up the app with a review comment from a pre-configured builder.
     ///
-    /// This encapsulates the common pattern of creating a comment and
+    /// This encapsulates the common pattern of building a comment and
     /// initialising the `ReviewApp` with it.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "helper mirrors builder options for flexibility"
-    )]
-    fn setup_app_with_comment(
-        &self,
-        author: Option<&str>,
-        file: Option<&str>,
-        line: Option<u32>,
-        body: Option<&str>,
-        diff_hunk: Option<&str>,
-    ) {
-        let mut builder = ReviewCommentBuilder::new(1);
-        if let Some(a) = author {
-            builder = builder.author(a);
-        }
-        if let Some(f) = file {
-            builder = builder.file_path(f);
-        }
-        if let Some(l) = line {
-            builder = builder.line_number(l);
-        }
-        if let Some(b) = body {
-            builder = builder.body(b);
-        }
-        if let Some(h) = diff_hunk {
-            builder = builder.diff_hunk(h);
-        }
+    fn setup_app_with_comment(&self, builder: ReviewCommentBuilder) {
         let comment = builder.build();
         let app = ReviewApp::new(vec![comment]);
         self.app.set(app);
@@ -85,75 +58,74 @@ fn given_review_comment_with_location(
     file: String,
     line: u32,
 ) {
-    detail_state.setup_app_with_comment(
-        Some(&author),
-        Some(&file),
-        Some(line),
-        Some("Test comment body"),
-        Some("@@ -1,3 +1,4 @@\n+fn test() {}"),
-    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author(&author)
+        .file_path(&file)
+        .line_number(line)
+        .body("Test comment body")
+        .diff_hunk("@@ -1,3 +1,4 @@\n+fn test() {}");
+    detail_state.setup_app_with_comment(builder);
 }
 
 #[given("a TUI with a review comment with body {body}")]
 fn given_review_comment_with_body(detail_state: &DetailState, body: String) {
     let body_text = body.trim_matches('"');
-    detail_state.setup_app_with_comment(
-        Some("alice"),
-        Some("src/lib.rs"),
-        Some(10),
-        Some(body_text),
-        Some("@@ -1,3 +1,4 @@\n+fn test() {}"),
-    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/lib.rs")
+        .line_number(10)
+        .body(body_text)
+        .diff_hunk("@@ -1,3 +1,4 @@\n+fn test() {}");
+    detail_state.setup_app_with_comment(builder);
 }
 
 #[given("a TUI with a review comment with a diff hunk")]
 fn given_review_comment_with_diff_hunk(detail_state: &DetailState) {
     let diff_hunk =
         "@@ -10,6 +10,10 @@\n fn existing() {}\n+fn new_function() {\n+    let x = 1;\n+}";
-    detail_state.setup_app_with_comment(
-        Some("alice"),
-        Some("src/main.rs"),
-        Some(12),
-        Some("Please review this change"),
-        Some(diff_hunk),
-    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/main.rs")
+        .line_number(12)
+        .body("Please review this change")
+        .diff_hunk(diff_hunk);
+    detail_state.setup_app_with_comment(builder);
 }
 
 #[given("a TUI with a review comment with a 120-character code line")]
 fn given_review_comment_with_long_code_line(detail_state: &DetailState) {
     let long_line = "x".repeat(120);
     let diff_hunk = format!("@@ -1,1 +1,1 @@\n+let long = \"{long_line}\";");
-    detail_state.setup_app_with_comment(
-        Some("alice"),
-        Some("src/main.rs"),
-        Some(1),
-        Some("Long line"),
-        Some(&diff_hunk),
-    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/main.rs")
+        .line_number(1)
+        .body("Long line")
+        .diff_hunk(&diff_hunk);
+    detail_state.setup_app_with_comment(builder);
     detail_state.max_width.set(80);
 }
 
 #[given("a TUI with a review comment on a file with unknown extension")]
 fn given_review_comment_with_unknown_extension(detail_state: &DetailState) {
-    detail_state.setup_app_with_comment(
-        Some("alice"),
-        Some("data.unknown_ext_xyz"),
-        Some(1),
-        Some("Check this data"),
-        Some("@@ -1,1 +1,1 @@\n+some data content"),
-    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("data.unknown_ext_xyz")
+        .line_number(1)
+        .body("Check this data")
+        .diff_hunk("@@ -1,1 +1,1 @@\n+some data content");
+    detail_state.setup_app_with_comment(builder);
     detail_state.max_width.set(80);
 }
 
 #[given("a TUI with a review comment without diff hunk")]
 fn given_review_comment_without_diff_hunk(detail_state: &DetailState) {
-    detail_state.setup_app_with_comment(
-        Some("bob"),
-        Some("src/lib.rs"),
-        Some(5),
-        Some("General comment"),
-        None,
-    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author("bob")
+        .file_path("src/lib.rs")
+        .line_number(5)
+        .body("General comment");
+    detail_state.setup_app_with_comment(builder);
 }
 
 #[given("a TUI with no comments")]
