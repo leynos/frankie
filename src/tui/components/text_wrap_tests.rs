@@ -60,7 +60,8 @@ fn wrap_to_width_handles_unicode() {
 
 #[test]
 fn wrap_code_block_handles_multiline() {
-    let code = "short line\na]".to_owned() + &"b".repeat(100);
+    // First line is short, second line exceeds 80 characters and should wrap
+    let code = "short line\n".to_owned() + &"b".repeat(100);
     let result = wrap_code_block(&code, 80);
 
     for line in result.lines() {

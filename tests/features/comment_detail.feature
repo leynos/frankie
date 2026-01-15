@@ -37,3 +37,15 @@ Feature: Comment detail view with inline code context
     Given a TUI with no comments
     When the view is rendered
     Then the detail pane shows no-selection placeholder
+
+  Scenario: Detail pane truncates to max height with ellipsis
+    Given a TUI with a comment producing more lines than visible height
+    When the view is rendered with max height 5
+    Then the output has at most 5 lines
+    And the last line is an ellipsis indicator
+
+  Scenario: Detail pane preserves blank lines during truncation
+    Given a TUI with a comment containing consecutive blank lines
+    When the view is rendered with max height 8
+    Then blank lines are preserved in the truncated output
+    And the last line is an ellipsis indicator

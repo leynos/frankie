@@ -1,14 +1,14 @@
 # Implement comment detail view with inline code context
 
 This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
-`Outcomes & Retrospective` must be kept up to date as work proceeds.
+`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
+`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
+proceeds.
 
 Status: DONE
 
-PLANS.md is not present in the repository root, so no additional plan governance
-applies.
+PLANS.md is not present in the repository root, so no additional plan
+governance applies.
 
 ## Purpose / Big picture
 
@@ -23,8 +23,8 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
 ## Constraints
 
 - Follow the model-view-update (MVU) structure already used in
-  `src/tui/app/mod.rs` and keep view
-  rendering in query methods, not update handlers.
+  `src/tui/app/mod.rs` and keep view rendering in query methods, not update
+  handlers.
 - Every new module must begin with a `//!` module-level comment.
 - No single code file may exceed 400 lines.
 - Documentation must use en-GB-oxendict spelling, 80-column wrapping, and the
@@ -54,21 +54,15 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
 
 - Risk: syntect highlighting can introduce ANSI (American National Standards
   Institute) escape codes that complicate wrapping to a maximum of 80 columns.
-  Severity: medium
-  Likelihood: medium
-  Mitigation: wrap source lines to 80 columns before highlighting, and test
-  width compliance using fixed-width fixtures.
+  Severity: medium Likelihood: medium Mitigation: wrap source lines to 80
+  columns before highlighting, and test width compliance using fixed-width
+  fixtures.
 - Risk: diff hunk context may be absent on some comments, leaving no code
-  context to render.
-  Severity: low
-  Likelihood: medium
-  Mitigation: display a clear placeholder and still render the comment body.
+  context to render. Severity: low Likelihood: medium Mitigation: display a
+  clear placeholder and still render the comment body.
 - Risk: combining a list and detail panel could degrade readability on small
-  terminal sizes.
-  Severity: medium
-  Likelihood: low
-  Mitigation: clamp panel heights, and prioritize code context when space is
-  limited.
+  terminal sizes. Severity: medium Likelihood: low Mitigation: clamp panel
+  heights, and prioritize code context when space is limited.
 
 ## Progress
 
@@ -83,7 +77,8 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
 - [x] (2026-01-13 01:45Z) Integrate detail view into TUI rendering and update
   layout.
 - [x] (2026-01-13 02:00Z) Update design documentation and user guide.
-- [x] (2026-01-13 02:30Z) Run formatting, linting, tests, and documentation validators.
+- [x] (2026-01-13 02:30Z) Run formatting, linting, tests, and documentation
+      validators.
 - [x] (2026-01-13 02:45Z) Mark roadmap entry complete and record outcomes.
 
 ## Surprises & discoveries
@@ -96,14 +91,13 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
 ## Decision log
 
 - Decision: Use `ReviewComment.diff_hunk` as the inline code context source for
-  the first implementation.
-  Rationale: It is already populated from the GitHub review comment payload and
-  available without additional API calls.
+  the first implementation. Rationale: It is already populated from the GitHub
+  review comment payload and available without additional API calls.
   Date/Author: 2026-01-11, plan author.
 - Decision: Add syntect to `Cargo.toml` because it is not currently listed.
   Rationale: The plan requires syntect for syntax highlighting and
-  `docs/frankie-design.md` specifies it as a dependency.
-  Date/Author: 2026-01-13, plan author.
+  `docs/frankie-design.md` specifies it as a dependency. Date/Author:
+  2026-01-13, plan author.
 
 ## Outcomes & retrospective
 
@@ -128,12 +122,12 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
 The review TUI is implemented under `src/tui/`. The model and update logic live
 in `src/tui/app/mod.rs`, with view rendering split into
 `src/tui/app/rendering.rs`. The current user interface (UI) only renders a
-review list via the
-`ReviewListComponent` in `src/tui/components/review_list.rs`. Review comments
-are represented by `ReviewComment` in `src/github/models/mod.rs`, which includes
-`diff_hunk`, `file_path`, and line numbers required for inline context. Unit
-tests for TUI behaviour live in `src/tui/app/tests.rs`, and behavioural tests
-use `rstest-bdd` under `tests/` with feature files in `tests/features/`.
+review list via the `ReviewListComponent` in
+`src/tui/components/review_list.rs`. Review comments are represented by
+`ReviewComment` in `src/github/models/mod.rs`, which includes `diff_hunk`,
+`file_path`, and line numbers required for inline context. Unit tests for TUI
+behaviour live in `src/tui/app/tests.rs`, and behavioural tests use
+`rstest-bdd` under `tests/` with feature files in `tests/features/`.
 
 The design expectations for this feature are described in `docs/roadmap.md` and
 `docs/frankie-design.md`. Documentation updates must follow
@@ -165,10 +159,9 @@ uses syntect to colourize code based on `file_path`, returning a `Result` so
 errors can fall back to plain text. Add a wrapping helper that enforces an
 80-column maximum (or terminal width if narrower) for code lines (using a
 consistent, character-counted wrap), with behaviour documented in unit tests.
-Wire the new component into
-`ReviewApp::view()` by rendering the list and detail panes together, ensuring
-cursor movement updates the selected comment detail. Keep the rendering
-functions in query-only paths.
+Wire the new component into `ReviewApp::view()` by rendering the list and
+detail panes together, ensuring cursor movement updates the selected comment
+detail. Keep the rendering functions in query-only paths.
 
 Stage D: documentation and cleanup. Update `docs/frankie-design.md` with any
 design decisions made during implementation (layout choice, highlight strategy,
@@ -256,8 +249,8 @@ Example detail rendering (illustrative, not a snapshot):
     Comment: Please extract this helper.
 
     @@ -40,6 +40,10 @@
-    +fn wrap_line(input: &str) -> String { ... }
-    +fn format_view(...) -> String { ... }
+    +fn wrap_line(input: &str) -> String { … }
+    +fn format_view(…) -> String { … }
 
 Example acceptance check for 80-column wrapping in unit tests:
 
@@ -287,6 +280,5 @@ fails.
 Updated en-GB-oxendict spellings, aligned the wrapping rule to a single
 definition, clarified syntect dependency guidance (now noting syntect is not
 listed in `Cargo.toml`), and expanded acronyms on first use (ExecPlan, TUI,
-MVU, ANSI, UI, and BDD). This keeps the document aligned with the
-documentation style guide and does not alter the planned implementation
-steps.
+MVU, ANSI, UI, and BDD). This keeps the document aligned with the documentation
+style guide and does not alter the planned implementation steps.

@@ -6,15 +6,22 @@
 //! - **Word-based wrapping** (`wrap_text`): Wraps at word boundaries while
 //!   preserving indentation and multiple spaces, used for prose text.
 
-/// Wraps a single line to a maximum width using character count.
+/// Wraps a single line to a maximum width using Unicode scalar value count.
 ///
-/// Uses character count rather than byte count to correctly handle
-/// Unicode characters including emoji and CJK text.
+/// Counts and wraps by Unicode scalar values (code points), not bytes. This
+/// means each `char` counts as 1 regardless of its UTF-8 byte length.
+///
+/// **Note**: This function does not account for terminal display width. CJK
+/// characters and many emoji occupy 2 terminal columns but count as 1 here.
+/// Combined grapheme clusters (e.g., 'e' + combining accent, or emoji with
+/// skin tone modifiers) also count each code point separately. For accurate
+/// display-width wrapping, consider crates like `unicode-width` or
+/// `unicode-segmentation`.
 ///
 /// # Arguments
 ///
 /// * `line` - The line to wrap
-/// * `max_width` - Maximum characters per line
+/// * `max_width` - Maximum Unicode scalar values (code points) per line
 #[must_use]
 pub fn wrap_to_width(line: &str, max_width: usize) -> String {
     if max_width == 0 {
@@ -57,10 +64,16 @@ pub fn wrap_to_width(line: &str, max_width: usize) -> String {
 /// * `max_width` - Maximum characters per line
 #[must_use]
 pub fn wrap_code_block(text: &str, max_width: usize) -> String {
-    text.lines()
-        .map(|line| wrap_to_width(line, max_width))
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut lines = text.lines();
+    let Some(first) = lines.next() else {
+        return String::new();
+    };
+
+    lines.fold(wrap_to_width(first, max_width), |mut acc, line| {
+        acc.push('\n');
+        acc.push_str(&wrap_to_width(line, max_width));
+        acc
+    })
 }
 
 /// Wraps text to a maximum width, preserving existing whitespace.

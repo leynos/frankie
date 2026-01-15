@@ -149,19 +149,30 @@ impl CommentDetailComponent {
 /// Truncates output to a maximum number of lines.
 ///
 /// If the output exceeds `max_height` lines, it is truncated and
-/// a "..." indicator is appended to show content was cut off.
+/// a "..." indicator is appended on the final line to show content was cut off.
+/// The result will have exactly `max_height` lines (or fewer if input is shorter).
 fn truncate_to_height(output: &mut String, max_height: usize) {
     let line_count = output.lines().count();
     if line_count <= max_height {
         return;
     }
 
-    // Find the byte position after the nth newline
-    let truncate_at = find_nth_newline_position(output, max_height.saturating_sub(1));
+    // Reserve one line for the ellipsis indicator
+    let lines_to_keep = max_height.saturating_sub(1);
+
+    // Find the byte position of the newline after the lines we want to keep
+    // We want to find the (lines_to_keep)th newline (0-indexed), so we look
+    // for the position where count exceeds (lines_to_keep - 1)
+    let truncate_at = if lines_to_keep == 0 {
+        // Special case: keep 0 lines, just show ellipsis
+        Some(0)
+    } else {
+        find_nth_newline_position(output, lines_to_keep - 1).map(|pos| pos + 1)
+    };
 
     if let Some(pos) = truncate_at {
         output.truncate(pos);
-        output.push_str("\n...\n");
+        output.push_str("...\n");
     }
 }
 
@@ -180,141 +191,5 @@ fn find_nth_newline_position(s: &str, n: usize) -> Option<usize> {
 }
 
 #[cfg(test)]
-mod tests {
-    use rstest::{fixture, rstest};
-
-    use super::*;
-    use crate::tui::components::test_utils::{ReviewCommentBuilder, strip_ansi_codes};
-
-    /// Renders a comment detail view for testing.
-    ///
-    /// Creates a `CommentDetailComponent` and renders the given comment
-    /// with standard test width (80 columns) and unlimited height.
-    fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
-        let component = CommentDetailComponent::new();
-        let ctx = CommentDetailViewContext {
-            selected_comment: comment,
-            max_width: 80,
-            max_height: 0, // unlimited
-        };
-        component.view(&ctx)
-    }
-
-    #[fixture]
-    fn sample_comment() -> ReviewComment {
-        ReviewCommentBuilder::new(0)
-            .author("alice")
-            .file_path("src/main.rs")
-            .line_number(42)
-            .body("Please extract this helper function.")
-            .diff_hunk("@@ -40,6 +40,10 @@\n+fn helper() {\n+    // code\n+}")
-            .build()
-    }
-
-    #[fixture]
-    fn comment_without_hunk() -> ReviewComment {
-        ReviewCommentBuilder::new(0)
-            .author("bob")
-            .file_path("src/lib.rs")
-            .line_number(10)
-            .body("Looks good!")
-            .build()
-    }
-
-    #[test]
-    fn view_renders_placeholder_when_no_comment() {
-        let output = render_comment_detail(None);
-
-        assert!(
-            output.contains(NO_SELECTION_PLACEHOLDER),
-            "should show no-selection placeholder"
-        );
-    }
-
-    #[rstest]
-    fn view_includes_author_and_file(sample_comment: ReviewComment) {
-        let output = render_comment_detail(Some(&sample_comment));
-
-        assert!(output.contains("[alice]"), "should include author");
-        assert!(output.contains("src/main.rs"), "should include file path");
-        assert!(output.contains(":42"), "should include line number");
-    }
-
-    #[rstest]
-    fn view_includes_body_text(sample_comment: ReviewComment) {
-        let output = render_comment_detail(Some(&sample_comment));
-
-        assert!(
-            output.contains("Please extract this helper"),
-            "should include comment body"
-        );
-    }
-
-    #[rstest]
-    fn view_includes_code_context(sample_comment: ReviewComment) {
-        let output = render_comment_detail(Some(&sample_comment));
-
-        // The diff hunk should be visible (may have ANSI codes)
-        assert!(
-            output.contains("fn helper()") || output.contains("helper"),
-            "should include code context from diff_hunk"
-        );
-    }
-
-    #[rstest]
-    fn view_shows_placeholder_when_no_diff_hunk(comment_without_hunk: ReviewComment) {
-        let output = render_comment_detail(Some(&comment_without_hunk));
-
-        assert!(
-            output.contains(NO_CONTEXT_PLACEHOLDER),
-            "should show no-context placeholder when diff_hunk is None"
-        );
-    }
-
-    #[test]
-    fn view_wraps_code_to_max_width() {
-        let long_code = format!("@@ -1,1 +1,1 @@\n+{}", "x".repeat(120));
-        let comment = ReviewCommentBuilder::new(0)
-            .author("alice")
-            .file_path("src/main.rs")
-            .diff_hunk(&long_code)
-            .build();
-
-        let output = render_comment_detail(Some(&comment));
-
-        // Strip ANSI codes and check line widths
-        let stripped = strip_ansi_codes(&output);
-        for line in stripped.lines() {
-            assert!(
-                line.chars().count() <= 80,
-                "line exceeds 80 chars: '{line}'"
-            );
-        }
-    }
-
-    #[test]
-    fn render_separator_respects_width() {
-        let sep_80 = CommentDetailComponent::render_separator(80);
-        assert_eq!(
-            sep_80.chars().count(),
-            80,
-            "separator should be 80 chars wide"
-        );
-
-        let sep_40 = CommentDetailComponent::render_separator(40);
-        assert_eq!(
-            sep_40.chars().count(),
-            40,
-            "separator should respect narrower width"
-        );
-
-        // Separator trusts the caller to clamp width; width >80 is allowed
-        // if caller provides it (e.g., for wide terminals)
-        let sep_100 = CommentDetailComponent::render_separator(100);
-        assert_eq!(
-            sep_100.chars().count(),
-            100,
-            "separator should use provided width"
-        );
-    }
-}
+#[path = "comment_detail_tests.rs"]
+mod tests;

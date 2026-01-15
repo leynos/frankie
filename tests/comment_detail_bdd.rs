@@ -8,6 +8,7 @@ use comment_detail_bdd_support::DetailState;
 use comment_detail_bdd_support::ReviewCommentBuilder;
 use frankie::tui::app::ReviewApp;
 use frankie::tui::components::test_utils::strip_ansi_codes;
+use frankie::tui::components::{CommentDetailComponent, CommentDetailViewContext};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 
@@ -255,5 +256,124 @@ fn shows_no_context_placeholder(detail_state: DetailState) {
 
 #[scenario(path = "tests/features/comment_detail.feature", index = 6)]
 fn shows_no_selection_placeholder(detail_state: DetailState) {
+    let _ = detail_state;
+}
+
+// Additional Given steps for truncation tests
+
+#[given("a TUI with a comment producing more lines than visible height")]
+fn given_comment_producing_many_lines(detail_state: &DetailState) {
+    // Create a comment with a long diff hunk that will produce many lines
+    let diff_hunk = concat!(
+        "@@ -1,10 +1,15 @@\n",
+        "+line1\n",
+        "+line2\n",
+        "+line3\n",
+        "+line4\n",
+        "+line5\n",
+        "+line6\n",
+        "+line7\n",
+        "+line8\n",
+        "+line9\n",
+        "+line10"
+    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/main.rs")
+        .line_number(1)
+        .body("Many lines of code")
+        .diff_hunk(diff_hunk);
+    let comment = builder.build();
+    detail_state.standalone_comment.set(comment);
+}
+
+#[given("a TUI with a comment containing consecutive blank lines")]
+fn given_comment_with_blank_lines(detail_state: &DetailState) {
+    // Create a comment with blank lines in the diff hunk.
+    // The diff hunk includes diff markers at the start of lines, so
+    // "+ " prefix followed by nothing creates a blank line in the output.
+    let diff_hunk = concat!(
+        "@@ -1,5 +1,8 @@\n",
+        "+line1\n",
+        "+\n",
+        "+\n",
+        "+line4\n",
+        "+line5"
+    );
+    let builder = ReviewCommentBuilder::new(1)
+        .author("bob")
+        .file_path("src/lib.rs")
+        .line_number(1)
+        .body("Code with blank lines")
+        .diff_hunk(diff_hunk);
+    let comment = builder.build();
+    detail_state.standalone_comment.set(comment);
+}
+
+// Additional When steps for truncation tests
+
+#[when("the view is rendered with max height {height:usize}")]
+#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
+fn when_view_rendered_with_max_height(detail_state: &DetailState, height: usize) {
+    let comment = detail_state
+        .standalone_comment
+        .with_ref(Clone::clone)
+        .expect("comment not set");
+    let component = CommentDetailComponent::new();
+    let ctx = CommentDetailViewContext {
+        selected_comment: Some(&comment),
+        max_width: 80,
+        max_height: height,
+    };
+    let view = component.view(&ctx);
+    detail_state.rendered_view.set(view);
+}
+
+// Additional Then steps for truncation tests
+
+#[then("the output has at most {max:usize} lines")]
+fn then_output_has_max_lines(detail_state: &DetailState, max: usize) {
+    let view = detail_state.get_rendered_view();
+    let line_count = view.lines().count();
+    assert!(
+        line_count <= max,
+        "expected at most {max} lines, got {line_count}:\n{view}"
+    );
+}
+
+#[then("the last line is an ellipsis indicator")]
+fn then_last_line_is_ellipsis(detail_state: &DetailState) {
+    let view = detail_state.get_rendered_view();
+    let stripped = strip_ansi_codes(&view);
+    let last_line = stripped.lines().last().unwrap_or("");
+    assert_eq!(
+        last_line, "...",
+        "expected last line to be '...', got '{last_line}'"
+    );
+}
+
+#[then("blank lines are preserved in the truncated output")]
+fn then_blank_lines_preserved(detail_state: &DetailState) {
+    let view = detail_state.get_rendered_view();
+    let stripped = strip_ansi_codes(&view);
+    // The output should contain at least one line that is just a diff marker "+"
+    // (representing a blank line in the diff context) within the code section.
+    // Note: The diff hunk lines like "+" represent blank added lines.
+    let has_diff_blank = stripped.lines().any(|line| line == "+");
+    assert!(
+        has_diff_blank,
+        "expected diff blank line '+' to be preserved in output:\n{stripped}"
+    );
+}
+
+// Scenario bindings for truncation tests
+
+#[scenario(path = "tests/features/comment_detail.feature", index = 7)]
+fn detail_pane_truncates_to_max_height(detail_state: DetailState) {
+    let _ = detail_state;
+}
+
+#[scenario(path = "tests/features/comment_detail.feature", index = 8)]
+fn detail_pane_preserves_blank_lines(detail_state: DetailState) {
     let _ = detail_state;
 }
