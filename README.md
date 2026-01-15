@@ -163,8 +163,8 @@ gates.
 
 ## Contributing
 
-Frankie is an active experiment in making code review better. Contributions,
-ideas, and feedback are welcome!
+Frankie is an active experiment in streamlining the code review workflow.
+Contributions, ideas, and feedback are welcome!
 
 **Current Focus:** We're working on Phase 3 (AI-assisted workflows). Check the
 [roadmap](docs/roadmap.md) for specific tasks.
@@ -202,4 +202,5 @@ Licensed under the ISC Licence. See [LICENSE](LICENSE) for details.
 ______________________________________________________________________
 
 **Frankie Goes to Code Review** is developed by df12 Productions with ❤️ for
-developers who believe code review can be better.
+developers who believe code review workflows should be faster and more
+enjoyable.
