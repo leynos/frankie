@@ -52,6 +52,9 @@ more like collaboration. It's built to be the GitHub PR adapter in the larger
 git clone https://github.com/leynos/frankie.git
 cd frankie
 make build
+
+# The binary is at target/debug/frankie
+# You can either run it directly or use cargo run
 ```
 
 ### Basic Usage
@@ -59,14 +62,17 @@ make build
 ```bash
 # Review a specific PR in interactive TUI mode
 export FRANKIE_TOKEN="your_github_token"
-frankie --tui --pr-url https://github.com/owner/repo/pull/123
+./target/debug/frankie --tui --pr-url https://github.com/owner/repo/pull/123
+
+# Or use cargo run
+cargo run -- --tui --pr-url https://github.com/owner/repo/pull/123
 
 # Auto-discover repository from your current directory
 cd /path/to/your/repo
-frankie --tui
+/path/to/frankie/target/debug/frankie --tui
 
 # List all PRs for a repository
-frankie --owner octocat --repo hello-world
+./target/debug/frankie --owner octocat --repo hello-world
 ```
 
 ### First Time Setup
@@ -79,7 +85,7 @@ frankie --owner octocat --repo hello-world
 3. **Optional - Enable caching**:
 
    ```bash
-   frankie --migrate-db --database-url frankie.sqlite
+   ./target/debug/frankie --migrate-db --database-url frankie.sqlite
    ```
 
 That's it! You're ready to start reviewing.
