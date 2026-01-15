@@ -25,6 +25,8 @@ pub struct CommentDetailViewContext<'a> {
     pub selected_comment: Option<&'a ReviewComment>,
     /// Maximum width for code block wrapping (typically 80).
     pub max_width: usize,
+    /// Maximum height in lines for the detail pane (0 = unlimited).
+    pub max_height: usize,
 }
 
 /// Component for displaying a single review comment with code context.
@@ -61,6 +63,7 @@ impl CommentDetailComponent {
     /// - Code context with syntax highlighting (if available)
     ///
     /// If no comment is selected, returns a placeholder message.
+    /// Output is truncated to `max_height` lines if specified (> 0).
     #[must_use]
     pub fn view(&self, ctx: &CommentDetailViewContext<'_>) -> String {
         let Some(comment) = ctx.selected_comment else {
@@ -83,6 +86,11 @@ impl CommentDetailComponent {
 
         // Code context
         output.push_str(&self.render_code_context(comment, ctx.max_width));
+
+        // Truncate to max_height if specified
+        if ctx.max_height > 0 {
+            truncate_to_height(&mut output, ctx.max_height);
+        }
 
         output
     }
@@ -137,68 +145,288 @@ impl CommentDetailComponent {
     }
 }
 
-/// Wraps text to a maximum width, preserving word boundaries where possible.
+/// Truncates output to a maximum number of lines.
 ///
-/// This is a simple word-wrap implementation for comment body text.
+/// If the output exceeds `max_height` lines, it is truncated and
+/// a "..." indicator is appended to show content was cut off.
+fn truncate_to_height(output: &mut String, max_height: usize) {
+    let line_count = output.lines().count();
+    if line_count <= max_height {
+        return;
+    }
+
+    // Find the byte position after the nth newline
+    let truncate_at = find_nth_newline_position(output, max_height.saturating_sub(1));
+
+    if let Some(pos) = truncate_at {
+        output.truncate(pos);
+        output.push_str("\n...\n");
+    }
+}
+
+/// Finds the byte position after the nth newline in a string.
+fn find_nth_newline_position(s: &str, n: usize) -> Option<usize> {
+    let mut count = 0;
+    for (i, ch) in s.char_indices() {
+        if ch == '\n' {
+            count += 1;
+            if count > n {
+                return Some(i);
+            }
+        }
+    }
+    None
+}
+
+/// Wraps text to a maximum width, preserving existing whitespace.
+///
+/// Unlike simple word-wrap, this preserves:
+/// - Leading indentation on each line
+/// - Multiple spaces between words
+/// - Empty lines (paragraph breaks)
+///
+/// Lines are only wrapped when they exceed `max_width`. Wrapped
+/// continuation lines preserve the original line's indentation.
 fn wrap_text(text: &str, max_width: usize) -> String {
     if max_width == 0 {
         return text.to_owned();
     }
 
-    text.split('\n')
-        .map(|paragraph| wrap_paragraph(paragraph, max_width))
+    text.lines()
+        .map(|line| wrap_line_preserving_indent(line, max_width))
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-/// Wraps a single paragraph to the specified maximum width.
+/// Wraps a single line while preserving its leading indentation.
 ///
-/// Handles word-by-word wrapping, collecting lines into a vector
-/// and joining them with newlines.
-fn wrap_paragraph(paragraph: &str, max_width: usize) -> String {
-    let mut lines: Vec<String> = Vec::new();
-    let mut current_line = String::new();
-    let mut current_width = 0;
+/// If the line fits within `max_width`, returns it unchanged.
+/// Otherwise, wraps at word boundaries, using the original
+/// indentation for continuation lines.
+fn wrap_line_preserving_indent(line: &str, max_width: usize) -> String {
+    let line_width = line.chars().count();
 
-    for word in paragraph.split_whitespace() {
+    // Short lines pass through unchanged
+    if line_width <= max_width {
+        return line.to_owned();
+    }
+
+    // Extract leading whitespace
+    let (indent, content) = split_at_content_start(line);
+    let indent_width = indent.chars().count();
+
+    // If indent alone exceeds max_width, just hard-wrap
+    if indent_width >= max_width {
+        return hard_wrap_line(line, max_width);
+    }
+
+    let available_width = max_width.saturating_sub(indent_width);
+    wrap_content_with_indent(content, indent, available_width)
+}
+
+/// Splits a line into leading whitespace and content.
+///
+/// Returns a tuple of (indent, content) where indent is all leading
+/// whitespace characters and content is the rest of the line.
+fn split_at_content_start(line: &str) -> (&str, &str) {
+    let trimmed = line.trim_start();
+    let indent_len = line.len() - trimmed.len();
+    line.split_at(indent_len)
+}
+
+/// Context for wrapping content with indentation.
+struct WrapContext<'a> {
+    indent: &'a str,
+    available_width: usize,
+    lines: Vec<String>,
+    current_line: String,
+    content_width: usize,
+}
+
+impl<'a> WrapContext<'a> {
+    fn new(indent: &'a str, available_width: usize) -> Self {
+        Self {
+            indent,
+            available_width,
+            lines: Vec::new(),
+            current_line: String::from(indent),
+            content_width: 0,
+        }
+    }
+
+    const fn is_line_empty(&self) -> bool {
+        self.content_width == 0
+    }
+
+    fn start_new_line(&mut self) {
+        let old_line = std::mem::replace(&mut self.current_line, String::from(self.indent));
+        self.lines.push(old_line);
+        self.content_width = 0;
+    }
+
+    fn push_word(&mut self, word: &str) {
+        self.current_line.push_str(word);
+        self.content_width += word.chars().count();
+    }
+
+    fn push_space(&mut self, space: &str) {
+        self.current_line.push_str(space);
+        self.content_width += space.chars().count();
+    }
+
+    fn process_word(&mut self, word: &str) {
         let word_len = word.chars().count();
 
-        if should_start_new_line(current_width, word_len, max_width) {
-            if !current_line.is_empty() {
-                lines.push(current_line);
-                current_line = String::new();
-            }
-            current_width = 0;
+        // Check if we need to wrap before this word
+        if !self.is_line_empty() && self.content_width + word_len > self.available_width {
+            self.start_new_line();
         }
 
-        append_word_to_line(word, &mut current_line, &mut current_width);
+        // Handle words longer than available width (hard wrap)
+        if word_len > self.available_width && self.is_line_empty() {
+            self.process_long_word(word);
+        } else {
+            self.push_word(word);
+        }
     }
 
-    if !current_line.is_empty() {
-        lines.push(current_line);
+    fn process_long_word(&mut self, word: &str) {
+        let wrapped = hard_wrap_line(word, self.available_width);
+        let parts: Vec<&str> = wrapped.lines().collect();
+        let last_idx = parts.len().saturating_sub(1);
+
+        for (i, part) in parts.into_iter().enumerate() {
+            self.push_word(part);
+            if i < last_idx {
+                self.start_new_line();
+            }
+        }
     }
 
-    lines.join("\n")
+    fn process_space(&mut self, space: &str) {
+        if self.is_line_empty() {
+            return;
+        }
+
+        let space_len = space.chars().count();
+        if self.content_width + space_len <= self.available_width {
+            self.push_space(space);
+        } else {
+            self.start_new_line();
+        }
+    }
+
+    fn finish(mut self) -> String {
+        self.lines.push(self.current_line);
+        self.lines.join("\n")
+    }
 }
 
-/// Determines if a new line should be started before adding a word.
+/// Wraps content with a given indent prefix.
 ///
-/// Returns true if the current line is non-empty and adding the word
-/// (plus a space separator) would exceed the maximum width.
-const fn should_start_new_line(current_width: usize, word_len: usize, max_width: usize) -> bool {
-    current_width > 0 && current_width + 1 + word_len > max_width
+/// Words are wrapped to fit within `available_width`, and each
+/// wrapped line is prefixed with `indent`.
+fn wrap_content_with_indent(content: &str, indent: &str, available_width: usize) -> String {
+    let mut ctx = WrapContext::new(indent, available_width);
+
+    for segment in split_preserving_spaces(content) {
+        match segment {
+            Segment::Word(word) => ctx.process_word(&word),
+            Segment::Space(space) => ctx.process_space(&space),
+        }
+    }
+
+    ctx.finish()
 }
 
-/// Appends a word to the current line, updating the width.
+/// Hard-wraps a line at exactly `max_width` characters.
 ///
-/// Adds a space separator if the line already has content.
-fn append_word_to_line(word: &str, line: &mut String, width: &mut usize) {
-    if *width > 0 {
-        line.push(' ');
-        *width += 1;
+/// Used when soft wrapping is not possible (e.g., very long words
+/// or lines where indentation exceeds the available width).
+fn hard_wrap_line(line: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return line.to_owned();
     }
-    line.push_str(word);
-    *width += word.chars().count();
+
+    let mut result = String::new();
+    let mut current_width = 0;
+
+    for ch in line.chars() {
+        if current_width >= max_width {
+            result.push('\n');
+            current_width = 0;
+        }
+        result.push(ch);
+        current_width += 1;
+    }
+
+    result
+}
+
+/// A segment of text: either a word or whitespace.
+enum Segment {
+    Word(String),
+    Space(String),
+}
+
+/// Splits content into alternating word and space segments.
+///
+/// Preserves the exact spacing between words, allowing the wrapper
+/// to maintain multiple spaces where they appear in the original.
+fn split_preserving_spaces(content: &str) -> Vec<Segment> {
+    let mut segments = Vec::new();
+    let mut current = String::new();
+    let mut in_whitespace: Option<bool> = None;
+
+    for ch in content.chars() {
+        let is_space = ch.is_whitespace();
+
+        match in_whitespace {
+            None => {
+                // First character
+                current.push(ch);
+                in_whitespace = Some(is_space);
+            }
+            Some(was_space) if was_space == is_space => {
+                // Same type, continue accumulating
+                current.push(ch);
+            }
+            Some(was_space) => {
+                // Type changed, push current segment and start new one
+                let segment = if was_space {
+                    Segment::Space(std::mem::take(&mut current))
+                } else {
+                    Segment::Word(std::mem::take(&mut current))
+                };
+                segments.push(segment);
+                current.push(ch);
+                in_whitespace = Some(is_space);
+            }
+        }
+    }
+
+    // Push final segment if any
+    push_final_segment(&mut segments, current, in_whitespace);
+
+    segments
+}
+
+/// Pushes the final accumulated segment if non-empty.
+fn push_final_segment(segments: &mut Vec<Segment>, current: String, in_whitespace: Option<bool>) {
+    let Some(is_space) = in_whitespace else {
+        return;
+    };
+
+    if current.is_empty() {
+        return;
+    }
+
+    let segment = if is_space {
+        Segment::Space(current)
+    } else {
+        Segment::Word(current)
+    };
+    segments.push(segment);
 }
 
 #[cfg(test)]
@@ -264,12 +492,13 @@ mod tests {
     /// Renders a comment detail view for testing.
     ///
     /// Creates a `CommentDetailComponent` and renders the given comment
-    /// with standard test width (80 columns).
+    /// with standard test width (80 columns) and unlimited height.
     fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
         let component = CommentDetailComponent::new();
         let ctx = CommentDetailViewContext {
             selected_comment: comment,
             max_width: 80,
+            max_height: 0, // unlimited
         };
         component.view(&ctx)
     }
@@ -396,6 +625,57 @@ mod tests {
             result.contains("Second paragraph."),
             "should preserve second paragraph"
         );
+    }
+
+    #[test]
+    fn wrap_text_preserves_indentation() {
+        let text = "    indented line";
+        let result = wrap_text(text, 80);
+        assert_eq!(result, text, "should preserve leading spaces");
+    }
+
+    #[test]
+    fn wrap_text_preserves_code_block_indentation() {
+        let text = "Here is code:\n    fn example() {\n        let x = 1;\n    }";
+        let result = wrap_text(text, 80);
+
+        assert!(
+            result.contains("    fn example()"),
+            "should preserve 4-space indent: {result}"
+        );
+        assert!(
+            result.contains("        let x = 1;"),
+            "should preserve 8-space indent: {result}"
+        );
+    }
+
+    #[test]
+    fn wrap_text_preserves_multiple_spaces() {
+        let text = "column1  column2  column3";
+        let result = wrap_text(text, 80);
+        assert_eq!(
+            result, text,
+            "should preserve double spaces between columns"
+        );
+    }
+
+    #[test]
+    fn wrap_text_wraps_indented_long_line() {
+        let text =
+            "    This is an indented line that is quite long and should wrap to the next line.";
+        let result = wrap_text(text, 40);
+
+        // All lines should have the same indentation
+        for line in result.lines() {
+            assert!(
+                line.starts_with("    ") || line.is_empty(),
+                "wrapped line should preserve indent: '{line}'"
+            );
+            assert!(
+                line.chars().count() <= 40,
+                "line should not exceed max width: '{line}'"
+            );
+        }
     }
 
     #[test]

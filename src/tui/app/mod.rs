@@ -381,11 +381,22 @@ impl Model for ReviewApp {
         output.push_str(&self.render_filter_bar());
         output.push('\n');
 
+        // Calculate layout heights
+        // Layout: header (1) + filter bar (1) + newline (1) + list + detail + status bar (1)
+        // Reserve space for detail pane (minimum 8 lines) and chrome (4 lines)
+        let chrome_height = 4_usize; // header + filter bar + newline + status bar
+        let detail_height = 8_usize; // minimum height for detail pane
+        let total_height = self.height as usize;
+        let list_height = total_height
+            .saturating_sub(chrome_height)
+            .saturating_sub(detail_height);
+
         let list_ctx = ReviewListViewContext {
             reviews: &self.reviews,
             filtered_indices: &self.filtered_indices,
             cursor_position: self.filter_state.cursor_position,
             scroll_offset: self.filter_state.scroll_offset,
+            visible_height: list_height,
         };
         let list_view = self.review_list.view(&list_ctx);
         output.push_str(&list_view);
@@ -394,6 +405,7 @@ impl Model for ReviewApp {
         let detail_ctx = CommentDetailViewContext {
             selected_comment: self.selected_comment(),
             max_width: 80.min(self.width as usize),
+            max_height: detail_height,
         };
         output.push_str(&self.comment_detail.view(&detail_ctx));
 
