@@ -123,7 +123,7 @@ offline, sync when online, never wait for GitHub API limits.
   resolution
 - **Reply templates**: Quick responses to common review patterns
 - **Offline-first mode**: Queue operations when disconnected
-- **Accessibility theming**: WCAG AA compliant colour schemes
+- **Accessibility theming**: WCAG AA-compliant colour schemes
 
 See the [full roadmap](docs/roadmap.md) for detailed timeline and completion
 criteria.
