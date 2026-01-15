@@ -342,10 +342,14 @@ fn then_output_has_max_lines(detail_state: &DetailState, max: usize) {
 }
 
 #[then("the last line is an ellipsis indicator")]
+#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_last_line_is_ellipsis(detail_state: &DetailState) {
     let view = detail_state.get_rendered_view();
     let stripped = strip_ansi_codes(&view);
-    let last_line = stripped.lines().last().unwrap_or("");
+    let last_line = stripped
+        .lines()
+        .last()
+        .expect("view should have at least one line");
     assert_eq!(
         last_line, "...",
         "expected last line to be '...', got '{last_line}'"

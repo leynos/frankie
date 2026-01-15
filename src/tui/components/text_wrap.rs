@@ -115,27 +115,19 @@ fn wrap_line_preserving_indent(line: &str, max_width: usize) -> String {
         return line.to_owned();
     }
 
-    // Extract leading whitespace
-    let (indent, content) = split_at_content_start(line);
+    // Extract leading whitespace (inlined logic)
+    let trimmed = line.trim_start();
+    let indent_len = line.len() - trimmed.len();
+    let (indent, content) = line.split_at(indent_len);
     let indent_width = indent.chars().count();
 
     // If indent alone exceeds max_width, just hard-wrap
     if indent_width >= max_width {
-        return hard_wrap_line(line, max_width);
+        return wrap_to_width(line, max_width);
     }
 
     let available_width = max_width.saturating_sub(indent_width);
     wrap_content_with_indent(content, indent, available_width)
-}
-
-/// Splits a line into leading whitespace and content.
-///
-/// Returns a tuple of (indent, content) where indent is all leading
-/// whitespace characters and content is the rest of the line.
-fn split_at_content_start(line: &str) -> (&str, &str) {
-    let trimmed = line.trim_start();
-    let indent_len = line.len() - trimmed.len();
-    line.split_at(indent_len)
 }
 
 /// Context for wrapping content with indentation.
@@ -186,7 +178,7 @@ impl<'a> WrapContext<'a> {
     }
 
     fn process_long_word(&mut self, word: &str) {
-        let wrapped = hard_wrap_line(word, self.available_width);
+        let wrapped = wrap_to_width(word, self.available_width);
         let parts: Vec<&str> = wrapped.lines().collect();
         let last_idx = parts.len().saturating_sub(1);
 
@@ -234,17 +226,6 @@ fn wrap_content_with_indent(content: &str, indent: &str, available_width: usize)
     }
 
     ctx.finish()
-}
-
-/// Hard-wraps a line at exactly `max_width` characters.
-///
-/// Used when soft wrapping is not possible (e.g., very long words
-/// or lines where indentation exceeds the available width).
-///
-/// This is an alias for [`wrap_to_width`] for semantic clarity in
-/// word-wrapping contexts.
-fn hard_wrap_line(line: &str, max_width: usize) -> String {
-    wrap_to_width(line, max_width)
 }
 
 /// A segment of text: either a word or whitespace.
