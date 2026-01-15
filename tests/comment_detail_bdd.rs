@@ -7,6 +7,7 @@ use bubbletea_rs::Model;
 use comment_detail_bdd_support::DetailState;
 use comment_detail_bdd_support::ReviewCommentBuilder;
 use frankie::tui::app::ReviewApp;
+use frankie::tui::components::test_utils::strip_ansi_codes;
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 
@@ -218,48 +219,6 @@ fn then_shows_no_selection_placeholder(detail_state: &DetailState) {
         "No comment selected",
         "expected no-selection placeholder in view",
     );
-}
-
-// Helper functions for stripping ANSI escape codes
-
-/// Strips ANSI escape codes from a string.
-///
-/// Delegates character processing to helper functions to reduce nesting.
-fn strip_ansi_codes(s: &str) -> String {
-    let mut result = String::new();
-    let mut in_escape = false;
-
-    for ch in s.chars() {
-        in_escape = process_character(ch, in_escape, &mut result);
-    }
-
-    result
-}
-
-/// Processes a single character for ANSI escape code stripping.
-///
-/// Returns the new escape state after processing the character.
-fn process_character(ch: char, in_escape: bool, result: &mut String) -> bool {
-    if is_escape_start(ch) {
-        return true;
-    }
-
-    if in_escape {
-        return is_escape_continues(ch);
-    }
-
-    result.push(ch);
-    false
-}
-
-/// Returns true if the character begins an ANSI escape sequence.
-const fn is_escape_start(ch: char) -> bool {
-    ch == '\x1b'
-}
-
-/// Returns true if the escape sequence continues (character is not alphabetic).
-const fn is_escape_continues(ch: char) -> bool {
-    !ch.is_ascii_alphabetic()
 }
 
 // Scenario bindings
