@@ -96,10 +96,19 @@ pub fn wrap_text(text: &str, max_width: usize) -> String {
         return text.to_owned();
     }
 
-    text.lines()
-        .map(|line| wrap_line_preserving_indent(line, max_width))
-        .collect::<Vec<_>>()
-        .join("\n")
+    let mut lines = text.lines();
+    let Some(first) = lines.next() else {
+        return String::new();
+    };
+
+    lines.fold(
+        wrap_line_preserving_indent(first, max_width),
+        |mut acc, line| {
+            acc.push('\n');
+            acc.push_str(&wrap_line_preserving_indent(line, max_width));
+            acc
+        },
+    )
 }
 
 /// Wraps a single line while preserving its leading indentation.
