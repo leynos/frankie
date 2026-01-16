@@ -1,5 +1,13 @@
 //! Behavioural tests for comment detail view with inline code context.
 
+// Integration tests use `.expect()` for clear failure diagnostics; this is
+// acceptable in test code but `allow-expect-in-tests` only covers `#[test]`
+// and `#[cfg(test)]` contexts, not integration test files.
+#![allow(
+    clippy::expect_used,
+    reason = "test assertions use expect for clear diagnostics"
+)]
+
 #[path = "comment_detail_bdd/mod.rs"]
 mod comment_detail_bdd_support;
 
@@ -36,17 +44,16 @@ impl DetailState {
         self.app.set(app);
     }
 
-    /// Gets the rendered view string.
-    #[expect(clippy::expect_used, reason = "test helper; panics acceptable")]
-    fn get_rendered_view(&self) -> String {
-        self.rendered_view
-            .with_ref(Clone::clone)
-            .expect("view not rendered")
+    /// Gets the rendered view string, if available.
+    fn get_rendered_view(&self) -> Option<String> {
+        self.rendered_view.with_ref(Clone::clone)
     }
 
     /// Asserts that the rendered view contains the expected text.
     fn assert_view_contains(&self, expected: &str, diagnostic: &str) {
-        let view = self.get_rendered_view();
+        let view = self
+            .get_rendered_view()
+            .expect("view should be rendered before asserting contents");
         assert!(view.contains(expected), "{diagnostic}:\n{view}");
     }
 }
@@ -136,12 +143,11 @@ fn given_tui_with_no_comments(detail_state: &DetailState) {
 // When steps
 
 #[when("the view is rendered")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_view_is_rendered(detail_state: &DetailState) {
     let view = detail_state
         .app
         .with_ref(ReviewApp::view)
-        .expect("app not initialised");
+        .expect("app should be initialised before rendering view");
     detail_state.rendered_view.set(view);
 }
 
@@ -174,7 +180,9 @@ fn then_shows_body_text(detail_state: &DetailState) {
 
 #[then("the detail pane shows code context")]
 fn then_shows_code_context(detail_state: &DetailState) {
-    let view = detail_state.get_rendered_view();
+    let view = detail_state
+        .get_rendered_view()
+        .expect("view should be rendered before checking code context");
     // The diff hunk should be visible (may have ANSI codes)
     assert!(
         view.contains("fn") || view.contains("new_function") || view.contains("@@"),
@@ -184,7 +192,9 @@ fn then_shows_code_context(detail_state: &DetailState) {
 
 #[then("all code lines are at most {max:usize} characters wide")]
 fn then_code_lines_within_width(detail_state: &DetailState, max: usize) {
-    let view = detail_state.get_rendered_view();
+    let view = detail_state
+        .get_rendered_view()
+        .expect("view should be rendered before checking line width");
 
     // Strip ANSI codes before checking width
     let stripped = strip_ansi_codes(&view);
@@ -196,7 +206,9 @@ fn then_code_lines_within_width(detail_state: &DetailState, max: usize) {
 
 #[then("the code context is displayed as plain text")]
 fn then_code_is_plain_text(detail_state: &DetailState) {
-    let view = detail_state.get_rendered_view();
+    let view = detail_state
+        .get_rendered_view()
+        .expect("view should be rendered before checking plain text");
     // Plain text means the content is visible and not syntax highlighted
     assert!(
         view.contains("some data content") || view.contains("data"),
@@ -313,12 +325,11 @@ fn given_comment_with_blank_lines(detail_state: &DetailState) {
 // Additional When steps for truncation tests
 
 #[when("the view is rendered with max height {height:usize}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_view_rendered_with_max_height(detail_state: &DetailState, height: usize) {
     let comment = detail_state
         .standalone_comment
         .with_ref(Clone::clone)
-        .expect("comment not set");
+        .expect("standalone comment should be set before rendering");
     let component = CommentDetailComponent::new();
     let ctx = CommentDetailViewContext {
         selected_comment: Some(&comment),
@@ -333,7 +344,9 @@ fn when_view_rendered_with_max_height(detail_state: &DetailState, height: usize)
 
 #[then("the output has at most {max:usize} lines")]
 fn then_output_has_max_lines(detail_state: &DetailState, max: usize) {
-    let view = detail_state.get_rendered_view();
+    let view = detail_state
+        .get_rendered_view()
+        .expect("view should be rendered before checking line count");
     let line_count = view.lines().count();
     assert!(
         line_count <= max,
@@ -342,14 +355,15 @@ fn then_output_has_max_lines(detail_state: &DetailState, max: usize) {
 }
 
 #[then("the last line is an ellipsis indicator")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_last_line_is_ellipsis(detail_state: &DetailState) {
-    let view = detail_state.get_rendered_view();
+    let view = detail_state
+        .get_rendered_view()
+        .expect("view should be rendered before checking last line");
     let stripped = strip_ansi_codes(&view);
     let last_line = stripped
         .lines()
         .last()
-        .expect("view should have at least one line");
+        .expect("rendered view should have at least one line");
     assert_eq!(
         last_line, "...",
         "expected last line to be '...', got '{last_line}'"
@@ -358,7 +372,9 @@ fn then_last_line_is_ellipsis(detail_state: &DetailState) {
 
 #[then("blank lines are preserved in the truncated output")]
 fn then_blank_lines_preserved(detail_state: &DetailState) {
-    let view = detail_state.get_rendered_view();
+    let view = detail_state
+        .get_rendered_view()
+        .expect("view should be rendered before checking blank lines");
     let stripped = strip_ansi_codes(&view);
     // The output should contain at least one line that is just a diff marker "+"
     // (representing a blank line in the diff context) within the code section.

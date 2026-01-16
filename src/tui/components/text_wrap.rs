@@ -270,28 +270,19 @@ fn split_preserving_spaces(content: &str) -> Vec<Segment> {
         }
     }
 
-    // Push final segment if any
-    push_final_segment(&mut segments, current, in_whitespace);
-
-    segments
-}
-
-/// Pushes the final accumulated segment if non-empty.
-fn push_final_segment(segments: &mut Vec<Segment>, current: String, in_whitespace: Option<bool>) {
-    let Some(is_space) = in_whitespace else {
-        return;
-    };
-
-    if current.is_empty() {
-        return;
+    // Push final segment if non-empty (inlined logic)
+    if let Some(is_space) = in_whitespace
+        && !current.is_empty()
+    {
+        let segment = if is_space {
+            Segment::Space(current)
+        } else {
+            Segment::Word(current)
+        };
+        segments.push(segment);
     }
 
-    let segment = if is_space {
-        Segment::Space(current)
-    } else {
-        Segment::Word(current)
-    };
-    segments.push(segment);
+    segments
 }
 
 #[cfg(test)]
