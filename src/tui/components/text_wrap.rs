@@ -258,31 +258,35 @@ fn split_preserving_spaces(content: &str) -> Vec<Segment> {
             }
             Some(was_space) => {
                 // Type changed, push current segment and start new one
-                let segment = if was_space {
-                    Segment::Space(std::mem::take(&mut current))
-                } else {
-                    Segment::Word(std::mem::take(&mut current))
-                };
-                segments.push(segment);
+                segments.push(create_segment(std::mem::take(&mut current), was_space));
                 current.push(ch);
                 in_whitespace = Some(is_space);
             }
         }
     }
 
-    // Push final segment if non-empty (inlined logic)
+    // Push final segment if non-empty
+    finalize_segment(&mut segments, current, in_whitespace);
+
+    segments
+}
+
+/// Creates a segment based on whether it contains whitespace.
+const fn create_segment(content: String, is_space: bool) -> Segment {
+    if is_space {
+        Segment::Space(content)
+    } else {
+        Segment::Word(content)
+    }
+}
+
+/// Finalises and pushes the last segment if non-empty.
+fn finalize_segment(segments: &mut Vec<Segment>, current: String, in_whitespace: Option<bool>) {
     if let Some(is_space) = in_whitespace
         && !current.is_empty()
     {
-        let segment = if is_space {
-            Segment::Space(current)
-        } else {
-            Segment::Word(current)
-        };
-        segments.push(segment);
+        segments.push(create_segment(current, is_space));
     }
-
-    segments
 }
 
 #[cfg(test)]

@@ -1,13 +1,5 @@
 //! Behavioural tests for comment detail view with inline code context.
 
-// Integration tests use `.expect()` for clear failure diagnostics; this is
-// acceptable in test code but `allow-expect-in-tests` only covers `#[test]`
-// and `#[cfg(test)]` contexts, not integration test files.
-#![allow(
-    clippy::expect_used,
-    reason = "test assertions use expect for clear diagnostics"
-)]
-
 #[path = "comment_detail_bdd/mod.rs"]
 mod comment_detail_bdd_support;
 
@@ -25,13 +17,19 @@ fn detail_state() -> DetailState {
     DetailState::default()
 }
 
+/// Error type for BDD test step failures.
+type StepError = &'static str;
+
+/// Result type for BDD test steps.
+type StepResult = Result<(), StepError>;
+
 // Helper methods for DetailState
 
 impl DetailState {
     /// Sets up the app with a review comment from a pre-configured builder.
     ///
     /// This encapsulates the common pattern of building a comment and
-    /// initialising the `ReviewApp` with it.
+    /// initializing the `ReviewApp` with it.
     fn setup_app_with_comment(&self, builder: ReviewCommentBuilder) {
         let comment = builder.build();
         let app = ReviewApp::new(vec![comment]);
@@ -44,17 +42,24 @@ impl DetailState {
         self.app.set(app);
     }
 
-    /// Gets the rendered view string, if available.
-    fn get_rendered_view(&self) -> Option<String> {
-        self.rendered_view.with_ref(Clone::clone)
+    /// Gets the rendered view string.
+    ///
+    /// Returns an error if the view has not been rendered.
+    fn get_rendered_view(&self) -> Result<String, StepError> {
+        self.rendered_view
+            .with_ref(Clone::clone)
+            .ok_or("view should be rendered before accessing")
     }
 
     /// Asserts that the rendered view contains the expected text.
-    fn assert_view_contains(&self, expected: &str, diagnostic: &str) {
-        let view = self
-            .get_rendered_view()
-            .expect("view should be rendered before asserting contents");
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "test assertion helper; panics are the expected failure mode"
+    )]
+    fn assert_view_contains(&self, expected: &str, diagnostic: &str) -> StepResult {
+        let view = self.get_rendered_view()?;
         assert!(view.contains(expected), "{diagnostic}:\n{view}");
+        Ok(())
     }
 }
 
@@ -143,58 +148,60 @@ fn given_tui_with_no_comments(detail_state: &DetailState) {
 // When steps
 
 #[when("the view is rendered")]
-fn when_view_is_rendered(detail_state: &DetailState) {
+fn when_view_is_rendered(detail_state: &DetailState) -> StepResult {
     let view = detail_state
         .app
         .with_ref(ReviewApp::view)
-        .expect("app should be initialised before rendering view");
+        .ok_or("app should be initialized before rendering view")?;
     detail_state.rendered_view.set(view);
+    Ok(())
 }
 
 // Then steps
 
 #[then("the detail pane shows author {author}")]
-fn then_shows_author(detail_state: &DetailState, author: String) {
+fn then_shows_author(detail_state: &DetailState, author: String) -> StepResult {
     let expected = format!("[{author}]");
-    detail_state.assert_view_contains(&expected, &format!("expected author [{author}] in view"));
+    detail_state.assert_view_contains(&expected, &format!("expected author [{author}] in view"))
 }
 
 #[then("the detail pane shows file path {file}")]
-fn then_shows_file_path(detail_state: &DetailState, file: String) {
-    detail_state.assert_view_contains(&file, &format!("expected file path {file} in view"));
+fn then_shows_file_path(detail_state: &DetailState, file: String) -> StepResult {
+    detail_state.assert_view_contains(&file, &format!("expected file path {file} in view"))
 }
 
 #[then("the detail pane shows line number {line:u32}")]
-fn then_shows_line_number(detail_state: &DetailState, line: u32) {
+fn then_shows_line_number(detail_state: &DetailState, line: u32) -> StepResult {
     let line_marker = format!(":{line}");
     detail_state.assert_view_contains(
         &line_marker,
         &format!("expected line number :{line} in view"),
-    );
+    )
 }
 
 #[then("the detail pane shows the body text")]
-fn then_shows_body_text(detail_state: &DetailState) {
-    detail_state.assert_view_contains("refactor", "expected body text in view");
+fn then_shows_body_text(detail_state: &DetailState) -> StepResult {
+    detail_state.assert_view_contains("refactor", "expected body text in view")
 }
 
 #[then("the detail pane shows code context")]
-fn then_shows_code_context(detail_state: &DetailState) {
-    let view = detail_state
-        .get_rendered_view()
-        .expect("view should be rendered before checking code context");
+fn then_shows_code_context(detail_state: &DetailState) -> StepResult {
+    let view = detail_state.get_rendered_view()?;
     // The diff hunk should be visible (may have ANSI codes)
     assert!(
         view.contains("fn") || view.contains("new_function") || view.contains("@@"),
         "expected code context in view:\n{view}"
     );
+    Ok(())
 }
 
 #[then("all code lines are at most {max:usize} characters wide")]
-fn then_code_lines_within_width(detail_state: &DetailState, max: usize) {
-    let view = detail_state
-        .get_rendered_view()
-        .expect("view should be rendered before checking line width");
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "test step; panics are the expected failure mode"
+)]
+fn then_code_lines_within_width(detail_state: &DetailState, max: usize) -> StepResult {
+    let view = detail_state.get_rendered_view()?;
 
     // Strip ANSI codes before checking width
     let stripped = strip_ansi_codes(&view);
@@ -202,13 +209,12 @@ fn then_code_lines_within_width(detail_state: &DetailState, max: usize) {
         let width = line.chars().count();
         assert!(width <= max, "line exceeds {max} chars ({width}): '{line}'");
     }
+    Ok(())
 }
 
 #[then("the code context is displayed as plain text")]
-fn then_code_is_plain_text(detail_state: &DetailState) {
-    let view = detail_state
-        .get_rendered_view()
-        .expect("view should be rendered before checking plain text");
+fn then_code_is_plain_text(detail_state: &DetailState) -> StepResult {
+    let view = detail_state.get_rendered_view()?;
     // Plain text means the content is visible and not syntax highlighted
     assert!(
         view.contains("some data content") || view.contains("data"),
@@ -219,19 +225,20 @@ fn then_code_is_plain_text(detail_state: &DetailState) {
         !view.contains("\x1b["),
         "expected no ANSI codes for plain text fallback:\n{view}"
     );
+    Ok(())
 }
 
 #[then("the detail pane shows no-context placeholder")]
-fn then_shows_no_context_placeholder(detail_state: &DetailState) {
-    detail_state.assert_view_contains("No code context", "expected no-context placeholder in view");
+fn then_shows_no_context_placeholder(detail_state: &DetailState) -> StepResult {
+    detail_state.assert_view_contains("No code context", "expected no-context placeholder in view")
 }
 
 #[then("the detail pane shows no-selection placeholder")]
-fn then_shows_no_selection_placeholder(detail_state: &DetailState) {
+fn then_shows_no_selection_placeholder(detail_state: &DetailState) -> StepResult {
     detail_state.assert_view_contains(
         "No comment selected",
         "expected no-selection placeholder in view",
-    );
+    )
 }
 
 // Scenario bindings
@@ -325,11 +332,11 @@ fn given_comment_with_blank_lines(detail_state: &DetailState) {
 // Additional When steps for truncation tests
 
 #[when("the view is rendered with max height {height:usize}")]
-fn when_view_rendered_with_max_height(detail_state: &DetailState, height: usize) {
+fn when_view_rendered_with_max_height(detail_state: &DetailState, height: usize) -> StepResult {
     let comment = detail_state
         .standalone_comment
         .with_ref(Clone::clone)
-        .expect("standalone comment should be set before rendering");
+        .ok_or("standalone comment should be set before rendering")?;
     let component = CommentDetailComponent::new();
     let ctx = CommentDetailViewContext {
         selected_comment: Some(&comment),
@@ -338,43 +345,40 @@ fn when_view_rendered_with_max_height(detail_state: &DetailState, height: usize)
     };
     let view = component.view(&ctx);
     detail_state.rendered_view.set(view);
+    Ok(())
 }
 
 // Additional Then steps for truncation tests
 
 #[then("the output has at most {max:usize} lines")]
-fn then_output_has_max_lines(detail_state: &DetailState, max: usize) {
-    let view = detail_state
-        .get_rendered_view()
-        .expect("view should be rendered before checking line count");
+fn then_output_has_max_lines(detail_state: &DetailState, max: usize) -> StepResult {
+    let view = detail_state.get_rendered_view()?;
     let line_count = view.lines().count();
     assert!(
         line_count <= max,
         "expected at most {max} lines, got {line_count}:\n{view}"
     );
+    Ok(())
 }
 
 #[then("the last line is an ellipsis indicator")]
-fn then_last_line_is_ellipsis(detail_state: &DetailState) {
-    let view = detail_state
-        .get_rendered_view()
-        .expect("view should be rendered before checking last line");
+fn then_last_line_is_ellipsis(detail_state: &DetailState) -> StepResult {
+    let view = detail_state.get_rendered_view()?;
     let stripped = strip_ansi_codes(&view);
     let last_line = stripped
         .lines()
         .last()
-        .expect("rendered view should have at least one line");
+        .ok_or("rendered view should have at least one line")?;
     assert_eq!(
         last_line, "...",
         "expected last line to be '...', got '{last_line}'"
     );
+    Ok(())
 }
 
 #[then("blank lines are preserved in the truncated output")]
-fn then_blank_lines_preserved(detail_state: &DetailState) {
-    let view = detail_state
-        .get_rendered_view()
-        .expect("view should be rendered before checking blank lines");
+fn then_blank_lines_preserved(detail_state: &DetailState) -> StepResult {
+    let view = detail_state.get_rendered_view()?;
     let stripped = strip_ansi_codes(&view);
     // The output should contain at least one line that is just a diff marker "+"
     // (representing a blank line in the diff context) within the code section.
@@ -384,6 +388,7 @@ fn then_blank_lines_preserved(detail_state: &DetailState) {
         has_diff_blank,
         "expected diff blank line '+' to be preserved in output:\n{stripped}"
     );
+    Ok(())
 }
 
 // Scenario bindings for truncation tests
