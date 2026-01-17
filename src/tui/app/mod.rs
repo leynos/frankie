@@ -269,20 +269,24 @@ impl ReviewApp {
     /// messages and returns any resulting commands. It delegates to specialised
     /// handlers for each message category to keep cyclomatic complexity low.
     pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        // EscapePressed in DiffContext mode
+        if matches!(msg, AppMsg::EscapePressed) && self.view_mode == ViewMode::DiffContext {
+            return self.handle_diff_context_msg(msg);
+        }
+
+        // EscapePressed in other modes
         if matches!(msg, AppMsg::EscapePressed) {
-            if self.view_mode == ViewMode::DiffContext {
-                return self.handle_diff_context_msg(msg);
-            }
             return self.handle_clear_filter();
         }
 
-        if self.view_mode == ViewMode::DiffContext {
-            if msg.is_diff_context() {
-                return self.handle_diff_context_msg(msg);
-            }
-            if msg.is_navigation() || msg.is_filter() {
-                return None;
-            }
+        // DiffContext-specific messages in DiffContext mode
+        if self.view_mode == ViewMode::DiffContext && msg.is_diff_context() {
+            return self.handle_diff_context_msg(msg);
+        }
+
+        // Block navigation and filter messages in DiffContext mode
+        if self.view_mode == ViewMode::DiffContext && (msg.is_navigation() || msg.is_filter()) {
+            return None;
         }
 
         if msg.is_navigation() {
