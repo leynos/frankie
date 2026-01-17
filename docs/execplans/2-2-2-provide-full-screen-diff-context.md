@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 PLANS.md is not present in the repository root, so no additional plan
 governance applies.
@@ -14,8 +14,8 @@ governance applies.
 
 Add a full-screen diff context screen to the review TUI so a reviewer can open
 complete change context from the review list, jump between diff hunks with
-keyboard shortcuts, and return to the list without losing selection. Success
-is visible when pressing the context shortcut renders a full-screen diff view,
+keyboard shortcuts, and return to the list without losing selection. Success is
+visible when pressing the context shortcut renders a full-screen diff view,
 next/previous hunk shortcuts move between hunks, and a profiling run confirms
 rendering stays under 100ms on the reference dataset.
 
@@ -69,19 +69,21 @@ rendering stays under 100ms on the reference dataset.
 
 ## Progress
 
-- [ ] (2026-01-17 00:00Z) Draft ExecPlan created.
-- [ ] Inspect existing TUI view and navigation code, and confirm available
-  diff context data sources.
-- [ ] Define the hunk model and navigation behaviour; update tests and state
-  scaffolding.
-- [ ] Implement full-screen diff context view with hunk navigation.
-- [ ] Update documentation (design decisions, user guide) and roadmap entry.
-- [ ] Run format, lint, test, and documentation validation commands.
-- [ ] Record profiling results and update this ExecPlan outcomes.
+- [x] (2026-01-17) Draft ExecPlan created.
+- [x] (2026-01-17) Inspected the TUI view and confirmed diff context sources.
+- [x] (2026-01-17) Defined hunk model + navigation helpers with unit tests.
+- [x] (2026-01-17) Implemented full-screen diff context view and navigation.
+- [x] (2026-01-17) Updated design docs, user guide, and roadmap entry.
+- [x] (2026-01-17) Ran formatting, lint, test, and documentation validation.
+- [x] (2026-01-17) Recorded profiling results in outcomes.
 
 ## Surprises & discoveries
 
-- None yet.
+- `make test` requires `cargo-nextest` in the local environment.
+- `make markdownlint` expects `markdownlint-cli2` on `PATH`; use
+  `MDLINT=/root/.bun/bin/markdownlint-cli2` if it is not available.
+- The performance check is best captured as an ignored test to keep the normal
+  test suite fast while still validating the 100ms requirement on demand.
 
 ## Decision log
 
@@ -92,12 +94,26 @@ rendering stays under 100ms on the reference dataset.
   Date/Author: 2026-01-17, plan author.
 - Decision: Use `c` to enter full-screen diff context and `[`/`]` to move to
   previous/next hunk, with `Esc` returning to the list. Rationale: `c` matches
-  the design doc; bracket keys avoid conflicts with AI shortcuts.
-  Date/Author: 2026-01-17, plan author.
+  the design doc; bracket keys avoid conflicts with AI shortcuts. Date/Author:
+  2026-01-17, plan author.
+- Decision: Capture the performance requirement with an ignored test at
+  `tests/diff_context_render_perf.rs` using the reference dataset in
+  `tests/fixtures/diff_context_reference.json`. Rationale: keep the default
+  test suite fast while enabling repeatable local profiling. Date/Author:
+  2026-01-17, implementation.
 
 ## Outcomes & retrospective
 
-- Pending implementation.
+- Delivered full-screen diff context view with hunk navigation and cached
+  rendering for fast redraws.
+- Added rstest unit coverage for hunk extraction/navigation and rstest-bdd
+  scenarios in `tests/full_screen_diff_context_bdd.rs` with
+  `tests/features/full_screen_diff_context.feature`.
+- Profiling: ran cargo test -p frankie diff_context_render_perf -- --ignored
+  --nocapture; passed (under 100ms) on 2026-01-17. Dataset:
+  tests/fixtures/diff_context_reference.json.
+- Validation: `make fmt`, `make markdownlint`, `make nixie`,
+  `make check-fmt`, `make lint`, and `make test` (logs in `/tmp/frankie-*.log`).
 
 ## Context and orientation
 

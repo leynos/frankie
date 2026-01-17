@@ -67,7 +67,7 @@ context.
 - [x] Implement comment detail view with inline code context and syntax
       highlighting via syntect; acceptance: code blocks render with 80-column
       wrapping and fallback to plain text when highlighting fails.
-- [ ] Provide full-screen diff context with jump-to-change navigation;
+- [x] Provide full-screen diff context with jump-to-change navigation;
       acceptance: keyboard shortcuts move between hunks, and rendering remains
       under 100ms on the reference dataset measured in local profiling.
 - [ ] Add time-travel navigation across PR history; acceptance: selecting a

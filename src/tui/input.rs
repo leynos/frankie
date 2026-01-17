@@ -25,9 +25,12 @@ pub fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
         KeyCode::Home | KeyCode::Char('g') => Some(AppMsg::Home),
         KeyCode::End | KeyCode::Char('G') => Some(AppMsg::End),
         KeyCode::Char('f') => Some(AppMsg::CycleFilter),
-        KeyCode::Esc => Some(AppMsg::ClearFilter),
+        KeyCode::Esc => Some(AppMsg::EscapePressed),
         KeyCode::Char('r') => Some(AppMsg::RefreshRequested),
         KeyCode::Char('?') => Some(AppMsg::ToggleHelp),
+        KeyCode::Char('c') => Some(AppMsg::ShowDiffContext),
+        KeyCode::Char('[') => Some(AppMsg::PreviousHunk),
+        KeyCode::Char(']') => Some(AppMsg::NextHunk),
         _ => None,
     }
 }

@@ -16,11 +16,14 @@ use bubbletea_rs::{Cmd, Model};
 use crate::github::models::ReviewComment;
 
 use super::components::{
-    CommentDetailComponent, CommentDetailViewContext, ReviewListComponent, ReviewListViewContext,
+    CommentDetailComponent, CommentDetailViewContext, DiffContextComponent, ReviewListComponent,
+    ReviewListViewContext,
 };
 use super::input::map_key_to_message;
 use super::messages::AppMsg;
-use super::state::{FilterState, ReviewFilter};
+use super::state::{
+    DiffContextState, FilterState, ReviewFilter, collect_diff_hunks, find_hunk_index,
+};
 
 mod navigation;
 mod rendering;
@@ -49,8 +52,21 @@ pub struct ReviewApp {
     review_list: ReviewListComponent,
     /// Comment detail component.
     comment_detail: CommentDetailComponent,
+    /// Diff context component.
+    diff_context_component: DiffContextComponent,
+    /// Full-screen diff context state.
+    diff_context_state: DiffContextState,
+    /// Active view mode.
+    view_mode: ViewMode,
     /// ID of the currently selected comment, used to restore cursor after sync.
     pub(crate) selected_comment_id: Option<u64>,
+}
+
+/// Tracks which view is currently active in the TUI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ViewMode {
+    ReviewList,
+    DiffContext,
 }
 
 impl ReviewApp {
@@ -75,6 +91,9 @@ impl ReviewApp {
             show_help: false,
             review_list: ReviewListComponent::new(),
             comment_detail: CommentDetailComponent::new(),
+            diff_context_component: DiffContextComponent::new(),
+            diff_context_state: DiffContextState::default(),
+            view_mode: ViewMode::ReviewList,
             selected_comment_id,
         }
     }
@@ -193,17 +212,87 @@ impl ReviewApp {
         self.update_selected_id();
     }
 
+    /// Rebuilds the diff context state from the current filtered reviews.
+    fn rebuild_diff_context_state(&mut self) {
+        let max_width = self.width as usize;
+        let hunks = collect_diff_hunks(&self.reviews, &self.filtered_indices);
+        let preferred_index = find_hunk_index(&hunks, self.selected_comment());
+        let rendered = self.diff_context_component.render_hunks(&hunks, max_width);
+
+        self.diff_context_state
+            .rebuild(rendered, max_width, preferred_index);
+    }
+
+    /// Enters the full-screen diff context view.
+    fn enter_diff_context(&mut self) {
+        self.rebuild_diff_context_state();
+        self.view_mode = ViewMode::DiffContext;
+    }
+
+    /// Exits the full-screen diff context view.
+    const fn exit_diff_context(&mut self) {
+        self.view_mode = ViewMode::ReviewList;
+    }
+
+    /// Handles diff context navigation messages.
+    fn handle_diff_context_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
+            AppMsg::ShowDiffContext => {
+                self.enter_diff_context();
+                None
+            }
+            AppMsg::HideDiffContext | AppMsg::EscapePressed => {
+                self.exit_diff_context();
+                None
+            }
+            AppMsg::NextHunk => {
+                self.diff_context_state.move_next();
+                None
+            }
+            AppMsg::PreviousHunk => {
+                self.diff_context_state.move_previous();
+                None
+            }
+            _ => {
+                debug_assert!(
+                    false,
+                    "non-diff-context message routed to handle_diff_context_msg"
+                );
+                None
+            }
+        }
+    }
+
     /// Handles a message and updates state accordingly.
     ///
     /// This method is the core update function that processes all application
     /// messages and returns any resulting commands. It delegates to specialised
     /// handlers for each message category to keep cyclomatic complexity low.
     pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        if matches!(msg, AppMsg::EscapePressed) {
+            if self.view_mode == ViewMode::DiffContext {
+                return self.handle_diff_context_msg(msg);
+            }
+            return self.handle_clear_filter();
+        }
+
+        if self.view_mode == ViewMode::DiffContext {
+            if msg.is_diff_context() {
+                return self.handle_diff_context_msg(msg);
+            }
+            if msg.is_navigation() || msg.is_filter() {
+                return None;
+            }
+        }
+
         if msg.is_navigation() {
             return self.handle_navigation_msg(msg);
         }
         if msg.is_filter() {
             return self.handle_filter_msg(msg);
+        }
+        if msg.is_diff_context() {
+            return self.handle_diff_context_msg(msg);
         }
         if msg.is_data() {
             return self.handle_data_msg(msg);
@@ -324,6 +413,11 @@ impl ReviewApp {
         self.height = height;
         let list_height = height.saturating_sub(4) as usize;
         self.review_list.set_visible_height(list_height);
+        if self.view_mode == ViewMode::DiffContext
+            && self.diff_context_state.cached_width() != width as usize
+        {
+            self.rebuild_diff_context_state();
+        }
         None
     }
 }
@@ -370,6 +464,10 @@ impl Model for ReviewApp {
         // If help is shown, render overlay instead
         if self.show_help {
             return self.render_help_overlay();
+        }
+
+        if self.view_mode == ViewMode::DiffContext {
+            return self.render_diff_context_view();
         }
 
         let mut output = String::new();

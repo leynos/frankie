@@ -157,7 +157,10 @@ comments.
 | `Home`, `g` | Go to first item              |
 | `End`, `G`  | Go to last item               |
 | `f`         | Cycle filter (All/Unresolved) |
-| `Esc`       | Clear filter                  |
+| `Esc`       | Clear filter or exit context  |
+| `c`         | Open full-screen diff context |
+| `[`         | Previous diff hunk            |
+| `]`         | Next diff hunk                |
 | `r`         | Refresh from GitHub           |
 | `?`         | Toggle help overlay           |
 | `q`         | Quit                          |
@@ -199,6 +202,8 @@ The TUI displays:
   line number, and a preview of the comment body
 - **Comment detail pane** — Displays the selected comment with full body text
   and inline code context
+- **Full-screen diff context** — Dedicated view for navigating between diff
+  hunks for the current review list selection
 - **Status bar** — Keyboard shortcut hints or error message if present
 
 ### Comment detail view
@@ -217,6 +222,13 @@ text.
 
 Long code lines are wrapped to a maximum of 80 columns (or the terminal width
 if narrower) to ensure readability without horizontal scrolling.
+
+### Full-screen diff context
+
+Press `c` in the review list to open a full-screen diff context view. The view
+shows the current diff hunk with file metadata and lets you jump between hunks
+using `[` (previous) and `]` (next). Press `Esc` to return to the review list
+without losing the current selection.
 
 ## Configuration
 

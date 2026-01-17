@@ -8,6 +8,7 @@
 use crate::github::models::ReviewComment;
 
 use super::code_highlight::CodeHighlighter;
+use super::text_truncate::truncate_to_height;
 use super::text_wrap::wrap_text;
 
 /// Placeholder message when no code context is available.
@@ -144,55 +145,6 @@ impl CommentDetailComponent {
 
         output
     }
-}
-
-/// Truncates output to a maximum number of lines.
-///
-/// If the output exceeds `max_height` lines, it is truncated and
-/// a "..." indicator is appended on the final line to show content was cut off.
-/// The result will have exactly `max_height` lines (or fewer if input is shorter).
-fn truncate_to_height(output: &mut String, max_height: usize) {
-    let line_count = output.lines().count();
-    if line_count <= max_height {
-        return;
-    }
-
-    // Reserve one line for the ellipsis indicator
-    let lines_to_keep = max_height.saturating_sub(1);
-
-    // Find the byte position of the newline after the lines we want to keep
-    // We want to find the (lines_to_keep)th newline (0-indexed), so we look
-    // for the position where count exceeds (lines_to_keep - 1)
-    let truncate_at = if lines_to_keep == 0 {
-        // Special case: keep 0 lines, just show ellipsis
-        Some(0)
-    } else {
-        find_nth_newline_position(output, lines_to_keep - 1).map(|pos| pos + 1)
-    };
-
-    if let Some(pos) = truncate_at {
-        output.truncate(pos);
-        output.push_str("...\n");
-    }
-}
-
-/// Finds the byte index of the nth newline character in a string (0-indexed).
-///
-/// Given `n`, returns the byte position of the `(n+1)`th newline when counting
-/// from one, i.e. `n=0` returns the position of the first newline, `n=1` the
-/// second, and so on. Callers should add 1 to the result to obtain the byte
-/// position immediately after that newline (the start of the following line).
-fn find_nth_newline_position(s: &str, n: usize) -> Option<usize> {
-    let mut count = 0;
-    for (i, ch) in s.char_indices() {
-        if ch == '\n' {
-            count += 1;
-            if count > n {
-                return Some(i);
-            }
-        }
-    }
-    None
 }
 
 #[cfg(test)]
