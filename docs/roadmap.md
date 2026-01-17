@@ -64,12 +64,12 @@ context.
 
 ### Step: Contextual comment exploration
 
-- [ ] Implement comment detail view with inline code context and syntax
+- [x] Implement comment detail view with inline code context and syntax
       highlighting via syntect; acceptance: code blocks render with 80-column
       wrapping and fallback to plain text when highlighting fails.
-- [ ] Provide full-screen diff context with jump-to-change navigation; accept-
-      ance: keyboard shortcuts move between hunks, and rendering remains under
-      100ms on the reference dataset measured in local profiling.
+- [ ] Provide full-screen diff context with jump-to-change navigation;
+      acceptance: keyboard shortcuts move between hunks, and rendering remains
+      under 100ms on the reference dataset measured in local profiling.
 - [ ] Add time-travel navigation across PR history; acceptance: selecting a
       comment replays the relevant commit snapshot and verifies line mapping
       correctness against git2 diffs.

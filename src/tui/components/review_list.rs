@@ -22,6 +22,8 @@ pub struct ReviewListViewContext<'a> {
     pub cursor_position: usize,
     /// Number of lines scrolled from top.
     pub scroll_offset: usize,
+    /// Maximum visible height in lines (for layout calculations).
+    pub visible_height: usize,
 }
 
 /// Component for displaying a list of review comments.
@@ -72,9 +74,16 @@ impl ReviewListComponent {
 
         let mut output = String::new();
 
+        // Use context's visible_height, falling back to component's default
+        let visible_height = if ctx.visible_height > 0 {
+            ctx.visible_height
+        } else {
+            self.visible_height
+        };
+
         // Calculate visible range based on scroll offset and visible height
         let start = ctx.scroll_offset;
-        let end = (ctx.scroll_offset + self.visible_height).min(ctx.filtered_indices.len());
+        let end = (ctx.scroll_offset + visible_height).min(ctx.filtered_indices.len());
 
         for (display_index, &review_index) in ctx
             .filtered_indices
@@ -207,6 +216,7 @@ mod tests {
             filtered_indices: &filtered_indices,
             cursor_position: 0,
             scroll_offset: 0,
+            visible_height: 10,
         };
         let output = component.view(&ctx);
         assert!(output.contains("No review comments"));
@@ -222,6 +232,7 @@ mod tests {
             filtered_indices: &filtered_indices,
             cursor_position: 1,
             scroll_offset: 0,
+            visible_height: 10,
         };
         let output = component.view(&ctx);
 
