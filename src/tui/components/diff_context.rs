@@ -3,7 +3,7 @@
 //! Renders a single diff hunk in a full-screen view with syntax highlighting
 //! and a header that includes the file path and hunk position.
 
-use crate::tui::state::{DiffHunk, RenderedDiffHunk};
+use crate::tui::state::{DiffHunk, RenderedDiffHunk, clamp_hunk_index};
 
 use super::code_highlight::CodeHighlighter;
 use super::text_truncate::truncate_to_height;
@@ -113,7 +113,7 @@ impl DiffContextComponent {
         }
 
         let total = ctx.hunks.len();
-        let current_index = clamp_index(ctx.current_index, total);
+        let current_index = clamp_hunk_index(ctx.current_index, total);
         let Some(current) = ctx.hunks.get(current_index) else {
             return format!("{NO_CONTEXT_PLACEHOLDER}\n");
         };
@@ -134,14 +134,6 @@ impl DiffContextComponent {
         output.push('\n');
         output.push_str(&body);
         output
-    }
-}
-
-fn clamp_index(index: usize, len: usize) -> usize {
-    if len == 0 {
-        0
-    } else {
-        index.min(len.saturating_sub(1))
     }
 }
 

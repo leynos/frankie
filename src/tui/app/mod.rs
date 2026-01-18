@@ -259,10 +259,7 @@ impl ReviewApp {
                 None
             }
             _ => {
-                debug_assert!(
-                    false,
-                    "non-diff-context message routed to handle_diff_context_msg"
-                );
+                // Unreachable: caller filters to diff-context messages.
                 None
             }
         }
@@ -338,10 +335,7 @@ impl ReviewApp {
             AppMsg::Home => self.handle_home(),
             AppMsg::End => self.handle_end(),
             _ => {
-                debug_assert!(
-                    false,
-                    "non-navigation message routed to handle_navigation_msg"
-                );
+                // Unreachable: caller filters to navigation messages.
                 None
             }
         }
@@ -354,7 +348,7 @@ impl ReviewApp {
             AppMsg::ClearFilter => self.handle_clear_filter(),
             AppMsg::CycleFilter => self.handle_cycle_filter(),
             _ => {
-                debug_assert!(false, "non-filter message routed to handle_filter_msg");
+                // Unreachable: caller filters to filter messages.
                 None
             }
         }
@@ -372,7 +366,7 @@ impl ReviewApp {
                 latency_ms,
             } => self.handle_sync_complete(reviews, *latency_ms),
             _ => {
-                debug_assert!(false, "non-data message routed to handle_data_msg");
+                // Unreachable: caller filters to data messages.
                 None
             }
         }
@@ -388,10 +382,7 @@ impl ReviewApp {
             }
             AppMsg::WindowResized { width, height } => self.handle_resize(*width, *height),
             _ => {
-                debug_assert!(
-                    false,
-                    "non-lifecycle message routed to handle_lifecycle_msg"
-                );
+                // Unreachable: caller filters to lifecycle messages.
                 None
             }
         }

@@ -21,7 +21,7 @@ profiling run confirms rendering stays under 100ms on the reference dataset.
 
 ## Constraints
 
-- Keep the model-view-update split intact: update logic stays in
+- Keep the model-view-update (MVU) split intact: update logic stays in
   `src/tui/app/mod.rs`, rendering stays in `src/tui/app/rendering.rs`, and
   components remain pure view helpers.
 - Every new module begins with a `//!` module-level comment.
@@ -74,7 +74,8 @@ profiling run confirms rendering stays under 100ms on the reference dataset.
 - [x] (2026-01-17) Defined hunk model + navigation helpers with unit tests.
 - [x] (2026-01-17) Implemented full-screen diff context view and navigation.
 - [x] (2026-01-17) Updated design docs, user guide, and roadmap entry.
-- [x] (2026-01-17) Ran formatting, lint, test, and documentation validation.
+- [x] (2026-01-17) Ran formatting, linting, testing, and documentation
+  validation.
 - [x] (2026-01-17) Recorded profiling results in outcomes.
 
 ## Surprises & discoveries
@@ -141,8 +142,9 @@ index helpers, plus unit tests using `rstest` for hunk extraction,
 deduplication, ordering, and navigation boundaries. Add behavioural tests using
 `rstest-bdd` v0.3.2 with a new feature file (for example
 `tests/features/full_screen_diff_context.feature`) and scenario module (for
-example `tests/full_screen_diff_context_bdd.rs`) that drive the TUI through:
-open full-screen view, move to next/previous hunk, and exit back to the list.
+example `tests/full_screen_diff_context_bdd.rs`) that drive the TUI through
+opening the full-screen view, moving to next/previous hunks, and exiting back
+to the list.
 
 Stage C: implementation. Introduce a full-screen diff context component (for
 example `src/tui/components/diff_context.rs`) that renders a header (file path,

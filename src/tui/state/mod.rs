@@ -7,6 +7,7 @@ mod diff_context;
 mod filter_state;
 
 pub(crate) use diff_context::{
-    DiffContextState, DiffHunk, RenderedDiffHunk, collect_diff_hunks, find_hunk_index,
+    DiffContextState, DiffHunk, RenderedDiffHunk, clamp_hunk_index, collect_diff_hunks,
+    find_hunk_index,
 };
 pub use filter_state::{FilterState, ReviewFilter};

@@ -27,7 +27,9 @@ pub(crate) struct RenderedDiffHunk {
     pub(crate) rendered: String,
 }
 
-fn clamp_index(index: usize, len: usize) -> usize {
+/// Clamps a hunk index to the valid bounds for the given length.
+#[must_use]
+pub(crate) fn clamp_hunk_index(index: usize, len: usize) -> usize {
     if len == 0 {
         0
     } else {
@@ -63,7 +65,7 @@ impl DiffContextState {
     ) {
         self.hunks = hunks;
         self.cached_width = cached_width;
-        self.current_index = clamp_index(preferred_index, self.hunks.len());
+        self.current_index = clamp_hunk_index(preferred_index, self.hunks.len());
     }
 
     /// Returns the rendered hunks.
@@ -125,7 +127,8 @@ impl DiffContextState {
         if self.hunks.is_empty() {
             return;
         }
-        self.current_index = clamp_index(self.current_index.saturating_add(1), self.hunks.len());
+        self.current_index =
+            clamp_hunk_index(self.current_index.saturating_add(1), self.hunks.len());
     }
 
     /// Moves to the previous hunk, clamping at the first hunk.
