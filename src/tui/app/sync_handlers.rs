@@ -57,6 +57,10 @@ impl ReviewApp {
         // Update selected_comment_id to match new cursor position
         self.update_selected_id();
 
+        if self.view_mode == super::ViewMode::DiffContext {
+            self.rebuild_diff_context_state();
+        }
+
         self.loading = false;
         self.error = None;
     }

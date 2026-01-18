@@ -5,7 +5,9 @@
 
 mod code_highlight;
 mod comment_detail;
+mod diff_context;
 mod review_list;
+mod text_truncate;
 mod text_wrap;
 
 #[cfg(any(test, feature = "test-support"))]
@@ -13,4 +15,5 @@ pub mod test_utils;
 
 pub use code_highlight::CodeHighlighter;
 pub use comment_detail::{CommentDetailComponent, CommentDetailViewContext};
+pub(crate) use diff_context::{DiffContextComponent, DiffContextViewContext};
 pub use review_list::{ReviewListComponent, ReviewListViewContext};

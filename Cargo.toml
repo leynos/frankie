@@ -35,8 +35,8 @@ frankie = { path = ".", features = ["test-support"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"
 rstest = "0.22.0"
-rstest-bdd = "0.2.0"
-rstest-bdd-macros = { version = "0.2.0", features = ["compile-time-validation"] }
+rstest-bdd = "0.3.2"
+rstest-bdd-macros = { version = "0.3.2", features = ["compile-time-validation"] }
 tempfile = "3.15.0"
 tokio = { version = "1.48.0", features = ["test-util", "time"] }
 wiremock = "0.6.5"

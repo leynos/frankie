@@ -11,15 +11,27 @@ fn sample_reviews() -> Vec<ReviewComment> {
         ReviewComment {
             file_path: Some("src/main.rs".to_owned()),
             line_number: Some(10),
+            diff_hunk: Some("@@ -1 +1 @@\n+fn first() {}".to_owned()),
             ..minimal_review(1, "First comment", "alice")
         },
         ReviewComment {
             file_path: Some("src/lib.rs".to_owned()),
             line_number: Some(20),
             in_reply_to_id: Some(1), // This is a reply
+            diff_hunk: Some("@@ -2 +2 @@\n+fn second() {}".to_owned()),
             ..minimal_review(2, "Second comment", "bob")
         },
     ]
+}
+
+#[fixture]
+fn reviews_without_hunks() -> Vec<ReviewComment> {
+    vec![ReviewComment {
+        file_path: Some("src/main.rs".to_owned()),
+        line_number: Some(10),
+        diff_hunk: None,
+        ..minimal_review(1, "First comment", "alice")
+    }]
 }
 
 #[rstest]
@@ -103,6 +115,39 @@ fn toggle_help_shows_and_hides_overlay() {
 
     app.handle_message(&AppMsg::ToggleHelp);
     assert!(!app.show_help);
+}
+
+#[rstest]
+fn show_diff_context_renders_full_screen(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+
+    app.handle_message(&AppMsg::ShowDiffContext);
+
+    let output = app.view();
+    assert!(output.contains("Hunk"));
+    assert!(output.contains("File:"));
+}
+
+#[rstest]
+fn escape_clears_filter_in_list_view(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+    app.handle_message(&AppMsg::SetFilter(ReviewFilter::Unresolved));
+    assert_ne!(app.active_filter(), &ReviewFilter::All);
+
+    app.handle_message(&AppMsg::EscapePressed);
+
+    assert_eq!(app.active_filter(), &ReviewFilter::All);
+}
+
+#[rstest]
+fn escape_exits_diff_context(reviews_without_hunks: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(reviews_without_hunks);
+
+    app.handle_message(&AppMsg::ShowDiffContext);
+    app.handle_message(&AppMsg::EscapePressed);
+
+    let output = app.view();
+    assert!(output.contains("Filter:"));
 }
 
 // Background sync tests

@@ -4,6 +4,7 @@ use rstest::{fixture, rstest};
 
 use super::*;
 use crate::tui::components::test_utils::{ReviewCommentBuilder, strip_ansi_codes};
+use crate::tui::components::text_truncate::find_nth_newline_position;
 
 /// Renders a comment detail view for testing.
 ///
