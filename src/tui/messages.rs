@@ -34,6 +34,18 @@ pub enum AppMsg {
     /// Cycle through available filters.
     CycleFilter,
 
+    // Diff context navigation
+    /// Enter the full-screen diff context view.
+    ShowDiffContext,
+    /// Exit the full-screen diff context view.
+    HideDiffContext,
+    /// Move to the next diff hunk.
+    NextHunk,
+    /// Move to the previous diff hunk.
+    PreviousHunk,
+    /// Escape key pressed (context-aware handling).
+    EscapePressed,
+
     // Data loading
     /// Request a refresh of review data from the API.
     RefreshRequested,
@@ -109,6 +121,15 @@ impl AppMsg {
                 | Self::RefreshFailed(_)
                 | Self::SyncTick
                 | Self::SyncComplete { .. }
+        )
+    }
+
+    /// Returns `true` if this is a diff context navigation message.
+    #[must_use]
+    pub const fn is_diff_context(&self) -> bool {
+        matches!(
+            self,
+            Self::ShowDiffContext | Self::HideDiffContext | Self::NextHunk | Self::PreviousHunk
         )
     }
 }
