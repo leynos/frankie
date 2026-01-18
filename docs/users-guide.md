@@ -225,9 +225,9 @@ if narrower) to ensure readability without horizontal scrolling.
 
 ### Full-screen diff context
 
-Press `c` in the review list to open a full-screen diff context view. The view
-shows the current diff hunk with file metadata and lets you jump between hunks
-using `[` (previous) and `]` (next). Press `Esc` to return to the review list
+Pressing `c` in the review list opens a full-screen diff context view. The view
+shows the current diff hunk with file metadata and allows jumping between hunks
+using `[` (previous) and `]` (next). Pressing `Esc` returns to the review list
 without losing the current selection.
 
 ## Configuration

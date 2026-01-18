@@ -113,6 +113,33 @@ fn when_diff_context_closed(state: &DiffContextState) -> StepResult {
     Ok(())
 }
 
+#[when("a navigation key is pressed in diff context")]
+fn when_navigation_key_pressed_in_diff_context(state: &DiffContextState) -> StepResult {
+    state
+        .app
+        .with_mut(|app| app.handle_message(&AppMsg::CursorDown))
+        .ok_or("app should be initialised before sending navigation key")?;
+    Ok(())
+}
+
+#[when("a filter key is pressed in diff context")]
+fn when_filter_key_pressed_in_diff_context(state: &DiffContextState) -> StepResult {
+    state
+        .app
+        .with_mut(|app| app.handle_message(&AppMsg::CycleFilter))
+        .ok_or("app should be initialised before sending filter key")?;
+    Ok(())
+}
+
+#[given("the second review comment is selected")]
+fn given_second_review_comment_selected(state: &DiffContextState) -> StepResult {
+    state
+        .app
+        .with_mut(|app| app.handle_message(&AppMsg::CursorDown))
+        .ok_or("app should be initialised before moving selection")?;
+    Ok(())
+}
+
 #[when("the view is rendered")]
 fn when_view_is_rendered(state: &DiffContextState) -> StepResult {
     state.render_view()
@@ -162,6 +189,17 @@ fn then_review_list_visible(state: &DiffContextState) -> StepResult {
     Ok(())
 }
 
+#[then("the second review comment remains selected")]
+fn then_second_review_comment_remains_selected(state: &DiffContextState) -> StepResult {
+    let view = state.view()?;
+    let stripped = strip_ansi_codes(&view);
+    assert!(
+        stripped.contains("> [bob]"),
+        "expected second comment to remain selected:\n{stripped}"
+    );
+    Ok(())
+}
+
 // Scenario bindings
 
 #[scenario(path = "tests/features/full_screen_diff_context.feature", index = 0)]
@@ -180,11 +218,26 @@ fn diff_context_clamps_previous_at_start(state: DiffContextState) {
 }
 
 #[scenario(path = "tests/features/full_screen_diff_context.feature", index = 3)]
-fn diff_context_shows_placeholder_without_hunks(state: DiffContextState) {
+fn diff_context_blocks_navigation_keys(state: DiffContextState) {
     let _ = state;
 }
 
 #[scenario(path = "tests/features/full_screen_diff_context.feature", index = 4)]
+fn diff_context_blocks_filter_keys(state: DiffContextState) {
+    let _ = state;
+}
+
+#[scenario(path = "tests/features/full_screen_diff_context.feature", index = 5)]
+fn diff_context_shows_placeholder_without_hunks(state: DiffContextState) {
+    let _ = state;
+}
+
+#[scenario(path = "tests/features/full_screen_diff_context.feature", index = 6)]
 fn diff_context_exit_returns_to_list(state: DiffContextState) {
+    let _ = state;
+}
+
+#[scenario(path = "tests/features/full_screen_diff_context.feature", index = 7)]
+fn diff_context_exit_preserves_selection(state: DiffContextState) {
     let _ = state;
 }

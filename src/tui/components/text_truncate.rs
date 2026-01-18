@@ -38,6 +38,9 @@ pub(crate) fn truncate_to_height(output: &mut String, max_height: usize) {
 
     if let Some(pos) = truncate_at {
         output.truncate(pos);
+        if contains_ansi_escape(output) {
+            output.push_str(ANSI_RESET);
+        }
         output.push_str("...\n");
     }
 }
@@ -68,6 +71,12 @@ pub(crate) fn find_nth_newline_position(s: &str, n: usize) -> Option<usize> {
     None
 }
 
+const ANSI_RESET: &str = "\x1b[0m";
+
+fn contains_ansi_escape(text: &str) -> bool {
+    text.contains("\x1b[")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,5 +100,12 @@ mod tests {
         let mut output = String::from("one\ntwo\n");
         truncate_to_height(&mut output, 0);
         assert_eq!(output, "one\ntwo\n");
+    }
+
+    #[test]
+    fn truncate_to_height_adds_reset_for_ansi_output() {
+        let mut output = "\u{1b}[31mred\nline2\nline3\n".to_owned();
+        truncate_to_height(&mut output, 2);
+        assert_eq!(output, "\u{1b}[31mred\n\u{1b}[0m...\n");
     }
 }

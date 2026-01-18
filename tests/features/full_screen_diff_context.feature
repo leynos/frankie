@@ -21,6 +21,21 @@ Feature: Full-screen diff context
     And the view is rendered
     Then the view shows hunk position 1/2
 
+  Scenario: Navigation keys are blocked in diff context
+    Given a TUI with review comments that contain diff hunks
+    When the full-screen diff context is opened
+    And the next hunk is selected
+    And a navigation key is pressed in diff context
+    And the view is rendered
+    Then the view shows hunk position 2/2
+
+  Scenario: Filter keys are blocked in diff context
+    Given a TUI with review comments that contain diff hunks
+    When the full-screen diff context is opened
+    And a filter key is pressed in diff context
+    And the view is rendered
+    Then the view shows hunk position 1/2
+
   Scenario: Placeholder when no diff hunks
     Given a TUI with review comments without diff hunks
     When the full-screen diff context is opened
@@ -33,3 +48,11 @@ Feature: Full-screen diff context
     And the diff context is closed
     And the view is rendered
     Then the review list is visible
+
+  Scenario: Exit diff context preserves selection
+    Given a TUI with review comments that contain diff hunks
+    And the second review comment is selected
+    When the full-screen diff context is opened
+    And the diff context is closed
+    And the view is rendered
+    Then the second review comment remains selected

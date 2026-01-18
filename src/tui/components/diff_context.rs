@@ -3,7 +3,7 @@
 //! Renders a single diff hunk in a full-screen view with syntax highlighting
 //! and a header that includes the file path and hunk position.
 
-use crate::tui::state::{DiffHunk, HunkIndex, RenderedDiffHunk};
+use crate::tui::state::{DiffHunk, RenderedDiffHunk};
 
 use super::code_highlight::CodeHighlighter;
 use super::text_truncate::truncate_to_height;
@@ -17,7 +17,7 @@ pub(crate) struct DiffContextViewContext<'a> {
     /// Rendered diff hunks to display.
     pub hunks: &'a [RenderedDiffHunk],
     /// Current hunk index.
-    pub current_index: HunkIndex,
+    pub current_index: usize,
     /// Maximum height in lines (0 = unlimited).
     pub max_height: usize,
 }
@@ -97,12 +97,10 @@ impl DiffContextComponent {
     ///
     /// ```rust,ignore
     /// use frankie::tui::components::{DiffContextComponent, DiffContextViewContext};
-    /// use frankie::tui::state::HunkIndex;
-    ///
     /// let component = DiffContextComponent::new();
     /// let ctx = DiffContextViewContext {
     ///     hunks: &[],
-    ///     current_index: HunkIndex::new(0),
+    ///     current_index: 0,
     ///     max_height: 0,
     /// };
     /// let output = DiffContextComponent::view(&ctx);
@@ -115,21 +113,35 @@ impl DiffContextComponent {
         }
 
         let total = ctx.hunks.len();
-        let current_index = ctx.current_index.clamp(total).value();
+        let current_index = clamp_index(ctx.current_index, total);
         let Some(current) = ctx.hunks.get(current_index) else {
             return format!("{NO_CONTEXT_PLACEHOLDER}\n");
         };
 
-        let mut output = String::new();
-        output.push_str(&render_header(&current.hunk, current_index, total));
-        output.push('\n');
-        output.push_str(&current.rendered);
+        let header = render_header(&current.hunk, current_index, total);
+        let mut body = current.rendered.clone();
 
         if ctx.max_height > 0 {
-            truncate_to_height(&mut output, ctx.max_height);
+            let body_height = ctx.max_height.saturating_sub(1);
+            if body_height == 0 {
+                return format!("{header}\n");
+            }
+            truncate_to_height(&mut body, body_height);
         }
 
+        let mut output = String::new();
+        output.push_str(&header);
+        output.push('\n');
+        output.push_str(&body);
         output
+    }
+}
+
+fn clamp_index(index: usize, len: usize) -> usize {
+    if len == 0 {
+        0
+    } else {
+        index.min(len.saturating_sub(1))
     }
 }
 
@@ -186,7 +198,7 @@ mod tests {
         let rendered = component.render_hunks(&[sample_hunk], 80);
         let ctx = DiffContextViewContext {
             hunks: &rendered,
-            current_index: HunkIndex::new(0),
+            current_index: 0,
             max_height: 0,
         };
 
@@ -200,12 +212,29 @@ mod tests {
     fn view_shows_placeholder_when_empty() {
         let ctx = DiffContextViewContext {
             hunks: &[],
-            current_index: HunkIndex::new(0),
+            current_index: 0,
             max_height: 0,
         };
 
         let output = DiffContextComponent::view(&ctx);
 
         assert!(output.contains(NO_CONTEXT_PLACEHOLDER));
+    }
+
+    #[rstest]
+    fn view_keeps_header_when_height_is_one(sample_hunk: DiffHunk) {
+        let component = DiffContextComponent::new();
+        let rendered = component.render_hunks(&[sample_hunk], 80);
+        let ctx = DiffContextViewContext {
+            hunks: &rendered,
+            current_index: 0,
+            max_height: 1,
+        };
+
+        let output = DiffContextComponent::view(&ctx);
+        let stripped = strip_ansi_codes(&output);
+
+        assert!(stripped.contains("File: src/main.rs:1"));
+        assert!(!stripped.contains("fn main"));
     }
 }

@@ -7085,10 +7085,12 @@ requests
 **Phase 2 implementation note**:
 
 - Full-screen context is built from review comment `diff_hunk` payloads while
-  time-travel and full-file diffs are still pending. Hunks are de-duplicated by
+  time travel and full-file diffs are still pending. Hunks are de-duplicated by
   `(file_path, diff_hunk)` and ordered by file path and line number.
 - Keyboard bindings: `c` enters full-screen context, `[` and `]` move between
   hunks, and `Esc` returns to the review list without losing selection.
+- Height constraints keep the header visible by truncating the hunk body first
+  and adding an ellipsis when required.
 - Diff hunks are pre-rendered on entry to keep view rendering under 100ms. The
   reference dataset for profiling lives in
   `tests/fixtures/diff_context_reference.json`.

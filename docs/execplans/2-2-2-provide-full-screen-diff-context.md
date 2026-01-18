@@ -12,12 +12,12 @@ governance applies.
 
 ## Purpose / Big picture
 
-Add a full-screen diff context screen to the review TUI so a reviewer can open
-complete change context from the review list, jump between diff hunks with
-keyboard shortcuts, and return to the list without losing selection. Success is
-visible when pressing the context shortcut renders a full-screen diff view,
-next/previous hunk shortcuts move between hunks, and a profiling run confirms
-rendering stays under 100ms on the reference dataset.
+Add a full-screen diff context screen to the review text user interface (TUI)
+so a reviewer can open complete change context from the review list, jump
+between diff hunks with keyboard shortcuts, and return to the list without
+losing selection. Success is visible when pressing the context shortcut renders
+a full-screen diff view, next/previous hunk shortcuts move between hunks, and a
+profiling run confirms rendering stays under 100ms on the reference dataset.
 
 ## Constraints
 
@@ -45,8 +45,8 @@ rendering stays under 100ms on the reference dataset.
 - Tests: if tests still fail after two fix attempts, stop and escalate with the
   latest failure output.
 - Ambiguity: if the source of “full-screen diff context” is unclear (comment
-  hunks vs full file diffs) and the choice materially affects UX, stop and ask
-  for confirmation.
+  hunks vs full file diffs) and the choice materially affects user experience
+  (UX), stop and ask for confirmation.
 
 ## Risks
 
@@ -118,14 +118,14 @@ rendering stays under 100ms on the reference dataset.
 ## Context and orientation
 
 The review TUI lives under `src/tui/`. `ReviewApp` in `src/tui/app/mod.rs`
-contains MVU state and update logic, while `src/tui/app/rendering.rs` builds
-strings for the terminal. Keyboard inputs are mapped in `src/tui/input.rs` to
-`AppMsg` variants in `src/tui/messages.rs`. The current UI renders a review
-list (`ReviewListComponent`) and comment detail pane (`CommentDetailComponent`)
-with syntax highlighting via `CodeHighlighter`. Review comments carry a
-`diff_hunk` string in `src/github/models/mod.rs`, which is already used for
-inline code context. Behavioural tests live under `tests/` with Gherkin feature
-files in `tests/features/`.
+contains model-view-update (MVU) state and update logic, while
+`src/tui/app/rendering.rs` builds strings for the terminal. Keyboard inputs are
+mapped in `src/tui/input.rs` to `AppMsg` variants in `src/tui/messages.rs`. The
+current UI renders a review list (`ReviewListComponent`) and comment detail
+pane (`CommentDetailComponent`) with syntax highlighting via `CodeHighlighter`.
+Review comments carry a `diff_hunk` string in `src/github/models/mod.rs`, which
+is already used for inline code context. Behavioural tests live under `tests/`
+with Gherkin feature files in `tests/features/`.
 
 ## Plan of work
 
@@ -136,8 +136,8 @@ and determine how to order and deduplicate hunks. If the reference dataset for
 profiling is not present, define a fixture dataset and document its location
 and intended size; escalate if this changes scope.
 
-Stage B: scaffolding and tests. Add a hunk model (for example `DiffHunk` and a
-`HunkIndex` newtype) and unit tests using `rstest` for hunk extraction,
+Stage B: scaffolding and tests. Add a hunk model (for example `DiffHunk`) and
+index helpers, plus unit tests using `rstest` for hunk extraction,
 deduplication, ordering, and navigation boundaries. Add behavioural tests using
 `rstest-bdd` v0.3.2 with a new feature file (for example
 `tests/features/full_screen_diff_context.feature`) and scenario module (for
@@ -258,15 +258,15 @@ Example placeholder when no hunks are available:
 
 Example navigation assertion in unit tests:
 
-    assert_eq!(state.current_hunk_index(), HunkIndex::new(1));
+    assert_eq!(state.current_index(), 1);
 
 ## Interfaces and dependencies
 
 - New component module (suggested): `src/tui/components/diff_context.rs` with a
   `DiffContextComponent` and a `DiffContextViewContext` carrying the hunk list,
   current index, max width, and max height.
-- New state types (suggested): `DiffHunk` and `HunkIndex` (newtype) in a
-  feature-local module to avoid integer soup.
+- New state types (suggested): `DiffHunk` plus index helpers (plain `usize`)
+  in a feature-local module to avoid integer soup.
 - New `AppMsg` variants (suggested): `ShowDiffContext`, `HideDiffContext`,
   `NextHunk`, `PreviousHunk`.
 - Update `src/tui/input.rs` to map `c`, `[`, `]`, and `Esc` appropriately.

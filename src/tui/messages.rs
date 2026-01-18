@@ -129,11 +129,7 @@ impl AppMsg {
     pub const fn is_diff_context(&self) -> bool {
         matches!(
             self,
-            Self::ShowDiffContext
-                | Self::HideDiffContext
-                | Self::NextHunk
-                | Self::PreviousHunk
-                | Self::EscapePressed
+            Self::ShowDiffContext | Self::HideDiffContext | Self::NextHunk | Self::PreviousHunk
         )
     }
 }

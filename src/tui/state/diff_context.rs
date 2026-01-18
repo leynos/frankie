@@ -27,60 +27,11 @@ pub(crate) struct RenderedDiffHunk {
     pub(crate) rendered: String,
 }
 
-/// Index into the diff hunk list.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct HunkIndex(usize);
-
-impl HunkIndex {
-    /// Creates a new index from a zero-based value.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use frankie::tui::state::HunkIndex;
-    ///
-    /// let index = HunkIndex::new(2);
-    /// assert_eq!(index.value(), 2);
-    /// ```
-    #[must_use]
-    pub const fn new(value: usize) -> Self {
-        Self(value)
-    }
-
-    /// Returns the underlying zero-based index.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use frankie::tui::state::HunkIndex;
-    ///
-    /// let index = HunkIndex::new(1);
-    /// assert_eq!(index.value(), 1);
-    /// ```
-    #[must_use]
-    pub const fn value(self) -> usize {
-        self.0
-    }
-
-    /// Clamps the index to the valid range for a given length.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use frankie::tui::state::HunkIndex;
-    ///
-    /// let index = HunkIndex::new(10).clamp(3);
-    /// assert_eq!(index.value(), 2);
-    /// ```
-    #[must_use]
-    pub const fn clamp(self, len: usize) -> Self {
-        if len == 0 {
-            return Self(0);
-        }
-        if self.0 >= len {
-            return Self(len.saturating_sub(1));
-        }
-        Self(self.0)
+fn clamp_index(index: usize, len: usize) -> usize {
+    if len == 0 {
+        0
+    } else {
+        index.min(len.saturating_sub(1))
     }
 }
 
@@ -88,7 +39,7 @@ impl HunkIndex {
 #[derive(Debug, Default)]
 pub(crate) struct DiffContextState {
     hunks: Vec<RenderedDiffHunk>,
-    current_index: HunkIndex,
+    current_index: usize,
     cached_width: usize,
 }
 
@@ -98,21 +49,21 @@ impl DiffContextState {
     /// # Examples
     ///
     /// ```rust,ignore
-    /// use frankie::tui::state::{DiffContextState, HunkIndex, RenderedDiffHunk};
+    /// use frankie::tui::state::{DiffContextState, RenderedDiffHunk};
     ///
     /// let mut state = DiffContextState::default();
-    /// state.rebuild(Vec::<RenderedDiffHunk>::new(), 80, HunkIndex::new(0));
+    /// state.rebuild(Vec::<RenderedDiffHunk>::new(), 80, 0);
     /// assert!(state.hunks().is_empty());
     /// ```
     pub(crate) fn rebuild(
         &mut self,
         hunks: Vec<RenderedDiffHunk>,
         cached_width: usize,
-        preferred_index: HunkIndex,
+        preferred_index: usize,
     ) {
         self.hunks = hunks;
         self.cached_width = cached_width;
-        self.current_index = preferred_index.clamp(self.hunks.len());
+        self.current_index = clamp_index(preferred_index, self.hunks.len());
     }
 
     /// Returns the rendered hunks.
@@ -138,10 +89,10 @@ impl DiffContextState {
     /// use frankie::tui::state::DiffContextState;
     ///
     /// let state = DiffContextState::default();
-    /// assert_eq!(state.current_index().value(), 0);
+    /// assert_eq!(state.current_index(), 0);
     /// ```
     #[must_use]
-    pub(crate) const fn current_index(&self) -> HunkIndex {
+    pub(crate) const fn current_index(&self) -> usize {
         self.current_index
     }
 
@@ -174,9 +125,7 @@ impl DiffContextState {
         if self.hunks.is_empty() {
             return;
         }
-        let max_index = self.hunks.len().saturating_sub(1);
-        let next = self.current_index.value().saturating_add(1).min(max_index);
-        self.current_index = HunkIndex::new(next);
+        self.current_index = clamp_index(self.current_index.saturating_add(1), self.hunks.len());
     }
 
     /// Moves to the previous hunk, clamping at the first hunk.
@@ -193,8 +142,7 @@ impl DiffContextState {
         if self.hunks.is_empty() {
             return;
         }
-        let prev = self.current_index.value().saturating_sub(1);
-        self.current_index = HunkIndex::new(prev);
+        self.current_index = self.current_index.saturating_sub(1);
     }
 }
 
@@ -220,6 +168,12 @@ pub(crate) fn collect_diff_hunks(
     reviews: &[ReviewComment],
     filtered_indices: &[usize],
 ) -> Vec<DiffHunk> {
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    struct Key {
+        file_path: Option<String>,
+        text: String,
+    }
+
     let mut seen = HashSet::new();
     let mut hunks = Vec::new();
 
@@ -234,7 +188,7 @@ pub(crate) fn collect_diff_hunks(
             continue;
         }
 
-        let key = DiffHunkKey {
+        let key = Key {
             file_path: comment.file_path.clone(),
             text: diff_hunk.to_owned(),
         };
@@ -264,37 +218,31 @@ pub(crate) fn collect_diff_hunks(
 /// # Examples
 ///
 /// ```rust,ignore
-/// use frankie::tui::state::{find_hunk_index, DiffHunk, HunkIndex};
+/// use frankie::tui::state::{find_hunk_index, DiffHunk};
 /// use frankie::github::models::ReviewComment;
 ///
 /// let hunks: Vec<DiffHunk> = Vec::new();
 /// let index = find_hunk_index(&hunks, None);
-/// assert_eq!(index, HunkIndex::new(0));
+/// assert_eq!(index, 0);
 /// ```
 #[must_use]
 pub(crate) fn find_hunk_index(
     hunks: &[DiffHunk],
     selected_comment: Option<&ReviewComment>,
-) -> HunkIndex {
+) -> usize {
     let Some(comment) = selected_comment else {
-        return HunkIndex::new(0);
+        return 0;
     };
 
     let Some(diff_hunk) = comment.diff_hunk.as_deref() else {
-        return HunkIndex::new(0);
+        return 0;
     };
 
     let position = hunks.iter().position(|hunk| {
         hunk.text == diff_hunk && hunk.file_path.as_deref() == comment.file_path.as_deref()
     });
 
-    HunkIndex::new(position.unwrap_or(0))
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct DiffHunkKey {
-    file_path: Option<String>,
-    text: String,
+    position.unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -361,12 +309,33 @@ mod tests {
 
         let index = find_hunk_index(&hunks, selected);
 
-        assert_eq!(index.value(), 1);
+        assert_eq!(index, 1);
     }
 
     #[test]
-    fn hunk_index_clamps_to_length() {
-        let index = HunkIndex::new(5).clamp(2);
-        assert_eq!(index.value(), 1);
+    fn rebuild_clamps_to_length() {
+        let hunks = vec![
+            RenderedDiffHunk {
+                hunk: DiffHunk {
+                    file_path: Some("src/lib.rs".to_owned()),
+                    line_number: Some(1),
+                    text: "@@ -1 +1 @@\n+fn a() {}".to_owned(),
+                },
+                rendered: "first\n".to_owned(),
+            },
+            RenderedDiffHunk {
+                hunk: DiffHunk {
+                    file_path: Some("src/main.rs".to_owned()),
+                    line_number: Some(2),
+                    text: "@@ -1 +1 @@\n+fn b() {}".to_owned(),
+                },
+                rendered: "second\n".to_owned(),
+            },
+        ];
+
+        let mut state = DiffContextState::default();
+        state.rebuild(hunks, 80, 5);
+
+        assert_eq!(state.current_index(), 1);
     }
 }
