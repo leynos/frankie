@@ -69,6 +69,11 @@ enum ViewMode {
     DiffContext,
 }
 
+enum DiffContextRouting {
+    Handled(Option<Cmd>),
+    Fallthrough,
+}
+
 impl ReviewApp {
     /// Creates a new application with the given review comments.
     #[must_use]
@@ -263,30 +268,49 @@ impl ReviewApp {
         }
     }
 
+    /// Routes messages when in `DiffContext` mode.
+    ///
+    /// Returns `DiffContextRouting::Handled` if the message was handled in
+    /// `DiffContext` mode, or `DiffContextRouting::Fallthrough` if the message
+    /// should fall through to regular routing.
+    fn try_handle_in_diff_context_mode(&mut self, msg: &AppMsg) -> DiffContextRouting {
+        if self.view_mode != ViewMode::DiffContext {
+            return DiffContextRouting::Fallthrough;
+        }
+
+        // EscapePressed in DiffContext mode
+        if matches!(msg, AppMsg::EscapePressed) {
+            return DiffContextRouting::Handled(self.handle_diff_context_msg(msg));
+        }
+
+        // DiffContext-specific messages
+        if msg.is_diff_context() {
+            return DiffContextRouting::Handled(self.handle_diff_context_msg(msg));
+        }
+
+        // Block navigation and filter messages in DiffContext mode
+        if msg.is_navigation() || msg.is_filter() {
+            return DiffContextRouting::Handled(None);
+        }
+
+        // Allow other messages to fall through
+        DiffContextRouting::Fallthrough
+    }
+
     /// Handles a message and updates state accordingly.
     ///
     /// This method is the core update function that processes all application
     /// messages and returns any resulting commands. It delegates to specialised
     /// handlers for each message category to keep cyclomatic complexity low.
     pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        // EscapePressed in DiffContext mode
-        if matches!(msg, AppMsg::EscapePressed) && self.view_mode == ViewMode::DiffContext {
-            return self.handle_diff_context_msg(msg);
+        // Route DiffContext mode messages
+        if let DiffContextRouting::Handled(result) = self.try_handle_in_diff_context_mode(msg) {
+            return result;
         }
 
-        // EscapePressed in other modes
+        // EscapePressed in ReviewList mode
         if matches!(msg, AppMsg::EscapePressed) {
             return self.handle_clear_filter();
-        }
-
-        // DiffContext-specific messages in DiffContext mode
-        if self.view_mode == ViewMode::DiffContext && msg.is_diff_context() {
-            return self.handle_diff_context_msg(msg);
-        }
-
-        // Block navigation and filter messages in DiffContext mode
-        if self.view_mode == ViewMode::DiffContext && (msg.is_navigation() || msg.is_filter()) {
-            return None;
         }
 
         if msg.is_navigation() {
