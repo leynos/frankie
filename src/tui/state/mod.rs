@@ -13,4 +13,4 @@ pub(crate) use diff_context::{
 };
 pub use filter_state::{FilterState, ReviewFilter};
 pub(crate) use time_travel::TimeTravelParams;
-pub use time_travel::TimeTravelState;
+pub use time_travel::{TimeTravelInitParams, TimeTravelState};

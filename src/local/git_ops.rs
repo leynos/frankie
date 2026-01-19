@@ -16,8 +16,9 @@ use std::sync::{Arc, Mutex};
 use chrono::{TimeZone, Utc};
 use git2::{DiffOptions, Oid, Repository};
 
-use super::commit::{CommitSnapshot, LineMappingVerification};
+use super::commit::{CommitMetadata, CommitSnapshot, LineMappingRequest, LineMappingVerification};
 use super::error::GitOperationError;
+use super::types::{CommitSha, RepoFilePath};
 
 /// Trait defining Git operations required for time-travel navigation.
 ///
@@ -36,8 +37,8 @@ pub trait GitOperations: Send + Sync + Debug {
     /// Returns an error if the commit cannot be found or accessed.
     fn get_commit_snapshot(
         &self,
-        sha: &str,
-        file_path: Option<&str>,
+        sha: &CommitSha,
+        file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError>;
 
     /// Gets the content of a file at a specific commit.
@@ -50,7 +51,11 @@ pub trait GitOperations: Send + Sync + Debug {
     /// # Errors
     ///
     /// Returns an error if the commit or file cannot be found.
-    fn get_file_at_commit(&self, sha: &str, file_path: &str) -> Result<String, GitOperationError>;
+    fn get_file_at_commit(
+        &self,
+        sha: &CommitSha,
+        file_path: &RepoFilePath,
+    ) -> Result<String, GitOperationError>;
 
     /// Verifies line mapping between two commits.
     ///
@@ -59,24 +64,14 @@ pub trait GitOperations: Send + Sync + Debug {
     ///
     /// # Arguments
     ///
-    /// * `old_sha` - The source commit SHA (where the comment was made).
-    /// * `new_sha` - The target commit SHA (typically HEAD).
-    /// * `file_path` - Path to the file.
-    /// * `line` - The line number in the old commit.
+    /// * `request` - The line mapping request containing old/new SHAs, file path, and line number.
     ///
     /// # Errors
     ///
     /// Returns an error if the diff cannot be computed.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "All parameters needed for line mapping verification"
-    )]
     fn verify_line_mapping(
         &self,
-        old_sha: &str,
-        new_sha: &str,
-        file_path: &str,
-        line: u32,
+        request: &LineMappingRequest,
     ) -> Result<LineMappingVerification, GitOperationError>;
 
     /// Gets parent commits of the specified commit.
@@ -89,11 +84,14 @@ pub trait GitOperations: Send + Sync + Debug {
     /// # Errors
     ///
     /// Returns an error if the commit cannot be found.
-    fn get_parent_commits(&self, sha: &str, limit: usize)
-    -> Result<Vec<String>, GitOperationError>;
+    fn get_parent_commits(
+        &self,
+        sha: &CommitSha,
+        limit: usize,
+    ) -> Result<Vec<CommitSha>, GitOperationError>;
 
     /// Checks if a commit exists in the repository.
-    fn commit_exists(&self, sha: &str) -> bool;
+    fn commit_exists(&self, sha: &CommitSha) -> bool;
 }
 
 /// Git2-based implementation of `GitOperations`.
@@ -113,19 +111,25 @@ impl std::fmt::Debug for Git2Operations {
 }
 
 impl Git2Operations {
+    /// Helper to construct `Git2Operations` from a `Repository` result.
+    fn from_repo_result(
+        result: Result<Repository, git2::Error>,
+    ) -> Result<Self, GitOperationError> {
+        let repo = result.map_err(|e| GitOperationError::RepositoryNotAvailable {
+            message: e.message().to_owned(),
+        })?;
+        Ok(Self {
+            repo: Mutex::new(repo),
+        })
+    }
+
     /// Opens a repository at the given path.
     ///
     /// # Errors
     ///
     /// Returns an error if the path is not a valid Git repository.
     pub fn open(repo_path: &Path) -> Result<Self, GitOperationError> {
-        let repo =
-            Repository::open(repo_path).map_err(|e| GitOperationError::RepositoryNotAvailable {
-                message: e.message().to_owned(),
-            })?;
-        Ok(Self {
-            repo: Mutex::new(repo),
-        })
+        Self::from_repo_result(Repository::open(repo_path))
     }
 
     /// Discovers and opens a repository containing the given path.
@@ -134,14 +138,7 @@ impl Git2Operations {
     ///
     /// Returns an error if no Git repository is found.
     pub fn discover(start_path: &Path) -> Result<Self, GitOperationError> {
-        let repo = Repository::discover(start_path).map_err(|e| {
-            GitOperationError::RepositoryNotAvailable {
-                message: e.message().to_owned(),
-            }
-        })?;
-        Ok(Self {
-            repo: Mutex::new(repo),
-        })
+        Self::from_repo_result(Repository::discover(start_path))
     }
 
     /// Creates a new instance wrapping an existing repository.
@@ -187,20 +184,138 @@ impl Git2Operations {
                 })?;
         Ok(entry.id())
     }
+
+    /// Checks if a file was deleted in a tree.
+    fn is_file_deleted(new_tree: &git2::Tree<'_>, file_path: &str) -> bool {
+        new_tree.get_path(Path::new(file_path)).is_err()
+    }
+
+    /// Checks if two commit OIDs are the same.
+    fn are_commits_same(old_oid: Oid, new_oid: Oid) -> bool {
+        old_oid == new_oid
+    }
+
+    /// Creates a diff for a specific file between two trees.
+    fn create_file_diff<'a>(
+        repo: &'a Repository,
+        old_tree: &git2::Tree<'_>,
+        new_tree: &git2::Tree<'_>,
+        file_path: &str,
+    ) -> Result<git2::Diff<'a>, GitOperationError> {
+        let mut diff_opts = DiffOptions::new();
+        diff_opts.pathspec(file_path);
+
+        repo.diff_tree_to_tree(Some(old_tree), Some(new_tree), Some(&mut diff_opts))
+            .map_err(|e| GitOperationError::DiffComputationFailed {
+                message: e.message().to_owned(),
+            })
+    }
+
+    /// Checks if a diff has no changes.
+    fn has_no_changes(diff: &git2::Diff<'_>) -> bool {
+        diff.deltas().len() == 0
+    }
+
+    /// Checks if a line is within a hunk's old range.
+    const fn is_line_in_hunk(line: u32, old_start: u32, old_lines: u32) -> bool {
+        line >= old_start && line < old_start + old_lines
+    }
+
+    /// Checks if a line was deleted in a hunk.
+    const fn is_line_deleted_in_hunk(
+        line: u32,
+        old_start: u32,
+        old_lines: u32,
+        new_lines: u32,
+    ) -> bool {
+        if old_lines > new_lines {
+            let removed_start = old_start + new_lines;
+            line >= removed_start
+        } else {
+            false
+        }
+    }
+
+    /// Calculates the offset contribution from a hunk.
+    fn calculate_hunk_offset(old_lines: u32, new_lines: u32) -> i32 {
+        i32::try_from(new_lines).unwrap_or(0) - i32::try_from(old_lines).unwrap_or(0)
+    }
+
+    /// Computes the line offset by processing diff hunks.
+    fn compute_line_offset_from_hunks(
+        diff: &git2::Diff<'_>,
+        target_line: u32,
+    ) -> Result<(i32, bool), GitOperationError> {
+        let mut line_offset: i32 = 0;
+        let mut line_deleted = false;
+        let mut passed_line = false;
+
+        diff.foreach(
+            &mut |_, _| true,
+            None,
+            Some(&mut |_delta, hunk| {
+                let old_start = hunk.old_start();
+                let old_lines = hunk.old_lines();
+                let new_lines = hunk.new_lines();
+
+                if passed_line {
+                    return true;
+                }
+
+                if Self::is_line_in_hunk(target_line, old_start, old_lines) {
+                    line_deleted =
+                        Self::is_line_deleted_in_hunk(target_line, old_start, old_lines, new_lines);
+                    passed_line = true;
+                } else if target_line >= old_start + old_lines {
+                    line_offset += Self::calculate_hunk_offset(old_lines, new_lines);
+                } else {
+                    passed_line = true;
+                }
+
+                true
+            }),
+            None,
+        )
+        .map_err(|e| GitOperationError::DiffComputationFailed {
+            message: e.message().to_owned(),
+        })?;
+
+        Ok((line_offset, line_deleted))
+    }
+
+    /// Creates the appropriate line mapping result from offset and deletion state.
+    fn create_line_mapping_result(
+        original_line: u32,
+        line_offset: i32,
+        line_deleted: bool,
+    ) -> LineMappingVerification {
+        if line_deleted {
+            return LineMappingVerification::deleted(original_line);
+        }
+
+        let new_line = u32::try_from(i32::try_from(original_line).unwrap_or(0) + line_offset)
+            .unwrap_or(original_line);
+
+        if new_line == original_line {
+            LineMappingVerification::exact(original_line)
+        } else {
+            LineMappingVerification::moved(original_line, new_line)
+        }
+    }
 }
 
 impl GitOperations for Git2Operations {
     fn get_commit_snapshot(
         &self,
-        sha: &str,
-        file_path: Option<&str>,
+        sha: &CommitSha,
+        file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError> {
         let repo = self.repo.lock().unwrap();
-        let oid = Self::parse_sha_with_repo(&repo, sha)?;
+        let oid = Self::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
             .map_err(|_| GitOperationError::CommitNotFound {
-                sha: sha.to_owned(),
+                sha: sha.to_string(),
             })?;
 
         let message = commit
@@ -219,60 +334,58 @@ impl GitOperations for Git2Operations {
             .single()
             .unwrap_or_else(Utc::now);
 
+        let metadata = CommitMetadata::new(oid.to_string(), message, author_name, timestamp);
+
         if let Some(path) = file_path {
-            let blob_oid = Self::get_file_blob_oid(&commit, path)?;
+            let blob_oid = Self::get_file_blob_oid(&commit, path.as_str())?;
             let blob =
                 repo.find_blob(blob_oid)
                     .map_err(|e| GitOperationError::CommitAccessFailed {
-                        sha: sha.to_owned(),
+                        sha: sha.to_string(),
                         message: e.message().to_owned(),
                     })?;
 
             let content = std::str::from_utf8(blob.content())
                 .map_err(|_| GitOperationError::CommitAccessFailed {
-                    sha: sha.to_owned(),
+                    sha: sha.to_string(),
                     message: "file content is not valid UTF-8".to_owned(),
                 })?
                 .to_owned();
 
             Ok(CommitSnapshot::with_file_content(
-                oid.to_string(),
-                message,
-                author_name,
-                timestamp,
-                path.to_owned(),
+                metadata,
+                path.to_string(),
                 content,
             ))
         } else {
-            Ok(CommitSnapshot::new(
-                oid.to_string(),
-                message,
-                author_name,
-                timestamp,
-            ))
+            Ok(CommitSnapshot::new(metadata))
         }
     }
 
-    fn get_file_at_commit(&self, sha: &str, file_path: &str) -> Result<String, GitOperationError> {
+    fn get_file_at_commit(
+        &self,
+        sha: &CommitSha,
+        file_path: &RepoFilePath,
+    ) -> Result<String, GitOperationError> {
         let repo = self.repo.lock().unwrap();
-        let oid = Self::parse_sha_with_repo(&repo, sha)?;
+        let oid = Self::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
             .map_err(|_| GitOperationError::CommitNotFound {
-                sha: sha.to_owned(),
+                sha: sha.to_string(),
             })?;
 
-        let blob_oid = Self::get_file_blob_oid(&commit, file_path)?;
+        let blob_oid = Self::get_file_blob_oid(&commit, file_path.as_str())?;
         let blob = repo
             .find_blob(blob_oid)
             .map_err(|e| GitOperationError::CommitAccessFailed {
-                sha: sha.to_owned(),
+                sha: sha.to_string(),
                 message: e.message().to_owned(),
             })?;
 
         let content = std::str::from_utf8(blob.content()).map_err(|_| {
             GitOperationError::CommitAccessFailed {
-                sha: sha.to_owned(),
+                sha: sha.to_string(),
                 message: "file content is not valid UTF-8".to_owned(),
             }
         })?;
@@ -280,131 +393,62 @@ impl GitOperations for Git2Operations {
         Ok(content.to_owned())
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "Diff traversal logic is inherently complex"
-    )]
-    #[expect(
-        clippy::excessive_nesting,
-        reason = "Git diff callback requires nested conditions"
-    )]
     fn verify_line_mapping(
         &self,
-        old_sha: &str,
-        new_sha: &str,
-        file_path: &str,
-        line: u32,
+        request: &LineMappingRequest,
     ) -> Result<LineMappingVerification, GitOperationError> {
         let repo = self.repo.lock().unwrap();
-        let old_oid = Self::parse_sha_with_repo(&repo, old_sha)?;
-        let new_oid = Self::parse_sha_with_repo(&repo, new_sha)?;
+        let old_oid = Self::parse_sha_with_repo(&repo, &request.old_sha)?;
+        let new_oid = Self::parse_sha_with_repo(&repo, &request.new_sha)?;
+
+        // Early return if commits are the same
+        if Self::are_commits_same(old_oid, new_oid) {
+            return Ok(LineMappingVerification::exact(request.line));
+        }
 
         let old_commit =
             repo.find_commit(old_oid)
                 .map_err(|_| GitOperationError::CommitNotFound {
-                    sha: old_sha.to_owned(),
+                    sha: request.old_sha.clone(),
                 })?;
         let new_commit =
             repo.find_commit(new_oid)
                 .map_err(|_| GitOperationError::CommitNotFound {
-                    sha: new_sha.to_owned(),
+                    sha: request.new_sha.clone(),
                 })?;
 
         let old_tree = old_commit.tree()?;
         let new_tree = new_commit.tree()?;
 
-        // Check if the file exists in the new commit
-        if new_tree.get_path(Path::new(file_path)).is_err() {
-            return Ok(LineMappingVerification::deleted(line));
+        // Check if the file was deleted in the new commit
+        if Self::is_file_deleted(&new_tree, &request.file_path) {
+            return Ok(LineMappingVerification::deleted(request.line));
         }
 
-        // If commits are the same, line is exact match
-        if old_oid == new_oid {
-            return Ok(LineMappingVerification::exact(line));
-        }
-
-        let mut diff_opts = DiffOptions::new();
-        diff_opts.pathspec(file_path);
-
-        let diff = repo
-            .diff_tree_to_tree(Some(&old_tree), Some(&new_tree), Some(&mut diff_opts))
-            .map_err(|e| GitOperationError::DiffComputationFailed {
-                message: e.message().to_owned(),
-            })?;
+        let diff = Self::create_file_diff(&repo, &old_tree, &new_tree, &request.file_path)?;
 
         // If no changes to the file, line is exact match
-        if diff.deltas().len() == 0 {
-            return Ok(LineMappingVerification::exact(line));
+        if Self::has_no_changes(&diff) {
+            return Ok(LineMappingVerification::exact(request.line));
         }
 
-        // Compute line offset from hunks
-        let mut line_offset: i32 = 0;
-        let mut line_deleted = false;
-        let mut passed_line = false;
+        let (line_offset, line_deleted) =
+            Self::compute_line_offset_from_hunks(&diff, request.line)?;
 
-        diff.foreach(
-            &mut |_, _| true,
-            None,
-            Some(&mut |_delta, hunk| {
-                let old_start = hunk.old_start();
-                let old_lines = hunk.old_lines();
-                let new_lines = hunk.new_lines();
-
-                // If we've already passed the target line, don't process
-                if passed_line {
-                    return true;
-                }
-
-                // Check if the target line is within this hunk's old range
-                if line >= old_start && line < old_start + old_lines {
-                    // Line is in a changed region - could be deleted or modified
-                    // For simplicity, we'll mark it as deleted if old_lines > new_lines
-                    // and the line is in the removed portion
-                    if old_lines > new_lines {
-                        let removed_start = old_start + new_lines;
-                        if line >= removed_start {
-                            line_deleted = true;
-                        }
-                    }
-                    passed_line = true;
-                } else if line >= old_start + old_lines {
-                    // Line is after this hunk, accumulate offset
-                    line_offset += i32::try_from(new_lines).unwrap_or(0)
-                        - i32::try_from(old_lines).unwrap_or(0);
-                } else {
-                    // Line is before this hunk, we're done
-                    passed_line = true;
-                }
-
-                true
-            }),
-            None,
-        )
-        .map_err(|e| GitOperationError::DiffComputationFailed {
-            message: e.message().to_owned(),
-        })?;
-
-        if line_deleted {
-            return Ok(LineMappingVerification::deleted(line));
-        }
-
-        let new_line =
-            u32::try_from(i32::try_from(line).unwrap_or(0) + line_offset).unwrap_or(line);
-
-        if new_line == line {
-            Ok(LineMappingVerification::exact(line))
-        } else {
-            Ok(LineMappingVerification::moved(line, new_line))
-        }
+        Ok(Self::create_line_mapping_result(
+            request.line,
+            line_offset,
+            line_deleted,
+        ))
     }
 
     fn get_parent_commits(
         &self,
-        sha: &str,
+        sha: &CommitSha,
         limit: usize,
-    ) -> Result<Vec<String>, GitOperationError> {
+    ) -> Result<Vec<CommitSha>, GitOperationError> {
         let repo = self.repo.lock().unwrap();
-        let oid = Self::parse_sha_with_repo(&repo, sha)?;
+        let oid = Self::parse_sha_with_repo(&repo, sha.as_str())?;
         let mut revwalk = repo.revwalk()?;
         revwalk.push(oid)?;
         // Topological sorting ensures parents come after children in the commit graph,
@@ -412,22 +456,22 @@ impl GitOperations for Git2Operations {
         // TIME adds a secondary sort by commit timestamp for commits at the same depth.
         revwalk.set_sorting(git2::Sort::TOPOLOGICAL | git2::Sort::TIME)?;
 
-        let commits: Vec<String> = revwalk
+        let commits: Vec<CommitSha> = revwalk
             .filter_map(Result::ok)
             .take(limit)
-            .map(|oid| oid.to_string())
+            .map(|oid| CommitSha::new(oid.to_string()))
             .collect();
 
         Ok(commits)
     }
 
-    fn commit_exists(&self, sha: &str) -> bool {
+    fn commit_exists(&self, sha: &CommitSha) -> bool {
         let repo = self.repo.lock().unwrap();
-        Self::parse_sha_with_repo(&repo, sha)
+        Self::parse_sha_with_repo(&repo, sha.as_str())
             .and_then(|oid| {
                 repo.find_commit(oid)
                     .map_err(|_| GitOperationError::CommitNotFound {
-                        sha: sha.to_owned(),
+                        sha: sha.to_string(),
                     })
             })
             .is_ok()
@@ -450,6 +494,7 @@ pub fn create_git_ops(repo_path: &Path) -> Result<Arc<dyn GitOperations>, GitOpe
 mod tests {
     use super::*;
     use crate::local::LineMappingStatus;
+    use crate::local::types::{CommitSha, RepoFilePath};
     use std::fs;
     use tempfile::TempDir;
 
@@ -489,13 +534,34 @@ mod tests {
             .unwrap()
     }
 
+    /// Helper to test Git operation error handling with custom setup.
+    fn test_git_error<F, T>(
+        setup: impl FnOnce(&Repository) -> String,
+        operation: F,
+    ) -> GitOperationError
+    where
+        F: FnOnce(&Git2Operations, &str) -> Result<T, GitOperationError>,
+        T: std::fmt::Debug,
+    {
+        let (dir, repo) = create_test_repo();
+        let param = setup(&repo);
+        let ops = Git2Operations::from_repository(repo);
+
+        let result = operation(&ops, &param);
+
+        let err = result.unwrap_err();
+        drop(dir);
+        err
+    }
+
     #[test]
     fn test_commit_snapshot() {
         let (dir, repo) = create_test_repo();
         let oid = create_commit(&repo, "Initial commit", &[("test.txt", "hello")]);
 
         let ops = Git2Operations::from_repository(repo);
-        let snapshot = ops.get_commit_snapshot(&oid.to_string(), None).unwrap();
+        let sha = CommitSha::new(oid.to_string());
+        let snapshot = ops.get_commit_snapshot(&sha, None).unwrap();
 
         assert_eq!(snapshot.message(), "Initial commit");
         assert_eq!(snapshot.author(), "Test User");
@@ -510,9 +576,9 @@ mod tests {
         let oid = create_commit(&repo, "Add file", &[("src/main.rs", "fn main() {}")]);
 
         let ops = Git2Operations::from_repository(repo);
-        let snapshot = ops
-            .get_commit_snapshot(&oid.to_string(), Some("src/main.rs"))
-            .unwrap();
+        let sha = CommitSha::new(oid.to_string());
+        let path = RepoFilePath::new("src/main.rs".to_owned());
+        let snapshot = ops.get_commit_snapshot(&sha, Some(&path)).unwrap();
 
         assert_eq!(snapshot.file_content(), Some("fn main() {}"));
         assert_eq!(snapshot.file_path(), Some("src/main.rs"));
@@ -526,9 +592,9 @@ mod tests {
         let oid = create_commit(&repo, "Add file", &[("test.txt", "content here")]);
 
         let ops = Git2Operations::from_repository(repo);
-        let content = ops
-            .get_file_at_commit(&oid.to_string(), "test.txt")
-            .unwrap();
+        let sha = CommitSha::new(oid.to_string());
+        let path = RepoFilePath::new("test.txt".to_owned());
+        let content = ops.get_file_at_commit(&sha, &path).unwrap();
 
         assert_eq!(content, "content here");
 
@@ -537,34 +603,35 @@ mod tests {
 
     #[test]
     fn test_file_not_found() {
-        let (dir, repo) = create_test_repo();
-        let oid = create_commit(&repo, "Add file", &[("test.txt", "content")]);
+        let err = test_git_error(
+            |repo| {
+                let oid = create_commit(repo, "Add file", &[("test.txt", "content")]);
+                oid.to_string()
+            },
+            |ops, sha| {
+                let commit_sha = CommitSha::new(sha.to_owned());
+                let path = RepoFilePath::new("nonexistent.txt".to_owned());
+                ops.get_file_at_commit(&commit_sha, &path)
+            },
+        );
 
-        let ops = Git2Operations::from_repository(repo);
-        let result = ops.get_file_at_commit(&oid.to_string(), "nonexistent.txt");
-
-        assert!(matches!(
-            result,
-            Err(GitOperationError::FileNotFound { .. })
-        ));
-
-        drop(dir);
+        assert!(matches!(err, GitOperationError::FileNotFound { .. }));
     }
 
     #[test]
     fn test_commit_not_found() {
-        let (dir, repo) = create_test_repo();
-        create_commit(&repo, "Initial", &[("test.txt", "content")]);
+        let err = test_git_error(
+            |repo| {
+                create_commit(repo, "Initial", &[("test.txt", "content")]);
+                "0000000000000000000000000000000000000000".to_owned()
+            },
+            |ops, sha| {
+                let commit_sha = CommitSha::new(sha.to_owned());
+                ops.get_commit_snapshot(&commit_sha, None)
+            },
+        );
 
-        let ops = Git2Operations::from_repository(repo);
-        let result = ops.get_commit_snapshot("0000000000000000000000000000000000000000", None);
-
-        assert!(matches!(
-            result,
-            Err(GitOperationError::CommitNotFound { .. })
-        ));
-
-        drop(dir);
+        assert!(matches!(err, GitOperationError::CommitNotFound { .. }));
     }
 
     #[test]
@@ -573,9 +640,11 @@ mod tests {
         let oid = create_commit(&repo, "Initial", &[("test.txt", "content")]);
 
         let ops = Git2Operations::from_repository(repo);
+        let sha = CommitSha::new(oid.to_string());
+        let nonexistent = CommitSha::new("0000000000000000000000000000000000000000".to_owned());
 
-        assert!(ops.commit_exists(&oid.to_string()));
-        assert!(!ops.commit_exists("0000000000000000000000000000000000000000"));
+        assert!(ops.commit_exists(&sha));
+        assert!(!ops.commit_exists(&nonexistent));
 
         drop(dir);
     }
@@ -588,12 +657,13 @@ mod tests {
         let oid3 = create_commit(&repo, "Third", &[("test.txt", "v3")]);
 
         let ops = Git2Operations::from_repository(repo);
-        let commits = ops.get_parent_commits(&oid3.to_string(), 10).unwrap();
+        let sha = CommitSha::new(oid3.to_string());
+        let commits = ops.get_parent_commits(&sha, 10).unwrap();
 
         assert_eq!(commits.len(), 3);
-        assert_eq!(commits[0], oid3.to_string());
-        assert_eq!(commits[1], oid2.to_string());
-        assert_eq!(commits[2], oid1.to_string());
+        assert_eq!(commits[0].as_str(), oid3.to_string());
+        assert_eq!(commits[1].as_str(), oid2.to_string());
+        assert_eq!(commits[2].as_str(), oid1.to_string());
 
         drop(dir);
     }
@@ -604,9 +674,9 @@ mod tests {
         let oid = create_commit(&repo, "Add file", &[("test.txt", "line1\nline2\nline3")]);
 
         let ops = Git2Operations::from_repository(repo);
-        let verification = ops
-            .verify_line_mapping(&oid.to_string(), &oid.to_string(), "test.txt", 2)
-            .unwrap();
+        let request =
+            LineMappingRequest::new(oid.to_string(), oid.to_string(), "test.txt".to_owned(), 2);
+        let verification = ops.verify_line_mapping(&request).unwrap();
 
         assert_eq!(verification.status(), LineMappingStatus::Exact);
         assert_eq!(verification.original_line(), 2);
@@ -622,9 +692,9 @@ mod tests {
         let oid2 = create_commit(&repo, "Other file", &[("other.txt", "other content")]);
 
         let ops = Git2Operations::from_repository(repo);
-        let verification = ops
-            .verify_line_mapping(&oid1.to_string(), &oid2.to_string(), "test.txt", 2)
-            .unwrap();
+        let request =
+            LineMappingRequest::new(oid1.to_string(), oid2.to_string(), "test.txt".to_owned(), 2);
+        let verification = ops.verify_line_mapping(&request).unwrap();
 
         assert_eq!(verification.status(), LineMappingStatus::Exact);
 

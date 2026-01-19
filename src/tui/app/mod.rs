@@ -91,6 +91,11 @@ enum TimeTravelRouting {
     Fallthrough,
 }
 
+enum ViewModeRouting {
+    Handled(Option<Cmd>),
+    Fallthrough,
+}
+
 impl ReviewApp {
     /// Creates a new application with the given review comments.
     #[must_use]
@@ -325,6 +330,14 @@ impl ReviewApp {
         DiffContextRouting::Fallthrough
     }
 
+    /// Checks if a message should be blocked when in time-travel mode.
+    ///
+    /// Time-travel mode blocks navigation, filter, and diff context messages
+    /// to prevent interference with the time-travel view state.
+    const fn is_blocked_in_time_travel(msg: &AppMsg) -> bool {
+        msg.is_navigation() || msg.is_filter() || msg.is_diff_context()
+    }
+
     /// Routes messages when in `TimeTravel` mode.
     ///
     /// Returns `TimeTravelRouting::Handled` if the message was handled in
@@ -341,7 +354,7 @@ impl ReviewApp {
         }
 
         // Block navigation, filter, and diff context messages in TimeTravel mode
-        if msg.is_navigation() || msg.is_filter() || msg.is_diff_context() {
+        if Self::is_blocked_in_time_travel(msg) {
             return TimeTravelRouting::Handled(None);
         }
 
@@ -363,28 +376,35 @@ impl ReviewApp {
         }
     }
 
-    /// Handles a message and updates state accordingly.
+    /// Routes messages based on the current view mode.
     ///
-    /// This method is the core update function that processes all application
-    /// messages and returns any resulting commands. It delegates to specialised
-    /// handlers for each message category to keep cyclomatic complexity low.
-    #[doc(hidden)]
-    pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+    /// Returns `ViewModeRouting::Handled(cmd)` if the message was handled by
+    /// mode-specific routing, or `ViewModeRouting::Fallthrough` if the message
+    /// should proceed to category-based dispatch.
+    fn route_by_view_mode(&mut self, msg: &AppMsg) -> ViewModeRouting {
         // Route TimeTravel mode messages first (takes priority)
         if let TimeTravelRouting::Handled(result) = self.try_handle_in_time_travel_mode(msg) {
-            return result;
+            return ViewModeRouting::Handled(result);
         }
 
         // Route DiffContext mode messages
         if let DiffContextRouting::Handled(result) = self.try_handle_in_diff_context_mode(msg) {
-            return result;
+            return ViewModeRouting::Handled(result);
         }
 
         // EscapePressed in ReviewList mode
         if matches!(msg, AppMsg::EscapePressed) {
-            return self.handle_clear_filter();
+            return ViewModeRouting::Handled(self.handle_clear_filter());
         }
 
+        ViewModeRouting::Fallthrough
+    }
+
+    /// Dispatches messages based on their category.
+    ///
+    /// This method handles messages that were not intercepted by mode-specific
+    /// routing, dispatching them to the appropriate category handler.
+    fn dispatch_by_message_category(&mut self, msg: &AppMsg) -> Option<Cmd> {
         if msg.is_navigation() {
             return self.handle_navigation_msg(msg);
         }
@@ -401,6 +421,19 @@ impl ReviewApp {
             return self.handle_data_msg(msg);
         }
         self.handle_lifecycle_msg(msg)
+    }
+
+    /// Handles a message and updates state accordingly.
+    ///
+    /// This method is the core update function that processes all application
+    /// messages and returns any resulting commands. It first attempts mode-based
+    /// routing, then falls back to category-based dispatch.
+    #[doc(hidden)]
+    pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        if let ViewModeRouting::Handled(result) = self.route_by_view_mode(msg) {
+            return result;
+        }
+        self.dispatch_by_message_category(msg)
     }
 
     /// Dispatches navigation messages to their handlers.

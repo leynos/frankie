@@ -167,37 +167,50 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use super::*;
-    use crate::local::{CommitSnapshot, LineMappingVerification};
+    use crate::local::{CommitMetadata, CommitSnapshot, LineMappingVerification};
+    use crate::tui::state::TimeTravelInitParams;
+
+    /// Creates a standard context with common settings.
+    fn create_test_context(state: &TimeTravelState) -> TimeTravelViewContext<'_> {
+        TimeTravelViewContext {
+            state: Some(state),
+            max_width: 80,
+            max_height: 0,
+        }
+    }
+
+    /// Creates context and renders the view.
+    fn render_view_with_state(state: &TimeTravelState) -> String {
+        let ctx = create_test_context(state);
+        TimeTravelViewComponent::view(&ctx)
+    }
 
     #[fixture]
     fn sample_state() -> TimeTravelState {
-        let snapshot = CommitSnapshot::with_file_content(
+        let metadata = CommitMetadata::new(
             "abc1234567890".to_owned(),
             "Fix login validation".to_owned(),
             "Alice".to_owned(),
             Utc::now(),
+        );
+        let snapshot = CommitSnapshot::with_file_content(
+            metadata,
             "src/auth.rs".to_owned(),
             "fn login() {\n    validate();\n}\n".to_owned(),
         );
 
-        TimeTravelState::new(
+        TimeTravelState::new(TimeTravelInitParams {
             snapshot,
-            "src/auth.rs".to_owned(),
-            Some(2),
-            Some(LineMappingVerification::exact(2)),
-            vec!["abc1234567890".to_owned(), "def5678901234".to_owned()],
-        )
+            file_path: "src/auth.rs".to_owned(),
+            original_line: Some(2),
+            line_mapping: Some(LineMappingVerification::exact(2)),
+            commit_history: vec!["abc1234567890".to_owned(), "def5678901234".to_owned()],
+        })
     }
 
     #[rstest]
     fn view_shows_commit_header(sample_state: TimeTravelState) {
-        let ctx = TimeTravelViewContext {
-            state: Some(&sample_state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&sample_state);
 
         assert!(output.contains("abc1234"));
         assert!(output.contains("Fix login validation"));
@@ -205,39 +218,21 @@ mod tests {
 
     #[rstest]
     fn view_shows_file_path(sample_state: TimeTravelState) {
-        let ctx = TimeTravelViewContext {
-            state: Some(&sample_state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&sample_state);
 
         assert!(output.contains("src/auth.rs"));
     }
 
     #[rstest]
     fn view_shows_line_mapping(sample_state: TimeTravelState) {
-        let ctx = TimeTravelViewContext {
-            state: Some(&sample_state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&sample_state);
 
         assert!(output.contains("exact match"));
     }
 
     #[rstest]
     fn view_shows_navigation(sample_state: TimeTravelState) {
-        let ctx = TimeTravelViewContext {
-            state: Some(&sample_state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&sample_state);
 
         assert!(output.contains("Commit 1/2"));
         assert!(output.contains("[h] Previous"));
@@ -245,13 +240,7 @@ mod tests {
 
     #[rstest]
     fn view_shows_file_content(sample_state: TimeTravelState) {
-        let ctx = TimeTravelViewContext {
-            state: Some(&sample_state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&sample_state);
 
         assert!(output.contains("fn login()"));
         assert!(output.contains("validate()"));
@@ -259,13 +248,7 @@ mod tests {
 
     #[rstest]
     fn view_highlights_target_line(sample_state: TimeTravelState) {
-        let ctx = TimeTravelViewContext {
-            state: Some(&sample_state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&sample_state);
 
         // Line 2 should have the > marker
         assert!(output.contains(">  2 |"));

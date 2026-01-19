@@ -1,6 +1,9 @@
 //! Mock implementation of `GitOperations` for BDD tests.
 
-use frankie::local::{CommitSnapshot, GitOperationError, GitOperations, LineMappingVerification};
+use frankie::local::{
+    CommitMetadata, CommitSha, CommitSnapshot, GitOperationError, GitOperations,
+    LineMappingRequest, LineMappingVerification, RepoFilePath,
+};
 
 /// Mock implementation of `GitOperations` for testing.
 #[derive(Debug)]
@@ -8,7 +11,7 @@ pub(crate) struct MockGitOperations {
     /// Whether the commit should be found.
     commit_exists: bool,
     /// The commit history to return.
-    commit_history: Vec<String>,
+    commit_history: Vec<CommitSha>,
 }
 
 impl Default for MockGitOperations {
@@ -16,9 +19,9 @@ impl Default for MockGitOperations {
         Self {
             commit_exists: true,
             commit_history: vec![
-                "abc1234567890".to_owned(),
-                "def5678901234".to_owned(),
-                "ghi9012345678".to_owned(),
+                CommitSha::new("abc1234567890".to_owned()),
+                CommitSha::new("def5678901234".to_owned()),
+                CommitSha::new("ghi9012345678".to_owned()),
             ],
         }
     }
@@ -44,42 +47,41 @@ impl MockGitOperations {
 impl GitOperations for MockGitOperations {
     fn get_commit_snapshot(
         &self,
-        sha: &str,
-        file_path: Option<&str>,
+        sha: &CommitSha,
+        file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError> {
         if !self.commit_exists {
             return Err(GitOperationError::CommitNotFound {
-                sha: sha.to_owned(),
+                sha: sha.to_string(),
             });
         }
 
         let timestamp = chrono::Utc::now();
-        file_path.map_or_else(
-            || {
-                Ok(CommitSnapshot::new(
-                    sha.to_owned(),
-                    "Fix login validation".to_owned(),
-                    "Alice".to_owned(),
-                    timestamp,
-                ))
-            },
-            |path| {
-                Ok(CommitSnapshot::with_file_content(
-                    sha.to_owned(),
-                    "Fix login validation".to_owned(),
-                    "Alice".to_owned(),
-                    timestamp,
-                    path.to_owned(),
-                    "fn login() {\n    // validation\n}".to_owned(),
-                ))
-            },
-        )
+        let metadata = CommitMetadata::new(
+            sha.to_string(),
+            "Fix login validation".to_owned(),
+            "Alice".to_owned(),
+            timestamp,
+        );
+        if let Some(path) = file_path {
+            Ok(CommitSnapshot::with_file_content(
+                metadata,
+                path.to_string(),
+                "fn login() {\n    // validation\n}".to_owned(),
+            ))
+        } else {
+            Ok(CommitSnapshot::new(metadata))
+        }
     }
 
-    fn get_file_at_commit(&self, sha: &str, _file_path: &str) -> Result<String, GitOperationError> {
+    fn get_file_at_commit(
+        &self,
+        sha: &CommitSha,
+        _file_path: &RepoFilePath,
+    ) -> Result<String, GitOperationError> {
         if !self.commit_exists {
             return Err(GitOperationError::CommitNotFound {
-                sha: sha.to_owned(),
+                sha: sha.to_string(),
             });
         }
         Ok("fn login() {\n    // validation\n}".to_owned())
@@ -87,23 +89,20 @@ impl GitOperations for MockGitOperations {
 
     fn verify_line_mapping(
         &self,
-        _old_sha: &str,
-        _new_sha: &str,
-        _file_path: &str,
-        line: u32,
+        request: &LineMappingRequest,
     ) -> Result<LineMappingVerification, GitOperationError> {
-        Ok(LineMappingVerification::exact(line))
+        Ok(LineMappingVerification::exact(request.line))
     }
 
     fn get_parent_commits(
         &self,
-        _sha: &str,
+        _sha: &CommitSha,
         limit: usize,
-    ) -> Result<Vec<String>, GitOperationError> {
+    ) -> Result<Vec<CommitSha>, GitOperationError> {
         Ok(self.commit_history.iter().take(limit).cloned().collect())
     }
 
-    fn commit_exists(&self, _sha: &str) -> bool {
+    fn commit_exists(&self, _sha: &CommitSha) -> bool {
         self.commit_exists
     }
 }

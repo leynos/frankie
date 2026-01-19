@@ -5,7 +5,22 @@
 //! verify line mapping correctness against git2 diffs.
 
 use crate::github::models::ReviewComment;
-use crate::local::{CommitSnapshot, LineMappingVerification};
+use crate::local::{CommitMetadata, CommitSnapshot, LineMappingVerification};
+
+/// Parameters for initialising a time-travel state.
+#[derive(Debug, Clone)]
+pub struct TimeTravelInitParams {
+    /// The commit snapshot to display.
+    pub snapshot: CommitSnapshot,
+    /// Path to the file being viewed.
+    pub file_path: String,
+    /// Line number from the original comment.
+    pub original_line: Option<u32>,
+    /// Verification of line mapping to HEAD.
+    pub line_mapping: Option<LineMappingVerification>,
+    /// List of commit SHAs in the history (most recent first).
+    pub commit_history: Vec<String>,
+}
 
 /// State container for time-travel navigation.
 #[derive(Debug, Clone)]
@@ -30,30 +45,16 @@ pub struct TimeTravelState {
 }
 
 impl TimeTravelState {
-    /// Creates a new time-travel state.
+    /// Creates a new time-travel state from initialisation parameters.
     #[must_use]
     #[doc(hidden)]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "All parameters required for complete state"
-    )]
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "Option<T> destructuring is not const-stable"
-    )]
-    pub fn new(
-        snapshot: CommitSnapshot,
-        file_path: String,
-        original_line: Option<u32>,
-        line_mapping: Option<LineMappingVerification>,
-        commit_history: Vec<String>,
-    ) -> Self {
+    pub fn new(params: TimeTravelInitParams) -> Self {
         Self {
-            snapshot,
-            file_path,
-            original_line,
-            line_mapping,
-            commit_history,
+            snapshot: params.snapshot,
+            file_path: params.file_path,
+            original_line: params.original_line,
+            line_mapping: params.line_mapping,
+            commit_history: params.commit_history,
             current_index: 0,
             loading: false,
             error_message: None,
@@ -63,13 +64,14 @@ impl TimeTravelState {
     /// Creates a loading placeholder state.
     #[must_use]
     pub(crate) fn loading(file_path: String, original_line: Option<u32>) -> Self {
+        let metadata = CommitMetadata::new(
+            String::new(),
+            "Loading...".to_owned(),
+            String::new(),
+            chrono::Utc::now(),
+        );
         Self {
-            snapshot: CommitSnapshot::new(
-                String::new(),
-                "Loading...".to_owned(),
-                String::new(),
-                chrono::Utc::now(),
-            ),
+            snapshot: CommitSnapshot::new(metadata),
             file_path,
             original_line,
             line_mapping: None,
@@ -87,13 +89,14 @@ impl TimeTravelState {
         expect(dead_code, reason = "Used in tests and planned for error handling")
     )]
     pub(crate) fn error(message: String, file_path: String) -> Self {
+        let metadata = CommitMetadata::new(
+            String::new(),
+            String::new(),
+            String::new(),
+            chrono::Utc::now(),
+        );
         Self {
-            snapshot: CommitSnapshot::new(
-                String::new(),
-                String::new(),
-                String::new(),
-                chrono::Utc::now(),
-            ),
+            snapshot: CommitSnapshot::new(metadata),
             file_path,
             original_line: None,
             line_mapping: None,
@@ -266,14 +269,53 @@ mod tests {
     use super::*;
     use crate::github::models::test_support::minimal_review;
     use crate::local::LineMappingStatus;
+    // TimeTravelInitParams is already in scope via `use super::*`
+
+    /// Creates a `TimeTravelState` at the specified commit index.
+    fn state_at_index(
+        snapshot: CommitSnapshot,
+        history: Vec<String>,
+        index: usize,
+    ) -> TimeTravelState {
+        let mut state = TimeTravelState::new(TimeTravelInitParams {
+            snapshot: snapshot.clone(),
+            file_path: "src/auth.rs".to_owned(),
+            original_line: None,
+            line_mapping: None,
+            commit_history: history,
+        });
+        state.update_snapshot(snapshot, None, index);
+        state
+    }
+
+    /// Asserts all navigation-related properties of a `TimeTravelState`.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Test helper needs all navigation properties for comprehensive assertions"
+    )]
+    fn assert_navigation(
+        state: &TimeTravelState,
+        can_previous: bool,
+        can_next: bool,
+        expected_next_sha: Option<&str>,
+        expected_prev_sha: Option<&str>,
+    ) {
+        assert_eq!(state.can_go_previous(), can_previous);
+        assert_eq!(state.can_go_next(), can_next);
+        assert_eq!(state.next_commit_sha(), expected_next_sha);
+        assert_eq!(state.previous_commit_sha(), expected_prev_sha);
+    }
 
     #[fixture]
     fn sample_snapshot() -> CommitSnapshot {
-        CommitSnapshot::with_file_content(
+        let metadata = CommitMetadata::new(
             "abc1234567890".to_owned(),
             "Fix login bug".to_owned(),
             "Alice".to_owned(),
             Utc::now(),
+        );
+        CommitSnapshot::with_file_content(
+            metadata,
             "src/auth.rs".to_owned(),
             "fn login() {}".to_owned(),
         )
@@ -290,13 +332,13 @@ mod tests {
 
     #[rstest]
     fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
-        let state = TimeTravelState::new(
-            sample_snapshot.clone(),
-            "src/auth.rs".to_owned(),
-            Some(42),
-            None,
-            sample_history.clone(),
-        );
+        let state = TimeTravelState::new(TimeTravelInitParams {
+            snapshot: sample_snapshot.clone(),
+            file_path: "src/auth.rs".to_owned(),
+            original_line: Some(42),
+            line_mapping: None,
+            commit_history: sample_history.clone(),
+        });
 
         assert_eq!(state.snapshot().sha(), sample_snapshot.sha());
         assert_eq!(state.file_path(), "src/auth.rs");
@@ -328,84 +370,51 @@ mod tests {
 
     #[rstest]
     fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
-        let state = TimeTravelState::new(
-            sample_snapshot,
-            "src/auth.rs".to_owned(),
-            None,
-            None,
-            sample_history,
-        );
+        let state = state_at_index(sample_snapshot, sample_history, 0);
 
         // At index 0 (most recent): can go previous, cannot go next
-        assert!(state.can_go_previous());
-        assert!(!state.can_go_next());
-
-        assert_eq!(state.next_commit_sha(), None);
-        assert_eq!(state.previous_commit_sha(), Some("def5678901234"));
+        assert_navigation(&state, true, false, None, Some("def5678901234"));
     }
 
     #[rstest]
     fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
-        let mut state = TimeTravelState::new(
-            sample_snapshot.clone(),
-            "src/auth.rs".to_owned(),
-            None,
-            None,
-            sample_history,
-        );
-
-        state.update_snapshot(sample_snapshot, None, 1);
+        let state = state_at_index(sample_snapshot, sample_history, 1);
 
         // At index 1 (middle): can go both ways
-        assert!(state.can_go_previous());
-        assert!(state.can_go_next());
-
-        assert_eq!(state.next_commit_sha(), Some("abc1234567890"));
-        assert_eq!(state.previous_commit_sha(), Some("ghi9012345678"));
+        assert_navigation(
+            &state,
+            true,
+            true,
+            Some("abc1234567890"),
+            Some("ghi9012345678"),
+        );
     }
 
     #[rstest]
     fn navigation_at_oldest(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
-        let mut state = TimeTravelState::new(
-            sample_snapshot.clone(),
-            "src/auth.rs".to_owned(),
-            None,
-            None,
-            sample_history,
-        );
-
-        state.update_snapshot(sample_snapshot, None, 2);
+        let state = state_at_index(sample_snapshot, sample_history, 2);
 
         // At index 2 (oldest): cannot go previous, can go next
-        assert!(!state.can_go_previous());
-        assert!(state.can_go_next());
+        assert_navigation(&state, false, true, Some("def5678901234"), None);
     }
 
     #[rstest]
     fn loading_blocks_navigation(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
-        let mut state = TimeTravelState::new(
-            sample_snapshot,
-            "src/auth.rs".to_owned(),
-            None,
-            None,
-            sample_history,
-        );
-
+        let mut state = state_at_index(sample_snapshot, sample_history, 0);
         state.set_loading(true);
 
-        assert!(!state.can_go_previous());
-        assert!(!state.can_go_next());
+        assert_navigation(&state, false, false, None, Some("def5678901234"));
     }
 
     #[rstest]
     fn update_snapshot_clamps_index(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
-        let mut state = TimeTravelState::new(
-            sample_snapshot.clone(),
-            "src/auth.rs".to_owned(),
-            None,
-            None,
-            sample_history,
-        );
+        let mut state = TimeTravelState::new(TimeTravelInitParams {
+            snapshot: sample_snapshot.clone(),
+            file_path: "src/auth.rs".to_owned(),
+            original_line: None,
+            line_mapping: None,
+            commit_history: sample_history,
+        });
 
         // Try to update with an out-of-bounds index
         state.update_snapshot(sample_snapshot, None, 100);
@@ -470,13 +479,13 @@ mod tests {
     #[rstest]
     fn line_mapping_stored(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
         let mapping = LineMappingVerification::moved(42, 50);
-        let state = TimeTravelState::new(
-            sample_snapshot,
-            "src/auth.rs".to_owned(),
-            Some(42),
-            Some(mapping.clone()),
-            sample_history,
-        );
+        let state = TimeTravelState::new(TimeTravelInitParams {
+            snapshot: sample_snapshot,
+            file_path: "src/auth.rs".to_owned(),
+            original_line: Some(42),
+            line_mapping: Some(mapping.clone()),
+            commit_history: sample_history,
+        });
 
         let stored = state.line_mapping().unwrap();
         assert_eq!(stored.status(), LineMappingStatus::Moved);

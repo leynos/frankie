@@ -25,12 +25,16 @@ mod discovery;
 mod error;
 mod git_ops;
 mod remote;
+mod types;
 
-pub use commit::{CommitSnapshot, LineMappingStatus, LineMappingVerification};
+pub use commit::{
+    CommitMetadata, CommitSnapshot, LineMappingRequest, LineMappingStatus, LineMappingVerification,
+};
 pub use discovery::{LocalRepository, discover_repository};
 pub use error::{GitOperationError, LocalDiscoveryError};
 pub use git_ops::{Git2Operations, GitOperations, create_git_ops};
 pub use remote::GitHubOrigin;
+pub use types::{CommitSha, RepoFilePath};
 
 #[cfg(test)]
 mod tests;
