@@ -9,6 +9,7 @@ mod diff_context;
 mod review_list;
 mod text_truncate;
 mod text_wrap;
+mod time_travel_view;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_utils;
@@ -17,3 +18,4 @@ pub use code_highlight::CodeHighlighter;
 pub use comment_detail::{CommentDetailComponent, CommentDetailViewContext};
 pub(crate) use diff_context::{DiffContextComponent, DiffContextViewContext};
 pub use review_list::{ReviewListComponent, ReviewListViewContext};
+pub(crate) use time_travel_view::{TimeTravelViewComponent, TimeTravelViewContext};

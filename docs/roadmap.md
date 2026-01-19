@@ -70,7 +70,7 @@ context.
 - [x] Provide full-screen diff context with jump-to-change navigation;
       acceptance: keyboard shortcuts move between hunks, and rendering remains
       under 100ms on the reference dataset measured in local profiling.
-- [ ] Add time-travel navigation across PR history; acceptance: selecting a
+- [x] Add time-travel navigation across PR history; acceptance: selecting a
       comment replays the relevant commit snapshot and verifies line mapping
       correctness against git2 diffs.
 

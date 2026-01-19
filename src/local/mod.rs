@@ -1,8 +1,9 @@
-//! Local Git repository discovery.
+//! Local Git repository operations.
 //!
 //! This module provides functionality to detect whether the current working
-//! directory is inside a Git repository and extract GitHub origin information
-//! from configured remotes.
+//! directory is inside a Git repository, extract GitHub origin information
+//! from configured remotes, and perform Git operations for time-travel
+//! navigation across PR history.
 //!
 //! # Example
 //!
@@ -19,12 +20,16 @@
 //! }
 //! ```
 
+mod commit;
 mod discovery;
 mod error;
+mod git_ops;
 mod remote;
 
+pub use commit::{CommitSnapshot, LineMappingStatus, LineMappingVerification};
 pub use discovery::{LocalRepository, discover_repository};
-pub use error::LocalDiscoveryError;
+pub use error::{GitOperationError, LocalDiscoveryError};
+pub use git_ops::{Git2Operations, GitOperations, create_git_ops};
 pub use remote::GitHubOrigin;
 
 #[cfg(test)]

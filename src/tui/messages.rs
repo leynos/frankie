@@ -7,10 +7,11 @@
 use crate::github::error::IntakeError;
 use crate::github::models::ReviewComment;
 
-use super::state::ReviewFilter;
+use super::state::{ReviewFilter, TimeTravelState};
 
 /// Messages for the review listing TUI application.
 #[derive(Debug, Clone)]
+#[doc(hidden)]
 pub enum AppMsg {
     // Navigation
     /// Move cursor up one item.
@@ -45,6 +46,22 @@ pub enum AppMsg {
     PreviousHunk,
     /// Escape key pressed (context-aware handling).
     EscapePressed,
+
+    // Time-travel navigation
+    /// Enter time-travel mode for the selected comment.
+    EnterTimeTravel,
+    /// Exit time-travel mode.
+    ExitTimeTravel,
+    /// Time-travel data loaded successfully.
+    TimeTravelLoaded(Box<TimeTravelState>),
+    /// Time-travel loading failed.
+    TimeTravelFailed(String),
+    /// Navigate to the next (more recent) commit in time-travel.
+    NextCommit,
+    /// Navigate to the previous (older) commit in time-travel.
+    PreviousCommit,
+    /// Commit navigation completed with updated state.
+    CommitNavigated(Box<TimeTravelState>),
 
     // Data loading
     /// Request a refresh of review data from the API.
@@ -84,6 +101,7 @@ pub enum AppMsg {
 impl AppMsg {
     /// Creates an error message from an `IntakeError`.
     #[must_use]
+    #[doc(hidden)]
     pub fn from_error(error: &IntakeError) -> Self {
         Self::RefreshFailed(error.to_string())
     }
@@ -130,6 +148,21 @@ impl AppMsg {
         matches!(
             self,
             Self::ShowDiffContext | Self::HideDiffContext | Self::NextHunk | Self::PreviousHunk
+        )
+    }
+
+    /// Returns `true` if this is a time-travel navigation message.
+    #[must_use]
+    pub const fn is_time_travel(&self) -> bool {
+        matches!(
+            self,
+            Self::EnterTimeTravel
+                | Self::ExitTimeTravel
+                | Self::TimeTravelLoaded(_)
+                | Self::TimeTravelFailed(_)
+                | Self::NextCommit
+                | Self::PreviousCommit
+                | Self::CommitNavigated(_)
         )
     }
 }
