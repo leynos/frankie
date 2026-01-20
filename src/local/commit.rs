@@ -60,9 +60,12 @@ pub struct CommitSnapshot {
 }
 
 impl CommitSnapshot {
-    /// Creates a new commit snapshot.
-    #[must_use]
-    pub fn new(metadata: CommitMetadata) -> Self {
+    /// Private helper to construct a snapshot from metadata and optional file data.
+    fn from_metadata(
+        metadata: CommitMetadata,
+        file_path: Option<String>,
+        file_content: Option<String>,
+    ) -> Self {
         let short_sha = metadata.sha.chars().take(7).collect();
         Self {
             sha: metadata.sha,
@@ -70,9 +73,15 @@ impl CommitSnapshot {
             message: metadata.message,
             author: metadata.author,
             timestamp: metadata.timestamp,
-            file_content: None,
-            file_path: None,
+            file_content,
+            file_path,
         }
+    }
+
+    /// Creates a new commit snapshot.
+    #[must_use]
+    pub fn new(metadata: CommitMetadata) -> Self {
+        Self::from_metadata(metadata, None, None)
     }
 
     /// Creates a commit snapshot with file content.
@@ -82,16 +91,7 @@ impl CommitSnapshot {
         file_path: String,
         file_content: String,
     ) -> Self {
-        let short_sha = metadata.sha.chars().take(7).collect();
-        Self {
-            sha: metadata.sha,
-            short_sha,
-            message: metadata.message,
-            author: metadata.author,
-            timestamp: metadata.timestamp,
-            file_content: Some(file_content),
-            file_path: Some(file_path),
-        }
+        Self::from_metadata(metadata, Some(file_path), Some(file_content))
     }
 
     /// Returns the full commit SHA.
@@ -325,39 +325,78 @@ impl LineMappingRequest {
 }
 
 #[cfg(test)]
-#[expect(clippy::too_many_arguments, reason = "Test helpers require all properties")]
 mod tests {
     use super::*;
 
+    /// Expected line mapping properties for test assertions.
+    #[derive(Debug, Clone)]
+    struct ExpectedLineMapping {
+        original: u32,
+        current: Option<u32>,
+        status: LineMappingStatus,
+        offset: Option<i32>,
+    }
+
+    impl ExpectedLineMapping {
+        /// Returns expected values for an exact match.
+        const fn exact(line: u32) -> Self {
+            Self {
+                original: line,
+                current: Some(line),
+                status: LineMappingStatus::Exact,
+                offset: Some(0),
+            }
+        }
+
+        /// Returns expected values for a moved line.
+        fn moved(original: u32, current: u32) -> Self {
+            let offset = i32::try_from(current).unwrap_or(i32::MAX)
+                - i32::try_from(original).unwrap_or(0);
+            Self {
+                original,
+                current: Some(current),
+                status: LineMappingStatus::Moved,
+                offset: Some(offset),
+            }
+        }
+
+        /// Returns expected values for a deleted line.
+        const fn deleted(line: u32) -> Self {
+            Self {
+                original: line,
+                current: None,
+                status: LineMappingStatus::Deleted,
+                offset: None,
+            }
+        }
+
+        /// Returns expected values for a line that could not be found.
+        const fn not_found(line: u32) -> Self {
+            Self {
+                original: line,
+                current: None,
+                status: LineMappingStatus::NotFound,
+                offset: None,
+            }
+        }
+    }
+
     /// Asserts that a commit snapshot has the expected basic properties.
-    fn assert_snapshot_has_basic_properties(
-        snapshot: &CommitSnapshot,
-        expected_sha: &str,
-        expected_message: &str,
-        expected_author: &str,
-        expected_timestamp: &DateTime<Utc>,
-    ) {
-        assert_eq!(snapshot.sha(), expected_sha);
-        // Use chars().take(7) to safely extract the first 7 characters
-        let expected_short: String = expected_sha.chars().take(7).collect();
+    fn assert_snapshot_has_basic_properties(snapshot: &CommitSnapshot, expected: &CommitMetadata) {
+        assert_eq!(snapshot.sha(), &expected.sha);
+        let expected_short: String = expected.sha.chars().take(7).collect();
         assert_eq!(snapshot.short_sha(), expected_short);
-        assert_eq!(snapshot.message(), expected_message);
-        assert_eq!(snapshot.author(), expected_author);
-        assert_eq!(snapshot.timestamp(), expected_timestamp);
+        assert_eq!(snapshot.message(), &expected.message);
+        assert_eq!(snapshot.author(), &expected.author);
+        assert_eq!(snapshot.timestamp(), &expected.timestamp);
     }
 
     /// Asserts that a line mapping verification has the expected properties.
-    fn assert_line_mapping(
-        verification: &LineMappingVerification,
-        expected_original: u32,
-        expected_current: Option<u32>,
-        expected_status: LineMappingStatus,
-        expected_offset: Option<i32>,
-    ) {
-        assert_eq!(verification.original_line(), expected_original);
-        assert_eq!(verification.current_line(), expected_current);
-        assert_eq!(verification.status(), expected_status);
-        assert_eq!(verification.offset(), expected_offset);
+    fn assert_line_mapping(verification: &LineMappingVerification, expected: &ExpectedLineMapping) {
+        assert_eq!(verification.original_line(), expected.original);
+        assert_eq!(verification.current_line(), expected.current);
+        assert_eq!(verification.status(), expected.status);
+        assert_eq!(verification.offset(), expected.offset);
     }
 
     #[test]
@@ -369,15 +408,9 @@ mod tests {
             "Alice".to_owned(),
             timestamp,
         );
-        let snapshot = CommitSnapshot::new(metadata);
+        let snapshot = CommitSnapshot::new(metadata.clone());
 
-        assert_snapshot_has_basic_properties(
-            &snapshot,
-            "abc1234567890",
-            "Fix bug in login",
-            "Alice",
-            &timestamp,
-        );
+        assert_snapshot_has_basic_properties(&snapshot, &metadata);
         assert!(snapshot.file_content().is_none());
         assert!(snapshot.file_path().is_none());
     }
@@ -404,26 +437,14 @@ mod tests {
     #[test]
     fn line_mapping_exact() {
         let verification = LineMappingVerification::exact(42);
-        assert_line_mapping(
-            &verification,
-            42,
-            Some(42),
-            LineMappingStatus::Exact,
-            Some(0),
-        );
+        assert_line_mapping(&verification, &ExpectedLineMapping::exact(42));
         assert!(verification.display().contains("exact match"));
     }
 
     #[test]
     fn line_mapping_moved() {
         let verification = LineMappingVerification::moved(42, 50);
-        assert_line_mapping(
-            &verification,
-            42,
-            Some(50),
-            LineMappingStatus::Moved,
-            Some(8),
-        );
+        assert_line_mapping(&verification, &ExpectedLineMapping::moved(42, 50));
         assert!(verification.display().contains("+8"));
     }
 
@@ -437,14 +458,14 @@ mod tests {
     #[test]
     fn line_mapping_deleted() {
         let verification = LineMappingVerification::deleted(42);
-        assert_line_mapping(&verification, 42, None, LineMappingStatus::Deleted, None);
+        assert_line_mapping(&verification, &ExpectedLineMapping::deleted(42));
         assert!(verification.display().contains("deleted"));
     }
 
     #[test]
     fn line_mapping_not_found() {
         let verification = LineMappingVerification::not_found(42);
-        assert_eq!(verification.status(), LineMappingStatus::NotFound);
+        assert_line_mapping(&verification, &ExpectedLineMapping::not_found(42));
         assert!(verification.display().contains("not found"));
     }
 

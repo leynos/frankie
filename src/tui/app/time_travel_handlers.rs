@@ -21,6 +21,41 @@ use super::ReviewApp;
 /// Maximum number of commits to load in history.
 const COMMIT_HISTORY_LIMIT: usize = 50;
 
+/// Direction for commit navigation in time-travel mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NavigationDirection {
+    /// Navigate to the next (more recent) commit.
+    Next,
+    /// Navigate to the previous (older) commit.
+    Previous,
+}
+
+impl NavigationDirection {
+    /// Returns whether navigation in this direction is possible.
+    fn can_navigate(self, state: &TimeTravelState) -> bool {
+        match self {
+            Self::Next => state.can_go_next(),
+            Self::Previous => state.can_go_previous(),
+        }
+    }
+
+    /// Returns the target commit SHA for this direction.
+    fn target_sha(self, state: &TimeTravelState) -> Option<&str> {
+        match self {
+            Self::Next => state.next_commit_sha(),
+            Self::Previous => state.previous_commit_sha(),
+        }
+    }
+
+    /// Calculates the new index after navigating in this direction.
+    const fn calculate_index(self, current: usize) -> usize {
+        match self {
+            Self::Next => current.saturating_sub(1),
+            Self::Previous => current + 1,
+        }
+    }
+}
+
 /// Context for navigating to a specific commit in time-travel mode.
 #[derive(Debug, Clone)]
 struct CommitNavigationContext {
@@ -36,31 +71,6 @@ struct CommitNavigationContext {
     new_index: usize,
     /// List of commit SHAs in the history.
     commit_history: Vec<String>,
-}
-
-impl CommitNavigationContext {
-    /// Creates a new commit navigation context.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "All parameters needed for navigation context initialisation"
-    )]
-    const fn new(
-        sha: String,
-        file_path: String,
-        original_line: Option<u32>,
-        head_sha: Option<String>,
-        new_index: usize,
-        commit_history: Vec<String>,
-    ) -> Self {
-        Self {
-            sha,
-            file_path,
-            original_line,
-            head_sha,
-            new_index,
-            commit_history,
-        }
-    }
 }
 
 impl ReviewApp {
@@ -135,50 +145,31 @@ impl ReviewApp {
 
     /// Handles the `NextCommit` message.
     pub(super) fn handle_next_commit(&mut self) -> Option<Cmd> {
-        let context = {
-            let state = self.time_travel_state.as_ref()?;
-
-            if !state.can_go_next() {
-                return None;
-            }
-
-            CommitNavigationContext::new(
-                state.next_commit_sha()?.to_owned(),
-                state.file_path().to_owned(),
-                state.original_line(),
-                self.head_sha.clone(),
-                state.current_index().saturating_sub(1),
-                state.commit_history().to_vec(),
-            )
-        };
-
-        let git_ops = Arc::clone(self.git_ops.as_ref()?);
-
-        // Set loading state
-        if let Some(state) = self.time_travel_state.as_mut() {
-            state.set_loading(true);
-        }
-
-        Some(spawn_commit_navigation(git_ops, context))
+        self.handle_commit_navigation(NavigationDirection::Next)
     }
 
     /// Handles the `PreviousCommit` message.
     pub(super) fn handle_previous_commit(&mut self) -> Option<Cmd> {
+        self.handle_commit_navigation(NavigationDirection::Previous)
+    }
+
+    /// Handles commit navigation in the given direction.
+    fn handle_commit_navigation(&mut self, direction: NavigationDirection) -> Option<Cmd> {
         let context = {
             let state = self.time_travel_state.as_ref()?;
 
-            if !state.can_go_previous() {
+            if !direction.can_navigate(state) {
                 return None;
             }
 
-            CommitNavigationContext::new(
-                state.previous_commit_sha()?.to_owned(),
-                state.file_path().to_owned(),
-                state.original_line(),
-                self.head_sha.clone(),
-                state.current_index() + 1,
-                state.commit_history().to_vec(),
-            )
+            CommitNavigationContext {
+                sha: direction.target_sha(state)?.to_owned(),
+                file_path: state.file_path().to_owned(),
+                original_line: state.original_line(),
+                head_sha: self.head_sha.clone(),
+                new_index: direction.calculate_index(state.current_index()),
+                commit_history: state.commit_history().to_vec(),
+            }
         };
 
         let git_ops = Arc::clone(self.git_ops.as_ref()?);
@@ -200,43 +191,41 @@ impl ReviewApp {
     }
 }
 
+/// Spawns an async task that loads data and maps the result to a message.
+fn spawn_load_task<T, F, L>(git_ops: Arc<dyn GitOperations>, loader: L, success_msg: F) -> Cmd
+where
+    T: Send + 'static,
+    F: FnOnce(T) -> AppMsg + Send + 'static,
+    L: FnOnce(&dyn GitOperations) -> Result<T, GitOperationError> + Send + 'static,
+{
+    Box::pin(async move {
+        match loader(&*git_ops) {
+            Ok(value) => Some(Box::new(success_msg(value)) as Box<dyn Any + Send>),
+            Err(e) => Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>),
+        }
+    })
+}
+
 /// Spawns an async task to load time-travel data.
 fn spawn_time_travel_load(
     git_ops: Arc<dyn GitOperations>,
     params: TimeTravelParams,
     head_sha: Option<String>,
 ) -> Cmd {
-    Box::pin(async move {
-        let result = load_time_travel_state(&*git_ops, &params, head_sha.as_deref());
-
-        match result {
-            Ok(state) => {
-                Some(Box::new(AppMsg::TimeTravelLoaded(Box::new(state))) as Box<dyn Any + Send>)
-            }
-            Err(e) => {
-                Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>)
-            }
-        }
-    })
+    spawn_load_task(
+        git_ops,
+        move |ops| load_time_travel_state(ops, &params, head_sha.as_deref()),
+        |state| AppMsg::TimeTravelLoaded(Box::new(state)),
+    )
 }
 
 /// Spawns an async task to navigate to a different commit.
-fn spawn_commit_navigation(
-    git_ops: Arc<dyn GitOperations>,
-    context: CommitNavigationContext,
-) -> Cmd {
-    Box::pin(async move {
-        let result = load_commit_snapshot(&*git_ops, context);
-
-        match result {
-            Ok(state) => {
-                Some(Box::new(AppMsg::CommitNavigated(Box::new(state))) as Box<dyn Any + Send>)
-            }
-            Err(e) => {
-                Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>)
-            }
-        }
-    })
+fn spawn_commit_navigation(git_ops: Arc<dyn GitOperations>, context: CommitNavigationContext) -> Cmd {
+    spawn_load_task(
+        git_ops,
+        move |ops| load_commit_snapshot(ops, context),
+        |state| AppMsg::CommitNavigated(Box::new(state)),
+    )
 }
 
 /// Loads the initial time-travel state for a comment.

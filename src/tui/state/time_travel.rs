@@ -271,6 +271,57 @@ mod tests {
     use crate::local::LineMappingStatus;
     // TimeTravelInitParams is already in scope via `use super::*`
 
+    /// Expected navigation properties for test assertions.
+    #[derive(Debug, Clone)]
+    struct ExpectedNavigation<'a> {
+        can_previous: bool,
+        can_next: bool,
+        next_sha: Option<&'a str>,
+        prev_sha: Option<&'a str>,
+    }
+
+    impl<'a> ExpectedNavigation<'a> {
+        /// Returns navigation state at index 0 (can go previous, cannot go next).
+        const fn at_newest(prev_sha: &'a str) -> Self {
+            Self {
+                can_previous: true,
+                can_next: false,
+                next_sha: None,
+                prev_sha: Some(prev_sha),
+            }
+        }
+
+        /// Returns navigation state in the middle (can go both ways).
+        const fn at_middle(next_sha: &'a str, prev_sha: &'a str) -> Self {
+            Self {
+                can_previous: true,
+                can_next: true,
+                next_sha: Some(next_sha),
+                prev_sha: Some(prev_sha),
+            }
+        }
+
+        /// Returns navigation state at last index (cannot go previous, can go next).
+        const fn at_oldest(next_sha: &'a str) -> Self {
+            Self {
+                can_previous: false,
+                can_next: true,
+                next_sha: Some(next_sha),
+                prev_sha: None,
+            }
+        }
+
+        /// Returns navigation state when loading (cannot navigate either way).
+        const fn blocked(prev_sha: Option<&'a str>) -> Self {
+            Self {
+                can_previous: false,
+                can_next: false,
+                next_sha: None,
+                prev_sha,
+            }
+        }
+    }
+
     /// Creates a `TimeTravelState` at the specified commit index.
     fn state_at_index(
         snapshot: CommitSnapshot,
@@ -289,21 +340,11 @@ mod tests {
     }
 
     /// Asserts all navigation-related properties of a `TimeTravelState`.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Test helper needs all navigation properties for comprehensive assertions"
-    )]
-    fn assert_navigation(
-        state: &TimeTravelState,
-        can_previous: bool,
-        can_next: bool,
-        expected_next_sha: Option<&str>,
-        expected_prev_sha: Option<&str>,
-    ) {
-        assert_eq!(state.can_go_previous(), can_previous);
-        assert_eq!(state.can_go_next(), can_next);
-        assert_eq!(state.next_commit_sha(), expected_next_sha);
-        assert_eq!(state.previous_commit_sha(), expected_prev_sha);
+    fn assert_navigation(state: &TimeTravelState, expected: &ExpectedNavigation<'_>) {
+        assert_eq!(state.can_go_previous(), expected.can_previous);
+        assert_eq!(state.can_go_next(), expected.can_next);
+        assert_eq!(state.next_commit_sha(), expected.next_sha);
+        assert_eq!(state.previous_commit_sha(), expected.prev_sha);
     }
 
     #[fixture]
@@ -373,7 +414,7 @@ mod tests {
         let state = state_at_index(sample_snapshot, sample_history, 0);
 
         // At index 0 (most recent): can go previous, cannot go next
-        assert_navigation(&state, true, false, None, Some("def5678901234"));
+        assert_navigation(&state, &ExpectedNavigation::at_newest("def5678901234"));
     }
 
     #[rstest]
@@ -383,10 +424,7 @@ mod tests {
         // At index 1 (middle): can go both ways
         assert_navigation(
             &state,
-            true,
-            true,
-            Some("abc1234567890"),
-            Some("ghi9012345678"),
+            &ExpectedNavigation::at_middle("abc1234567890", "ghi9012345678"),
         );
     }
 
@@ -395,7 +433,7 @@ mod tests {
         let state = state_at_index(sample_snapshot, sample_history, 2);
 
         // At index 2 (oldest): cannot go previous, can go next
-        assert_navigation(&state, false, true, Some("def5678901234"), None);
+        assert_navigation(&state, &ExpectedNavigation::at_oldest("def5678901234"));
     }
 
     #[rstest]
@@ -403,7 +441,7 @@ mod tests {
         let mut state = state_at_index(sample_snapshot, sample_history, 0);
         state.set_loading(true);
 
-        assert_navigation(&state, false, false, None, Some("def5678901234"));
+        assert_navigation(&state, &ExpectedNavigation::blocked(Some("def5678901234")));
     }
 
     #[rstest]

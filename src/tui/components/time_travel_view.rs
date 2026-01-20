@@ -270,13 +270,7 @@ mod tests {
     #[test]
     fn view_shows_loading() {
         let state = TimeTravelState::loading("src/main.rs".to_owned(), Some(10));
-        let ctx = TimeTravelViewContext {
-            state: Some(&state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&state);
 
         assert!(output.contains(LOADING_PLACEHOLDER));
     }
@@ -284,13 +278,7 @@ mod tests {
     #[test]
     fn view_shows_error() {
         let state = TimeTravelState::error("Commit not found".to_owned(), "src/main.rs".to_owned());
-        let ctx = TimeTravelViewContext {
-            state: Some(&state),
-            max_width: 80,
-            max_height: 0,
-        };
-
-        let output = TimeTravelViewComponent::view(&ctx);
+        let output = render_view_with_state(&state);
 
         assert!(output.contains("Error: Commit not found"));
     }
