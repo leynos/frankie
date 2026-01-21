@@ -201,7 +201,9 @@ where
     Box::pin(async move {
         match loader(&*git_ops) {
             Ok(value) => Some(Box::new(success_msg(value)) as Box<dyn Any + Send>),
-            Err(e) => Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>),
+            Err(e) => {
+                Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>)
+            }
         }
     })
 }
@@ -220,7 +222,10 @@ fn spawn_time_travel_load(
 }
 
 /// Spawns an async task to navigate to a different commit.
-fn spawn_commit_navigation(git_ops: Arc<dyn GitOperations>, context: CommitNavigationContext) -> Cmd {
+fn spawn_commit_navigation(
+    git_ops: Arc<dyn GitOperations>,
+    context: CommitNavigationContext,
+) -> Cmd {
     spawn_load_task(
         git_ops,
         move |ops| load_commit_snapshot(ops, context),

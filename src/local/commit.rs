@@ -350,8 +350,8 @@ mod tests {
 
         /// Returns expected values for a moved line.
         fn moved(original: u32, current: u32) -> Self {
-            let offset = i32::try_from(current).unwrap_or(i32::MAX)
-                - i32::try_from(original).unwrap_or(0);
+            let offset =
+                i32::try_from(current).unwrap_or(i32::MAX) - i32::try_from(original).unwrap_or(0);
             Self {
                 original,
                 current: Some(current),
