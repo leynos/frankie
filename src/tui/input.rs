@@ -89,6 +89,7 @@ mod tests {
     use super::*;
     use bubbletea_rs::event::KeyMsg;
     use crossterm::event::{KeyCode, KeyModifiers};
+    use rstest::rstest;
 
     fn key_msg(key: KeyCode) -> KeyMsg {
         KeyMsg {
@@ -97,46 +98,59 @@ mod tests {
         }
     }
 
-    #[test]
-    fn time_travel_h_maps_to_previous_commit() {
-        let msg =
-            map_key_to_message_with_context(&key_msg(KeyCode::Char('h')), InputContext::TimeTravel);
-        assert!(matches!(msg, Some(AppMsg::PreviousCommit)));
-    }
+    #[rstest]
+    #[case::time_travel_h_previous(
+        KeyCode::Char('h'),
+        Some(InputContext::TimeTravel),
+        Some(AppMsg::PreviousCommit)
+    )]
+    #[case::time_travel_l_next(
+        KeyCode::Char('l'),
+        Some(InputContext::TimeTravel),
+        Some(AppMsg::NextCommit)
+    )]
+    #[case::time_travel_esc_exit(
+        KeyCode::Esc,
+        Some(InputContext::TimeTravel),
+        Some(AppMsg::ExitTimeTravel)
+    )]
+    #[case::review_list_t_enter(
+        KeyCode::Char('t'),
+        Some(InputContext::ReviewList),
+        Some(AppMsg::EnterTimeTravel)
+    )]
+    #[case::diff_context_esc_hide(
+        KeyCode::Esc,
+        Some(InputContext::DiffContext),
+        Some(AppMsg::HideDiffContext)
+    )]
+    #[case::review_list_j_down(
+        KeyCode::Char('j'),
+        Some(InputContext::ReviewList),
+        Some(AppMsg::CursorDown)
+    )]
+    #[case::default_context_j_down(KeyCode::Char('j'), None, Some(AppMsg::CursorDown))]
+    fn key_mapping(
+        #[case] key: KeyCode,
+        #[case] ctx: Option<InputContext>,
+        #[case] expected: Option<AppMsg>,
+    ) {
+        let result = ctx.map_or_else(
+            || map_key_to_message(&key_msg(key)),
+            |context| map_key_to_message_with_context(&key_msg(key), context),
+        );
 
-    #[test]
-    fn time_travel_l_maps_to_next_commit() {
-        let msg =
-            map_key_to_message_with_context(&key_msg(KeyCode::Char('l')), InputContext::TimeTravel);
-        assert!(matches!(msg, Some(AppMsg::NextCommit)));
-    }
-
-    #[test]
-    fn time_travel_esc_exits() {
-        let msg = map_key_to_message_with_context(&key_msg(KeyCode::Esc), InputContext::TimeTravel);
-        assert!(matches!(msg, Some(AppMsg::ExitTimeTravel)));
-    }
-
-    #[test]
-    fn review_list_t_enters_time_travel() {
-        let msg =
-            map_key_to_message_with_context(&key_msg(KeyCode::Char('t')), InputContext::ReviewList);
-        assert!(matches!(msg, Some(AppMsg::EnterTimeTravel)));
-    }
-
-    #[test]
-    fn diff_context_esc_hides() {
-        let msg =
-            map_key_to_message_with_context(&key_msg(KeyCode::Esc), InputContext::DiffContext);
-        assert!(matches!(msg, Some(AppMsg::HideDiffContext)));
-    }
-
-    #[test]
-    fn default_context_is_review_list() {
-        let msg1 = map_key_to_message(&key_msg(KeyCode::Char('j')));
-        let msg2 =
-            map_key_to_message_with_context(&key_msg(KeyCode::Char('j')), InputContext::ReviewList);
-        assert!(matches!(msg1, Some(AppMsg::CursorDown)));
-        assert!(matches!(msg2, Some(AppMsg::CursorDown)));
+        // Compare enum variants using discriminant
+        match (result, expected) {
+            (Some(r), Some(e)) => {
+                assert_eq!(
+                    std::mem::discriminant(&r),
+                    std::mem::discriminant(&e),
+                    "Expected {e:?}, got {r:?}"
+                );
+            }
+            (None, None) => {}
+            (r, e) => panic!("Expected {e:?}, got {r:?}"),
+        }
     }
 }
