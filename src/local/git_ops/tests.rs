@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use git2::{Oid, Repository};
+use rstest::{fixture, rstest};
 use tempfile::TempDir;
 
 use super::*;
@@ -13,7 +14,8 @@ use crate::local::commit::LineMappingRequest;
 use crate::local::error::GitOperationError;
 use crate::local::types::{CommitSha, RepoFilePath};
 
-fn create_test_repo() -> (TempDir, Repository) {
+#[fixture]
+fn test_repo() -> (TempDir, Repository) {
     let dir = TempDir::new().unwrap();
     let repo = Repository::init(dir.path()).unwrap();
 
@@ -51,6 +53,7 @@ fn create_commit(repo: &Repository, message: &str, files: &[(&str, &str)]) -> Oi
 
 /// Helper to test Git operation error handling with custom setup.
 fn test_git_error<F, T>(
+    test_repo: (TempDir, Repository),
     setup: impl FnOnce(&Repository) -> String,
     operation: F,
 ) -> GitOperationError
@@ -58,7 +61,7 @@ where
     F: FnOnce(&Git2Operations, &str) -> Result<T, GitOperationError>,
     T: std::fmt::Debug,
 {
-    let (dir, repo) = create_test_repo();
+    let (dir, repo) = test_repo;
     let param = setup(&repo);
     let ops = Git2Operations::from_repository(repo);
 
@@ -69,9 +72,9 @@ where
     err
 }
 
-#[test]
-fn test_commit_snapshot() {
-    let (dir, repo) = create_test_repo();
+#[rstest]
+fn test_commit_snapshot(test_repo: (TempDir, Repository)) {
+    let (dir, repo) = test_repo;
     let oid = create_commit(&repo, "Initial commit", &[("test.txt", "hello")]);
 
     let ops = Git2Operations::from_repository(repo);
@@ -85,9 +88,9 @@ fn test_commit_snapshot() {
     drop(dir);
 }
 
-#[test]
-fn test_commit_snapshot_with_file() {
-    let (dir, repo) = create_test_repo();
+#[rstest]
+fn test_commit_snapshot_with_file(test_repo: (TempDir, Repository)) {
+    let (dir, repo) = test_repo;
     let oid = create_commit(&repo, "Add file", &[("src/main.rs", "fn main() {}")]);
 
     let ops = Git2Operations::from_repository(repo);
@@ -101,9 +104,9 @@ fn test_commit_snapshot_with_file() {
     drop(dir);
 }
 
-#[test]
-fn test_get_file_at_commit() {
-    let (dir, repo) = create_test_repo();
+#[rstest]
+fn test_get_file_at_commit(test_repo: (TempDir, Repository)) {
+    let (dir, repo) = test_repo;
     let oid = create_commit(&repo, "Add file", &[("test.txt", "content here")]);
 
     let ops = Git2Operations::from_repository(repo);
@@ -116,9 +119,10 @@ fn test_get_file_at_commit() {
     drop(dir);
 }
 
-#[test]
-fn test_file_not_found() {
+#[rstest]
+fn test_file_not_found(test_repo: (TempDir, Repository)) {
     let err = test_git_error(
+        test_repo,
         |repo| {
             let oid = create_commit(repo, "Add file", &[("test.txt", "content")]);
             oid.to_string()
@@ -133,9 +137,10 @@ fn test_file_not_found() {
     assert!(matches!(err, GitOperationError::FileNotFound { .. }));
 }
 
-#[test]
-fn test_commit_not_found() {
+#[rstest]
+fn test_commit_not_found(test_repo: (TempDir, Repository)) {
     let err = test_git_error(
+        test_repo,
         |repo| {
             create_commit(repo, "Initial", &[("test.txt", "content")]);
             "0000000000000000000000000000000000000000".to_owned()
@@ -149,9 +154,9 @@ fn test_commit_not_found() {
     assert!(matches!(err, GitOperationError::CommitNotFound { .. }));
 }
 
-#[test]
-fn test_commit_exists() {
-    let (dir, repo) = create_test_repo();
+#[rstest]
+fn test_commit_exists(test_repo: (TempDir, Repository)) {
+    let (dir, repo) = test_repo;
     let oid = create_commit(&repo, "Initial", &[("test.txt", "content")]);
 
     let ops = Git2Operations::from_repository(repo);
@@ -164,9 +169,9 @@ fn test_commit_exists() {
     drop(dir);
 }
 
-#[test]
-fn test_get_parent_commits() {
-    let (dir, repo) = create_test_repo();
+#[rstest]
+fn test_get_parent_commits(test_repo: (TempDir, Repository)) {
+    let (dir, repo) = test_repo;
     let oid1 = create_commit(&repo, "First", &[("test.txt", "v1")]);
     let oid2 = create_commit(&repo, "Second", &[("test.txt", "v2")]);
     let oid3 = create_commit(&repo, "Third", &[("test.txt", "v3")]);
@@ -183,9 +188,9 @@ fn test_get_parent_commits() {
     drop(dir);
 }
 
-#[test]
-fn test_line_mapping_exact() {
-    let (dir, repo) = create_test_repo();
+#[rstest]
+fn test_line_mapping_exact(test_repo: (TempDir, Repository)) {
+    let (dir, repo) = test_repo;
     let oid = create_commit(&repo, "Add file", &[("test.txt", "line1\nline2\nline3")]);
 
     let ops = Git2Operations::from_repository(repo);
@@ -200,9 +205,9 @@ fn test_line_mapping_exact() {
     drop(dir);
 }
 
-#[test]
-fn test_line_mapping_no_change() {
-    let (dir, repo) = create_test_repo();
+#[rstest]
+fn test_line_mapping_no_change(test_repo: (TempDir, Repository)) {
+    let (dir, repo) = test_repo;
     let oid1 = create_commit(&repo, "Add file", &[("test.txt", "line1\nline2\nline3")]);
     let oid2 = create_commit(&repo, "Other file", &[("other.txt", "other content")]);
 
