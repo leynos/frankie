@@ -1,11 +1,17 @@
 #![expect(clippy::indexing_slicing, reason = "Test assertions")]
 #![expect(clippy::unwrap_used, reason = "Tests panic on failure")]
 
+use std::fs;
+use std::path::Path;
+
+use git2::{Oid, Repository};
+use tempfile::TempDir;
+
 use super::*;
 use crate::local::LineMappingStatus;
+use crate::local::commit::LineMappingRequest;
+use crate::local::error::GitOperationError;
 use crate::local::types::{CommitSha, RepoFilePath};
-use std::fs;
-use tempfile::TempDir;
 
 fn create_test_repo() -> (TempDir, Repository) {
     let dir = TempDir::new().unwrap();
