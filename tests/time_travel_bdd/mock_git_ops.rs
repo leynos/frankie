@@ -69,9 +69,7 @@ impl GitOperations for MockGitOperations {
         file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError> {
         if !self.commit_exists {
-            return Err(GitOperationError::CommitNotFound {
-                sha: sha.to_string(),
-            });
+            return Err(GitOperationError::CommitNotFound { sha: sha.clone() });
         }
 
         let timestamp = chrono::Utc::now();
@@ -98,9 +96,7 @@ impl GitOperations for MockGitOperations {
         _file_path: &RepoFilePath,
     ) -> Result<String, GitOperationError> {
         if !self.commit_exists {
-            return Err(GitOperationError::CommitNotFound {
-                sha: sha.to_string(),
-            });
+            return Err(GitOperationError::CommitNotFound { sha: sha.clone() });
         }
         Ok("fn login() {\n    // validation\n}".to_owned())
     }

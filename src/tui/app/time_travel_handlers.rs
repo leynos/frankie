@@ -451,9 +451,7 @@ mod tests {
             .expect_get_commit_snapshot()
             .times(1)
             .returning(|sha, _file_path| {
-                Err(GitOperationError::CommitNotFound {
-                    sha: sha.to_string(),
-                })
+                Err(GitOperationError::CommitNotFound { sha: sha.clone() })
             });
 
         let params = TimeTravelParams {

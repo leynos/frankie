@@ -20,7 +20,7 @@ pub(super) fn parse_sha_with_repo(repo: &Repository, sha: &str) -> Result<Oid, G
     let obj = repo
         .revparse_single(sha)
         .map_err(|_| GitOperationError::CommitNotFound {
-            sha: sha.to_owned(),
+            sha: sha.to_owned().into(),
         })?;
 
     Ok(obj.id())
@@ -35,8 +35,8 @@ pub(super) fn get_file_blob_oid(
     let entry =
         tree.get_path(Path::new(file_path))
             .map_err(|_| GitOperationError::FileNotFound {
-                path: file_path.to_owned(),
-                sha: commit.id().to_string(),
+                path: file_path.to_owned().into(),
+                sha: commit.id().to_string().into(),
             })?;
     Ok(entry.id())
 }

@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use super::{CommitSha, RepoFilePath};
+
 /// Errors that may occur during local repository discovery.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum LocalDiscoveryError {
@@ -42,23 +44,23 @@ pub enum GitOperationError {
     #[error("commit not found: {sha}")]
     CommitNotFound {
         /// The SHA that could not be found.
-        sha: String,
+        sha: CommitSha,
     },
 
     /// The requested file could not be found at the specified commit.
     #[error("file '{path}' not found at commit {sha}")]
     FileNotFound {
         /// The file path that could not be found.
-        path: String,
+        path: RepoFilePath,
         /// The commit SHA where the file was expected.
-        sha: String,
+        sha: CommitSha,
     },
 
     /// Failed to access the commit.
     #[error("failed to access commit {sha}: {message}")]
     CommitAccessFailed {
         /// The commit SHA.
-        sha: String,
+        sha: CommitSha,
         /// Error details.
         message: String,
     },

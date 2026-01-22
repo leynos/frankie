@@ -88,9 +88,7 @@ impl GitOperations for Git2Operations {
         let oid = helpers::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
-            .map_err(|_| GitOperationError::CommitNotFound {
-                sha: sha.to_string(),
-            })?;
+            .map_err(|_| GitOperationError::CommitNotFound { sha: sha.clone() })?;
 
         let message = commit
             .message()
@@ -115,13 +113,13 @@ impl GitOperations for Git2Operations {
             let blob =
                 repo.find_blob(blob_oid)
                     .map_err(|e| GitOperationError::CommitAccessFailed {
-                        sha: sha.to_string(),
+                        sha: sha.clone(),
                         message: e.message().to_owned(),
                     })?;
 
             let content = std::str::from_utf8(blob.content())
                 .map_err(|_| GitOperationError::CommitAccessFailed {
-                    sha: sha.to_string(),
+                    sha: sha.clone(),
                     message: "file content is not valid UTF-8".to_owned(),
                 })?
                 .to_owned();
@@ -149,21 +147,19 @@ impl GitOperations for Git2Operations {
         let oid = helpers::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
-            .map_err(|_| GitOperationError::CommitNotFound {
-                sha: sha.to_string(),
-            })?;
+            .map_err(|_| GitOperationError::CommitNotFound { sha: sha.clone() })?;
 
         let blob_oid = helpers::get_file_blob_oid(&commit, file_path.as_str())?;
         let blob = repo
             .find_blob(blob_oid)
             .map_err(|e| GitOperationError::CommitAccessFailed {
-                sha: sha.to_string(),
+                sha: sha.clone(),
                 message: e.message().to_owned(),
             })?;
 
         let content = std::str::from_utf8(blob.content()).map_err(|_| {
             GitOperationError::CommitAccessFailed {
-                sha: sha.to_string(),
+                sha: sha.clone(),
                 message: "file content is not valid UTF-8".to_owned(),
             }
         })?;
@@ -191,12 +187,12 @@ impl GitOperations for Git2Operations {
         let old_commit =
             repo.find_commit(old_oid)
                 .map_err(|_| GitOperationError::CommitNotFound {
-                    sha: request.old_sha.clone(),
+                    sha: request.old_sha.clone().into(),
                 })?;
         let new_commit =
             repo.find_commit(new_oid)
                 .map_err(|_| GitOperationError::CommitNotFound {
-                    sha: request.new_sha.clone(),
+                    sha: request.new_sha.clone().into(),
                 })?;
 
         let old_tree = old_commit.tree()?;
@@ -260,9 +256,7 @@ impl GitOperations for Git2Operations {
         helpers::parse_sha_with_repo(&repo, sha.as_str())
             .and_then(|oid| {
                 repo.find_commit(oid)
-                    .map_err(|_| GitOperationError::CommitNotFound {
-                        sha: sha.to_string(),
-                    })
+                    .map_err(|_| GitOperationError::CommitNotFound { sha: sha.clone() })
             })
             .is_ok()
     }
