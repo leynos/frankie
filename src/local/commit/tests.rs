@@ -1,4 +1,3 @@
-
 use super::*;
 
 /// Expected line mapping properties for test assertions.
