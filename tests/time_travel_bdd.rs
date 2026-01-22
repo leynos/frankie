@@ -1,5 +1,7 @@
 //! Behavioural tests for time-travel navigation.
 
+#![expect(clippy::expect_used, reason = "Test setup invariants")]
+
 #[path = "time_travel_bdd/mod.rs"]
 mod time_travel_support;
 
@@ -24,7 +26,9 @@ fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
         "def5678901234".to_owned(),
         "ghi9012345678".to_owned(),
     ];
-    let sha = commit_history.get(index).cloned().unwrap_or_default();
+    let sha = commit_history.get(index).cloned().expect(
+        "invalid commit index for commit_history in create_mock_time_travel_state_at_index",
+    );
     let metadata = CommitMetadata::new(
         sha,
         "Fix login validation".to_owned(),
