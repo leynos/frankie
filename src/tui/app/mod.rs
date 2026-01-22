@@ -81,17 +81,11 @@ pub(crate) enum ViewMode {
     TimeTravel,
 }
 
-enum DiffContextRouting {
-    Handled(Option<Cmd>),
-    Fallthrough,
-}
-
-enum TimeTravelRouting {
-    Handled(Option<Cmd>),
-    Fallthrough,
-}
-
-enum ViewModeRouting {
+/// Result of message routing through view mode handlers.
+///
+/// Used to indicate whether a message was handled by a mode-specific handler
+/// or should fall through to the default handling logic.
+enum MessageRouting {
     Handled(Option<Cmd>),
     Fallthrough,
 }
@@ -303,31 +297,31 @@ impl ReviewApp {
 
     /// Routes messages when in `DiffContext` mode.
     ///
-    /// Returns `DiffContextRouting::Handled` if the message was handled in
-    /// `DiffContext` mode, or `DiffContextRouting::Fallthrough` if the message
+    /// Returns `MessageRouting::Handled` if the message was handled in
+    /// `DiffContext` mode, or `MessageRouting::Fallthrough` if the message
     /// should fall through to regular routing.
-    fn try_handle_in_diff_context_mode(&mut self, msg: &AppMsg) -> DiffContextRouting {
+    fn try_handle_in_diff_context_mode(&mut self, msg: &AppMsg) -> MessageRouting {
         if self.view_mode != ViewMode::DiffContext {
-            return DiffContextRouting::Fallthrough;
+            return MessageRouting::Fallthrough;
         }
 
         // EscapePressed in DiffContext mode
         if matches!(msg, AppMsg::EscapePressed) {
-            return DiffContextRouting::Handled(self.handle_diff_context_msg(msg));
+            return MessageRouting::Handled(self.handle_diff_context_msg(msg));
         }
 
         // DiffContext-specific messages
         if msg.is_diff_context() {
-            return DiffContextRouting::Handled(self.handle_diff_context_msg(msg));
+            return MessageRouting::Handled(self.handle_diff_context_msg(msg));
         }
 
         // Block navigation and filter messages in DiffContext mode
         if msg.is_navigation() || msg.is_filter() {
-            return DiffContextRouting::Handled(None);
+            return MessageRouting::Handled(None);
         }
 
         // Allow other messages to fall through
-        DiffContextRouting::Fallthrough
+        MessageRouting::Fallthrough
     }
 
     /// Checks if a message should be blocked when in time-travel mode.
@@ -340,26 +334,26 @@ impl ReviewApp {
 
     /// Routes messages when in `TimeTravel` mode.
     ///
-    /// Returns `TimeTravelRouting::Handled` if the message was handled in
-    /// `TimeTravel` mode, or `TimeTravelRouting::Fallthrough` if the message
+    /// Returns `MessageRouting::Handled` if the message was handled in
+    /// `TimeTravel` mode, or `MessageRouting::Fallthrough` if the message
     /// should fall through to regular routing.
-    fn try_handle_in_time_travel_mode(&mut self, msg: &AppMsg) -> TimeTravelRouting {
+    fn try_handle_in_time_travel_mode(&mut self, msg: &AppMsg) -> MessageRouting {
         if self.view_mode != ViewMode::TimeTravel {
-            return TimeTravelRouting::Fallthrough;
+            return MessageRouting::Fallthrough;
         }
 
         // Time-travel-specific messages
         if msg.is_time_travel() {
-            return TimeTravelRouting::Handled(self.handle_time_travel_msg(msg));
+            return MessageRouting::Handled(self.handle_time_travel_msg(msg));
         }
 
         // Block navigation, filter, and diff context messages in TimeTravel mode
         if Self::is_blocked_in_time_travel(msg) {
-            return TimeTravelRouting::Handled(None);
+            return MessageRouting::Handled(None);
         }
 
         // Allow other messages to fall through (e.g., Quit, WindowResized)
-        TimeTravelRouting::Fallthrough
+        MessageRouting::Fallthrough
     }
 
     /// Dispatches time-travel messages to their handlers.
@@ -378,26 +372,26 @@ impl ReviewApp {
 
     /// Routes messages based on the current view mode.
     ///
-    /// Returns `ViewModeRouting::Handled(cmd)` if the message was handled by
-    /// mode-specific routing, or `ViewModeRouting::Fallthrough` if the message
+    /// Returns `MessageRouting::Handled(cmd)` if the message was handled by
+    /// mode-specific routing, or `MessageRouting::Fallthrough` if the message
     /// should proceed to category-based dispatch.
-    fn route_by_view_mode(&mut self, msg: &AppMsg) -> ViewModeRouting {
+    fn route_by_view_mode(&mut self, msg: &AppMsg) -> MessageRouting {
         // Route TimeTravel mode messages first (takes priority)
-        if let TimeTravelRouting::Handled(result) = self.try_handle_in_time_travel_mode(msg) {
-            return ViewModeRouting::Handled(result);
+        if let MessageRouting::Handled(result) = self.try_handle_in_time_travel_mode(msg) {
+            return MessageRouting::Handled(result);
         }
 
         // Route DiffContext mode messages
-        if let DiffContextRouting::Handled(result) = self.try_handle_in_diff_context_mode(msg) {
-            return ViewModeRouting::Handled(result);
+        if let MessageRouting::Handled(result) = self.try_handle_in_diff_context_mode(msg) {
+            return MessageRouting::Handled(result);
         }
 
         // EscapePressed in ReviewList mode
         if matches!(msg, AppMsg::EscapePressed) {
-            return ViewModeRouting::Handled(self.handle_clear_filter());
+            return MessageRouting::Handled(self.handle_clear_filter());
         }
 
-        ViewModeRouting::Fallthrough
+        MessageRouting::Fallthrough
     }
 
     /// Dispatches messages based on their category.
@@ -430,7 +424,7 @@ impl ReviewApp {
     /// routing, then falls back to category-based dispatch.
     #[doc(hidden)]
     pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        if let ViewModeRouting::Handled(result) = self.route_by_view_mode(msg) {
+        if let MessageRouting::Handled(result) = self.route_by_view_mode(msg) {
             return result;
         }
         self.dispatch_by_message_category(msg)
