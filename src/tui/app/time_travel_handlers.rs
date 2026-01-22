@@ -268,6 +268,7 @@ fn load_time_travel_state(
         original_line: params.line_number,
         line_mapping,
         commit_history,
+        current_index: 0,
     }))
 }
 
@@ -296,22 +297,14 @@ fn load_commit_snapshot(
         None
     };
 
-    let mut state = TimeTravelState::new(TimeTravelInitParams {
+    Ok(TimeTravelState::new(TimeTravelInitParams {
         snapshot,
         file_path: context.file_path,
         original_line: context.original_line,
         line_mapping,
         commit_history: context.commit_history,
-    });
-
-    // Update to the new index
-    state.update_snapshot(
-        state.snapshot().clone(),
-        state.line_mapping().cloned(),
-        context.new_index,
-    );
-
-    Ok(state)
+        current_index: context.new_index,
+    }))
 }
 
 #[cfg(test)]

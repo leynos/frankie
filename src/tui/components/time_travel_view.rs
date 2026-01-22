@@ -213,6 +213,7 @@ mod tests {
             original_line: Some(2),
             line_mapping: Some(LineMappingVerification::exact(2)),
             commit_history: vec!["abc1234567890".to_owned(), "def5678901234".to_owned()],
+            current_index: 0,
         })
     }
 

@@ -37,16 +37,14 @@ fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
         "fn login() {\n    // validation\n}".to_owned(),
     );
     let line_mapping = Some(LineMappingVerification::exact(42));
-    let mut state = TimeTravelState::new(TimeTravelInitParams {
-        snapshot: snapshot.clone(),
+    TimeTravelState::new(TimeTravelInitParams {
+        snapshot,
         file_path: "src/auth.rs".to_owned(),
         original_line: Some(42),
-        line_mapping: line_mapping.clone(),
+        line_mapping,
         commit_history,
-    });
-    // Update to the specified index
-    state.update_snapshot(snapshot, line_mapping, index);
-    state
+        current_index: index,
+    })
 }
 
 /// Creates a mock time-travel state for testing.

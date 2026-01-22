@@ -597,12 +597,15 @@ impl Model for ReviewApp {
             return self.render_help_overlay();
         }
 
-        match self.view_mode {
-            ViewMode::DiffContext => return self.render_diff_context_view(),
-            ViewMode::TimeTravel => return self.render_time_travel_view(),
-            ViewMode::ReviewList => {}
+        // Handle special view modes with early returns
+        if self.view_mode == ViewMode::DiffContext {
+            return self.render_diff_context_view();
+        }
+        if self.view_mode == ViewMode::TimeTravel {
+            return self.render_time_travel_view();
         }
 
+        // Render main ReviewList view
         let mut output = String::new();
 
         output.push_str(&self.render_header());

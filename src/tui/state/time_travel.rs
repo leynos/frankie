@@ -20,6 +20,8 @@ pub struct TimeTravelInitParams {
     pub line_mapping: Option<LineMappingVerification>,
     /// List of commit SHAs in the history (most recent first).
     pub commit_history: Vec<String>,
+    /// Current position in the commit history.
+    pub current_index: usize,
 }
 
 /// State container for time-travel navigation.
@@ -55,7 +57,7 @@ impl TimeTravelState {
             original_line: params.original_line,
             line_mapping: params.line_mapping,
             commit_history: params.commit_history,
-            current_index: 0,
+            current_index: params.current_index,
             loading: false,
             error_message: None,
         }
@@ -328,15 +330,14 @@ mod tests {
         history: Vec<String>,
         index: usize,
     ) -> TimeTravelState {
-        let mut state = TimeTravelState::new(TimeTravelInitParams {
-            snapshot: snapshot.clone(),
+        TimeTravelState::new(TimeTravelInitParams {
+            snapshot,
             file_path: "src/auth.rs".to_owned(),
             original_line: None,
             line_mapping: None,
             commit_history: history,
-        });
-        state.update_snapshot(snapshot, None, index);
-        state
+            current_index: index,
+        })
     }
 
     /// Asserts all navigation-related properties of a `TimeTravelState`.
@@ -379,6 +380,7 @@ mod tests {
             original_line: Some(42),
             line_mapping: None,
             commit_history: sample_history.clone(),
+            current_index: 0,
         });
 
         assert_eq!(state.snapshot().sha(), sample_snapshot.sha());
@@ -452,6 +454,7 @@ mod tests {
             original_line: None,
             line_mapping: None,
             commit_history: sample_history,
+            current_index: 0,
         });
 
         // Try to update with an out-of-bounds index
@@ -523,6 +526,7 @@ mod tests {
             original_line: Some(42),
             line_mapping: Some(mapping.clone()),
             commit_history: sample_history,
+            current_index: 0,
         });
 
         let stored = state.line_mapping().unwrap();
