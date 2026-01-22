@@ -187,6 +187,20 @@ fn given_line_mapping_exact(state: &TimeTravelTestState) {
     let _ = state;
 }
 
+#[given("the line mapping shows line moved from {from} to {to}")]
+fn given_line_mapping_moved(state: &TimeTravelTestState, from: u32, to: u32) {
+    let mock = MockGitOperations::new().with_line_mapping(LineMappingVerification::moved(from, to));
+    state.setup_repository(true, Some(Arc::new(mock)));
+    state.setup_app_with_comments(vec![TimeTravelTestState::default_comment()]);
+}
+
+#[given("the line mapping shows line {line} deleted")]
+fn given_line_mapping_deleted(state: &TimeTravelTestState, line: u32) {
+    let mock = MockGitOperations::new().with_line_mapping(LineMappingVerification::deleted(line));
+    state.setup_repository(true, Some(Arc::new(mock)));
+    state.setup_app_with_comments(vec![TimeTravelTestState::default_comment()]);
+}
+
 #[given("time-travel mode is entered for the selected comment")]
 #[when("time-travel mode is entered for the selected comment")]
 fn time_travel_entered(state: &TimeTravelTestState) -> StepResult {
@@ -275,6 +289,16 @@ fn then_review_list_visible(state: &TimeTravelTestState) -> StepResult {
     state.assert_view_contains("Filter:")
 }
 
+#[then("the view shows the line moved by {offset}")]
+fn then_view_shows_line_moved(state: &TimeTravelTestState, offset: String) -> StepResult {
+    state.assert_view_contains(&offset)
+}
+
+#[then("the view shows the line was deleted")]
+fn then_view_shows_line_deleted(state: &TimeTravelTestState) -> StepResult {
+    state.assert_view_contains("deleted")
+}
+
 // Scenario bindings
 
 #[scenario(path = "tests/features/time_travel.feature", index = 0)]
@@ -309,5 +333,15 @@ fn time_travel_missing_repository(state: TimeTravelTestState) {
 
 #[scenario(path = "tests/features/time_travel.feature", index = 6)]
 fn time_travel_exit_mode(state: TimeTravelTestState) {
+    let _ = state;
+}
+
+#[scenario(path = "tests/features/time_travel.feature", index = 7)]
+fn time_travel_line_mapping_moved(state: TimeTravelTestState) {
+    let _ = state;
+}
+
+#[scenario(path = "tests/features/time_travel.feature", index = 8)]
+fn time_travel_line_mapping_deleted(state: TimeTravelTestState) {
     let _ = state;
 }

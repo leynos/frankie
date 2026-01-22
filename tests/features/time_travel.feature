@@ -56,3 +56,21 @@ Feature: Time-travel navigation
     When time-travel mode is exited
     And the view is rendered
     Then the review list is visible
+
+  Scenario: Display line mapping for moved line
+    Given a TUI with review comments that have commit SHAs
+    And a local repository is available
+    And the line mapping shows line moved from 42 to 50
+    When time-travel mode is entered for the selected comment
+    And the view is rendered
+    Then the view shows line mapping status
+    And the view shows the line moved by +8
+
+  Scenario: Display line mapping for deleted line
+    Given a TUI with review comments that have commit SHAs
+    And a local repository is available
+    And the line mapping shows line 42 deleted
+    When time-travel mode is entered for the selected comment
+    And the view is rendered
+    Then the view shows line mapping status
+    And the view shows the line was deleted

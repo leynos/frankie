@@ -12,6 +12,8 @@ pub(crate) struct MockGitOperations {
     commit_exists: bool,
     /// The commit history to return.
     commit_history: Vec<CommitSha>,
+    /// Optional configured line mapping response. If None, defaults to exact match.
+    line_mapping_response: Option<LineMappingVerification>,
 }
 
 impl Default for MockGitOperations {
@@ -23,6 +25,7 @@ impl Default for MockGitOperations {
                 CommitSha::new("def5678901234".to_owned()),
                 CommitSha::new("ghi9012345678".to_owned()),
             ],
+            line_mapping_response: None,
         }
     }
 }
@@ -40,6 +43,21 @@ impl MockGitOperations {
     )]
     pub(crate) fn with_commit_exists(mut self, exists: bool) -> Self {
         self.commit_exists = exists;
+        self
+    }
+
+    /// Sets the line mapping verification response.
+    ///
+    /// Use this to test different line mapping scenarios:
+    /// - `exact(line)` for unchanged lines
+    /// - `moved(original, new)` for lines that moved positions
+    /// - `deleted(line)` for lines that were removed
+    #[expect(
+        clippy::missing_const_for_fn,
+        reason = "Vec fields prevent const evaluation"
+    )]
+    pub(crate) fn with_line_mapping(mut self, mapping: LineMappingVerification) -> Self {
+        self.line_mapping_response = Some(mapping);
         self
     }
 }
@@ -91,7 +109,11 @@ impl GitOperations for MockGitOperations {
         &self,
         request: &LineMappingRequest,
     ) -> Result<LineMappingVerification, GitOperationError> {
-        Ok(LineMappingVerification::exact(request.line))
+        // Use configured response if available, otherwise default to exact match
+        Ok(self
+            .line_mapping_response
+            .clone()
+            .unwrap_or_else(|| LineMappingVerification::exact(request.line)))
     }
 
     fn get_parent_commits(
