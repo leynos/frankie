@@ -262,11 +262,11 @@ fn then_view_shows_line_mapping(state: &TimeTravelTestState) -> StepResult {
     let view = state.view()?;
     let stripped = strip_ansi_codes(&view);
     // Check for line mapping indicator (exact match symbol)
-    assert!(
-        stripped.contains("42") || stripped.contains("Line"),
-        "expected line mapping status in view:\n{stripped}"
-    );
-    Ok(())
+    if stripped.contains("42") || stripped.contains("Line") {
+        Ok(())
+    } else {
+        Err("expected line mapping status (line number or 'Line' text) not found in view")
+    }
 }
 
 #[then("the view shows commit position {position}")]
