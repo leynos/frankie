@@ -12,13 +12,13 @@ governance applies.
 
 ## Purpose / Big picture
 
-Add time-travel navigation across PR history to the review TUI so a reviewer
-can see the exact code state when a comment was made, verify that line mappings
-remain correct, and navigate between commits in the PR history. Success is
-visible when pressing `t` on a selected comment shows the commit snapshot with
-file content at that commit, line mapping verification displays correct/moved/
-deleted status, `h`/`l` navigate between commits, and behavioural tests cover
-all scenarios.
+Add time-travel navigation across PR history to the review text-based
+user interface (TUI) so a reviewer can see the exact code state when a
+comment was made, verify that line mappings remain correct, and navigate
+between commits in the PR history. Success is visible when pressing `t` on a
+selected comment shows the commit snapshot with file content at that commit,
+line mapping verification displays correct/moved/deleted status, `h`/`l` navigate
+between commits, and behavioural tests cover all scenarios.
 
 ## Constraints
 

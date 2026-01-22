@@ -242,9 +242,9 @@ without losing the current selection.
 
 ### Time-travel mode
 
-Time-travel mode lets you view the exact code state when a review comment was
-made. This is useful for understanding what the reviewer saw at the time they
-left their comment, especially when the code has changed significantly since
+Time-travel mode displays the exact code state when a review comment was
+made. This is useful for understanding what was observed at the time a
+comment was left, especially when the code has changed significantly since
 then.
 
 To enter time-travel mode:
@@ -273,7 +273,8 @@ history:
 - `h` moves to the previous (older) commit
 - `l` moves to the next (newer) commit
 
-The header shows your position in the commit history (e.g., "Commit 2 of 5").
+The header shows the current position in the commit history (e.g., "Commit 2
+of 5").
 
 #### Requirements
 

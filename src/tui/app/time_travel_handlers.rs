@@ -4,9 +4,6 @@
 //! users to view the code state at the time a comment was made and verify
 //! line mapping correctness.
 
-// Shadow reuse is acceptable for cloning references
-#![expect(clippy::shadow_reuse, reason = "Clone of reference for async move")]
-
 use std::any::Any;
 use std::sync::Arc;
 
@@ -111,10 +108,10 @@ impl ReviewApp {
         self.view_mode = super::ViewMode::TimeTravel;
 
         // Spawn async task to load time-travel data
-        let git_ops = Arc::clone(git_ops);
+        let git_ops_clone = Arc::clone(git_ops);
         let head_sha = self.head_sha.clone();
 
-        Some(spawn_time_travel_load(git_ops, params, head_sha))
+        Some(spawn_time_travel_load(git_ops_clone, params, head_sha))
     }
 
     /// Handles the `ExitTimeTravel` message.

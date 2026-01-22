@@ -11,6 +11,7 @@ use bubbletea_rs::Cmd;
 
 use super::ReviewApp;
 use crate::github::models::ReviewComment;
+use crate::tui::app::ViewMode;
 use crate::tui::messages::AppMsg;
 
 /// Default interval between background syncs.
@@ -57,7 +58,7 @@ impl ReviewApp {
         // Update selected_comment_id to match new cursor position
         self.update_selected_id();
 
-        if self.view_mode == super::ViewMode::DiffContext {
+        if self.view_mode == ViewMode::DiffContext {
             self.rebuild_diff_context_state();
         }
 

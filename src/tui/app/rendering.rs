@@ -36,7 +36,7 @@ impl ReviewApp {
                 "j/k:navigate  f:filter  c:context  t:time-travel  r:refresh  ?:help  q:quit"
             }
             super::ViewMode::DiffContext => "[/]:hunks  Esc:back  ?:help  q:quit",
-            super::ViewMode::TimeTravel => "h/l:commits  Esc:back  q:quit",
+            super::ViewMode::TimeTravel => "h/l:commits  Esc:back  ?:help  q:quit",
         };
         format!("{hints}\n")
     }

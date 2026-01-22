@@ -20,8 +20,9 @@ pub enum InputContext {
 /// Maps a key event to an application message.
 ///
 /// Returns `None` for unrecognised key events, allowing them to be ignored.
+/// This is a convenience wrapper that assumes the `ReviewList` context.
+/// For context-aware key mapping, use `map_key_to_message_with_context`.
 #[must_use]
-#[doc(hidden)]
 pub fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     map_key_to_message_with_context(key, InputContext::ReviewList)
 }

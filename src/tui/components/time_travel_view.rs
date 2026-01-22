@@ -64,18 +64,20 @@ impl TimeTravelViewComponent {
         output.push('\n');
         output.push('\n');
 
-        // Render file content
-        let content = render_file_content(state, ctx.max_width);
-        output.push_str(&content);
+        // Render file content with height limit accounting for chrome
+        // Reserve 4 lines for: header, line mapping, navigation, blank line
+        let chrome_height = 4;
+        let content_height = ctx.max_height.saturating_sub(chrome_height);
 
-        // Apply height limit if set
-        if ctx.max_height > 0 {
-            // Reserve 4 lines for header, line mapping, navigation, and blank line
-            let body_height = ctx.max_height.saturating_sub(4);
-            if body_height > 0 {
-                truncate_to_height(&mut output, ctx.max_height);
-            }
-        }
+        let content = if content_height > 0 {
+            let full_content = render_file_content(state, ctx.max_width);
+            let mut truncated = full_content;
+            truncate_to_height(&mut truncated, content_height);
+            truncated
+        } else {
+            render_file_content(state, ctx.max_width)
+        };
+        output.push_str(&content);
 
         output
     }
@@ -124,6 +126,11 @@ fn render_navigation_indicator(state: &TimeTravelState) -> String {
     format!("Commit {current}/{total}  {prev_indicator}  {next_indicator}")
 }
 
+/// Checks if a line number matches the target line.
+fn is_target_line(line_num: usize, target_line: Option<u32>) -> bool {
+    target_line.is_some_and(|t| u32::try_from(line_num).ok().is_some_and(|ln| ln == t))
+}
+
 fn render_file_content(state: &TimeTravelState, max_width: usize) -> String {
     let Some(content) = state.snapshot().file_content() else {
         return "(File content not available)\n".to_owned();
@@ -145,10 +152,11 @@ fn render_file_content(state: &TimeTravelState, max_width: usize) -> String {
 
     for (i, line) in lines.iter().enumerate() {
         let line_num = i + 1;
-        let is_target =
-            target_line.is_some_and(|t| u32::try_from(line_num).is_ok_and(|ln| t == ln));
-
-        let marker = if is_target { ">" } else { " " };
+        let marker = if is_target_line(line_num, target_line) {
+            ">"
+        } else {
+            " "
+        };
         // Use write! instead of format! to avoid extra allocation
         // Ignoring error as writing to String cannot fail
         #[expect(

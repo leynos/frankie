@@ -4,11 +4,6 @@
 //! by the time-travel feature, along with a git2-based implementation. The
 //! trait enables dependency injection for testing without real repositories.
 
-// Mutex unwrap is acceptable - a poisoned mutex indicates a bug
-#![expect(clippy::unwrap_used, reason = "Mutex poisoning is a fatal error")]
-// Shadow warnings for local iterator vars
-#![expect(clippy::shadow_unrelated, reason = "Iterator variable reuse in map")]
-
 use std::fmt::Debug;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -213,7 +208,7 @@ impl Git2Operations {
 
     /// Checks if a diff has no changes.
     fn has_no_changes(diff: &git2::Diff<'_>) -> bool {
-        diff.deltas().len() == 0
+        diff.deltas().next().is_none()
     }
 
     /// Checks if a line is within a hunk's old range.
@@ -310,7 +305,11 @@ impl GitOperations for Git2Operations {
         sha: &CommitSha,
         file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError> {
-        let repo = self.repo.lock().unwrap();
+        #[expect(
+            clippy::expect_used,
+            reason = "Mutex poisoning is an unrecoverable error"
+        )]
+        let repo = self.repo.lock().expect("Git repository mutex poisoned");
         let oid = Self::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
@@ -367,7 +366,11 @@ impl GitOperations for Git2Operations {
         sha: &CommitSha,
         file_path: &RepoFilePath,
     ) -> Result<String, GitOperationError> {
-        let repo = self.repo.lock().unwrap();
+        #[expect(
+            clippy::expect_used,
+            reason = "Mutex poisoning is an unrecoverable error"
+        )]
+        let repo = self.repo.lock().expect("Git repository mutex poisoned");
         let oid = Self::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
@@ -397,7 +400,11 @@ impl GitOperations for Git2Operations {
         &self,
         request: &LineMappingRequest,
     ) -> Result<LineMappingVerification, GitOperationError> {
-        let repo = self.repo.lock().unwrap();
+        #[expect(
+            clippy::expect_used,
+            reason = "Mutex poisoning is an unrecoverable error"
+        )]
+        let repo = self.repo.lock().expect("Git repository mutex poisoned");
         let old_oid = Self::parse_sha_with_repo(&repo, &request.old_sha)?;
         let new_oid = Self::parse_sha_with_repo(&repo, &request.new_sha)?;
 
@@ -447,7 +454,11 @@ impl GitOperations for Git2Operations {
         sha: &CommitSha,
         limit: usize,
     ) -> Result<Vec<CommitSha>, GitOperationError> {
-        let repo = self.repo.lock().unwrap();
+        #[expect(
+            clippy::expect_used,
+            reason = "Mutex poisoning is an unrecoverable error"
+        )]
+        let repo = self.repo.lock().expect("Git repository mutex poisoned");
         let oid = Self::parse_sha_with_repo(&repo, sha.as_str())?;
         let mut revwalk = repo.revwalk()?;
         revwalk.push(oid)?;
@@ -459,14 +470,18 @@ impl GitOperations for Git2Operations {
         let commits: Vec<CommitSha> = revwalk
             .filter_map(Result::ok)
             .take(limit)
-            .map(|oid| CommitSha::new(oid.to_string()))
+            .map(|commit_oid| CommitSha::new(commit_oid.to_string()))
             .collect();
 
         Ok(commits)
     }
 
     fn commit_exists(&self, sha: &CommitSha) -> bool {
-        let repo = self.repo.lock().unwrap();
+        #[expect(
+            clippy::expect_used,
+            reason = "Mutex poisoning is an unrecoverable error"
+        )]
+        let repo = self.repo.lock().expect("Git repository mutex poisoned");
         Self::parse_sha_with_repo(&repo, sha.as_str())
             .and_then(|oid| {
                 repo.find_commit(oid)

@@ -25,12 +25,11 @@ pub struct CommitMetadata {
 impl CommitMetadata {
     /// Creates new commit metadata.
     #[must_use]
-    pub const fn new(
-        sha: String,
-        message: String,
-        author: String,
-        timestamp: DateTime<Utc>,
-    ) -> Self {
+    #[expect(
+        clippy::missing_const_for_fn,
+        reason = "Const fn with String parameters is misleading since String allocation is not const"
+    )]
+    pub fn new(sha: String, message: String, author: String, timestamp: DateTime<Utc>) -> Self {
         Self {
             sha,
             message,
@@ -245,11 +244,14 @@ impl LineMappingVerification {
     }
 
     /// Returns the line offset (positive = moved down, negative = moved up).
+    ///
+    /// Returns `None` if the line was deleted or if the conversion to `i32` fails.
     #[must_use]
     pub fn offset(&self) -> Option<i32> {
-        self.current_line.map(|current| {
-            i32::try_from(current).unwrap_or(i32::MAX)
-                - i32::try_from(self.original_line).unwrap_or(0)
+        self.current_line.and_then(|current| {
+            let current_i32 = i32::try_from(current).ok()?;
+            let original_i32 = i32::try_from(self.original_line).ok()?;
+            Some(current_i32.saturating_sub(original_i32))
         })
     }
 
@@ -314,7 +316,11 @@ pub struct LineMappingRequest {
 impl LineMappingRequest {
     /// Creates a new line mapping request.
     #[must_use]
-    pub const fn new(old_sha: String, new_sha: String, file_path: String, line: u32) -> Self {
+    #[expect(
+        clippy::missing_const_for_fn,
+        reason = "Const fn with String parameters is misleading since String allocation is not const"
+    )]
+    pub fn new(old_sha: String, new_sha: String, file_path: String, line: u32) -> Self {
         Self {
             old_sha,
             new_sha,
@@ -350,8 +356,7 @@ mod tests {
 
         /// Returns expected values for a moved line.
         fn moved(original: u32, current: u32) -> Self {
-            let offset =
-                i32::try_from(current).unwrap_or(i32::MAX) - i32::try_from(original).unwrap_or(0);
+            let offset = i32::try_from(current).unwrap_or(0) - i32::try_from(original).unwrap_or(0);
             Self {
                 original,
                 current: Some(current),
