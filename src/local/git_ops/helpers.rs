@@ -93,6 +93,10 @@ pub(super) const fn is_line_deleted_in_hunk(
 }
 
 /// Calculates the offset contribution from a hunk.
+///
+/// Returns `new_lines - old_lines` as a signed offset. Values exceeding
+/// `i32::MAX` are treated as zero, though this is unreachable in practice
+/// since diff hunks cannot contain billions of lines.
 pub(super) fn calculate_hunk_offset(old_lines: u32, new_lines: u32) -> i32 {
     i32::try_from(new_lines).unwrap_or(0) - i32::try_from(old_lines).unwrap_or(0)
 }

@@ -1,4 +1,9 @@
-#![expect(clippy::unwrap_used, reason = "Tests panic on failure")]
+//! Unit tests for time-travel state management.
+//!
+//! These tests verify the `TimeTravelState` struct's navigation logic,
+//! loading/error states, and parameter extraction from review comments.
+
+#![expect(clippy::unwrap_used, reason = "Test assertions panic on failure")]
 
 use chrono::Utc;
 use rstest::{fixture, rstest};

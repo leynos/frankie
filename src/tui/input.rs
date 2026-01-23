@@ -150,7 +150,9 @@ mod tests {
                 );
             }
             (None, None) => {}
-            (r, e) => panic!("Expected {e:?}, got {r:?}"),
+            (r, e) => {
+                assert_eq!(r.is_some(), e.is_some(), "Expected {e:?}, got {r:?}");
+            }
         }
     }
 }

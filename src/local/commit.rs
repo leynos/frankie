@@ -269,6 +269,9 @@ impl LineMappingVerification {
                 )
             }
             LineMappingStatus::Moved => {
+                // SAFETY: By construction, `LineMappingVerification::moved()` always sets
+                // `current_line` to `Some(current)`, making the fallback unreachable.
+                // Similarly, `offset()` returns `Some` when `current_line` is `Some`.
                 let current = self.current_line.unwrap_or(0);
                 let offset = self.offset().unwrap_or(0);
                 let offset_str = if offset > 0 {

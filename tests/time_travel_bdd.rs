@@ -19,6 +19,18 @@ use time_travel_support::{MockGitOperations, TimeTravelTestState};
 
 use frankie::tui::components::test_utils::ReviewCommentBuilder;
 
+/// Creates a default review comment for testing.
+#[fixture]
+fn default_comment() -> frankie::github::models::ReviewComment {
+    ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/auth.rs")
+        .line_number(42)
+        .body("Check validation")
+        .commit_sha("abc1234567890")
+        .build()
+}
+
 /// Creates a mock time-travel state for testing at a specific history index.
 fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
     let commit_history = vec![
@@ -68,17 +80,6 @@ type StepError = &'static str;
 type StepResult = Result<(), StepError>;
 
 impl TimeTravelTestState {
-    /// Creates a default review comment for testing.
-    fn default_comment() -> frankie::github::models::ReviewComment {
-        ReviewCommentBuilder::new(1)
-            .author("alice")
-            .file_path("src/auth.rs")
-            .line_number(42)
-            .body("Check validation")
-            .commit_sha("abc1234567890")
-            .build()
-    }
-
     /// Creates a review comment with a specific commit SHA.
     fn comment_with_sha(sha: &str) -> frankie::github::models::ReviewComment {
         ReviewCommentBuilder::new(1)
@@ -166,13 +167,13 @@ fn given_comments_with_commit_shas(state: &TimeTravelTestState) {
 #[given("a local repository is available")]
 fn given_local_repository_available(state: &TimeTravelTestState) {
     state.setup_repository(true, Some(Arc::new(MockGitOperations::new())));
-    state.setup_app_with_comments(vec![TimeTravelTestState::default_comment()]);
+    state.setup_app_with_comments(vec![default_comment()]);
 }
 
 #[given("no local repository is available")]
 fn given_no_local_repository(state: &TimeTravelTestState) {
     state.setup_repository(false, None);
-    state.setup_app_with_comments(vec![TimeTravelTestState::default_comment()]);
+    state.setup_app_with_comments(vec![default_comment()]);
 }
 
 #[given("the commit is not found in the repository")]
@@ -187,7 +188,8 @@ fn given_commit_not_found(state: &TimeTravelTestState) {
 
 #[given("the line mapping shows exact match")]
 fn given_line_mapping_exact(state: &TimeTravelTestState) {
-    // Default mock already returns exact match
+    // Default mock already returns exact match - no setup needed
+    // Binding is required by rstest_bdd macro
     let _ = state;
 }
 
@@ -195,14 +197,14 @@ fn given_line_mapping_exact(state: &TimeTravelTestState) {
 fn given_line_mapping_moved(state: &TimeTravelTestState, from: u32, to: u32) {
     let mock = MockGitOperations::new().with_line_mapping(LineMappingVerification::moved(from, to));
     state.setup_repository(true, Some(Arc::new(mock)));
-    state.setup_app_with_comments(vec![TimeTravelTestState::default_comment()]);
+    state.setup_app_with_comments(vec![default_comment()]);
 }
 
 #[given("the line mapping shows line {line} deleted")]
 fn given_line_mapping_deleted(state: &TimeTravelTestState, line: u32) {
     let mock = MockGitOperations::new().with_line_mapping(LineMappingVerification::deleted(line));
     state.setup_repository(true, Some(Arc::new(mock)));
-    state.setup_app_with_comments(vec![TimeTravelTestState::default_comment()]);
+    state.setup_app_with_comments(vec![default_comment()]);
 }
 
 #[given("time-travel mode is entered for the selected comment")]

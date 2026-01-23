@@ -1,5 +1,13 @@
-#![expect(clippy::indexing_slicing, reason = "Test assertions")]
-#![expect(clippy::unwrap_used, reason = "Tests panic on failure")]
+//! Integration tests for Git operations.
+//!
+//! These tests use real Git repositories created via `tempfile` to verify
+//! commit snapshot retrieval, file content access, and line mapping logic.
+
+#![expect(
+    clippy::indexing_slicing,
+    reason = "Test assertions on known-size arrays"
+)]
+#![expect(clippy::unwrap_used, reason = "Test fixtures panic on setup failure")]
 
 use std::fs;
 use std::path::Path;
