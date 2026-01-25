@@ -7,6 +7,63 @@ use git2::{DiffOptions, Oid, Repository};
 use crate::local::commit::LineMappingVerification;
 use crate::local::error::GitOperationError;
 
+/// Represents a range of lines in a diff hunk.
+///
+/// Encapsulates the old file line range and new file line count from a diff hunk,
+/// providing semantic operations for line mapping calculations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct HunkRange {
+    /// Starting line number in the old file (1-indexed).
+    pub start: u32,
+    /// Number of lines in the old file's hunk.
+    pub old_lines: u32,
+    /// Number of lines in the new file's hunk.
+    pub new_lines: u32,
+}
+
+impl HunkRange {
+    /// Constructs a `HunkRange` from a git2 diff hunk.
+    pub fn from_hunk(hunk: &git2::DiffHunk<'_>) -> Self {
+        Self {
+            start: hunk.old_start(),
+            old_lines: hunk.old_lines(),
+            new_lines: hunk.new_lines(),
+        }
+    }
+
+    /// Checks if a line number is within this hunk's old range.
+    pub const fn contains_line(self, line: u32) -> bool {
+        line >= self.start && line < self.end_line()
+    }
+
+    /// Checks if a line was deleted in this hunk.
+    ///
+    /// A line is considered deleted if the hunk removed more lines than it added
+    /// and the line falls within the removed section.
+    pub const fn is_line_deleted(self, line: u32) -> bool {
+        if self.old_lines > self.new_lines {
+            let removed_start = self.start + self.new_lines;
+            line >= removed_start
+        } else {
+            false
+        }
+    }
+
+    /// Calculates the line offset contribution from this hunk.
+    ///
+    /// Returns `new_lines - old_lines` as a signed offset. Values exceeding
+    /// `i32::MAX` are treated as zero, though this is unreachable in practice
+    /// since diff hunks cannot contain billions of lines.
+    pub fn offset(self) -> i32 {
+        i32::try_from(self.new_lines).unwrap_or(0) - i32::try_from(self.old_lines).unwrap_or(0)
+    }
+
+    /// Returns the end line number (exclusive) of the old range.
+    pub const fn end_line(self) -> u32 {
+        self.start + self.old_lines
+    }
+}
+
 /// Parses a SHA string into an Oid using the repository.
 ///
 /// Attempts to parse as a full SHA first, then tries as a short SHA or ref.
@@ -72,35 +129,6 @@ pub(super) fn has_no_changes(diff: &git2::Diff<'_>) -> bool {
     diff.deltas().next().is_none()
 }
 
-/// Checks if a line is within a hunk's old range.
-pub(super) const fn is_line_in_hunk(line: u32, old_start: u32, old_lines: u32) -> bool {
-    line >= old_start && line < old_start + old_lines
-}
-
-/// Checks if a line was deleted in a hunk.
-pub(super) const fn is_line_deleted_in_hunk(
-    line: u32,
-    old_start: u32,
-    old_lines: u32,
-    new_lines: u32,
-) -> bool {
-    if old_lines > new_lines {
-        let removed_start = old_start + new_lines;
-        line >= removed_start
-    } else {
-        false
-    }
-}
-
-/// Calculates the offset contribution from a hunk.
-///
-/// Returns `new_lines - old_lines` as a signed offset. Values exceeding
-/// `i32::MAX` are treated as zero, though this is unreachable in practice
-/// since diff hunks cannot contain billions of lines.
-pub(super) fn calculate_hunk_offset(old_lines: u32, new_lines: u32) -> i32 {
-    i32::try_from(new_lines).unwrap_or(0) - i32::try_from(old_lines).unwrap_or(0)
-}
-
 /// Computes the line offset by processing diff hunks.
 pub(super) fn compute_line_offset_from_hunks(
     diff: &git2::Diff<'_>,
@@ -114,20 +142,17 @@ pub(super) fn compute_line_offset_from_hunks(
         &mut |_, _| true,
         None,
         Some(&mut |_delta, hunk| {
-            let old_start = hunk.old_start();
-            let old_lines = hunk.old_lines();
-            let new_lines = hunk.new_lines();
+            let range = HunkRange::from_hunk(&hunk);
 
             if passed_line {
                 return true;
             }
 
-            if is_line_in_hunk(target_line, old_start, old_lines) {
-                line_deleted =
-                    is_line_deleted_in_hunk(target_line, old_start, old_lines, new_lines);
+            if range.contains_line(target_line) {
+                line_deleted = range.is_line_deleted(target_line);
                 passed_line = true;
-            } else if target_line >= old_start + old_lines {
-                line_offset += calculate_hunk_offset(old_lines, new_lines);
+            } else if target_line >= range.end_line() {
+                line_offset += range.offset();
             } else {
                 passed_line = true;
             }

@@ -126,9 +126,82 @@ fn render_navigation_indicator(state: &TimeTravelState) -> String {
     format!("Commit {current}/{total}  {prev_indicator}  {next_indicator}")
 }
 
-/// Checks if a line number matches the target line.
-fn is_target_line(line_num: usize, target_line: Option<u32>) -> bool {
-    target_line.is_some_and(|t| u32::try_from(line_num).ok().is_some_and(|ln| ln == t))
+/// Checks if a source line number matches the target line.
+fn is_target_line(source_line: u32, target_line: Option<u32>) -> bool {
+    target_line.is_some_and(|t| source_line == t)
+}
+
+/// Parameters for rendering a single visual line.
+struct VisualLineParams<'a> {
+    marker: &'a str,
+    source_line_num: u32,
+    content: &'a str,
+    is_first: bool,
+}
+
+/// Context for rendering source lines with line numbers.
+struct LineRenderContext {
+    /// Width of the line number column.
+    line_num_width: usize,
+    /// Maximum width for wrapping content.
+    max_width: usize,
+    /// Optional target line to highlight.
+    target_line: Option<u32>,
+}
+
+impl LineRenderContext {
+    /// Renders a source line (potentially wrapped) to the output.
+    fn render_source_line(&self, output: &mut String, source_line: &str, source_line_num: u32) {
+        let is_target = is_target_line(source_line_num, self.target_line);
+        let marker = if is_target { ">" } else { " " };
+
+        let wrapped = wrap_code_block(source_line, self.max_width);
+        let visual_lines: Vec<&str> = wrapped.lines().collect();
+
+        if visual_lines.is_empty() {
+            let params = VisualLineParams {
+                marker,
+                source_line_num,
+                content: "",
+                is_first: true,
+            };
+            self.write_line(output, &params);
+        } else {
+            for (vi, visual_line) in visual_lines.iter().enumerate() {
+                let params = VisualLineParams {
+                    marker,
+                    source_line_num,
+                    content: visual_line,
+                    is_first: vi == 0,
+                };
+                self.write_line(output, &params);
+            }
+        }
+    }
+
+    /// Writes a single visual line to output.
+    fn write_line(&self, output: &mut String, params: &VisualLineParams<'_>) {
+        let line_num_width = self.line_num_width;
+        let VisualLineParams {
+            marker,
+            source_line_num,
+            content,
+            is_first,
+        } = params;
+        // Ignoring error as writing to String cannot fail
+        #[expect(
+            clippy::let_underscore_must_use,
+            reason = "Writing to String cannot fail"
+        )]
+        let _ = if *is_first {
+            writeln!(
+                output,
+                "{marker}{source_line_num:>line_num_width$} | {content}"
+            )
+        } else {
+            writeln!(output, "{marker}{:>line_num_width$} | {content}", "..")
+        };
+    }
 }
 
 fn render_file_content(state: &TimeTravelState, max_width: usize) -> String {
@@ -140,30 +213,20 @@ fn render_file_content(state: &TimeTravelState, max_width: usize) -> String {
         return "(Empty file)\n".to_owned();
     }
 
-    // Wrap the content to fit within max_width
-    let wrapped = wrap_code_block(content, max_width);
-
-    // Add line numbers and highlight the target line if available
-    let target_line = state.original_line();
-    let lines: Vec<&str> = wrapped.lines().collect();
+    let source_lines: Vec<&str> = content.lines().collect();
+    let ctx = LineRenderContext {
+        line_num_width: source_lines.len().to_string().len().max(3),
+        max_width,
+        target_line: state.original_line(),
+    };
 
     let mut output = String::new();
-    let line_num_width = lines.len().to_string().len().max(3);
 
-    for (i, line) in lines.iter().enumerate() {
-        let line_num = i + 1;
-        let marker = if is_target_line(line_num, target_line) {
-            ">"
-        } else {
-            " "
-        };
-        // Use write! instead of format! to avoid extra allocation
-        // Ignoring error as writing to String cannot fail
-        #[expect(
-            clippy::let_underscore_must_use,
-            reason = "Writing to String cannot fail"
-        )]
-        let _ = writeln!(output, "{marker}{line_num:>line_num_width$} | {line}");
+    // Iterate over source lines, wrapping each individually to preserve
+    // source line numbers through wrapping
+    for (i, source_line) in source_lines.iter().enumerate() {
+        let source_line_num = u32::try_from(i + 1).unwrap_or(u32::MAX);
+        ctx.render_source_line(&mut output, source_line, source_line_num);
     }
 
     output
@@ -290,5 +353,57 @@ mod tests {
         let output = render_view_with_state(&state);
 
         assert!(output.contains("Error: Commit not found"));
+    }
+
+    #[test]
+    fn view_preserves_source_line_numbers_through_wrapping() {
+        // Create content where line 2 is very long and will wrap
+        let long_line = "x".repeat(100);
+        let content = format!("short\n{long_line}\nthird");
+
+        let metadata = CommitMetadata::new(
+            "abc1234567890".to_owned(),
+            "Test".to_owned(),
+            "Alice".to_owned(),
+            Utc::now(),
+        );
+        let snapshot =
+            CommitSnapshot::with_file_content(metadata, "test.rs".to_owned(), content.clone());
+
+        // Target line 3 (the "third" line)
+        let state = TimeTravelState::new(TimeTravelInitParams {
+            snapshot,
+            file_path: "test.rs".to_owned(),
+            original_line: Some(3),
+            line_mapping: None,
+            commit_history: vec!["abc1234567890".to_owned()],
+            current_index: 0,
+        });
+
+        // Use narrow width to force wrapping
+        let ctx = TimeTravelViewContext {
+            state: Some(&state),
+            max_width: 40,
+            max_height: 0,
+        };
+        let output = TimeTravelViewComponent::view(&ctx);
+
+        // Line 3 should be highlighted even though line 2 wraps into multiple visual lines
+        assert!(
+            output.contains(">  3 | third"),
+            "Line 3 should be highlighted. Output:\n{output}"
+        );
+
+        // Line 2 (wrapped) should NOT have the > marker
+        assert!(
+            !output.contains(">  2 |"),
+            "Line 2 should not be highlighted. Output:\n{output}"
+        );
+
+        // Continuation lines should show dots
+        assert!(
+            output.contains(".. |"),
+            "Wrapped continuation should show dots. Output:\n{output}"
+        );
     }
 }
