@@ -1,7 +1,5 @@
 //! Behavioural tests for time-travel navigation.
 
-#![expect(clippy::expect_used, reason = "Test setup invariants")]
-
 #[path = "time_travel_bdd/mod.rs"]
 mod time_travel_support;
 
@@ -32,6 +30,7 @@ fn default_comment() -> frankie::github::models::ReviewComment {
 }
 
 /// Creates a mock time-travel state for testing at a specific history index.
+#[expect(clippy::expect_used, reason = "Test helper asserting valid index")]
 fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
     let commit_history = vec![
         "abc1234567890".to_owned(),
