@@ -130,6 +130,31 @@ pub(super) fn has_no_changes(diff: &git2::Diff<'_>) -> bool {
 }
 
 /// Computes the line offset by processing diff hunks.
+///
+/// # Heuristic Approach
+///
+/// This function uses **hunk-level aggregate counts** rather than examining
+/// individual `DiffLine` entries. For each hunk, it computes:
+///
+/// ```text
+/// offset = new_lines - old_lines
+/// ```
+///
+/// This approach is a reasonable approximation for most cases but may be
+/// imprecise for complex hunks containing interleaved additions and deletions.
+/// For example, a hunk that adds 3 lines and removes 2 lines contributes +1
+/// to the offset, regardless of where within the hunk those changes occur.
+///
+/// # Limitations
+///
+/// - Cannot detect whether a specific line was modified (changed in place)
+/// - Treats all lines within a hunk uniformly based on aggregate counts
+/// - May report incorrect offsets if a target line falls within a hunk where
+///   the exact position matters (e.g., some lines added above and some below)
+///
+/// For more precise line tracking, an alternative implementation could iterate
+/// through `diff.foreach(..., Some(&mut line_cb), ...)` to examine each
+/// `DiffLine` individually, but this comes at increased complexity.
 pub(super) fn compute_line_offset_from_hunks(
     diff: &git2::Diff<'_>,
     target_line: u32,
