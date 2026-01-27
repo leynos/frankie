@@ -29,7 +29,7 @@ enum NavigationDirection {
 
 impl NavigationDirection {
     /// Returns whether navigation in this direction is possible.
-    fn can_navigate(self, state: &TimeTravelState) -> bool {
+    const fn can_navigate(self, state: &TimeTravelState) -> bool {
         match self {
             Self::Next => state.can_go_next(),
             Self::Previous => state.can_go_previous(),
@@ -37,7 +37,7 @@ impl NavigationDirection {
     }
 
     /// Returns the target commit SHA for this direction.
-    fn target_sha(self, state: &TimeTravelState) -> Option<&str> {
+    fn target_sha(self, state: &TimeTravelState) -> Option<&CommitSha> {
         match self {
             Self::Next => state.next_commit_sha(),
             Self::Previous => state.previous_commit_sha(),
@@ -57,9 +57,9 @@ impl NavigationDirection {
 #[derive(Debug, Clone)]
 struct CommitNavigationContext {
     /// SHA of the commit to navigate to.
-    sha: String,
+    sha: CommitSha,
     /// Path to the file being viewed.
-    file_path: String,
+    file_path: RepoFilePath,
     /// Original line number from the comment.
     original_line: Option<u32>,
     /// SHA of the HEAD commit for line mapping verification.
@@ -67,7 +67,7 @@ struct CommitNavigationContext {
     /// New index in the commit history.
     new_index: usize,
     /// List of commit SHAs in the history.
-    commit_history: Vec<String>,
+    commit_history: Vec<CommitSha>,
 }
 
 impl ReviewApp {
@@ -93,9 +93,8 @@ impl ReviewApp {
         };
 
         // Check if commit exists
-        let commit_sha = CommitSha::new(params.commit_sha.clone());
-        if !git_ops.commit_exists(&commit_sha) {
-            let short_sha: String = params.commit_sha.chars().take(7).collect();
+        if !git_ops.commit_exists(&params.commit_sha) {
+            let short_sha: String = params.commit_sha.as_str().chars().take(7).collect();
             self.error = Some(format!("Commit {short_sha} not found in local repository"));
             return None;
         }
@@ -160,8 +159,8 @@ impl ReviewApp {
             }
 
             CommitNavigationContext {
-                sha: direction.target_sha(state)?.to_owned(),
-                file_path: state.file_path().to_owned(),
+                sha: direction.target_sha(state)?.clone(),
+                file_path: state.file_path().clone(),
                 original_line: state.original_line(),
                 head_sha: self.head_sha.clone(),
                 new_index: direction.calculate_index(state.current_index()),
@@ -236,25 +235,18 @@ fn load_time_travel_state(
     params: &TimeTravelParams,
     head_sha: Option<&str>,
 ) -> Result<TimeTravelState, GitOperationError> {
-    let commit_sha = CommitSha::new(params.commit_sha.clone());
-    let file_path = RepoFilePath::new(params.file_path.clone());
-
     // Get commit snapshot with file content
-    let snapshot = git_ops.get_commit_snapshot(&commit_sha, Some(&file_path))?;
+    let snapshot = git_ops.get_commit_snapshot(&params.commit_sha, Some(&params.file_path))?;
 
     // Get commit history
-    let commit_history_shas = git_ops.get_parent_commits(&commit_sha, COMMIT_HISTORY_LIMIT)?;
-    let commit_history: Vec<String> = commit_history_shas
-        .into_iter()
-        .map(|sha| sha.to_string())
-        .collect();
+    let commit_history = git_ops.get_parent_commits(&params.commit_sha, COMMIT_HISTORY_LIMIT)?;
 
     // Verify line mapping if we have a line number and HEAD
     let line_mapping = if let (Some(line), Some(head)) = (params.line_number, head_sha) {
         let request = LineMappingRequest::new(
-            params.commit_sha.clone(),
+            params.commit_sha.as_str().to_owned(),
             head.to_owned(),
-            params.file_path.clone(),
+            params.file_path.as_str().to_owned(),
             line,
         );
         git_ops.verify_line_mapping(&request).ok()
@@ -277,19 +269,16 @@ fn load_commit_snapshot(
     git_ops: &dyn GitOperations,
     context: CommitNavigationContext,
 ) -> Result<TimeTravelState, GitOperationError> {
-    let commit_sha = CommitSha::new(context.sha.clone());
-    let repo_file_path = RepoFilePath::new(context.file_path.clone());
-
     // Get commit snapshot with file content
-    let snapshot = git_ops.get_commit_snapshot(&commit_sha, Some(&repo_file_path))?;
+    let snapshot = git_ops.get_commit_snapshot(&context.sha, Some(&context.file_path))?;
 
     // Verify line mapping if we have a line number and HEAD
     let line_mapping = if let (Some(line), Some(head)) = (context.original_line, &context.head_sha)
     {
         let request = LineMappingRequest::new(
-            context.sha.clone(),
+            context.sha.as_str().to_owned(),
             head.clone(),
-            context.file_path.clone(),
+            context.file_path.as_str().to_owned(),
             line,
         );
         git_ops.verify_line_mapping(&request).ok()

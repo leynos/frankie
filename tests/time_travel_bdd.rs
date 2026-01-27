@@ -6,7 +6,9 @@ mod time_travel_support;
 use std::sync::Arc;
 
 use bubbletea_rs::Model;
-use frankie::local::{CommitMetadata, CommitSnapshot, LineMappingVerification};
+use frankie::local::{
+    CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
+};
 use frankie::tui::app::ReviewApp;
 use frankie::tui::components::test_utils::strip_ansi_codes;
 use frankie::tui::messages::AppMsg;
@@ -33,15 +35,15 @@ fn default_comment() -> frankie::github::models::ReviewComment {
 #[expect(clippy::expect_used, reason = "Test helper asserting valid index")]
 fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
     let commit_history = vec![
-        "abc1234567890".to_owned(),
-        "def5678901234".to_owned(),
-        "ghi9012345678".to_owned(),
+        CommitSha::new("abc1234567890".to_owned()),
+        CommitSha::new("def5678901234".to_owned()),
+        CommitSha::new("ghi9012345678".to_owned()),
     ];
     let sha = commit_history.get(index).cloned().expect(
         "invalid commit index for commit_history in create_mock_time_travel_state_at_index",
     );
     let metadata = CommitMetadata::new(
-        sha,
+        sha.as_str().to_owned(),
         "Fix login validation".to_owned(),
         "Alice".to_owned(),
         chrono::Utc::now(),
@@ -54,7 +56,7 @@ fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
     let line_mapping = Some(LineMappingVerification::exact(42));
     TimeTravelState::new(TimeTravelInitParams {
         snapshot,
-        file_path: "src/auth.rs".to_owned(),
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
         original_line: Some(42),
         line_mapping,
         commit_history,
@@ -185,11 +187,13 @@ fn given_commit_not_found(state: &TimeTravelTestState) {
     )]);
 }
 
+#[expect(
+    unused_variables,
+    reason = "Fixture required by BDD framework but unused in this step"
+)]
 #[given("the line mapping shows exact match")]
 fn given_line_mapping_exact(state: &TimeTravelTestState) {
     // Default mock already returns exact match - no setup needed
-    // Binding is required by rstest_bdd macro
-    let _ = state;
 }
 
 #[given("the line mapping shows line moved from {from} to {to}")]

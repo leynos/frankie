@@ -6,7 +6,9 @@
 use super::*;
 use crate::github::models::ReviewComment;
 use crate::github::models::test_support::minimal_review;
-use crate::local::{CommitMetadata, CommitSnapshot, LineMappingVerification};
+use crate::local::{
+    CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
+};
 use chrono::Utc;
 use mockall::mock;
 
@@ -72,8 +74,8 @@ fn time_travel_params_from_comment() {
     };
 
     let params = TimeTravelParams::from_comment(&comment).unwrap();
-    assert_eq!(params.commit_sha, "abc123");
-    assert_eq!(params.file_path, "src/main.rs");
+    assert_eq!(params.commit_sha.as_str(), "abc123");
+    assert_eq!(params.file_path.as_str(), "src/main.rs");
     assert_eq!(params.line_number, Some(42));
 }
 
@@ -118,15 +120,15 @@ fn load_time_travel_state_success() {
         .returning(|request| Ok(LineMappingVerification::exact(request.line)));
 
     let params = TimeTravelParams {
-        commit_sha: "abc1234567890".to_owned(),
-        file_path: "src/main.rs".to_owned(),
+        commit_sha: CommitSha::new("abc1234567890".to_owned()),
+        file_path: RepoFilePath::new("src/main.rs".to_owned()),
         line_number: Some(10),
     };
 
     let state = load_time_travel_state(&git_ops, &params, Some("HEAD")).unwrap();
 
     assert_eq!(state.snapshot().message(), "Test commit");
-    assert_eq!(state.file_path(), "src/main.rs");
+    assert_eq!(state.file_path().as_str(), "src/main.rs");
     assert_eq!(state.original_line(), Some(10));
     assert_eq!(state.commit_count(), 2);
 }
@@ -142,8 +144,8 @@ fn load_time_travel_state_commit_not_found() {
         .returning(|sha, _file_path| Err(GitOperationError::CommitNotFound { sha: sha.clone() }));
 
     let params = TimeTravelParams {
-        commit_sha: "nonexistent".to_owned(),
-        file_path: "src/main.rs".to_owned(),
+        commit_sha: CommitSha::new("nonexistent".to_owned()),
+        file_path: RepoFilePath::new("src/main.rs".to_owned()),
         line_number: None,
     };
 

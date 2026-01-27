@@ -5,7 +5,9 @@
 //! verify line mapping correctness against git2 diffs.
 
 use crate::github::models::ReviewComment;
-use crate::local::{CommitMetadata, CommitSnapshot, LineMappingVerification};
+use crate::local::{
+    CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
+};
 
 /// Parameters for initialising a time-travel state.
 #[derive(Debug, Clone)]
@@ -13,13 +15,13 @@ pub struct TimeTravelInitParams {
     /// The commit snapshot to display.
     pub snapshot: CommitSnapshot,
     /// Path to the file being viewed.
-    pub file_path: String,
+    pub file_path: RepoFilePath,
     /// Line number from the original comment.
     pub original_line: Option<u32>,
     /// Verification of line mapping to HEAD.
     pub line_mapping: Option<LineMappingVerification>,
     /// List of commit SHAs in the history (most recent first).
-    pub commit_history: Vec<String>,
+    pub commit_history: Vec<CommitSha>,
     /// Current position in the commit history.
     pub current_index: usize,
 }
@@ -31,13 +33,13 @@ pub struct TimeTravelState {
     /// The commit snapshot being viewed.
     snapshot: CommitSnapshot,
     /// File path being viewed.
-    file_path: String,
+    file_path: RepoFilePath,
     /// Line number from the original comment.
     original_line: Option<u32>,
     /// Verification of line mapping to HEAD.
     line_mapping: Option<LineMappingVerification>,
     /// List of commit SHAs in the history (most recent first).
-    commit_history: Vec<String>,
+    commit_history: Vec<CommitSha>,
     /// Current index in the commit history.
     current_index: usize,
     /// Whether the state is currently loading.
@@ -65,7 +67,7 @@ impl TimeTravelState {
 
     /// Creates a loading placeholder state.
     #[must_use]
-    pub(crate) fn loading(file_path: String, original_line: Option<u32>) -> Self {
+    pub(crate) fn loading(file_path: RepoFilePath, original_line: Option<u32>) -> Self {
         let metadata = CommitMetadata::new(
             String::new(),
             "Loading...".to_owned(),
@@ -86,11 +88,8 @@ impl TimeTravelState {
 
     /// Creates an error state.
     #[must_use]
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Used in tests and planned for error handling")
-    )]
-    pub(crate) fn error(message: String, file_path: String) -> Self {
+    #[cfg(test)]
+    pub(crate) fn error(message: String, file_path: RepoFilePath) -> Self {
         let metadata = CommitMetadata::new(
             String::new(),
             String::new(),
@@ -117,7 +116,7 @@ impl TimeTravelState {
 
     /// Returns the file path being viewed.
     #[must_use]
-    pub(crate) fn file_path(&self) -> &str {
+    pub(crate) const fn file_path(&self) -> &RepoFilePath {
         &self.file_path
     }
 
@@ -135,7 +134,7 @@ impl TimeTravelState {
 
     /// Returns the commit history.
     #[must_use]
-    pub(crate) fn commit_history(&self) -> &[String] {
+    pub(crate) fn commit_history(&self) -> &[CommitSha] {
         &self.commit_history
     }
 
@@ -159,15 +158,13 @@ impl TimeTravelState {
 
     /// Returns the total number of commits in history.
     #[must_use]
-    #[expect(clippy::missing_const_for_fn, reason = "Vec::len is not const-stable")]
-    pub(crate) fn commit_count(&self) -> usize {
+    pub(crate) const fn commit_count(&self) -> usize {
         self.commit_history.len()
     }
 
     /// Returns whether navigation to the previous commit is possible.
     #[must_use]
-    #[expect(clippy::missing_const_for_fn, reason = "Vec::len is not const-stable")]
-    pub(crate) fn can_go_previous(&self) -> bool {
+    pub(crate) const fn can_go_previous(&self) -> bool {
         !self.loading && self.current_index + 1 < self.commit_history.len()
     }
 
@@ -205,11 +202,9 @@ impl TimeTravelState {
 
     /// Returns the SHA of the next (more recent) commit, if available.
     #[must_use]
-    pub(crate) fn next_commit_sha(&self) -> Option<&str> {
+    pub(crate) fn next_commit_sha(&self) -> Option<&CommitSha> {
         if self.current_index > 0 {
-            self.commit_history
-                .get(self.current_index - 1)
-                .map(String::as_str)
+            self.commit_history.get(self.current_index - 1)
         } else {
             None
         }
@@ -217,10 +212,8 @@ impl TimeTravelState {
 
     /// Returns the SHA of the previous (older) commit, if available.
     #[must_use]
-    pub(crate) fn previous_commit_sha(&self) -> Option<&str> {
-        self.commit_history
-            .get(self.current_index + 1)
-            .map(String::as_str)
+    pub(crate) fn previous_commit_sha(&self) -> Option<&CommitSha> {
+        self.commit_history.get(self.current_index + 1)
     }
 }
 
@@ -228,9 +221,9 @@ impl TimeTravelState {
 #[derive(Debug, Clone)]
 pub(crate) struct TimeTravelParams {
     /// The commit SHA where the comment was made.
-    pub(crate) commit_sha: String,
+    pub(crate) commit_sha: CommitSha,
     /// Path to the file.
-    pub(crate) file_path: String,
+    pub(crate) file_path: RepoFilePath,
     /// Line number in the file.
     pub(crate) line_number: Option<u32>,
 }
@@ -245,8 +238,8 @@ impl TimeTravelParams {
         let file_path = comment.file_path.as_ref()?;
 
         Some(Self {
-            commit_sha: commit_sha.clone(),
-            file_path: file_path.clone(),
+            commit_sha: CommitSha::new(commit_sha.clone()),
+            file_path: RepoFilePath::new(file_path.clone()),
             line_number: comment.line_number.or(comment.original_line_number),
         })
     }

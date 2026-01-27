@@ -238,7 +238,9 @@ mod tests {
     use rstest::{fixture, rstest};
 
     use super::*;
-    use crate::local::{CommitMetadata, CommitSnapshot, LineMappingVerification};
+    use crate::local::{
+        CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
+    };
     use crate::tui::state::TimeTravelInitParams;
 
     /// Creates a standard context with common settings.
@@ -272,10 +274,13 @@ mod tests {
 
         TimeTravelState::new(TimeTravelInitParams {
             snapshot,
-            file_path: "src/auth.rs".to_owned(),
+            file_path: RepoFilePath::new("src/auth.rs".to_owned()),
             original_line: Some(2),
             line_mapping: Some(LineMappingVerification::exact(2)),
-            commit_history: vec!["abc1234567890".to_owned(), "def5678901234".to_owned()],
+            commit_history: vec![
+                CommitSha::new("abc1234567890".to_owned()),
+                CommitSha::new("def5678901234".to_owned()),
+            ],
             current_index: 0,
         })
     }
@@ -341,7 +346,7 @@ mod tests {
 
     #[test]
     fn view_shows_loading() {
-        let state = TimeTravelState::loading("src/main.rs".to_owned(), Some(10));
+        let state = TimeTravelState::loading(RepoFilePath::new("src/main.rs".to_owned()), Some(10));
         let output = render_view_with_state(&state);
 
         assert!(output.contains(LOADING_PLACEHOLDER));
@@ -349,7 +354,10 @@ mod tests {
 
     #[test]
     fn view_shows_error() {
-        let state = TimeTravelState::error("Commit not found".to_owned(), "src/main.rs".to_owned());
+        let state = TimeTravelState::error(
+            "Commit not found".to_owned(),
+            RepoFilePath::new("src/main.rs".to_owned()),
+        );
         let output = render_view_with_state(&state);
 
         assert!(output.contains("Error: Commit not found"));
@@ -373,10 +381,10 @@ mod tests {
         // Target line 3 (the "third" line)
         let state = TimeTravelState::new(TimeTravelInitParams {
             snapshot,
-            file_path: "test.rs".to_owned(),
+            file_path: RepoFilePath::new("test.rs".to_owned()),
             original_line: Some(3),
             line_mapping: None,
-            commit_history: vec!["abc1234567890".to_owned()],
+            commit_history: vec![CommitSha::new("abc1234567890".to_owned())],
             current_index: 0,
         });
 

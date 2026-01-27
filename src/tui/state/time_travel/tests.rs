@@ -3,8 +3,6 @@
 //! These tests verify the `TimeTravelState` struct's navigation logic,
 //! loading/error states, and parameter extraction from review comments.
 
-#![expect(clippy::unwrap_used, reason = "Test assertions panic on failure")]
-
 use chrono::Utc;
 use rstest::{fixture, rstest};
 
@@ -15,60 +13,64 @@ use crate::local::LineMappingStatus;
 
 /// Expected navigation properties for test assertions.
 #[derive(Debug, Clone)]
-struct ExpectedNavigation<'a> {
+struct ExpectedNavigation {
     can_previous: bool,
     can_next: bool,
-    next_sha: Option<&'a str>,
-    prev_sha: Option<&'a str>,
+    next_sha: Option<CommitSha>,
+    prev_sha: Option<CommitSha>,
 }
 
-impl<'a> ExpectedNavigation<'a> {
+impl ExpectedNavigation {
     /// Returns navigation state at index 0 (can go previous, cannot go next).
-    const fn at_newest(prev_sha: &'a str) -> Self {
+    fn at_newest(prev_sha: &str) -> Self {
         Self {
             can_previous: true,
             can_next: false,
             next_sha: None,
-            prev_sha: Some(prev_sha),
+            prev_sha: Some(CommitSha::new(prev_sha.to_owned())),
         }
     }
 
     /// Returns navigation state in the middle (can go both ways).
-    const fn at_middle(next_sha: &'a str, prev_sha: &'a str) -> Self {
+    fn at_middle(next_sha: &str, prev_sha: &str) -> Self {
         Self {
             can_previous: true,
             can_next: true,
-            next_sha: Some(next_sha),
-            prev_sha: Some(prev_sha),
+            next_sha: Some(CommitSha::new(next_sha.to_owned())),
+            prev_sha: Some(CommitSha::new(prev_sha.to_owned())),
         }
     }
 
     /// Returns navigation state at last index (cannot go previous, can go next).
-    const fn at_oldest(next_sha: &'a str) -> Self {
+    fn at_oldest(next_sha: &str) -> Self {
         Self {
             can_previous: false,
             can_next: true,
-            next_sha: Some(next_sha),
+            next_sha: Some(CommitSha::new(next_sha.to_owned())),
             prev_sha: None,
         }
     }
 
     /// Returns navigation state when loading (cannot navigate either way).
-    const fn blocked(prev_sha: Option<&'a str>) -> Self {
+    fn blocked(prev_sha: Option<&str>) -> Self {
         Self {
             can_previous: false,
             can_next: false,
             next_sha: None,
-            prev_sha,
+            prev_sha: prev_sha.map(|s| CommitSha::new(s.to_owned())),
         }
     }
 }
 
 /// Creates a `TimeTravelState` at the specified commit index.
-fn state_at_index(snapshot: CommitSnapshot, history: Vec<String>, index: usize) -> TimeTravelState {
+fn state_at_index(
+    snapshot: CommitSnapshot,
+    history: Vec<CommitSha>,
+    index: usize,
+) -> TimeTravelState {
     TimeTravelState::new(TimeTravelInitParams {
         snapshot,
-        file_path: "src/auth.rs".to_owned(),
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
         original_line: None,
         line_mapping: None,
         commit_history: history,
@@ -77,11 +79,11 @@ fn state_at_index(snapshot: CommitSnapshot, history: Vec<String>, index: usize) 
 }
 
 /// Asserts all navigation-related properties of a `TimeTravelState`.
-fn assert_navigation(state: &TimeTravelState, expected: &ExpectedNavigation<'_>) {
+fn assert_navigation(state: &TimeTravelState, expected: &ExpectedNavigation) {
     assert_eq!(state.can_go_previous(), expected.can_previous);
     assert_eq!(state.can_go_next(), expected.can_next);
-    assert_eq!(state.next_commit_sha(), expected.next_sha);
-    assert_eq!(state.previous_commit_sha(), expected.prev_sha);
+    assert_eq!(state.next_commit_sha(), expected.next_sha.as_ref());
+    assert_eq!(state.previous_commit_sha(), expected.prev_sha.as_ref());
 }
 
 #[fixture]
@@ -100,19 +102,19 @@ fn sample_snapshot() -> CommitSnapshot {
 }
 
 #[fixture]
-fn sample_history() -> Vec<String> {
+fn sample_history() -> Vec<CommitSha> {
     vec![
-        "abc1234567890".to_owned(),
-        "def5678901234".to_owned(),
-        "ghi9012345678".to_owned(),
+        CommitSha::new("abc1234567890".to_owned()),
+        CommitSha::new("def5678901234".to_owned()),
+        CommitSha::new("ghi9012345678".to_owned()),
     ]
 }
 
 #[rstest]
-fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
+fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let state = TimeTravelState::new(TimeTravelInitParams {
         snapshot: sample_snapshot.clone(),
-        file_path: "src/auth.rs".to_owned(),
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
         original_line: Some(42),
         line_mapping: None,
         commit_history: sample_history.clone(),
@@ -120,7 +122,7 @@ fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<St
     });
 
     assert_eq!(state.snapshot().sha(), sample_snapshot.sha());
-    assert_eq!(state.file_path(), "src/auth.rs");
+    assert_eq!(state.file_path().as_str(), "src/auth.rs");
     assert_eq!(state.original_line(), Some(42));
     assert!(state.line_mapping().is_none());
     assert_eq!(state.commit_count(), 3);
@@ -131,24 +133,27 @@ fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<St
 
 #[rstest]
 fn loading_state() {
-    let state = TimeTravelState::loading("src/main.rs".to_owned(), Some(10));
+    let state = TimeTravelState::loading(RepoFilePath::new("src/main.rs".to_owned()), Some(10));
 
     assert!(state.is_loading());
     assert_eq!(state.snapshot().message(), "Loading...");
-    assert_eq!(state.file_path(), "src/main.rs");
+    assert_eq!(state.file_path().as_str(), "src/main.rs");
     assert_eq!(state.original_line(), Some(10));
 }
 
 #[rstest]
 fn error_state() {
-    let state = TimeTravelState::error("Commit not found".to_owned(), "src/lib.rs".to_owned());
+    let state = TimeTravelState::error(
+        "Commit not found".to_owned(),
+        RepoFilePath::new("src/lib.rs".to_owned()),
+    );
 
     assert!(!state.is_loading());
     assert_eq!(state.error_message(), Some("Commit not found"));
 }
 
 #[rstest]
-fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
+fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let state = state_at_index(sample_snapshot, sample_history, 0);
 
     // At index 0 (most recent): can go previous, cannot go next
@@ -156,7 +161,7 @@ fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<Str
 }
 
 #[rstest]
-fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
+fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let state = state_at_index(sample_snapshot, sample_history, 1);
 
     // At index 1 (middle): can go both ways
@@ -167,7 +172,7 @@ fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<Str
 }
 
 #[rstest]
-fn navigation_at_oldest(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
+fn navigation_at_oldest(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let state = state_at_index(sample_snapshot, sample_history, 2);
 
     // At index 2 (oldest): cannot go previous, can go next
@@ -175,7 +180,7 @@ fn navigation_at_oldest(sample_snapshot: CommitSnapshot, sample_history: Vec<Str
 }
 
 #[rstest]
-fn loading_blocks_navigation(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
+fn loading_blocks_navigation(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let mut state = state_at_index(sample_snapshot, sample_history, 0);
     state.set_loading(true);
 
@@ -183,10 +188,10 @@ fn loading_blocks_navigation(sample_snapshot: CommitSnapshot, sample_history: Ve
 }
 
 #[rstest]
-fn update_snapshot_clamps_index(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
+fn update_snapshot_clamps_index(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let mut state = TimeTravelState::new(TimeTravelInitParams {
         snapshot: sample_snapshot.clone(),
-        file_path: "src/auth.rs".to_owned(),
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
         original_line: None,
         line_mapping: None,
         commit_history: sample_history,
@@ -209,10 +214,11 @@ fn params_from_comment_full() {
         ..minimal_review(1, "Test comment", "alice")
     };
 
-    let params = TimeTravelParams::from_comment(&comment).unwrap();
+    let params = TimeTravelParams::from_comment(&comment)
+        .expect("TimeTravelParams should be extractable from comment with full metadata");
 
-    assert_eq!(params.commit_sha, "abc123");
-    assert_eq!(params.file_path, "src/main.rs");
+    assert_eq!(params.commit_sha.as_str(), "abc123");
+    assert_eq!(params.file_path.as_str(), "src/main.rs");
     assert_eq!(params.line_number, Some(42)); // Prefers line_number
 }
 
@@ -226,7 +232,8 @@ fn params_from_comment_original_line() {
         ..minimal_review(1, "Test comment", "alice")
     };
 
-    let params = TimeTravelParams::from_comment(&comment).unwrap();
+    let params = TimeTravelParams::from_comment(&comment)
+        .expect("TimeTravelParams should be extractable from comment with original line");
 
     assert_eq!(params.line_number, Some(40)); // Falls back to original_line_number
 }
@@ -254,18 +261,20 @@ fn params_from_comment_missing_path() {
 }
 
 #[rstest]
-fn line_mapping_stored(sample_snapshot: CommitSnapshot, sample_history: Vec<String>) {
+fn line_mapping_stored(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let mapping = LineMappingVerification::moved(42, 50);
     let state = TimeTravelState::new(TimeTravelInitParams {
         snapshot: sample_snapshot,
-        file_path: "src/auth.rs".to_owned(),
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
         original_line: Some(42),
         line_mapping: Some(mapping.clone()),
         commit_history: sample_history,
         current_index: 0,
     });
 
-    let stored = state.line_mapping().unwrap();
+    let stored = state
+        .line_mapping()
+        .expect("Line mapping should be stored in state");
     assert_eq!(stored.status(), LineMappingStatus::Moved);
     assert_eq!(stored.original_line(), 42);
     assert_eq!(stored.current_line(), Some(50));
