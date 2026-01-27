@@ -73,7 +73,8 @@ fn time_travel_params_from_comment() {
         ..minimal_review(1, "Test", "alice")
     };
 
-    let params = TimeTravelParams::from_comment(&comment).unwrap();
+    let params = TimeTravelParams::from_comment(&comment)
+        .expect("TimeTravelParams should be extractable from comment with full metadata");
     assert_eq!(params.commit_sha.as_str(), "abc123");
     assert_eq!(params.file_path.as_str(), "src/main.rs");
     assert_eq!(params.line_number, Some(42));
@@ -125,7 +126,9 @@ fn load_time_travel_state_success() {
         line_number: Some(10),
     };
 
-    let state = load_time_travel_state(&git_ops, &params, Some("HEAD")).unwrap();
+    let head_sha = CommitSha::new("HEAD".to_owned());
+    let state = load_time_travel_state(&git_ops, &params, Some(&head_sha))
+        .expect("load_time_travel_state should succeed with valid mock setup");
 
     assert_eq!(state.snapshot().message(), "Test commit");
     assert_eq!(state.file_path().as_str(), "src/main.rs");

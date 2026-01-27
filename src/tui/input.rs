@@ -143,16 +143,11 @@ mod tests {
         // Compare enum variants using discriminant
         match (result, expected) {
             (Some(r), Some(e)) => {
-                assert_eq!(
-                    std::mem::discriminant(&r),
-                    std::mem::discriminant(&e),
-                    "Expected {e:?}, got {r:?}"
-                );
+                assert_eq!(std::mem::discriminant(&r), std::mem::discriminant(&e));
             }
             (None, None) => {}
-            (r, e) => {
-                assert_eq!(r.is_some(), e.is_some(), "Expected {e:?}, got {r:?}");
-            }
+            (Some(_), None) => panic!("Expected None, got Some"),
+            (None, Some(_)) => panic!("Expected Some, got None"),
         }
     }
 }

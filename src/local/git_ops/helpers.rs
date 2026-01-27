@@ -194,6 +194,15 @@ pub(super) fn compute_line_offset_from_hunks(
 }
 
 /// Creates the appropriate line mapping result from offset and deletion state.
+///
+/// # Fallback Behaviour for Extreme Line Numbers
+///
+/// The calculation `original_line + line_offset` uses `i32` arithmetic internally.
+/// If the line number exceeds `i32::MAX` (≈2 billion), conversion fails and falls
+/// back to treating the line as unchanged. Similarly, if the resulting line would
+/// be negative or exceed `u32::MAX`, it falls back to `original_line`. These cases
+/// are unrealistic in practice (source files never have billions of lines) but are
+/// handled gracefully rather than panicking.
 pub(super) fn create_line_mapping_result(
     original_line: u32,
     line_offset: i32,
@@ -203,6 +212,8 @@ pub(super) fn create_line_mapping_result(
         return LineMappingVerification::deleted(original_line);
     }
 
+    // Fallback: if original_line > i32::MAX or the result overflows u32,
+    // treat the line as unchanged rather than panicking.
     let new_line = u32::try_from(i32::try_from(original_line).unwrap_or(0) + line_offset)
         .unwrap_or(original_line);
 

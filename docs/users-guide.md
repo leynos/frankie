@@ -266,7 +266,7 @@ Line mapping verification shows one of these statuses:
 
 #### Navigating commits
 
-While in time-travel mode, use `h` and `l` to navigate through the commit
+While in time-travel mode, the `h` and `l` keys navigate through the commit
 history:
 
 - `h` moves to the previous (older) commit

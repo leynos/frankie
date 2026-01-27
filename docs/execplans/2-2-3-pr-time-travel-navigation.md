@@ -28,7 +28,7 @@ commits, and behavioural tests cover all scenarios.
 - Every new module begins with a `//!` module-level comment.
 - No single file may exceed 400 lines; split into feature-focused modules if
   needed.
-- Use `rstest` for unit tests and `rstest-bdd` v0.3.2 for behavioural tests.
+- Use `rstest` for unit tests and `rstest-bdd` v0.4.0 for behavioural tests.
 - Use `git2` for Git operations (not shell commands).
 - Use dependency injection (`GitOperations` trait) for testability.
 - Any filesystem access must use `cap_std`, `cap_std::fs_utf8`, and `camino`.

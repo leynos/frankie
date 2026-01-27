@@ -63,7 +63,7 @@ struct CommitNavigationContext {
     /// Original line number from the comment.
     original_line: Option<u32>,
     /// SHA of the HEAD commit for line mapping verification.
-    head_sha: Option<String>,
+    head_sha: Option<CommitSha>,
     /// New index in the commit history.
     new_index: usize,
     /// List of commit SHAs in the history.
@@ -92,14 +92,9 @@ impl ReviewApp {
             return None;
         };
 
-        // Check if commit exists
-        if !git_ops.commit_exists(&params.commit_sha) {
-            let short_sha: String = params.commit_sha.as_str().chars().take(7).collect();
-            self.error = Some(format!("Commit {short_sha} not found in local repository"));
-            return None;
-        }
-
         // Set loading state and enter time-travel mode
+        // Note: commit existence is verified asynchronously in load_time_travel_state,
+        // which returns CommitNotFound error via TimeTravelFailed message if needed.
         self.time_travel_state = Some(TimeTravelState::loading(
             params.file_path.clone(),
             params.line_number,
@@ -108,7 +103,7 @@ impl ReviewApp {
 
         // Spawn async task to load time-travel data
         let git_ops_clone = Arc::clone(git_ops);
-        let head_sha = self.head_sha.clone();
+        let head_sha = self.head_sha.as_ref().map(|s| CommitSha::new(s.clone()));
 
         Some(spawn_time_travel_load(git_ops_clone, params, head_sha))
     }
@@ -162,7 +157,7 @@ impl ReviewApp {
                 sha: direction.target_sha(state)?.clone(),
                 file_path: state.file_path().clone(),
                 original_line: state.original_line(),
-                head_sha: self.head_sha.clone(),
+                head_sha: self.head_sha.as_ref().map(|s| CommitSha::new(s.clone())),
                 new_index: direction.calculate_index(state.current_index()),
                 commit_history: state.commit_history().to_vec(),
             }
@@ -208,11 +203,11 @@ where
 fn spawn_time_travel_load(
     git_ops: Arc<dyn GitOperations>,
     params: TimeTravelParams,
-    head_sha: Option<String>,
+    head_sha: Option<CommitSha>,
 ) -> Cmd {
     spawn_load_task(
         git_ops,
-        move |ops| load_time_travel_state(ops, &params, head_sha.as_deref()),
+        move |ops| load_time_travel_state(ops, &params, head_sha.as_ref()),
         |state| AppMsg::TimeTravelLoaded(Box::new(state)),
     )
 }
@@ -229,11 +224,36 @@ fn spawn_commit_navigation(
     )
 }
 
+/// Verifies line mapping between a commit and HEAD.
+///
+/// Returns `None` if either `original_line` or `head_sha` is `None`, or if
+/// the verification fails.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Simple internal helper; introducing a struct would add more complexity than it removes"
+)]
+fn verify_line_mapping_optional(
+    git_ops: &dyn GitOperations,
+    commit_sha: &CommitSha,
+    file_path: &RepoFilePath,
+    original_line: Option<u32>,
+    head_sha: Option<&CommitSha>,
+) -> Option<crate::local::LineMappingVerification> {
+    let (line, head) = original_line.zip(head_sha)?;
+    let request = LineMappingRequest::new(
+        commit_sha.as_str().to_owned(),
+        head.as_str().to_owned(),
+        file_path.as_str().to_owned(),
+        line,
+    );
+    git_ops.verify_line_mapping(&request).ok()
+}
+
 /// Loads the initial time-travel state for a comment.
 fn load_time_travel_state(
     git_ops: &dyn GitOperations,
     params: &TimeTravelParams,
-    head_sha: Option<&str>,
+    head_sha: Option<&CommitSha>,
 ) -> Result<TimeTravelState, GitOperationError> {
     // Get commit snapshot with file content
     let snapshot = git_ops.get_commit_snapshot(&params.commit_sha, Some(&params.file_path))?;
@@ -242,17 +262,13 @@ fn load_time_travel_state(
     let commit_history = git_ops.get_parent_commits(&params.commit_sha, COMMIT_HISTORY_LIMIT)?;
 
     // Verify line mapping if we have a line number and HEAD
-    let line_mapping = if let (Some(line), Some(head)) = (params.line_number, head_sha) {
-        let request = LineMappingRequest::new(
-            params.commit_sha.as_str().to_owned(),
-            head.to_owned(),
-            params.file_path.as_str().to_owned(),
-            line,
-        );
-        git_ops.verify_line_mapping(&request).ok()
-    } else {
-        None
-    };
+    let line_mapping = verify_line_mapping_optional(
+        git_ops,
+        &params.commit_sha,
+        &params.file_path,
+        params.line_number,
+        head_sha,
+    );
 
     Ok(TimeTravelState::new(TimeTravelInitParams {
         snapshot,
@@ -273,18 +289,13 @@ fn load_commit_snapshot(
     let snapshot = git_ops.get_commit_snapshot(&context.sha, Some(&context.file_path))?;
 
     // Verify line mapping if we have a line number and HEAD
-    let line_mapping = if let (Some(line), Some(head)) = (context.original_line, &context.head_sha)
-    {
-        let request = LineMappingRequest::new(
-            context.sha.as_str().to_owned(),
-            head.clone(),
-            context.file_path.as_str().to_owned(),
-            line,
-        );
-        git_ops.verify_line_mapping(&request).ok()
-    } else {
-        None
-    };
+    let line_mapping = verify_line_mapping_optional(
+        git_ops,
+        &context.sha,
+        &context.file_path,
+        context.original_line,
+        context.head_sha.as_ref(),
+    );
 
     Ok(TimeTravelState::new(TimeTravelInitParams {
         snapshot,
@@ -297,7 +308,6 @@ fn load_commit_snapshot(
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, reason = "Tests panic on failure")]
 #[expect(
     clippy::ref_option_ref,
     reason = "Generated by mockall macro for Option<&T> parameters"
