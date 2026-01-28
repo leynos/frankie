@@ -8,8 +8,8 @@
     reason = "Test assertions are expected to panic on failure"
 )]
 
-use std::fs;
-use std::path::Path;
+use camino::Utf8Path;
+use cap_std::fs_utf8 as fs;
 
 use git2::{Oid, Repository};
 use rstest::{fixture, rstest};
@@ -45,16 +45,21 @@ fn create_commit(
     let sig = repo.signature()?;
     let mut index = repo.index()?;
 
+    let workdir = repo
+        .workdir()
+        .ok_or("repository has no working directory")?;
+    let workdir_str = workdir.to_str().ok_or("workdir path is not valid UTF-8")?;
+    let dir = fs::Dir::open_ambient_dir(workdir_str, cap_std::ambient_authority())?;
+
     for (path, content) in files {
-        let full_path = repo
-            .workdir()
-            .ok_or("repository has no working directory")?
-            .join(path);
-        if let Some(parent) = full_path.parent() {
-            fs::create_dir_all(parent)?;
+        let utf8_path = Utf8Path::new(path);
+        if let Some(parent) = utf8_path.parent()
+            && !parent.as_str().is_empty()
+        {
+            dir.create_dir_all(parent)?;
         }
-        fs::write(&full_path, content)?;
-        index.add_path(Path::new(path))?;
+        dir.write(utf8_path, content)?;
+        index.add_path(utf8_path.as_std_path())?;
     }
 
     let tree_id = index.write_tree()?;
@@ -84,7 +89,10 @@ where
 
     let result = operation(&ops, &param);
 
-    let err = result.expect_err("operation must fail");
+    let Err(err) = result else {
+        drop(dir);
+        return Err("operation must fail but succeeded".into());
+    };
     drop(dir);
     Ok(err)
 }

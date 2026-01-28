@@ -33,6 +33,8 @@ syntect = "5.2.0"
 
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
+camino = "1.1.9"
+cap-std = { version = "4.0.0", features = ["fs_utf8"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"
 rstest = "0.22.0"
