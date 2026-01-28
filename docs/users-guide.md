@@ -168,6 +168,8 @@ comments.
 
 #### Time-travel mode keyboard shortcuts
 
+Navigate through commit history:
+
 | Key   | Action                              |
 | ----- | ----------------------------------- |
 | `h`   | Navigate to previous (older) commit |

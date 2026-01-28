@@ -32,16 +32,16 @@ fn default_comment() -> frankie::github::models::ReviewComment {
 }
 
 /// Creates a mock time-travel state for testing at a specific history index.
-#[expect(clippy::expect_used, reason = "Test helper asserting valid index")]
-fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
+fn create_mock_time_travel_state_at_index(index: usize) -> Result<TimeTravelState, StepError> {
     let commit_history = vec![
         CommitSha::new("abc1234567890".to_owned()),
         CommitSha::new("def5678901234".to_owned()),
         CommitSha::new("ghi9012345678".to_owned()),
     ];
-    let sha = commit_history.get(index).cloned().expect(
-        "invalid commit index for commit_history in create_mock_time_travel_state_at_index",
-    );
+    let sha = commit_history
+        .get(index)
+        .cloned()
+        .ok_or("invalid commit index for commit_history")?;
     let metadata = CommitMetadata::new(
         sha.as_str().to_owned(),
         "Fix login validation".to_owned(),
@@ -54,18 +54,18 @@ fn create_mock_time_travel_state_at_index(index: usize) -> TimeTravelState {
         "fn login() {\n    // validation\n}".to_owned(),
     );
     let line_mapping = Some(LineMappingVerification::exact(42));
-    TimeTravelState::new(TimeTravelInitParams {
+    Ok(TimeTravelState::new(TimeTravelInitParams {
         snapshot,
         file_path: RepoFilePath::new("src/auth.rs".to_owned()),
         original_line: Some(42),
         line_mapping,
         commit_history,
         current_index: index,
-    })
+    }))
 }
 
 /// Creates a mock time-travel state for testing.
-fn create_mock_time_travel_state() -> TimeTravelState {
+fn create_mock_time_travel_state() -> Result<TimeTravelState, StepError> {
     create_mock_time_travel_state_at_index(0)
 }
 
@@ -213,7 +213,7 @@ fn given_line_mapping_deleted(state: &TimeTravelTestState, line: u32) {
 #[given("time-travel mode is entered for the selected comment")]
 #[when("time-travel mode is entered for the selected comment")]
 fn time_travel_entered(state: &TimeTravelTestState) -> StepResult {
-    let mock_state = create_mock_time_travel_state();
+    let mock_state = create_mock_time_travel_state()?;
     state.handle_with_callback(
         &AppMsg::EnterTimeTravel,
         Some(AppMsg::TimeTravelLoaded(Box::new(mock_state))),
@@ -223,7 +223,7 @@ fn time_travel_entered(state: &TimeTravelTestState) -> StepResult {
 #[given("the previous commit is navigated to")]
 #[when("the previous commit is navigated to")]
 fn previous_commit(state: &TimeTravelTestState) -> StepResult {
-    let mock_state = create_mock_time_travel_state_at_index(1);
+    let mock_state = create_mock_time_travel_state_at_index(1)?;
     state.handle_with_callback(
         &AppMsg::PreviousCommit,
         Some(AppMsg::CommitNavigated(Box::new(mock_state))),
@@ -232,7 +232,7 @@ fn previous_commit(state: &TimeTravelTestState) -> StepResult {
 
 #[when("the next commit is navigated to")]
 fn when_next_commit(state: &TimeTravelTestState) -> StepResult {
-    let mock_state = create_mock_time_travel_state_at_index(0);
+    let mock_state = create_mock_time_travel_state_at_index(0)?;
     state.handle_with_callback(
         &AppMsg::NextCommit,
         Some(AppMsg::CommitNavigated(Box::new(mock_state))),
@@ -309,6 +309,10 @@ fn then_view_shows_line_deleted(state: &TimeTravelTestState) -> StepResult {
 }
 
 // Scenario bindings
+
+// Scenario bindings - the `state` parameter is consumed by the rstest_bdd macro
+// to wire up the BDD steps. The `let _ = state;` pattern suppresses unused
+// variable warnings while allowing the macro to use the binding.
 
 #[scenario(path = "tests/features/time_travel.feature", index = 0)]
 fn time_travel_enter_mode(state: TimeTravelTestState) {

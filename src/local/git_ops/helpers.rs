@@ -40,6 +40,14 @@ impl HunkRange {
     ///
     /// A line is considered deleted if the hunk removed more lines than it added
     /// and the line falls within the removed section.
+    ///
+    /// # Positional assumption
+    ///
+    /// This method assumes deleted lines are located at the *end* of the hunk
+    /// (starting at `start + new_lines`). In practice, deletions can occur
+    /// anywhere within a hunk—at the beginning, interleaved with additions, or
+    /// scattered throughout. This assumption aligns with the broader heuristic
+    /// limitations documented in [`compute_line_offset_from_hunks`].
     pub const fn is_line_deleted(self, line: u32) -> bool {
         if self.old_lines > self.new_lines {
             let removed_start = self.start + self.new_lines;

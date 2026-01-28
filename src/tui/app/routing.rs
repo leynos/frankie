@@ -98,8 +98,8 @@ impl ReviewApp {
             return MessageRouting::Handled(result);
         }
 
-        // EscapePressed in ReviewList mode
-        if matches!(msg, AppMsg::EscapePressed) {
+        // EscapePressed in ReviewList mode only
+        if self.view_mode == ViewMode::ReviewList && matches!(msg, AppMsg::EscapePressed) {
             return MessageRouting::Handled(self.handle_clear_filter());
         }
 

@@ -146,8 +146,9 @@ mod tests {
                 assert_eq!(std::mem::discriminant(&r), std::mem::discriminant(&e));
             }
             (None, None) => {}
-            (Some(_), None) => panic!("Expected None, got Some"),
-            (None, Some(_)) => panic!("Expected Some, got None"),
+            (r, e) => {
+                panic!("Some/None mismatch: result={r:?}, expected={e:?}");
+            }
         }
     }
 }

@@ -84,6 +84,11 @@ struct CommitNavigationContext {
 }
 
 impl ReviewApp {
+    /// Converts the stored HEAD SHA string to a `CommitSha` newtype.
+    fn head_commit_sha(&self) -> Option<CommitSha> {
+        self.head_sha.as_ref().map(|s| CommitSha::new(s.clone()))
+    }
+
     /// Handles the `EnterTimeTravel` message.
     ///
     /// Initiates loading of the time-travel state for the currently selected
@@ -116,7 +121,7 @@ impl ReviewApp {
 
         // Spawn async task to load time-travel data
         let git_ops_clone = Arc::clone(git_ops);
-        let head_sha = self.head_sha.as_ref().map(|s| CommitSha::new(s.clone()));
+        let head_sha = self.head_commit_sha();
 
         Some(spawn_time_travel_load(git_ops_clone, params, head_sha))
     }
@@ -170,7 +175,7 @@ impl ReviewApp {
                 sha: direction.target_sha(state)?.clone(),
                 file_path: state.file_path().clone(),
                 original_line: state.original_line(),
-                head_sha: self.head_sha.as_ref().map(|s| CommitSha::new(s.clone())),
+                head_sha: self.head_commit_sha(),
                 new_index: direction.calculate_index(state.current_index()),
                 commit_history: state.commit_history().to_vec(),
             }
@@ -196,6 +201,9 @@ impl ReviewApp {
 }
 
 /// Spawns an async task that loads data and maps the result to a message.
+///
+/// Uses `tokio::task::spawn_blocking` to offload synchronous git2 operations
+/// to a blocking thread pool, preventing the async executor from being stalled.
 fn spawn_load_task<T, F, L>(git_ops: Arc<dyn GitOperations>, loader: L, success_msg: F) -> Cmd
 where
     T: Send + 'static,
@@ -203,11 +211,16 @@ where
     L: FnOnce(&dyn GitOperations) -> Result<T, GitOperationError> + Send + 'static,
 {
     Box::pin(async move {
-        match loader(&*git_ops) {
-            Ok(value) => Some(Box::new(success_msg(value)) as Box<dyn Any + Send>),
-            Err(e) => {
+        let result = tokio::task::spawn_blocking(move || loader(&*git_ops)).await;
+        match result {
+            Ok(Ok(value)) => Some(Box::new(success_msg(value)) as Box<dyn Any + Send>),
+            Ok(Err(e)) => {
                 Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>)
             }
+            Err(e) => Some(
+                Box::new(AppMsg::TimeTravelFailed(format!("Task join error: {e}")))
+                    as Box<dyn Any + Send>,
+            ),
         }
     })
 }

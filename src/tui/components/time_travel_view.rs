@@ -150,12 +150,22 @@ struct LineRenderContext {
 }
 
 impl LineRenderContext {
+    /// Width of the prefix added before content: marker (1) + line number + " | " (3).
+    const fn prefix_width(&self) -> usize {
+        1 + self.line_num_width + 3
+    }
+
+    /// Returns the available width for content after accounting for the line prefix.
+    const fn content_width(&self) -> usize {
+        self.max_width.saturating_sub(self.prefix_width())
+    }
+
     /// Renders a source line (potentially wrapped) to the output.
     fn render_source_line(&self, output: &mut String, source_line: &str, source_line_num: u32) {
         let is_target = is_target_line(source_line_num, self.target_line);
         let marker = if is_target { ">" } else { " " };
 
-        let wrapped = wrap_code_block(source_line, self.max_width);
+        let wrapped = wrap_code_block(source_line, self.content_width());
         let visual_lines: Vec<&str> = wrapped.lines().collect();
 
         if visual_lines.is_empty() {

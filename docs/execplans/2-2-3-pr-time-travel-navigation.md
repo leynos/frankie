@@ -379,6 +379,8 @@ Example line mapping status indicators:
 
 ## Keyboard bindings
 
+Time-travel navigation keyboard shortcuts:
+
 | Key   | Context    | Action                                      |
 | ----- | ---------- | ------------------------------------------- |
 | `t`   | ReviewList | Enter time-travel mode for selected comment |
