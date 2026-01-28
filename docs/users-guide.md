@@ -168,7 +168,7 @@ comments.
 
 #### Time-travel mode keyboard shortcuts
 
-Navigate through commit history:
+Table: Time-travel mode keyboard shortcuts.
 
 | Key   | Action                              |
 | ----- | ----------------------------------- |

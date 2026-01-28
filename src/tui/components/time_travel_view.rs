@@ -198,19 +198,23 @@ impl LineRenderContext {
             content,
             is_first,
         } = params;
-        // Ignoring error as writing to String cannot fail
-        #[expect(
-            clippy::let_underscore_must_use,
-            reason = "Writing to String cannot fail"
-        )]
-        let _ = if *is_first {
-            writeln!(
+        // Writing to String cannot fail, so we explicitly discard the Result.
+        if *is_first {
+            #[expect(
+                clippy::let_underscore_must_use,
+                reason = "writeln! to String cannot fail"
+            )]
+            let _ = writeln!(
                 output,
                 "{marker}{source_line_num:>line_num_width$} | {content}"
-            )
+            );
         } else {
-            writeln!(output, "{marker}{:>line_num_width$} | {content}", "..")
-        };
+            #[expect(
+                clippy::let_underscore_must_use,
+                reason = "writeln! to String cannot fail"
+            )]
+            let _ = writeln!(output, "{marker}{:>line_num_width$} | {content}", "..");
+        }
     }
 }
 

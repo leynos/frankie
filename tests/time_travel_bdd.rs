@@ -309,10 +309,11 @@ fn then_view_shows_line_deleted(state: &TimeTravelTestState) -> StepResult {
 }
 
 // Scenario bindings
-
-// Scenario bindings - the `state` parameter is consumed by the rstest_bdd macro
-// to wire up the BDD steps. The `let _ = state;` pattern suppresses unused
-// variable warnings while allowing the macro to use the binding.
+//
+// The `state` parameter is consumed by the rstest_bdd macro to wire up BDD steps.
+// The `let _ = state;` pattern suppresses unused variable warnings while allowing
+// the macro to use the binding. Using `_state` prefix is not possible because
+// the macro generates code that uses the variable, triggering `used_underscore_binding`.
 
 #[scenario(path = "tests/features/time_travel.feature", index = 0)]
 fn time_travel_enter_mode(state: TimeTravelTestState) {
