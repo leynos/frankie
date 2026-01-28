@@ -18,6 +18,19 @@ use super::ReviewApp;
 /// Maximum number of commits to load in history.
 const COMMIT_HISTORY_LIMIT: usize = 50;
 
+/// Context for verifying line mapping between commits.
+#[derive(Debug, Clone)]
+struct LineMappingContext<'a> {
+    /// SHA of the commit where the line was originally referenced.
+    commit_sha: &'a CommitSha,
+    /// Path to the file being verified.
+    file_path: &'a RepoFilePath,
+    /// Original line number from the comment, if available.
+    original_line: Option<u32>,
+    /// SHA of the HEAD commit for comparison, if available.
+    head_sha: Option<&'a CommitSha>,
+}
+
 /// Direction for commit navigation in time-travel mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NavigationDirection {
@@ -228,22 +241,15 @@ fn spawn_commit_navigation(
 ///
 /// Returns `None` if either `original_line` or `head_sha` is `None`, or if
 /// the verification fails.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Simple internal helper; introducing a struct would add more complexity than it removes"
-)]
 fn verify_line_mapping_optional(
     git_ops: &dyn GitOperations,
-    commit_sha: &CommitSha,
-    file_path: &RepoFilePath,
-    original_line: Option<u32>,
-    head_sha: Option<&CommitSha>,
+    context: &LineMappingContext<'_>,
 ) -> Option<crate::local::LineMappingVerification> {
-    let (line, head) = original_line.zip(head_sha)?;
+    let (line, head) = context.original_line.zip(context.head_sha)?;
     let request = LineMappingRequest::new(
-        commit_sha.as_str().to_owned(),
+        context.commit_sha.as_str().to_owned(),
         head.as_str().to_owned(),
-        file_path.as_str().to_owned(),
+        context.file_path.as_str().to_owned(),
         line,
     );
     git_ops.verify_line_mapping(&request).ok()
@@ -264,10 +270,12 @@ fn load_time_travel_state(
     // Verify line mapping if we have a line number and HEAD
     let line_mapping = verify_line_mapping_optional(
         git_ops,
-        &params.commit_sha,
-        &params.file_path,
-        params.line_number,
-        head_sha,
+        &LineMappingContext {
+            commit_sha: &params.commit_sha,
+            file_path: &params.file_path,
+            original_line: params.line_number,
+            head_sha,
+        },
     );
 
     Ok(TimeTravelState::new(TimeTravelInitParams {
@@ -291,10 +299,12 @@ fn load_commit_snapshot(
     // Verify line mapping if we have a line number and HEAD
     let line_mapping = verify_line_mapping_optional(
         git_ops,
-        &context.sha,
-        &context.file_path,
-        context.original_line,
-        context.head_sha.as_ref(),
+        &LineMappingContext {
+            commit_sha: &context.sha,
+            file_path: &context.file_path,
+            original_line: context.original_line,
+            head_sha: context.head_sha.as_ref(),
+        },
     );
 
     Ok(TimeTravelState::new(TimeTravelInitParams {
