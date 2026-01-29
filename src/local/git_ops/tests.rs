@@ -11,7 +11,7 @@
 use camino::Utf8Path;
 use cap_std::fs_utf8 as fs;
 
-use git2::{Oid, Repository};
+use git2::{ErrorCode, Oid, Repository};
 use rstest::{fixture, rstest};
 use tempfile::TempDir;
 
@@ -65,7 +65,13 @@ fn create_commit(
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
 
-    let parent = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    // Determine the parent commit, treating UnbornBranch as "no parent"
+    // while propagating other errors upward.
+    let parent: Option<git2::Commit<'_>> = match repo.head() {
+        Ok(head_ref) => Some(head_ref.peel_to_commit()?),
+        Err(e) if e.code() == ErrorCode::UnbornBranch => None,
+        Err(e) => return Err(e.into()),
+    };
 
     let parents: Vec<&git2::Commit<'_>> = parent.iter().collect();
 
