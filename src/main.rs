@@ -33,6 +33,7 @@ async fn run() -> Result<(), IntakeError> {
         OperationMode::RepositoryListing => cli::repository_listing::run(&config).await,
         OperationMode::Interactive => cli::interactive::run(&config).await,
         OperationMode::ReviewTui => cli::review_tui::run(&config).await,
+        OperationMode::ExportComments => cli::export_comments::run(&config).await,
     }
 }
 

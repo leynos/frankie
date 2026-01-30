@@ -12,7 +12,7 @@ including loading individual pull requests and listing PRs for a repository.
 
 ## Operation modes
 
-Frankie supports four operation modes:
+Frankie supports five operation modes:
 
 1. **Interactive mode** — Auto-detect repository from local Git directory
 2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
@@ -20,6 +20,8 @@ Frankie supports four operation modes:
    `--repo`
 4. **Review TUI mode** — Interactive terminal interface for navigating and
    filtering review comments using `--tui` with `--pr-url`
+5. **Comment export mode** — Export review comments in structured formats using
+   `--export` with `--pr-url`
 
 ## Interactive mode (local discovery)
 
@@ -295,6 +297,90 @@ explaining what is missing.
 - **Commit not found** — Displays "Commit not found in local repository. The
   commit may have been force-pushed away."
 
+## Comment export mode
+
+Export review comments in structured formats for downstream processing by AI
+tools or human review:
+
+```bash
+frankie --pr-url https://github.com/owner/repo/pull/123 --export markdown
+```
+
+### Export formats
+
+Frankie supports two export formats:
+
+- **Markdown** (`--export markdown`) — Human-readable format with code blocks
+  and syntax highlighting hints
+- **JSONL** (`--export jsonl`) — Machine-readable format with one JSON object
+  per line
+
+### Output destination
+
+By default, exported content is written to stdout. Use `--output` to write to a
+file instead:
+
+```bash
+# Export to stdout
+frankie --pr-url https://github.com/owner/repo/pull/123 --export markdown
+
+# Export to file
+frankie --pr-url https://github.com/owner/repo/pull/123 --export jsonl --output comments.jsonl
+```
+
+### Stable ordering
+
+Comments are sorted in a stable, deterministic order:
+
+1. By file path (alphabetically, missing paths sorted last)
+2. By line number (ascending, missing line numbers sorted last)
+3. By comment ID (ascending, for tie-breaking)
+
+This ensures consistent output across runs for the same PR state.
+
+### Markdown format example
+
+The output includes a header, then each comment with location, reviewer, body,
+and code context (if available):
+
+````markdown
+# Review Comments Export
+
+PR: https://github.com/owner/repo/pull/123
+
+---
+
+## src/auth.rs:42
+
+**Reviewer:** alice
+**Created:** 2025-01-15T10:30:00Z
+
+Consider using a constant here instead of a magic number.
+
+```rust
+@@ -40,3 +40,5 @@
+ fn validate_token(token: &str) -> bool {
+-    token.len() > 0
++    token.len() > 8
+ }
+```
+
+---
+````
+
+### JSONL format example
+
+```jsonl
+{"id":456,"author":"alice","file_path":"src/auth.rs","line_number":42,"body":"Consider using a constant here.","diff_hunk":"@@ -40,3 +40,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T10:30:00Z"}
+{"id":457,"author":"bob","file_path":"src/auth.rs","line_number":50,"body":"Add error handling.","diff_hunk":"@@ -48,3 +48,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T11:00:00Z"}
+```
+
+### Export errors
+
+- **Missing PR URL** — The `--pr-url` flag is required when using `--export`.
+- **Invalid format** — Use `markdown` or `jsonl` as the export format value.
+- **File write error** — Check that the output path is writable.
+
 ## Configuration
 
 Frankie supports configuration through multiple sources with the following
@@ -372,6 +458,8 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)            |
 | `--no-local-discovery`                      | `-n`  | Disable automatic local Git discovery      |
 | `--tui`                                     | `-T`  | Launch interactive TUI for review comments |
+| `--export <FORMAT>`                         | `-e`  | Export comments (`markdown` or `jsonl`)    |
+| `--output <PATH>`                           | —     | Output file for export (default: stdout)   |
 | `--help`                                    | `-h`  | Show help information                      |
 
 Run `frankie --help` to see all available options and their descriptions.
