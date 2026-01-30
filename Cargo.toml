@@ -36,7 +36,7 @@ frankie = { path = ".", features = ["test-support"] }
 camino = "1.2.2"
 cap-std = { version = "4.0.0", features = ["fs_utf8"] }
 env-lock = "0.1.0"
-mockall = "0.12.1"
+mockall = "0.14.0"
 rstest = "0.22.0"
 rstest-bdd = "0.4.0"
 rstest-bdd-macros = { version = "0.4.0", features = ["compile-time-validation"] }
