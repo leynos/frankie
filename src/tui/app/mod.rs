@@ -8,26 +8,34 @@
 //!
 //! - `rendering`: View rendering methods for terminal output
 //! - `sync_handlers`: Background sync and refresh handling
+//! - `time_travel_handlers`: Time-travel navigation handlers
 
 use std::any::Any;
+use std::sync::Arc;
 
 use bubbletea_rs::{Cmd, Model};
 
 use crate::github::models::ReviewComment;
+use crate::local::GitOperations;
 
 use super::components::{
     CommentDetailComponent, CommentDetailViewContext, DiffContextComponent, ReviewListComponent,
     ReviewListViewContext,
 };
-use super::input::map_key_to_message;
+use super::input::{InputContext, map_key_to_message_with_context};
 use super::messages::AppMsg;
 use super::state::{
-    DiffContextState, FilterState, ReviewFilter, collect_diff_hunks, find_hunk_index,
+    DiffContextState, FilterState, ReviewFilter, TimeTravelState, collect_diff_hunks,
+    find_hunk_index,
 };
 
 mod navigation;
 mod rendering;
+mod routing;
 mod sync_handlers;
+mod time_travel_handlers;
+
+use routing::MessageRouting;
 
 /// Main application model for the review listing TUI.
 #[derive(Debug)]
@@ -60,18 +68,20 @@ pub struct ReviewApp {
     view_mode: ViewMode,
     /// ID of the currently selected comment, used to restore cursor after sync.
     pub(crate) selected_comment_id: Option<u64>,
+    /// Time-travel navigation state.
+    time_travel_state: Option<TimeTravelState>,
+    /// Git operations for time-travel (optional, requires local repo).
+    git_ops: Option<Arc<dyn GitOperations>>,
+    /// HEAD commit SHA for line mapping verification.
+    head_sha: Option<String>,
 }
 
 /// Tracks which view is currently active in the TUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ViewMode {
+pub(crate) enum ViewMode {
     ReviewList,
     DiffContext,
-}
-
-enum DiffContextRouting {
-    Handled(Option<Cmd>),
-    Fallthrough,
+    TimeTravel,
 }
 
 impl ReviewApp {
@@ -100,6 +110,9 @@ impl ReviewApp {
             diff_context_state: DiffContextState::default(),
             view_mode: ViewMode::ReviewList,
             selected_comment_id,
+            time_travel_state: None,
+            git_ops: None,
+            head_sha: None,
         }
     }
 
@@ -107,6 +120,17 @@ impl ReviewApp {
     #[must_use]
     pub fn empty() -> Self {
         Self::new(Vec::new())
+    }
+
+    /// Sets the git operations for time-travel navigation.
+    ///
+    /// Call this method after creating the app if a local Git repository is
+    /// available to enable time-travel functionality.
+    #[must_use]
+    pub fn with_git_ops(mut self, git_ops: Arc<dyn GitOperations>, head_sha: String) -> Self {
+        self.git_ops = Some(git_ops);
+        self.head_sha = Some(head_sha);
+        self
     }
 
     /// Returns the currently filtered reviews.
@@ -265,64 +289,31 @@ impl ReviewApp {
         }
     }
 
-    /// Routes messages when in `DiffContext` mode.
-    ///
-    /// Returns `DiffContextRouting::Handled` if the message was handled in
-    /// `DiffContext` mode, or `DiffContextRouting::Fallthrough` if the message
-    /// should fall through to regular routing.
-    fn try_handle_in_diff_context_mode(&mut self, msg: &AppMsg) -> DiffContextRouting {
-        if self.view_mode != ViewMode::DiffContext {
-            return DiffContextRouting::Fallthrough;
+    /// Dispatches time-travel messages to their handlers.
+    fn handle_time_travel_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
+            AppMsg::EnterTimeTravel => self.handle_enter_time_travel(),
+            AppMsg::ExitTimeTravel => self.handle_exit_time_travel(),
+            AppMsg::TimeTravelLoaded(state) => self.handle_time_travel_loaded(state.clone()),
+            AppMsg::TimeTravelFailed(error) => self.handle_time_travel_failed(error),
+            AppMsg::NextCommit => self.handle_next_commit(),
+            AppMsg::PreviousCommit => self.handle_previous_commit(),
+            AppMsg::CommitNavigated(state) => self.handle_commit_navigated(state.clone()),
+            _ => None,
         }
-
-        // EscapePressed in DiffContext mode
-        if matches!(msg, AppMsg::EscapePressed) {
-            return DiffContextRouting::Handled(self.handle_diff_context_msg(msg));
-        }
-
-        // DiffContext-specific messages
-        if msg.is_diff_context() {
-            return DiffContextRouting::Handled(self.handle_diff_context_msg(msg));
-        }
-
-        // Block navigation and filter messages in DiffContext mode
-        if msg.is_navigation() || msg.is_filter() {
-            return DiffContextRouting::Handled(None);
-        }
-
-        // Allow other messages to fall through
-        DiffContextRouting::Fallthrough
     }
 
     /// Handles a message and updates state accordingly.
     ///
     /// This method is the core update function that processes all application
-    /// messages and returns any resulting commands. It delegates to specialised
-    /// handlers for each message category to keep cyclomatic complexity low.
+    /// messages and returns any resulting commands. It first attempts mode-based
+    /// routing, then falls back to category-based dispatch.
+    #[doc(hidden)]
     pub fn handle_message(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        // Route DiffContext mode messages
-        if let DiffContextRouting::Handled(result) = self.try_handle_in_diff_context_mode(msg) {
+        if let MessageRouting::Handled(result) = self.route_by_view_mode(msg) {
             return result;
         }
-
-        // EscapePressed in ReviewList mode
-        if matches!(msg, AppMsg::EscapePressed) {
-            return self.handle_clear_filter();
-        }
-
-        if msg.is_navigation() {
-            return self.handle_navigation_msg(msg);
-        }
-        if msg.is_filter() {
-            return self.handle_filter_msg(msg);
-        }
-        if msg.is_diff_context() {
-            return self.handle_diff_context_msg(msg);
-        }
-        if msg.is_data() {
-            return self.handle_data_msg(msg);
-        }
-        self.handle_lifecycle_msg(msg)
+        self.dispatch_by_message_category(msg)
     }
 
     /// Dispatches navigation messages to their handlers.
@@ -459,9 +450,10 @@ impl Model for ReviewApp {
             return self.handle_message(app_msg);
         }
 
-        // Handle key events from bubbletea-rs
+        // Handle key events from bubbletea-rs with context-aware mapping
         if let Some(key_msg) = msg.downcast_ref::<bubbletea_rs::event::KeyMsg>() {
-            let app_msg = map_key_to_message(key_msg);
+            let context = self.input_context();
+            let app_msg = map_key_to_message_with_context(key_msg, context);
             if let Some(mapped) = app_msg {
                 return self.handle_message(&mapped);
             }
@@ -485,10 +477,15 @@ impl Model for ReviewApp {
             return self.render_help_overlay();
         }
 
+        // Handle special view modes with early returns
         if self.view_mode == ViewMode::DiffContext {
             return self.render_diff_context_view();
         }
+        if self.view_mode == ViewMode::TimeTravel {
+            return self.render_time_travel_view();
+        }
 
+        // Render main ReviewList view
         let mut output = String::new();
 
         output.push_str(&self.render_header());
@@ -527,6 +524,17 @@ impl Model for ReviewApp {
         output.push_str(&self.render_status_bar());
 
         output
+    }
+}
+
+impl ReviewApp {
+    /// Returns the current input context for context-aware key mapping.
+    const fn input_context(&self) -> InputContext {
+        match self.view_mode {
+            ViewMode::ReviewList => InputContext::ReviewList,
+            ViewMode::DiffContext => InputContext::DiffContext,
+            ViewMode::TimeTravel => InputContext::TimeTravel,
+        }
     }
 }
 

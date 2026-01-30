@@ -21,6 +21,7 @@ thiserror = "1.0.69"
 tokio = { version = "1.48.0", features = ["macros", "rt-multi-thread"] }
 url = "2.5.4"
 git2 = "0.20.3"
+chrono = { version = "0.4.43", features = ["serde"] }
 
 # TUI framework
 bubbletea-rs = "0.0.9"
@@ -32,11 +33,13 @@ syntect = "5.2.0"
 
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
+camino = "1.2.2"
+cap-std = { version = "4.0.0", features = ["fs_utf8"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"
 rstest = "0.22.0"
-rstest-bdd = "0.3.2"
-rstest-bdd-macros = { version = "0.3.2", features = ["compile-time-validation"] }
+rstest-bdd = "0.4.0"
+rstest-bdd-macros = { version = "0.4.0", features = ["compile-time-validation"] }
 tempfile = "3.15.0"
 tokio = { version = "1.48.0", features = ["test-util", "time"] }
 wiremock = "0.6.5"

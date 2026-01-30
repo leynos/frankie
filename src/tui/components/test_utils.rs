@@ -29,6 +29,7 @@ pub struct ReviewCommentBuilder {
     line_number: Option<u32>,
     body: Option<String>,
     diff_hunk: Option<String>,
+    commit_sha: Option<String>,
 }
 
 impl ReviewCommentBuilder {
@@ -42,6 +43,7 @@ impl ReviewCommentBuilder {
             line_number: None,
             body: None,
             diff_hunk: None,
+            commit_sha: None,
         }
     }
 
@@ -80,6 +82,13 @@ impl ReviewCommentBuilder {
         self
     }
 
+    /// Sets the commit SHA for the comment.
+    #[must_use]
+    pub fn commit_sha(mut self, sha: &str) -> Self {
+        self.commit_sha = Some(sha.to_owned());
+        self
+    }
+
     /// Builds the `ReviewComment` instance.
     #[must_use]
     pub fn build(self) -> ReviewComment {
@@ -91,7 +100,7 @@ impl ReviewCommentBuilder {
             line_number: self.line_number,
             original_line_number: None,
             diff_hunk: self.diff_hunk,
-            commit_sha: None,
+            commit_sha: self.commit_sha,
             in_reply_to_id: None,
             created_at: None,
             updated_at: None,

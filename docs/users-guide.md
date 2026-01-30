@@ -161,9 +161,21 @@ comments.
 | `c`         | Open full-screen diff context |
 | `[`         | Previous diff hunk            |
 | `]`         | Next diff hunk                |
+| `t`         | Enter time-travel mode        |
 | `r`         | Refresh from GitHub           |
 | `?`         | Toggle help overlay           |
 | `q`         | Quit                          |
+
+#### Time-travel mode keyboard shortcuts
+
+Table: Time-travel mode keyboard shortcuts.
+
+| Key   | Action                              |
+| ----- | ----------------------------------- |
+| `h`   | Navigate to previous (older) commit |
+| `l`   | Navigate to next (newer) commit     |
+| `Esc` | Exit time-travel mode               |
+| `q`   | Quit                                |
 
 ### Background sync
 
@@ -229,6 +241,59 @@ Pressing `c` in the review list opens a full-screen diff context view. The view
 shows the current diff hunk with file metadata and allows jumping between hunks
 using `[` (previous) and `]` (next). Pressing `Esc` returns to the review list
 without losing the current selection.
+
+### Time-travel mode
+
+Time-travel mode displays the exact code state when a review comment was made.
+This is useful for understanding what was observed at the time a comment was
+left, especially when the code has changed significantly since then.
+
+To enter time-travel mode:
+
+1. Select a review comment in the list
+2. Press `t` to enter time-travel mode
+
+Frankie loads the commit snapshot associated with the comment and displays:
+
+- **Commit information** — SHA, message, author, and timestamp
+- **File content** — The file as it appeared at that commit
+- **Line mapping status** — Whether the commented line still exists and where
+
+Line mapping verification shows one of these statuses:
+
+- `✓` **Exact match** — The line is at the same position in both commits
+- `→` **Moved** — The line has moved to a different position (shows offset)
+- `✗` **Deleted** — The line no longer exists in the current commit
+- `?` **Not found** — Unable to locate the line in the commit
+
+#### Navigating commits
+
+While in time-travel mode, the `h` and `l` keys navigate through the commit
+history:
+
+- `h` moves to the previous (older) commit
+- `l` moves to the next (newer) commit
+
+The header shows the current position in the commit history (e.g., "Commit 2 of
+5").
+
+#### Requirements
+
+Time-travel mode requires:
+
+- A local Git repository (Frankie must be run from within the repository or
+  the repository must be discoverable)
+- The commit SHA referenced by the comment must exist in the local repository
+
+If these requirements are not met, Frankie displays a clear error message
+explaining what is missing.
+
+#### Time-travel errors
+
+- **No local repository** — Displays "No local repository available. Clone the
+  repository to use time-travel mode."
+- **Commit not found** — Displays "Commit not found in local repository. The
+  commit may have been force-pushed away."
 
 ## Configuration
 

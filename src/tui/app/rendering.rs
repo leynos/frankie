@@ -5,7 +5,9 @@
 //! without modification.
 
 use super::ReviewApp;
-use crate::tui::components::{DiffContextComponent, DiffContextViewContext};
+use crate::tui::components::{
+    DiffContextComponent, DiffContextViewContext, TimeTravelViewComponent, TimeTravelViewContext,
+};
 
 impl ReviewApp {
     /// Renders the header bar.
@@ -31,9 +33,10 @@ impl ReviewApp {
 
         let hints = match self.view_mode {
             super::ViewMode::ReviewList => {
-                "j/k:navigate  f:filter  c:context  r:refresh  ?:help  q:quit"
+                "j/k:navigate  f:filter  c:context  t:time-travel  r:refresh  ?:help  q:quit"
             }
             super::ViewMode::DiffContext => "[/]:hunks  Esc:back  ?:help  q:quit",
+            super::ViewMode::TimeTravel => "h/l:commits  Esc:back  ?:help  q:quit",
         };
         format!("{hints}\n")
     }
@@ -62,12 +65,18 @@ Filtering:
 Other:
   r          Refresh from GitHub
   c          View full-screen context
+  t          Time-travel to comment's commit
   ?          Toggle this help
   q          Quit
 
 Diff context:
   [          Previous hunk
   ]          Next hunk
+  Esc        Return to review list
+
+Time-travel:
+  h          Previous (older) commit
+  l          Next (more recent) commit
   Esc        Return to review list
 
 Press any key to close this help.
@@ -92,6 +101,28 @@ Press any key to close this help.
         };
 
         output.push_str(&DiffContextComponent::view(&ctx));
+        output.push_str(&self.render_status_bar());
+
+        output
+    }
+
+    /// Renders the time-travel navigation view.
+    pub(super) fn render_time_travel_view(&self) -> String {
+        let mut output = String::new();
+
+        output.push_str(&self.render_header());
+
+        let chrome_height = 2_usize; // header + status bar
+        let total_height = self.height as usize;
+        let body_height = total_height.saturating_sub(chrome_height);
+
+        let ctx = TimeTravelViewContext {
+            state: self.time_travel_state.as_ref(),
+            max_width: self.width as usize,
+            max_height: body_height,
+        };
+
+        output.push_str(&TimeTravelViewComponent::view(&ctx));
         output.push_str(&self.render_status_bar());
 
         output

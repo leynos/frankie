@@ -270,9 +270,9 @@ checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
 
 [[package]]
 name = "camino"
-version = "1.2.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "276a59bf2b2c967788139340c9f0c5b12d7fd6630315c15c217e559de85d2609"
+checksum = "e629a66d692cb9ff1a1c664e41771b3dcaf961985a9774c0eb0bd1b51cf60a48"
 dependencies = [
  "serde_core",
 ]
@@ -285,13 +285,31 @@ checksum = "b6cf3aea8a5081171859ef57bc1606b1df6999df4f1110f8eef68b30098d1d3a"
 dependencies = [
  "ambient-authority",
  "fs-set-times",
- "io-extras",
- "io-lifetimes",
+ "io-extras 0.18.4",
+ "io-lifetimes 2.0.4",
  "ipnet",
  "maybe-owned",
  "rustix",
  "rustix-linux-procfs",
  "windows-sys 0.59.0",
+ "winx",
+]
+
+[[package]]
+name = "cap-primitives"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2738131575dbd2ca9e8e144a102ba4e534ca726e2446f1e92090a1cc08fe283"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
+ "ipnet",
+ "maybe-owned",
+ "rustix",
+ "rustix-linux-procfs",
+ "windows-sys 0.61.2",
  "winx",
 ]
 
@@ -302,9 +320,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6dc3090992a735d23219de5c204927163d922f42f575a0189b005c62d37549a"
 dependencies = [
  "camino",
- "cap-primitives",
- "io-extras",
- "io-lifetimes",
+ "cap-primitives 3.4.5",
+ "io-extras 0.18.4",
+ "io-lifetimes 2.0.4",
+ "rustix",
+]
+
+[[package]]
+name = "cap-std"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42d9210de501a941735b489ee5c41501283259ddf3fec9884ace40def0a80a11"
+dependencies = [
+ "camino",
+ "cap-primitives 4.0.0",
+ "io-extras 0.19.0",
+ "io-lifetimes 3.0.1",
  "rustix",
 ]
 
@@ -351,9 +382,9 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
 name = "chrono"
-version = "0.4.42"
+version = "0.4.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
+checksum = "fac4744fb15ae8337dc853fee7fb3f4e48c0fbaa23d0afe49c447b4fab126118"
 dependencies = [
  "iana-time-zone",
  "js-sys",
@@ -1089,6 +1120,9 @@ dependencies = [
  "async-trait",
  "bubbletea-rs",
  "bubbletea-widgets",
+ "camino",
+ "cap-std 4.0.0",
+ "chrono",
  "clap",
  "crossterm",
  "diesel",
@@ -1119,7 +1153,7 @@ version = "0.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
 dependencies = [
- "io-lifetimes",
+ "io-lifetimes 2.0.4",
  "rustix",
  "windows-sys 0.59.0",
 ]
@@ -1728,8 +1762,18 @@ version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2285ddfe3054097ef4b2fe909ef8c3bcd1ea52a8f0d274416caebeef39f04a65"
 dependencies = [
- "io-lifetimes",
+ "io-lifetimes 2.0.4",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "io-extras"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
+dependencies = [
+ "io-lifetimes 3.0.1",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1737,6 +1781,12 @@ name = "io-lifetimes"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983"
+
+[[package]]
+name = "io-lifetimes"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f0fb0570afe1fed943c5c3d4102d5358592d8625fda6a0007fdbe65a92fba96"
 
 [[package]]
 name = "ipnet"
@@ -2874,9 +2924,9 @@ dependencies = [
 
 [[package]]
 name = "rstest-bdd"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7451d147800bd8b0b8621116a2c553b13408f2b7914a5b818eccaa37240ed9a"
+checksum = "5e741d97bce6ea0a7d0f074716041e0d0eebe6ab9edcd243e7d12f9fd2b5e8b6"
 dependencies = [
  "ctor",
  "derive_more 0.99.20",
@@ -2886,9 +2936,9 @@ dependencies = [
  "i18n-embed",
  "inventory",
  "log",
- "once_cell",
  "regex",
  "rstest-bdd-patterns",
+ "rstest-bdd-policy",
  "rust-embed",
  "serde",
  "serde_json",
@@ -2898,37 +2948,44 @@ dependencies = [
 
 [[package]]
 name = "rstest-bdd-macros"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c58aca0e441b276f7e52a6fe1b9bb8c341004110f610e7dfda112578c0c18837"
+checksum = "a7e3b51c032a6174f82d87843a5e62cfd08ce4606005eafde07ed12561d73196"
 dependencies = [
  "camino",
- "cap-std",
+ "cap-std 3.4.5",
  "cfg-if",
  "convert_case 0.6.0",
  "gherkin",
  "newt-hype",
- "once_cell",
  "proc-macro-crate",
  "proc-macro-error",
  "proc-macro2",
  "quote",
  "regex",
  "rstest-bdd-patterns",
+ "rstest-bdd-policy",
  "syn 2.0.111",
+ "thiserror 1.0.69",
  "walkdir",
 ]
 
 [[package]]
 name = "rstest-bdd-patterns"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59a52766aaee3793eec30ff351a5ebddba34dddab8500b18891cddece364a66d"
+checksum = "75d730afd8727e5b18bd276ebf5ea4c881760138762d0cd7d415dc6b6662c6c6"
 dependencies = [
  "gherkin",
  "regex",
  "thiserror 1.0.69",
 ]
+
+[[package]]
+name = "rstest-bdd-policy"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d256efeb01f08e281cef9cd1e54dab33d8778e871090f5fa49b7a9a70f0caf81"
 
 [[package]]
 name = "rstest_macros"
