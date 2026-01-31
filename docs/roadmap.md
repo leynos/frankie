@@ -76,7 +76,7 @@ context.
 
 ### Step: Comment export pipeline
 
-- [ ] Deliver structured comment export (location, code context, issue text) in
+- [x] Deliver structured comment export (location, code context, issue text) in
       Markdown and JSONL formats; acceptance: exports include stable ordering,
       pass schema validation, and are exercised in integration tests.
 - [ ] Introduce template-driven export customisation; acceptance: templates

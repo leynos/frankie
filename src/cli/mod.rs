@@ -1,6 +1,7 @@
 //! CLI operation mode handlers.
 //!
 //! This module contains the implementations for different operation modes:
+//! - [`export_comments`]: Export review comments in structured formats
 //! - [`interactive`]: Local repository discovery and listing
 //! - [`migrations`]: Database schema migrations
 //! - [`repository_listing`]: List PRs for a specified repository
@@ -8,9 +9,12 @@
 //! - [`single_pr`]: Load details for a single pull request
 //!
 //! Output formatting utilities are in [`output`].
+//! Export formatters are in [`export`].
 
 use frankie::{ListPullRequestsParams, PullRequestState};
 
+pub mod export;
+pub mod export_comments;
 pub mod interactive;
 pub mod migrations;
 pub mod output;
