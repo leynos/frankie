@@ -101,6 +101,26 @@ mod tests {
 
     use super::*;
 
+    fn assert_parse_error_contains(config: &FrankieConfig, expected_msg_fragment: &str) {
+        let result = parse_export_format(config);
+        assert!(result.is_err());
+        match result {
+            Err(IntakeError::Configuration { message }) => {
+                assert!(
+                    message.contains(expected_msg_fragment),
+                    "expected message to contain '{expected_msg_fragment}', got: {message}"
+                );
+            }
+            _ => panic!("expected Configuration error"),
+        }
+    }
+
+    fn write_to_string(comments: &[ExportedComment], pr_url: &str, format: ExportFormat) -> String {
+        let mut buffer = Vec::new();
+        write_format(&mut buffer, comments, pr_url, format).expect("should write");
+        String::from_utf8(buffer).expect("valid UTF-8")
+    }
+
     #[rstest]
     fn parse_export_format_returns_error_when_missing() {
         let config = FrankieConfig {
@@ -108,15 +128,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = parse_export_format(&config);
-
-        assert!(result.is_err());
-        match result {
-            Err(IntakeError::Configuration { message }) => {
-                assert!(message.contains("export format is required"));
-            }
-            _ => panic!("expected Configuration error"),
-        }
+        assert_parse_error_contains(&config, "export format is required");
     }
 
     #[rstest]
@@ -152,20 +164,11 @@ mod tests {
             ..Default::default()
         };
 
-        let result = parse_export_format(&config);
-
-        assert!(result.is_err());
-        match result {
-            Err(IntakeError::Configuration { message }) => {
-                assert!(message.contains("unsupported export format"));
-            }
-            _ => panic!("expected Configuration error"),
-        }
+        assert_parse_error_contains(&config, "unsupported export format");
     }
 
     #[rstest]
     fn write_format_markdown_writes_to_buffer() {
-        let mut buffer = Vec::new();
         let comments = vec![ExportedComment {
             id: 1,
             author: Some("alice".to_owned()),
@@ -179,22 +182,18 @@ mod tests {
             created_at: None,
         }];
 
-        write_format(
-            &mut buffer,
+        let output = write_to_string(
             &comments,
             "https://example.com/pr/1",
             ExportFormat::Markdown,
-        )
-        .expect("should write");
+        );
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("# Review Comments Export"));
         assert!(output.contains("test.rs:10"));
     }
 
     #[rstest]
     fn write_format_jsonl_writes_to_buffer() {
-        let mut buffer = Vec::new();
         let comments = vec![ExportedComment {
             id: 42,
             author: Some("bob".to_owned()),
@@ -208,15 +207,8 @@ mod tests {
             created_at: None,
         }];
 
-        write_format(
-            &mut buffer,
-            &comments,
-            "https://example.com/pr/1",
-            ExportFormat::Jsonl,
-        )
-        .expect("should write");
+        let output = write_to_string(&comments, "https://example.com/pr/1", ExportFormat::Jsonl);
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         let parsed: serde_json::Value = serde_json::from_str(output.trim()).expect("valid JSON");
         assert_eq!(parsed["id"], 42);
         assert_eq!(parsed["body"], "LGTM");

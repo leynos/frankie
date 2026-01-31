@@ -160,72 +160,118 @@ fn io_error(error: &std::io::Error) -> IntakeError {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "test helper mirrors ExportedComment structure"
-)]
+struct CommentBuilder {
+    id: u64,
+    author: Option<String>,
+    file_path: Option<String>,
+    line_number: Option<u32>,
+    body: Option<String>,
+    diff_hunk: Option<String>,
+    created_at: Option<String>,
+}
+
+#[cfg(test)]
+impl CommentBuilder {
+    fn new(id: u64) -> Self {
+        Self {
+            id,
+            author: None,
+            file_path: None,
+            line_number: None,
+            body: None,
+            diff_hunk: None,
+            created_at: None,
+        }
+    }
+
+    fn author(mut self, author: &str) -> Self {
+        self.author = Some(author.to_owned());
+        self
+    }
+
+    fn file_path(mut self, file_path: &str) -> Self {
+        self.file_path = Some(file_path.to_owned());
+        self
+    }
+
+    fn line_number(mut self, line_number: u32) -> Self {
+        self.line_number = Some(line_number);
+        self
+    }
+
+    fn body(mut self, body: &str) -> Self {
+        self.body = Some(body.to_owned());
+        self
+    }
+
+    fn diff_hunk(mut self, diff_hunk: &str) -> Self {
+        self.diff_hunk = Some(diff_hunk.to_owned());
+        self
+    }
+
+    fn created_at(mut self, created_at: &str) -> Self {
+        self.created_at = Some(created_at.to_owned());
+        self
+    }
+
+    fn build(self) -> ExportedComment {
+        ExportedComment {
+            id: self.id,
+            author: self.author,
+            file_path: self.file_path,
+            line_number: self.line_number,
+            original_line_number: None,
+            body: self.body,
+            diff_hunk: self.diff_hunk,
+            commit_sha: None,
+            in_reply_to_id: None,
+            created_at: self.created_at,
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use rstest::rstest;
 
     use super::*;
 
-    fn make_comment(
-        id: u64,
-        author: Option<&str>,
-        file_path: Option<&str>,
-        line_number: Option<u32>,
-        body: Option<&str>,
-        diff_hunk: Option<&str>,
-        created_at: Option<&str>,
-    ) -> ExportedComment {
-        ExportedComment {
-            id,
-            author: author.map(String::from),
-            file_path: file_path.map(String::from),
-            line_number,
-            original_line_number: None,
-            body: body.map(String::from),
-            diff_hunk: diff_hunk.map(String::from),
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: created_at.map(String::from),
-        }
+    fn write_markdown_to_string(
+        comments: &[ExportedComment],
+        pr_url: &str,
+    ) -> Result<String, IntakeError> {
+        let mut buffer = Vec::new();
+        write_markdown(&mut buffer, comments, pr_url)?;
+        Ok(String::from_utf8(buffer).expect("valid UTF-8"))
     }
 
     #[rstest]
     fn writes_header_with_pr_url() {
-        let mut buffer = Vec::new();
         let comments: Vec<ExportedComment> = vec![];
 
-        write_markdown(
-            &mut buffer,
-            &comments,
-            "https://github.com/owner/repo/pull/123",
-        )
-        .expect("should write markdown");
+        let output = write_markdown_to_string(&comments, "https://github.com/owner/repo/pull/123")
+            .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("# Review Comments Export"));
         assert!(output.contains("PR: https://github.com/owner/repo/pull/123"));
     }
 
     #[rstest]
     fn writes_comment_with_all_fields() {
-        let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            Some("alice"),
-            Some("src/lib.rs"),
-            Some(42),
-            Some("Consider using a constant here."),
-            Some("@@ -40,3 +40,5 @@\n let x = 1;"),
-            Some("2025-01-15T10:00:00Z"),
-        )];
+        let comments = vec![
+            CommentBuilder::new(1)
+                .author("alice")
+                .file_path("src/lib.rs")
+                .line_number(42)
+                .body("Consider using a constant here.")
+                .diff_hunk("@@ -40,3 +40,5 @@\n let x = 1;")
+                .created_at("2025-01-15T10:00:00Z")
+                .build(),
+        ];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("## src/lib.rs:42"));
         assert!(output.contains("**Reviewer:** alice"));
         assert!(output.contains("**Created:** 2025-01-15T10:00:00Z"));
@@ -236,41 +282,33 @@ mod tests {
 
     #[rstest]
     fn handles_missing_file_path() {
-        let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            Some("bob"),
-            None,
-            Some(10),
-            Some("Fix this"),
-            None,
-            None,
-        )];
+        let comments = vec![
+            CommentBuilder::new(1)
+                .author("bob")
+                .line_number(10)
+                .body("Fix this")
+                .build(),
+        ];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("## (unknown file):10"));
     }
 
     #[rstest]
     fn handles_missing_line_number() {
-        let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            Some("charlie"),
-            Some("README.md"),
-            None,
-            Some("Update docs"),
-            None,
-            None,
-        )];
+        let comments = vec![
+            CommentBuilder::new(1)
+                .author("charlie")
+                .file_path("README.md")
+                .body("Update docs")
+                .build(),
+        ];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("## README.md"));
         // Should not have a colon and line number
         assert!(!output.contains("README.md:"));
@@ -278,33 +316,21 @@ mod tests {
 
     #[rstest]
     fn handles_completely_missing_location() {
-        let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            None,
-            None,
-            None,
-            Some("General comment"),
-            None,
-            None,
-        )];
+        let comments = vec![CommentBuilder::new(1).body("General comment").build()];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("## (unknown location)"));
     }
 
     #[rstest]
     fn empty_comments_produces_header_only() {
-        let mut buffer = Vec::new();
         let comments: Vec<ExportedComment> = vec![];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("# Review Comments Export"));
         assert!(!output.contains("---")); // No comment separators
     }
@@ -323,72 +349,50 @@ mod tests {
 
     #[rstest]
     fn uses_diff_language_for_unknown_extension() {
-        let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            None,
-            Some("config.unknown"),
-            Some(1),
-            None,
-            Some("some code"),
-            None,
-        )];
+        let comments = vec![
+            CommentBuilder::new(1)
+                .file_path("config.unknown")
+                .line_number(1)
+                .diff_hunk("some code")
+                .build(),
+        ];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("```diff"));
     }
 
     #[rstest]
     fn uses_diff_language_when_no_file_path() {
-        let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            None,
-            None,
-            None,
-            None,
-            Some("+ added line"),
-            None,
-        )];
+        let comments = vec![CommentBuilder::new(1).diff_hunk("+ added line").build()];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         assert!(output.contains("```diff"));
     }
 
     #[rstest]
     fn multiple_comments_have_separators() {
-        let mut buffer = Vec::new();
         let comments = vec![
-            make_comment(
-                1,
-                Some("alice"),
-                Some("a.rs"),
-                Some(1),
-                Some("First"),
-                None,
-                None,
-            ),
-            make_comment(
-                2,
-                Some("bob"),
-                Some("b.rs"),
-                Some(2),
-                Some("Second"),
-                None,
-                None,
-            ),
+            CommentBuilder::new(1)
+                .author("alice")
+                .file_path("a.rs")
+                .line_number(1)
+                .body("First")
+                .build(),
+            CommentBuilder::new(2)
+                .author("bob")
+                .file_path("b.rs")
+                .line_number(2)
+                .body("Second")
+                .build(),
         ];
 
-        write_markdown(&mut buffer, &comments, "https://example.com/pr/1")
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
             .expect("should write markdown");
 
-        let output = String::from_utf8(buffer).expect("valid UTF-8");
         let separator_count = output.matches("---").count();
         assert_eq!(separator_count, 2); // One per comment
     }

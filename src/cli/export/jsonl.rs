@@ -39,47 +39,80 @@ fn io_error(error: &std::io::Error) -> IntakeError {
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::too_many_arguments,
-    clippy::indexing_slicing,
-    reason = "test helpers and assertions use known indices"
-)]
-mod tests {
-    use rstest::rstest;
+struct CommentBuilder {
+    id: u64,
+    author: Option<String>,
+    file_path: Option<String>,
+    line_number: Option<u32>,
+    body: Option<String>,
+}
 
-    use super::*;
-
-    fn make_comment(
-        id: u64,
-        author: Option<&str>,
-        file_path: Option<&str>,
-        line_number: Option<u32>,
-        body: Option<&str>,
-    ) -> ExportedComment {
-        ExportedComment {
+#[cfg(test)]
+impl CommentBuilder {
+    fn new(id: u64) -> Self {
+        Self {
             id,
-            author: author.map(String::from),
-            file_path: file_path.map(String::from),
-            line_number,
+            author: None,
+            file_path: None,
+            line_number: None,
+            body: None,
+        }
+    }
+
+    fn author(mut self, author: &str) -> Self {
+        self.author = Some(author.to_owned());
+        self
+    }
+
+    fn file_path(mut self, file_path: &str) -> Self {
+        self.file_path = Some(file_path.to_owned());
+        self
+    }
+
+    fn line_number(mut self, line_number: u32) -> Self {
+        self.line_number = Some(line_number);
+        self
+    }
+
+    fn body(mut self, body: &str) -> Self {
+        self.body = Some(body.to_owned());
+        self
+    }
+
+    fn build(self) -> ExportedComment {
+        ExportedComment {
+            id: self.id,
+            author: self.author,
+            file_path: self.file_path,
+            line_number: self.line_number,
             original_line_number: None,
-            body: body.map(String::from),
+            body: self.body,
             diff_hunk: None,
             commit_sha: None,
             in_reply_to_id: None,
             created_at: None,
         }
     }
+}
+
+#[cfg(test)]
+#[expect(clippy::indexing_slicing, reason = "test assertions use known indices")]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
 
     #[rstest]
     fn writes_single_comment_as_json_line() {
         let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            123,
-            Some("alice"),
-            Some("src/lib.rs"),
-            Some(42),
-            Some("Fix this"),
-        )];
+        let comments = vec![
+            CommentBuilder::new(123)
+                .author("alice")
+                .file_path("src/lib.rs")
+                .line_number(42)
+                .body("Fix this")
+                .build(),
+        ];
 
         write_jsonl(&mut buffer, &comments).expect("should write JSONL");
 
@@ -101,9 +134,24 @@ mod tests {
     fn writes_multiple_comments_one_per_line() {
         let mut buffer = Vec::new();
         let comments = vec![
-            make_comment(1, Some("alice"), Some("a.rs"), Some(10), Some("First")),
-            make_comment(2, Some("bob"), Some("b.rs"), Some(20), Some("Second")),
-            make_comment(3, Some("charlie"), Some("c.rs"), Some(30), Some("Third")),
+            CommentBuilder::new(1)
+                .author("alice")
+                .file_path("a.rs")
+                .line_number(10)
+                .body("First")
+                .build(),
+            CommentBuilder::new(2)
+                .author("bob")
+                .file_path("b.rs")
+                .line_number(20)
+                .body("Second")
+                .build(),
+            CommentBuilder::new(3)
+                .author("charlie")
+                .file_path("c.rs")
+                .line_number(30)
+                .body("Third")
+                .build(),
         ];
 
         write_jsonl(&mut buffer, &comments).expect("should write JSONL");
@@ -134,7 +182,7 @@ mod tests {
     #[rstest]
     fn omits_none_fields() {
         let mut buffer = Vec::new();
-        let comments = vec![make_comment(42, None, None, None, None)];
+        let comments = vec![CommentBuilder::new(42).build()];
 
         write_jsonl(&mut buffer, &comments).expect("should write JSONL");
 
@@ -152,13 +200,11 @@ mod tests {
     #[rstest]
     fn escapes_special_characters_in_body() {
         let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            None,
-            None,
-            None,
-            Some("Quote: \"hello\" and newline:\nend"),
-        )];
+        let comments = vec![
+            CommentBuilder::new(1)
+                .body("Quote: \"hello\" and newline:\nend")
+                .build(),
+        ];
 
         write_jsonl(&mut buffer, &comments).expect("should write JSONL");
 
@@ -174,13 +220,13 @@ mod tests {
     #[rstest]
     fn handles_unicode_in_body() {
         let mut buffer = Vec::new();
-        let comments = vec![make_comment(
-            1,
-            Some("田中"),
-            Some("日本語.rs"),
-            None,
-            Some("コメント: 🎉"),
-        )];
+        let comments = vec![
+            CommentBuilder::new(1)
+                .author("田中")
+                .file_path("日本語.rs")
+                .body("コメント: 🎉")
+                .build(),
+        ];
 
         write_jsonl(&mut buffer, &comments).expect("should write JSONL");
 
@@ -197,8 +243,8 @@ mod tests {
     fn each_line_ends_with_newline() {
         let mut buffer = Vec::new();
         let comments = vec![
-            make_comment(1, None, None, None, None),
-            make_comment(2, None, None, None, None),
+            CommentBuilder::new(1).build(),
+            CommentBuilder::new(2).build(),
         ];
 
         write_jsonl(&mut buffer, &comments).expect("should write JSONL");

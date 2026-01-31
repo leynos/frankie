@@ -77,64 +77,56 @@ mod tests {
         }
     }
 
+    fn assert_sorted_order(mut comments: Vec<ExportedComment>, expected_ids: &[u64]) {
+        sort_comments(&mut comments);
+        let actual_ids: Vec<u64> = comments.iter().map(|c| c.id).collect();
+        assert_eq!(actual_ids, expected_ids);
+    }
+
     #[rstest]
-    fn sorts_by_file_path_first() {
-        let mut comments = vec![
+    #[case::sorts_by_file_path_first(
+        vec![
             make_comment(1, Some("src/z.rs"), Some(10)),
             make_comment(2, Some("src/a.rs"), Some(10)),
             make_comment(3, Some("src/m.rs"), Some(10)),
-        ];
-
-        sort_comments(&mut comments);
-
-        assert_eq!(comments[0].file_path.as_deref(), Some("src/a.rs"));
-        assert_eq!(comments[1].file_path.as_deref(), Some("src/m.rs"));
-        assert_eq!(comments[2].file_path.as_deref(), Some("src/z.rs"));
-    }
-
-    #[rstest]
-    fn sorts_by_line_number_within_file() {
-        let mut comments = vec![
+        ],
+        &[2, 3, 1],
+        "file paths should sort alphabetically"
+    )]
+    #[case::sorts_by_line_number_within_file(
+        vec![
             make_comment(1, Some("src/lib.rs"), Some(100)),
             make_comment(2, Some("src/lib.rs"), Some(10)),
             make_comment(3, Some("src/lib.rs"), Some(50)),
-        ];
-
-        sort_comments(&mut comments);
-
-        assert_eq!(comments[0].line_number, Some(10));
-        assert_eq!(comments[1].line_number, Some(50));
-        assert_eq!(comments[2].line_number, Some(100));
-    }
-
-    #[rstest]
-    fn sorts_by_id_when_file_and_line_match() {
-        let mut comments = vec![
+        ],
+        &[2, 3, 1],
+        "line numbers should sort ascending within same file"
+    )]
+    #[case::sorts_by_id_when_file_and_line_match(
+        vec![
             make_comment(300, Some("src/lib.rs"), Some(42)),
             make_comment(100, Some("src/lib.rs"), Some(42)),
             make_comment(200, Some("src/lib.rs"), Some(42)),
-        ];
-
-        sort_comments(&mut comments);
-
-        assert_eq!(comments[0].id, 100);
-        assert_eq!(comments[1].id, 200);
-        assert_eq!(comments[2].id, 300);
-    }
-
-    #[rstest]
-    fn none_file_paths_sort_last() {
-        let mut comments = vec![
+        ],
+        &[100, 200, 300],
+        "IDs should sort ascending when file and line match"
+    )]
+    #[case::none_file_paths_sort_last(
+        vec![
             make_comment(1, None, Some(10)),
             make_comment(2, Some("src/lib.rs"), Some(10)),
             make_comment(3, None, Some(5)),
-        ];
-
-        sort_comments(&mut comments);
-
-        assert_eq!(comments[0].file_path.as_deref(), Some("src/lib.rs"));
-        assert!(comments[1].file_path.is_none());
-        assert!(comments[2].file_path.is_none());
+        ],
+        &[2, 3, 1],
+        "None file paths should sort after Some file paths"
+    )]
+    fn sorting_behaviour(
+        #[case] comments: Vec<ExportedComment>,
+        #[case] expected_ids: &[u64],
+        #[case] description: &str,
+    ) {
+        let _ = description; // Used for test case naming only
+        assert_sorted_order(comments, expected_ids);
     }
 
     #[rstest]

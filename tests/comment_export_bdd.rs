@@ -99,6 +99,28 @@ mod export_types {
         });
     }
 
+    fn format_comment_location(file_path: Option<&String>, line_number: Option<u32>) -> String {
+        match (file_path, line_number) {
+            (Some(path), Some(line)) => format!("{path}:{line}"),
+            (Some(path), None) => path.clone(),
+            (None, Some(line)) => format!("(unknown file):{line}"),
+            (None, None) => "(unknown location)".to_owned(),
+        }
+    }
+
+    fn detect_language_from_path(file_path: Option<&String>) -> &'static str {
+        file_path
+            .and_then(|p| Path::new(p).extension())
+            .and_then(|ext| ext.to_str())
+            .map_or("diff", |ext| match ext {
+                "rs" => "rust",
+                "py" => "python",
+                "js" => "javascript",
+                "ts" => "typescript",
+                _ => "diff",
+            })
+    }
+
     pub fn write_markdown<W: Write>(
         writer: &mut W,
         comments: &[ExportedComment],
@@ -113,12 +135,7 @@ mod export_types {
             writeln!(writer, "---").map_err(|e| io_error(&e))?;
             writeln!(writer).map_err(|e| io_error(&e))?;
 
-            let location = match (&comment.file_path, comment.line_number) {
-                (Some(path), Some(line)) => format!("{path}:{line}"),
-                (Some(path), None) => path.clone(),
-                (None, Some(line)) => format!("(unknown file):{line}"),
-                (None, None) => "(unknown location)".to_owned(),
-            };
+            let location = format_comment_location(comment.file_path.as_ref(), comment.line_number);
             writeln!(writer, "## {location}").map_err(|e| io_error(&e))?;
             writeln!(writer).map_err(|e| io_error(&e))?;
 
@@ -135,18 +152,7 @@ mod export_types {
             }
 
             if let Some(diff_hunk) = &comment.diff_hunk {
-                let language = comment
-                    .file_path
-                    .as_ref()
-                    .and_then(|p| Path::new(p).extension())
-                    .and_then(|ext| ext.to_str())
-                    .map_or("diff", |ext| match ext {
-                        "rs" => "rust",
-                        "py" => "python",
-                        "js" => "javascript",
-                        "ts" => "typescript",
-                        _ => "diff",
-                    });
+                let language = detect_language_from_path(comment.file_path.as_ref());
 
                 writeln!(writer).map_err(|e| io_error(&e))?;
                 writeln!(writer, "```{language}").map_err(|e| io_error(&e))?;
@@ -329,84 +335,63 @@ fn resolve_mock_server_url(server_url: &str, pr_url: &str) -> String {
     }
 }
 
-#[then("the output has header {text}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
-fn assert_output_has_header(export_state: &ExportState, text: String) {
-    let output = export_state
+#[expect(clippy::expect_used, reason = "helper for integration test steps")]
+fn get_output(export_state: &ExportState) -> String {
+    export_state
         .output
         .with_ref(Clone::clone)
-        .expect("output missing");
+        .expect("output missing")
+}
 
-    // Strip quotes from captured text if present
-    let expected = text.trim_matches('"');
+#[expect(clippy::expect_used, reason = "helper for integration test steps")]
+fn get_error(export_state: &ExportState) -> IntakeError {
+    export_state
+        .error
+        .with_ref(Clone::clone)
+        .expect("expected error")
+}
+
+fn trim_quotes(text: &str) -> &str {
+    text.trim_matches('"')
+}
+
+fn assert_output_contains(export_state: &ExportState, expected: &str, context: &str) {
+    let output = get_output(export_state);
     assert!(
         output.contains(expected),
-        "expected output to contain '{expected}', got:\n{output}"
+        "expected output to contain {context} '{expected}', got:\n{output}"
     );
+}
+
+fn assert_count_equals(actual: usize, expected: usize, item_type: &str) {
+    assert_eq!(
+        actual, expected,
+        "expected {expected} {item_type}, found {actual}"
+    );
+}
+
+#[then("the output has header {text}")]
+fn assert_output_has_header(export_state: &ExportState, text: String) {
+    assert_output_contains(export_state, trim_quotes(&text), "header");
 }
 
 #[then("the output has PR URL containing {text}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_output_has_pr_url(export_state: &ExportState, text: String) {
-    let output = export_state
-        .output
-        .with_ref(Clone::clone)
-        .expect("output missing");
-
-    // Strip quotes from captured text if present
-    let expected = text.trim_matches('"');
-    assert!(
-        output.contains(expected),
-        "expected output to contain PR URL '{expected}', got:\n{output}"
-    );
+    assert_output_contains(export_state, trim_quotes(&text), "PR URL");
 }
 
 #[then("the output has {count:CommentCount} comment sections")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_comment_section_count(export_state: &ExportState, count: CommentCount) {
-    let output = export_state
-        .output
-        .with_ref(Clone::clone)
-        .expect("output missing");
-
+    let output = get_output(export_state);
     let section_count = output.matches("---").count();
-    assert_eq!(
-        section_count,
-        count.value() as usize,
-        "expected {} comment sections, found {}",
-        count.value(),
-        section_count
-    );
+    assert_count_equals(section_count, count.value() as usize, "comment sections");
 }
 
 #[then("the output has {count:CommentCount} JSON lines")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_json_line_count(export_state: &ExportState, count: CommentCount) {
-    let output = export_state
-        .output
-        .with_ref(Clone::clone)
-        .expect("output missing");
-
+    let output = get_output(export_state);
     let line_count = output.lines().filter(|line| !line.is_empty()).count();
-    assert_eq!(
-        line_count,
-        count.value() as usize,
-        "expected {} JSON lines, found {}",
-        count.value(),
-        line_count
-    );
+    assert_count_equals(line_count, count.value() as usize, "JSON lines");
 }
 
 #[then("each JSON line is valid JSON with an id field")]
@@ -487,29 +472,14 @@ fn assert_comment_at_index(export_state: &ExportState, index: usize, file: &str,
 }
 
 #[then("the output is empty")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_output_empty(export_state: &ExportState) {
-    let output = export_state
-        .output
-        .with_ref(Clone::clone)
-        .expect("output missing");
-
+    let output = get_output(export_state);
     assert!(output.is_empty(), "expected empty output, got: {output}");
 }
 
 #[then("the error indicates unsupported export format")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_unsupported_format_error(export_state: &ExportState) {
-    let error = export_state
-        .error
-        .with_ref(Clone::clone)
-        .expect("expected error");
+    let error = get_error(export_state);
 
     match error {
         IntakeError::Configuration { message } => {
