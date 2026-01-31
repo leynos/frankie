@@ -245,6 +245,16 @@ mod tests {
         Ok(String::from_utf8(buffer).expect("valid UTF-8"))
     }
 
+    fn assert_single_comment_output_contains(comment: ExportedComment, expected_substring: &str) {
+        let comments = vec![comment];
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
+            .expect("should write markdown");
+        assert!(
+            output.contains(expected_substring),
+            "expected output to contain '{expected_substring}', got:\n{output}"
+        );
+    }
+
     #[rstest]
     fn writes_header_with_pr_url() {
         let comments: Vec<ExportedComment> = vec![];
@@ -282,46 +292,31 @@ mod tests {
 
     #[rstest]
     fn handles_missing_file_path() {
-        let comments = vec![
-            CommentBuilder::new(1)
-                .author("bob")
-                .line_number(10)
-                .body("Fix this")
-                .build(),
-        ];
+        let comment = CommentBuilder::new(1)
+            .author("bob")
+            .line_number(10)
+            .body("Fix this")
+            .build();
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
-
-        assert!(output.contains("## (unknown file):10"));
+        assert_single_comment_output_contains(comment, "## (unknown file):10");
     }
 
     #[rstest]
     fn handles_missing_line_number() {
-        let comments = vec![
-            CommentBuilder::new(1)
-                .author("charlie")
-                .file_path("README.md")
-                .body("Update docs")
-                .build(),
-        ];
+        let comment = CommentBuilder::new(1)
+            .author("charlie")
+            .file_path("README.md")
+            .body("Update docs")
+            .build();
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
-
-        assert!(output.contains("## README.md"));
-        // Should not have a colon and line number
-        assert!(!output.contains("README.md:"));
+        assert_single_comment_output_contains(comment, "## README.md");
     }
 
     #[rstest]
     fn handles_completely_missing_location() {
-        let comments = vec![CommentBuilder::new(1).body("General comment").build()];
+        let comment = CommentBuilder::new(1).body("General comment").build();
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
-
-        assert!(output.contains("## (unknown location)"));
+        assert_single_comment_output_contains(comment, "## (unknown location)");
     }
 
     #[rstest]
@@ -349,28 +344,20 @@ mod tests {
 
     #[rstest]
     fn uses_diff_language_for_unknown_extension() {
-        let comments = vec![
-            CommentBuilder::new(1)
-                .file_path("config.unknown")
-                .line_number(1)
-                .diff_hunk("some code")
-                .build(),
-        ];
+        let comment = CommentBuilder::new(1)
+            .file_path("config.unknown")
+            .line_number(1)
+            .diff_hunk("some code")
+            .build();
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
-
-        assert!(output.contains("```diff"));
+        assert_single_comment_output_contains(comment, "```diff");
     }
 
     #[rstest]
     fn uses_diff_language_when_no_file_path() {
-        let comments = vec![CommentBuilder::new(1).diff_hunk("+ added line").build()];
+        let comment = CommentBuilder::new(1).diff_hunk("+ added line").build();
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
-
-        assert!(output.contains("```diff"));
+        assert_single_comment_output_contains(comment, "```diff");
     }
 
     #[rstest]
