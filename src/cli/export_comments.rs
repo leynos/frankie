@@ -136,6 +136,62 @@ mod tests {
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+    /// Builder for constructing `ExportedComment` test fixtures.
+    struct CommentBuilder {
+        id: u64,
+        author: Option<String>,
+        file_path: Option<String>,
+        line_number: Option<u32>,
+        body: Option<String>,
+    }
+
+    impl CommentBuilder {
+        fn new(id: u64) -> Self {
+            Self {
+                id,
+                author: None,
+                file_path: None,
+                line_number: None,
+                body: None,
+            }
+        }
+
+        fn author(mut self, author: &str) -> Self {
+            self.author = Some(author.to_owned());
+            self
+        }
+
+        fn file_path(mut self, path: &str) -> Self {
+            self.file_path = Some(path.to_owned());
+            self
+        }
+
+        fn line_number(mut self, line: u32) -> Self {
+            self.line_number = Some(line);
+            self
+        }
+
+        fn body(mut self, body: &str) -> Self {
+            self.body = Some(body.to_owned());
+            self
+        }
+
+        fn build(self) -> ExportedComment {
+            ExportedComment {
+                id: self.id,
+                author: self.author,
+                file_path: self.file_path,
+                line_number: self.line_number,
+                original_line_number: None,
+                body: self.body,
+                diff_hunk: None,
+                commit_sha: None,
+                in_reply_to_id: None,
+                created_at: None,
+            }
+        }
+    }
+
     fn assert_parse_error_contains(
         config: &FrankieConfig,
         expected_msg_fragment: &str,
@@ -250,18 +306,14 @@ mod tests {
 
     #[rstest]
     fn write_format_markdown_writes_to_buffer() -> TestResult {
-        let comments = vec![ExportedComment {
-            id: 1,
-            author: Some("alice".to_owned()),
-            file_path: Some("test.rs".to_owned()),
-            line_number: Some(10),
-            original_line_number: None,
-            body: Some("Fix this".to_owned()),
-            diff_hunk: None,
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: None,
-        }];
+        let comments = vec![
+            CommentBuilder::new(1)
+                .author("alice")
+                .file_path("test.rs")
+                .line_number(10)
+                .body("Fix this")
+                .build(),
+        ];
 
         let output = write_to_string(
             &comments,
@@ -276,18 +328,7 @@ mod tests {
 
     #[rstest]
     fn write_format_jsonl_writes_to_buffer() -> TestResult {
-        let comments = vec![ExportedComment {
-            id: 42,
-            author: Some("bob".to_owned()),
-            file_path: None,
-            line_number: None,
-            original_line_number: None,
-            body: Some("LGTM".to_owned()),
-            diff_hunk: None,
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: None,
-        }];
+        let comments = vec![CommentBuilder::new(42).author("bob").body("LGTM").build()];
 
         let output = write_to_string(
             &comments,
