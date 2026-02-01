@@ -3,26 +3,37 @@
 //! This module provides common test helpers used across export-related test
 //! modules to reduce duplication and ensure consistent testing patterns.
 
+use std::fmt;
+
 use super::ExportedComment;
 
-/// A newtype wrapper for pull request URLs in tests.
+// Re-export PrUrl from model for test convenience.
+pub use super::PrUrl;
+
+/// Error type for test assertions that implements `std::error::Error`.
 ///
-/// Provides semantic typing for PR URL parameters to reduce string argument
-/// ratio and improve type safety.
-#[derive(Debug, Clone, Copy)]
-pub struct PrUrl<'a>(&'a str);
+/// This allows test helpers to return errors compatible with `?` operator
+/// in test functions returning `Result<(), Box<dyn std::error::Error>>`.
+#[derive(Debug)]
+pub struct TestError(String);
 
-impl<'a> PrUrl<'a> {
-    /// Creates a new `PrUrl` from a string slice.
-    #[must_use]
-    pub const fn new(url: &'a str) -> Self {
-        Self(url)
+impl fmt::Display for TestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
+}
 
-    /// Returns the underlying string slice.
-    #[must_use]
-    pub const fn as_str(self) -> &'a str {
-        self.0
+impl std::error::Error for TestError {}
+
+impl From<String> for TestError {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for TestError {
+    fn from(s: &str) -> Self {
+        Self(s.to_owned())
     }
 }
 
@@ -127,22 +138,26 @@ impl CommentBuilder {
 }
 
 /// Asserts that `haystack` contains `needle`, returning an error if not.
-pub fn assert_contains(haystack: &str, needle: &str) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns a [`TestError`] if the `needle` is not found in `haystack`.
+pub fn assert_contains(haystack: &str, needle: &str) -> Result<(), TestError> {
     if haystack.contains(needle) {
         Ok(())
     } else {
-        Err(format!(
-            "expected output to contain '{needle}', got:\n{haystack}"
-        ))
+        Err(format!("expected output to contain '{needle}', got:\n{haystack}").into())
     }
 }
 
 /// Asserts that `haystack` does NOT contain `needle`, returning an error if it does.
-pub fn assert_not_contains(haystack: &str, needle: &str) -> Result<(), String> {
+///
+/// # Errors
+///
+/// Returns a [`TestError`] if `needle` is found in `haystack`.
+pub fn assert_not_contains(haystack: &str, needle: &str) -> Result<(), TestError> {
     if haystack.contains(needle) {
-        Err(format!(
-            "expected output to NOT contain '{needle}', got:\n{haystack}"
-        ))
+        Err(format!("expected output to NOT contain '{needle}', got:\n{haystack}").into())
     } else {
         Ok(())
     }

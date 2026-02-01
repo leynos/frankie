@@ -24,5 +24,5 @@ pub mod test_helpers;
 
 pub use jsonl::write_jsonl;
 pub use markdown::write_markdown;
-pub use model::{ExportFormat, ExportedComment};
+pub use model::{ExportFormat, ExportedComment, PrUrl};
 pub use ordering::sort_comments;

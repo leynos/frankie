@@ -10,6 +10,27 @@ use serde::Serialize;
 
 use crate::github::{IntakeError, ReviewComment};
 
+/// A newtype wrapper for pull request URLs.
+///
+/// Provides semantic typing for PR URL parameters to reduce string argument
+/// ratio and improve type safety.
+#[derive(Debug, Clone, Copy)]
+pub struct PrUrl<'a>(&'a str);
+
+impl<'a> PrUrl<'a> {
+    /// Creates a new `PrUrl` from a string slice.
+    #[must_use]
+    pub const fn new(url: &'a str) -> Self {
+        Self(url)
+    }
+
+    /// Returns the underlying string slice.
+    #[must_use]
+    pub const fn as_str(self) -> &'a str {
+        self.0
+    }
+}
+
 /// A review comment prepared for export with all relevant metadata.
 ///
 /// This structure is designed for serialization and includes only the fields
@@ -172,7 +193,6 @@ mod tests {
     #[case("")]
     fn export_format_rejects_invalid_values(#[case] input: &str) {
         let result: Result<ExportFormat, _> = input.parse();
-        assert!(result.is_err());
         let err = result.expect_err("should reject invalid format");
         assert!(
             matches!(err, IntakeError::Configuration { ref message } if message.contains("unsupported export format")),

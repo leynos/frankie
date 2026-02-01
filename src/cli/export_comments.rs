@@ -10,30 +10,11 @@ use cap_std::ambient_authority;
 use cap_std::fs_utf8::Dir;
 
 use frankie::{
-    FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
+    FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken, PrUrl,
     PullRequestLocator, ReviewCommentGateway,
 };
 
 use super::export::{ExportFormat, ExportedComment, sort_comments, write_jsonl, write_markdown};
-
-/// A newtype wrapper for pull request URLs.
-///
-/// Provides semantic typing for PR URL parameters to reduce string argument
-/// ratio and improve type safety.
-#[derive(Debug, Clone, Copy)]
-pub struct PrUrl<'a>(&'a str);
-
-impl<'a> PrUrl<'a> {
-    /// Creates a new `PrUrl` from a string slice.
-    const fn new(url: &'a str) -> Self {
-        Self(url)
-    }
-
-    /// Returns the underlying string slice.
-    const fn as_str(&self) -> &str {
-        self.0
-    }
-}
 
 /// Exports review comments from a pull request in structured format.
 ///
@@ -132,7 +113,7 @@ fn write_format<W: Write>(
 mod tests {
     use rstest::rstest;
 
-    use frankie::export::test_helpers::{CommentBuilder, assert_contains};
+    use frankie::export::test_helpers::{CommentBuilder, TestError, assert_contains};
 
     use super::*;
 
@@ -141,7 +122,7 @@ mod tests {
     fn assert_parse_error_contains(
         config: &FrankieConfig,
         expected_msg_fragment: &str,
-    ) -> Result<(), String> {
+    ) -> Result<(), TestError> {
         let result = parse_export_format(config);
         match result {
             Err(IntakeError::Configuration { message }) => {
@@ -150,11 +131,12 @@ mod tests {
                 } else {
                     Err(format!(
                         "expected message to contain '{expected_msg_fragment}', got: {message}"
-                    ))
+                    )
+                    .into())
                 }
             }
-            Err(other) => Err(format!("expected Configuration error, got: {other:?}")),
-            Ok(_) => Err("expected error but got success".to_owned()),
+            Err(other) => Err(format!("expected Configuration error, got: {other:?}").into()),
+            Ok(_) => Err("expected error but got success".into()),
         }
     }
 
@@ -174,15 +156,16 @@ mod tests {
         parsed: &serde_json::Value,
         field: &str,
         expected: impl Into<serde_json::Value>,
-    ) -> Result<(), String> {
+    ) -> Result<(), TestError> {
         let actual = parsed.get(field);
         let expected_val = expected.into();
         if actual == Some(&expected_val) {
             Ok(())
         } else {
-            Err(format!(
-                "field '{field}' mismatch: expected {expected_val:?}, got {actual:?}"
-            ))
+            Err(
+                format!("field '{field}' mismatch: expected {expected_val:?}, got {actual:?}")
+                    .into(),
+            )
         }
     }
 
