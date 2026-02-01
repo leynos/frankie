@@ -9,6 +9,7 @@ test-support = []
 
 [dependencies]
 async-trait = "0.1.83"
+camino = "1.2.2"
 clap = { version = "4.5.53", features = ["derive"] }
 diesel = { version = "2.3.4", features = ["sqlite"] }
 diesel_migrations = "2.3.1"
@@ -33,7 +34,6 @@ syntect = "5.2.0"
 
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
-camino = "1.2.2"
 cap-std = { version = "4.0.0", features = ["fs_utf8"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"

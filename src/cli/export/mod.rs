@@ -1,26 +1,7 @@
 //! Structured comment export functionality.
 //!
-//! This module provides utilities for exporting pull request review comments
-//! in structured formats (Markdown and JSONL) suitable for downstream
-//! processing by AI tools or human review.
-//!
-//! # Supported Formats
-//!
-//! - **Markdown**: Human-readable format with syntax-highlighted code blocks
-//! - **JSONL**: Machine-readable JSON Lines format (one object per line)
-//!
-//! # Ordering
-//!
-//! Comments are exported in stable order: by file path (alphabetical), then
-//! line number (ascending), then comment ID (ascending). Comments with missing
-//! file paths or line numbers are sorted last.
+//! This module re-exports the export types and functions from the library
+//! crate for use by the CLI. The actual implementations live in the library
+//! to allow sharing with integration tests.
 
-mod jsonl;
-mod markdown;
-mod model;
-mod ordering;
-
-pub use jsonl::write_jsonl;
-pub use markdown::write_markdown;
-pub use model::{ExportFormat, ExportedComment};
-pub use ordering::sort_comments;
+pub use frankie::{ExportFormat, ExportedComment, sort_comments, write_jsonl, write_markdown};

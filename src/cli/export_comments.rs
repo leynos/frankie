@@ -92,10 +92,6 @@ fn write_format<W: Write>(
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::indexing_slicing,
-    reason = "test assertions use known JSON fields"
-)]
 mod tests {
     use rstest::rstest;
 
@@ -103,7 +99,6 @@ mod tests {
 
     fn assert_parse_error_contains(config: &FrankieConfig, expected_msg_fragment: &str) {
         let result = parse_export_format(config);
-        assert!(result.is_err());
         match result {
             Err(IntakeError::Configuration { message }) => {
                 assert!(
@@ -111,14 +106,25 @@ mod tests {
                     "expected message to contain '{expected_msg_fragment}', got: {message}"
                 );
             }
-            _ => panic!("expected Configuration error"),
+            Err(other) => panic!("expected Configuration error, got: {other:?}"),
+            Ok(_) => panic!("expected error but got success"),
         }
     }
 
     fn write_to_string(comments: &[ExportedComment], pr_url: &str, format: ExportFormat) -> String {
         let mut buffer = Vec::new();
-        write_format(&mut buffer, comments, pr_url, format).expect("should write");
-        String::from_utf8(buffer).expect("valid UTF-8")
+        write_format(&mut buffer, comments, pr_url, format).expect("write_format should succeed");
+        String::from_utf8(buffer).expect("output should be valid UTF-8")
+    }
+
+    fn assert_json_field_eq(
+        parsed: &serde_json::Value,
+        field: &str,
+        expected: impl Into<serde_json::Value>,
+    ) {
+        let actual = parsed.get(field);
+        let expected_val = expected.into();
+        assert_eq!(actual, Some(&expected_val), "field '{field}' mismatch");
     }
 
     #[rstest]
@@ -138,10 +144,8 @@ mod tests {
             ..Default::default()
         };
 
-        let result = parse_export_format(&config);
-
-        assert!(result.is_ok());
-        assert_eq!(result.expect("should parse"), ExportFormat::Markdown);
+        let result = parse_export_format(&config).expect("should parse markdown format");
+        assert_eq!(result, ExportFormat::Markdown);
     }
 
     #[rstest]
@@ -151,10 +155,8 @@ mod tests {
             ..Default::default()
         };
 
-        let result = parse_export_format(&config);
-
-        assert!(result.is_ok());
-        assert_eq!(result.expect("should parse"), ExportFormat::Jsonl);
+        let result = parse_export_format(&config).expect("should parse jsonl format");
+        assert_eq!(result, ExportFormat::Jsonl);
     }
 
     #[rstest]
@@ -209,8 +211,9 @@ mod tests {
 
         let output = write_to_string(&comments, "https://example.com/pr/1", ExportFormat::Jsonl);
 
-        let parsed: serde_json::Value = serde_json::from_str(output.trim()).expect("valid JSON");
-        assert_eq!(parsed["id"], 42);
-        assert_eq!(parsed["body"], "LGTM");
+        let parsed: serde_json::Value =
+            serde_json::from_str(output.trim()).expect("should be valid JSON");
+        assert_json_field_eq(&parsed, "id", 42_u64);
+        assert_json_field_eq(&parsed, "body", "LGTM");
     }
 }

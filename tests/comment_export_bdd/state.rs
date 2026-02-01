@@ -1,4 +1,4 @@
-//! Scenario state and runtime/server initialisation for the comment export
+//! Scenario state and runtime/server initialization for the comment export
 //! BDD tests.
 
 use frankie::IntakeError;
@@ -18,7 +18,7 @@ pub(crate) struct ExportState {
     pub(crate) error: Slot<IntakeError>,
 }
 
-/// Ensures the runtime and server are initialised in `ExportState`.
+/// Ensures the runtime and server are initialized in `ExportState`.
 pub(crate) fn ensure_runtime_and_server(
     export_state: &ExportState,
 ) -> Result<SharedRuntime, IntakeError> {

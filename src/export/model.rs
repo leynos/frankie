@@ -1,17 +1,18 @@
 //! Export data models for structured comment output.
 //!
-//! This module defines the serialisable structures used for exporting review
+//! This module defines the serializable structures used for exporting review
 //! comments and the format selection enum for CLI integration.
 
 use std::fmt;
 use std::str::FromStr;
 
-use frankie::{IntakeError, ReviewComment};
 use serde::Serialize;
+
+use crate::github::{IntakeError, ReviewComment};
 
 /// A review comment prepared for export with all relevant metadata.
 ///
-/// This structure is designed for serialisation and includes only the fields
+/// This structure is designed for serialization and includes only the fields
 /// needed for structured export. It is constructed from a [`ReviewComment`]
 /// via the [`From`] trait implementation.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]

@@ -14,15 +14,6 @@ use super::model::ExportedComment;
 /// 1. File path (alphabetical, `None` values last)
 /// 2. Line number (ascending, `None` values last)
 /// 3. Comment ID (ascending)
-///
-/// # Examples
-///
-/// ```
-/// use frankie::ReviewComment;
-/// # use std::path::Path;
-///
-/// // Comments are sorted by file, then line, then ID
-/// ```
 pub fn sort_comments(comments: &mut [ExportedComment]) {
     comments.sort_by(compare_comments);
 }
@@ -56,7 +47,6 @@ fn compare_options<T: Ord>(a: Option<&T>, b: Option<&T>) -> Ordering {
 }
 
 #[cfg(test)]
-#[expect(clippy::indexing_slicing, reason = "test assertions use known indices")]
 mod tests {
     use rstest::rstest;
 
@@ -139,12 +129,12 @@ mod tests {
 
         sort_comments(&mut comments);
 
-        assert_eq!(comments[0].line_number, Some(10));
-        assert!(comments[1].line_number.is_none());
-        assert!(comments[2].line_number.is_none());
-        // Within None group, sorted by ID
-        assert_eq!(comments[1].id, 1);
-        assert_eq!(comments[2].id, 3);
+        // First comment should have line number 10, rest should be None
+        let line_numbers: Vec<Option<u32>> = comments.iter().map(|c| c.line_number).collect();
+        assert_eq!(line_numbers, vec![Some(10), None, None]);
+        // Within None group, sorted by ID: 1, then 3
+        let ids: Vec<u64> = comments.iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![2, 1, 3]);
     }
 
     #[rstest]
@@ -158,8 +148,8 @@ mod tests {
     fn single_element_unchanged() {
         let mut comments = vec![make_comment(42, Some("test.rs"), Some(1))];
         sort_comments(&mut comments);
-        assert_eq!(comments.len(), 1);
-        assert_eq!(comments[0].id, 42);
+        let ids: Vec<u64> = comments.iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![42]);
     }
 
     #[rstest]
@@ -179,11 +169,7 @@ mod tests {
         // src/a.rs:10 (id=2), src/a.rs:30 (id=3), src/a.rs:None (id=6)
         // src/b.rs:10 (id=4), src/b.rs:20 (id=5)
         // None:None (id=1)
-        assert_eq!(comments[0].id, 2); // src/a.rs:10
-        assert_eq!(comments[1].id, 3); // src/a.rs:30
-        assert_eq!(comments[2].id, 6); // src/a.rs:None
-        assert_eq!(comments[3].id, 4); // src/b.rs:10
-        assert_eq!(comments[4].id, 5); // src/b.rs:20
-        assert_eq!(comments[5].id, 1); // None:None
+        let ids: Vec<u64> = comments.iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![2, 3, 6, 4, 5, 1]);
     }
 }

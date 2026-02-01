@@ -155,7 +155,7 @@ Review comments are fetched via `OctocrabReviewCommentGateway` implementing
 - `created_at: Option<String>` - ISO 8601 timestamp
 - `updated_at: Option<String>` - ISO 8601 timestamp
 
-Serialisation uses `serde` and `serde_json` (already in Cargo.toml).
+Serialization uses `serde` and `serde_json` (already in Cargo.toml).
 Behavioural tests live under `tests/` with Gherkin feature files in
 `tests/features/`.
 

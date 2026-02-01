@@ -4,9 +4,10 @@
 //! blocks for diff context.
 
 use std::io::Write;
-use std::path::Path;
 
-use frankie::IntakeError;
+use camino::Utf8Path;
+
+use crate::github::IntakeError;
 
 use super::model::ExportedComment;
 
@@ -99,57 +100,82 @@ fn write_metadata<W: Write>(writer: &mut W, comment: &ExportedComment) -> Result
 }
 
 /// Writes a fenced code block with language hint from file extension.
+///
+/// Uses a fence length that exceeds any backtick runs in the diff hunk to
+/// prevent nested code fences from breaking the Markdown output.
 fn write_code_block<W: Write>(
     writer: &mut W,
     file_path: Option<&str>,
     diff_hunk: &str,
 ) -> Result<(), IntakeError> {
     let language = file_path
-        .and_then(|p| Path::new(p).extension())
-        .and_then(|ext| ext.to_str())
+        .and_then(|p| Utf8Path::new(p).extension())
         .map_or("diff", extension_to_language);
 
+    let fence = compute_fence(diff_hunk);
     writeln!(writer).map_err(|e| io_error(&e))?;
-    writeln!(writer, "```{language}").map_err(|e| io_error(&e))?;
+    writeln!(writer, "{fence}{language}").map_err(|e| io_error(&e))?;
     writeln!(writer, "{diff_hunk}").map_err(|e| io_error(&e))?;
-    writeln!(writer, "```").map_err(|e| io_error(&e))?;
+    writeln!(writer, "{fence}").map_err(|e| io_error(&e))?;
     Ok(())
 }
 
+/// Computes a fence string that exceeds any backtick run in the content.
+fn compute_fence(content: &str) -> String {
+    let max_backticks = content.split(|c| c != '`').map(str::len).max().unwrap_or(0);
+    let fence_len = max_backticks.max(2) + 1;
+    "`".repeat(fence_len)
+}
+
+/// Extension-to-language mapping entries.
+const EXTENSION_MAPPINGS: &[(&str, &str)] = &[
+    ("rs", "rust"),
+    ("py", "python"),
+    ("js", "javascript"),
+    ("ts", "typescript"),
+    ("jsx", "jsx"),
+    ("tsx", "tsx"),
+    ("rb", "ruby"),
+    ("go", "go"),
+    ("java", "java"),
+    ("kt", "kotlin"),
+    ("kts", "kotlin"),
+    ("swift", "swift"),
+    ("c", "c"),
+    ("cpp", "cpp"),
+    ("cc", "cpp"),
+    ("cxx", "cpp"),
+    ("h", "cpp"),
+    ("hpp", "cpp"),
+    ("cs", "csharp"),
+    ("php", "php"),
+    ("sh", "bash"),
+    ("bash", "bash"),
+    ("zsh", "zsh"),
+    ("fish", "fish"),
+    ("ps1", "powershell"),
+    ("sql", "sql"),
+    ("md", "markdown"),
+    ("json", "json"),
+    ("yaml", "yaml"),
+    ("yml", "yaml"),
+    ("toml", "toml"),
+    ("xml", "xml"),
+    ("html", "html"),
+    ("htm", "html"),
+    ("css", "css"),
+    ("scss", "scss"),
+    ("sass", "scss"),
+    ("less", "less"),
+];
+
 /// Maps file extensions to Markdown code block language hints.
 fn extension_to_language(ext: &str) -> &'static str {
-    match ext.to_lowercase().as_str() {
-        "rs" => "rust",
-        "py" => "python",
-        "js" => "javascript",
-        "ts" => "typescript",
-        "jsx" => "jsx",
-        "tsx" => "tsx",
-        "rb" => "ruby",
-        "go" => "go",
-        "java" => "java",
-        "kt" | "kts" => "kotlin",
-        "swift" => "swift",
-        "c" => "c",
-        "cpp" | "cc" | "cxx" | "h" | "hpp" => "cpp",
-        "cs" => "csharp",
-        "php" => "php",
-        "sh" | "bash" => "bash",
-        "zsh" => "zsh",
-        "fish" => "fish",
-        "ps1" => "powershell",
-        "sql" => "sql",
-        "md" => "markdown",
-        "json" => "json",
-        "yaml" | "yml" => "yaml",
-        "toml" => "toml",
-        "xml" => "xml",
-        "html" | "htm" => "html",
-        "css" => "css",
-        "scss" | "sass" => "scss",
-        "less" => "less",
-        _ => "diff",
-    }
+    let ext_lower = ext.to_lowercase();
+    EXTENSION_MAPPINGS
+        .iter()
+        .find(|(e, _)| *e == ext_lower)
+        .map_or("diff", |(_, lang)| lang)
 }
 
 /// Converts an I/O error to an [`IntakeError::Io`].
@@ -236,19 +262,15 @@ mod tests {
 
     use super::*;
 
-    fn write_markdown_to_string(
-        comments: &[ExportedComment],
-        pr_url: &str,
-    ) -> Result<String, IntakeError> {
+    fn write_markdown_to_string(comments: &[ExportedComment], pr_url: &str) -> String {
         let mut buffer = Vec::new();
-        write_markdown(&mut buffer, comments, pr_url)?;
-        Ok(String::from_utf8(buffer).expect("valid UTF-8"))
+        write_markdown(&mut buffer, comments, pr_url).expect("should write markdown");
+        String::from_utf8(buffer).expect("valid UTF-8")
     }
 
     fn assert_single_comment_output_contains(comment: ExportedComment, expected_substring: &str) {
         let comments = vec![comment];
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1");
         assert!(
             output.contains(expected_substring),
             "expected output to contain '{expected_substring}', got:\n{output}"
@@ -259,8 +281,7 @@ mod tests {
     fn writes_header_with_pr_url() {
         let comments: Vec<ExportedComment> = vec![];
 
-        let output = write_markdown_to_string(&comments, "https://github.com/owner/repo/pull/123")
-            .expect("should write markdown");
+        let output = write_markdown_to_string(&comments, "https://github.com/owner/repo/pull/123");
 
         assert!(output.contains("# Review Comments Export"));
         assert!(output.contains("PR: https://github.com/owner/repo/pull/123"));
@@ -279,8 +300,7 @@ mod tests {
                 .build(),
         ];
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1");
 
         assert!(output.contains("## src/lib.rs:42"));
         assert!(output.contains("**Reviewer:** alice"));
@@ -323,8 +343,7 @@ mod tests {
     fn empty_comments_produces_header_only() {
         let comments: Vec<ExportedComment> = vec![];
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1");
 
         assert!(output.contains("# Review Comments Export"));
         assert!(!output.contains("---")); // No comment separators
@@ -377,8 +396,7 @@ mod tests {
                 .build(),
         ];
 
-        let output = write_markdown_to_string(&comments, "https://example.com/pr/1")
-            .expect("should write markdown");
+        let output = write_markdown_to_string(&comments, "https://example.com/pr/1");
 
         let separator_count = output.matches("---").count();
         assert_eq!(separator_count, 2); // One per comment

@@ -299,8 +299,8 @@ explaining what is missing.
 
 ## Comment export mode
 
-Export review comments in structured formats for downstream processing by AI
-tools or human review:
+Export review comments in structured formats for downstream processing by
+artificial intelligence (AI) tools or human review:
 
 ```bash
 frankie --pr-url https://github.com/owner/repo/pull/123 --export markdown
