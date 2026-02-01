@@ -170,17 +170,6 @@ mod tests {
     }
 
     #[rstest]
-    fn parse_export_format_returns_error_when_missing() -> TestResult {
-        let config = FrankieConfig {
-            export: None,
-            ..Default::default()
-        };
-
-        assert_parse_error_contains(&config, "export format is required")?;
-        Ok(())
-    }
-
-    #[rstest]
     #[case("markdown", ExportFormat::Markdown)]
     #[case("jsonl", ExportFormat::Jsonl)]
     fn parse_export_format_returns_expected_format(
@@ -197,16 +186,20 @@ mod tests {
     }
 
     #[rstest]
-    #[case("xml")]
-    #[case("csv")]
-    #[case("yaml")]
-    fn parse_export_format_returns_error_for_invalid(#[case] input: &str) -> TestResult {
+    #[case(None, "export format is required")]
+    #[case(Some("xml"), "unsupported export format")]
+    #[case(Some("csv"), "unsupported export format")]
+    #[case(Some("yaml"), "unsupported export format")]
+    fn parse_export_format_rejects_missing_or_invalid(
+        #[case] input: Option<&str>,
+        #[case] expected_error: &str,
+    ) -> TestResult {
         let config = FrankieConfig {
-            export: Some(input.to_owned()),
+            export: input.map(str::to_owned),
             ..Default::default()
         };
 
-        assert_parse_error_contains(&config, "unsupported export format")?;
+        assert_parse_error_contains(&config, expected_error)?;
         Ok(())
     }
 
