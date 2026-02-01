@@ -165,10 +165,9 @@ mod tests {
         #[case] expected: ExportFormat,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let parsed: ExportFormat = input.parse()?;
-        if parsed != expected {
-            return Err(format!("expected {expected:?}, got {parsed:?}").into());
-        }
-        Ok(())
+        (parsed == expected)
+            .then_some(())
+            .ok_or_else(|| format!("expected {expected:?}, got {parsed:?}").into())
     }
 
     #[rstest]

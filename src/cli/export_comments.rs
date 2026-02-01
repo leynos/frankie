@@ -21,7 +21,7 @@ use super::export::{ExportFormat, ExportedComment, sort_comments, write_jsonl, w
 /// Provides semantic typing for PR URL parameters to reduce string argument
 /// ratio and improve type safety.
 #[derive(Debug, Clone, Copy)]
-struct PrUrl<'a>(&'a str);
+pub struct PrUrl<'a>(&'a str);
 
 impl<'a> PrUrl<'a> {
     /// Creates a new `PrUrl` from a string slice.
