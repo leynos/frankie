@@ -160,14 +160,9 @@ mod tests {
     #[case("JSONL", ExportFormat::Jsonl)]
     #[case("json-lines", ExportFormat::Jsonl)]
     #[case("jsonlines", ExportFormat::Jsonl)]
-    fn export_format_parses_valid_values(
-        #[case] input: &str,
-        #[case] expected: ExportFormat,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let parsed: ExportFormat = input.parse()?;
-        (parsed == expected)
-            .then_some(())
-            .ok_or_else(|| format!("expected {expected:?}, got {parsed:?}").into())
+    fn export_format_parses_valid_values(#[case] input: &str, #[case] expected: ExportFormat) {
+        let parsed: ExportFormat = input.parse().expect("should parse valid format");
+        assert_eq!(parsed, expected);
     }
 
     #[rstest]

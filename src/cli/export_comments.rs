@@ -132,65 +132,11 @@ fn write_format<W: Write>(
 mod tests {
     use rstest::rstest;
 
+    use frankie::export::test_helpers::{CommentBuilder, assert_contains};
+
     use super::*;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-    /// Builder for constructing `ExportedComment` test fixtures.
-    struct CommentBuilder {
-        id: u64,
-        author: Option<String>,
-        file_path: Option<String>,
-        line_number: Option<u32>,
-        body: Option<String>,
-    }
-
-    impl CommentBuilder {
-        fn new(id: u64) -> Self {
-            Self {
-                id,
-                author: None,
-                file_path: None,
-                line_number: None,
-                body: None,
-            }
-        }
-
-        fn author(mut self, author: &str) -> Self {
-            self.author = Some(author.to_owned());
-            self
-        }
-
-        fn file_path(mut self, path: &str) -> Self {
-            self.file_path = Some(path.to_owned());
-            self
-        }
-
-        fn line_number(mut self, line: u32) -> Self {
-            self.line_number = Some(line);
-            self
-        }
-
-        fn body(mut self, body: &str) -> Self {
-            self.body = Some(body.to_owned());
-            self
-        }
-
-        fn build(self) -> ExportedComment {
-            ExportedComment {
-                id: self.id,
-                author: self.author,
-                file_path: self.file_path,
-                line_number: self.line_number,
-                original_line_number: None,
-                body: self.body,
-                diff_hunk: None,
-                commit_sha: None,
-                in_reply_to_id: None,
-                created_at: None,
-            }
-        }
-    }
 
     fn assert_parse_error_contains(
         config: &FrankieConfig,
@@ -251,52 +197,29 @@ mod tests {
         Ok(())
     }
 
-    fn assert_eq_format(actual: ExportFormat, expected: ExportFormat) -> Result<(), String> {
-        if actual == expected {
-            Ok(())
-        } else {
-            Err(format!("expected {expected:?}, got {actual:?}"))
-        }
-    }
-
-    fn assert_contains(haystack: &str, needle: &str) -> Result<(), String> {
-        if haystack.contains(needle) {
-            Ok(())
-        } else {
-            Err(format!(
-                "expected output to contain '{needle}', got:\n{haystack}"
-            ))
-        }
-    }
-
     #[rstest]
-    fn parse_export_format_returns_markdown() -> TestResult {
+    #[case("markdown", ExportFormat::Markdown)]
+    #[case("jsonl", ExportFormat::Jsonl)]
+    fn parse_export_format_returns_expected_format(
+        #[case] input: &str,
+        #[case] expected: ExportFormat,
+    ) {
         let config = FrankieConfig {
-            export: Some("markdown".to_owned()),
+            export: Some(input.to_owned()),
             ..Default::default()
         };
 
-        let result = parse_export_format(&config)?;
-        assert_eq_format(result, ExportFormat::Markdown)?;
-        Ok(())
+        let result = parse_export_format(&config).expect("should parse valid format");
+        assert_eq!(result, expected);
     }
 
     #[rstest]
-    fn parse_export_format_returns_jsonl() -> TestResult {
+    #[case("xml")]
+    #[case("csv")]
+    #[case("yaml")]
+    fn parse_export_format_returns_error_for_invalid(#[case] input: &str) -> TestResult {
         let config = FrankieConfig {
-            export: Some("jsonl".to_owned()),
-            ..Default::default()
-        };
-
-        let result = parse_export_format(&config)?;
-        assert_eq_format(result, ExportFormat::Jsonl)?;
-        Ok(())
-    }
-
-    #[rstest]
-    fn parse_export_format_returns_error_for_invalid() -> TestResult {
-        let config = FrankieConfig {
-            export: Some("xml".to_owned()),
+            export: Some(input.to_owned()),
             ..Default::default()
         };
 

@@ -19,6 +19,8 @@ mod jsonl;
 mod markdown;
 mod model;
 mod ordering;
+#[doc(hidden)]
+pub mod test_helpers;
 
 pub use jsonl::write_jsonl;
 pub use markdown::write_markdown;

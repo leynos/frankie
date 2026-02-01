@@ -6,115 +6,9 @@
 use rstest::rstest;
 
 use super::*;
-
-/// A newtype wrapper for pull request URLs in tests.
-///
-/// Provides semantic typing for PR URL parameters to reduce string argument
-/// ratio and improve type safety.
-#[derive(Debug, Clone, Copy)]
-struct PrUrl<'a>(&'a str);
-
-impl<'a> PrUrl<'a> {
-    /// Creates a new `PrUrl` from a string slice.
-    const fn new(url: &'a str) -> Self {
-        Self(url)
-    }
-
-    /// Returns the underlying string slice.
-    const fn as_str(self) -> &'a str {
-        self.0
-    }
-}
-
-/// Test data constants to reduce string argument repetition.
-mod test_data {
-    use super::PrUrl;
-
-    /// Default PR URL for tests that don't need a specific URL.
-    pub const DEFAULT_PR_URL: PrUrl<'static> = PrUrl::new("https://example.com/pr/1");
-    /// A realistic GitHub PR URL for testing header output.
-    pub const GITHUB_PR_URL: PrUrl<'static> = PrUrl::new("https://github.com/owner/repo/pull/123");
-    /// Sample author name for comprehensive tests.
-    pub const SAMPLE_AUTHOR: &str = "alice";
-    /// Sample file path for comprehensive tests.
-    pub const SAMPLE_FILE_PATH: &str = "src/lib.rs";
-    /// Sample comment body for comprehensive tests.
-    pub const SAMPLE_BODY: &str = "Consider using a constant here.";
-    /// Sample diff hunk for comprehensive tests.
-    pub const SAMPLE_DIFF_HUNK: &str = "@@ -40,3 +40,5 @@\n let x = 1;";
-    /// Sample timestamp for comprehensive tests.
-    pub const SAMPLE_TIMESTAMP: &str = "2025-01-15T10:00:00Z";
-}
-
-/// Builder for creating test [`ExportedComment`] instances with a fluent API.
-struct CommentBuilder {
-    id: u64,
-    author: Option<String>,
-    file_path: Option<String>,
-    line_number: Option<u32>,
-    body: Option<String>,
-    diff_hunk: Option<String>,
-    created_at: Option<String>,
-}
-
-impl CommentBuilder {
-    fn new(id: u64) -> Self {
-        Self {
-            id,
-            author: None,
-            file_path: None,
-            line_number: None,
-            body: None,
-            diff_hunk: None,
-            created_at: None,
-        }
-    }
-
-    fn author(mut self, author: &str) -> Self {
-        self.author = Some(author.to_owned());
-        self
-    }
-
-    fn file_path(mut self, file_path: &str) -> Self {
-        self.file_path = Some(file_path.to_owned());
-        self
-    }
-
-    fn line_number(mut self, line_number: u32) -> Self {
-        self.line_number = Some(line_number);
-        self
-    }
-
-    fn body(mut self, body: &str) -> Self {
-        self.body = Some(body.to_owned());
-        self
-    }
-
-    fn diff_hunk(mut self, diff_hunk: &str) -> Self {
-        self.diff_hunk = Some(diff_hunk.to_owned());
-        self
-    }
-
-    fn created_at(mut self, created_at: &str) -> Self {
-        self.created_at = Some(created_at.to_owned());
-        self
-    }
-
-    fn build(self) -> ExportedComment {
-        ExportedComment {
-            id: self.id,
-            author: self.author,
-            file_path: self.file_path,
-            line_number: self.line_number,
-            original_line_number: None,
-            body: self.body,
-            diff_hunk: self.diff_hunk,
-            commit_sha: None,
-            in_reply_to_id: None,
-            created_at: self.created_at,
-        }
-    }
-}
+use crate::export::test_helpers::{
+    CommentBuilder, PrUrl, assert_contains, assert_not_contains, test_data,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -125,34 +19,6 @@ fn write_markdown_to_string(
     let mut buffer = Vec::new();
     write_markdown(&mut buffer, comments, pr_url.as_str())?;
     Ok(String::from_utf8(buffer)?)
-}
-
-fn assert_contains(haystack: &str, needle: &str) -> Result<(), String> {
-    if haystack.contains(needle) {
-        Ok(())
-    } else {
-        Err(format!(
-            "expected output to contain '{needle}', got:\n{haystack}"
-        ))
-    }
-}
-
-fn assert_not_contains(haystack: &str, needle: &str) -> Result<(), String> {
-    if haystack.contains(needle) {
-        Err(format!(
-            "expected output to NOT contain '{needle}', got:\n{haystack}"
-        ))
-    } else {
-        Ok(())
-    }
-}
-
-fn assert_eq_count(actual: usize, expected: usize, description: &str) -> Result<(), String> {
-    if actual == expected {
-        Ok(())
-    } else {
-        Err(format!("{description}: expected {expected}, got {actual}"))
-    }
 }
 
 fn assert_single_comment_output_contains(
@@ -299,6 +165,8 @@ fn multiple_comments_have_separators() -> TestResult {
     let output = write_markdown_to_string(&comments, test_data::DEFAULT_PR_URL)?;
 
     let separator_count = output.matches("---").count();
-    assert_eq_count(separator_count, 2, "separator count")?; // One per comment
+    if separator_count != 2 {
+        return Err(format!("expected 2 separators, got {separator_count}").into());
+    }
     Ok(())
 }
