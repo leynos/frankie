@@ -119,6 +119,31 @@ impl CommentBuilder {
         self
     }
 
+    /// Sets the author to [`test_data::SAMPLE_AUTHOR`].
+    pub fn with_sample_author(self) -> Self {
+        self.author(test_data::SAMPLE_AUTHOR)
+    }
+
+    /// Sets the file path to [`test_data::SAMPLE_FILE_PATH`].
+    pub fn with_sample_file_path(self) -> Self {
+        self.file_path(test_data::SAMPLE_FILE_PATH)
+    }
+
+    /// Sets the body to [`test_data::SAMPLE_BODY`].
+    pub fn with_sample_body(self) -> Self {
+        self.body(test_data::SAMPLE_BODY)
+    }
+
+    /// Sets the diff hunk to [`test_data::SAMPLE_DIFF_HUNK`].
+    pub fn with_sample_diff_hunk(self) -> Self {
+        self.diff_hunk(test_data::SAMPLE_DIFF_HUNK)
+    }
+
+    /// Sets the creation timestamp to [`test_data::SAMPLE_TIMESTAMP`].
+    pub fn with_sample_created_at(self) -> Self {
+        self.created_at(test_data::SAMPLE_TIMESTAMP)
+    }
+
     /// Builds the [`ExportedComment`] with configured values.
     #[must_use]
     pub fn build(self) -> ExportedComment {
