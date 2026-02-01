@@ -7,12 +7,33 @@ use rstest::rstest;
 
 use super::*;
 
+/// A newtype wrapper for pull request URLs in tests.
+///
+/// Provides semantic typing for PR URL parameters to reduce string argument
+/// ratio and improve type safety.
+#[derive(Debug, Clone, Copy)]
+struct PrUrl<'a>(&'a str);
+
+impl<'a> PrUrl<'a> {
+    /// Creates a new `PrUrl` from a string slice.
+    const fn new(url: &'a str) -> Self {
+        Self(url)
+    }
+
+    /// Returns the underlying string slice.
+    const fn as_str(self) -> &'a str {
+        self.0
+    }
+}
+
 /// Test data constants to reduce string argument repetition.
 mod test_data {
+    use super::PrUrl;
+
     /// Default PR URL for tests that don't need a specific URL.
-    pub const DEFAULT_PR_URL: &str = "https://example.com/pr/1";
+    pub const DEFAULT_PR_URL: PrUrl<'static> = PrUrl::new("https://example.com/pr/1");
     /// A realistic GitHub PR URL for testing header output.
-    pub const GITHUB_PR_URL: &str = "https://github.com/owner/repo/pull/123";
+    pub const GITHUB_PR_URL: PrUrl<'static> = PrUrl::new("https://github.com/owner/repo/pull/123");
     /// Sample author name for comprehensive tests.
     pub const SAMPLE_AUTHOR: &str = "alice";
     /// Sample file path for comprehensive tests.
@@ -99,10 +120,10 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn write_markdown_to_string(
     comments: &[ExportedComment],
-    pr_url: &str,
+    pr_url: PrUrl<'_>,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut buffer = Vec::new();
-    write_markdown(&mut buffer, comments, pr_url)?;
+    write_markdown(&mut buffer, comments, pr_url.as_str())?;
     Ok(String::from_utf8(buffer)?)
 }
 
@@ -151,7 +172,10 @@ fn writes_header_with_pr_url() -> TestResult {
     let output = write_markdown_to_string(&comments, test_data::GITHUB_PR_URL)?;
 
     assert_contains(&output, "# Review Comments Export")?;
-    assert_contains(&output, &format!("PR: {}", test_data::GITHUB_PR_URL))?;
+    assert_contains(
+        &output,
+        &format!("PR: {}", test_data::GITHUB_PR_URL.as_str()),
+    )?;
     Ok(())
 }
 
