@@ -257,6 +257,22 @@ impl FrankieConfig {
             .ok_or(IntakeError::MissingPullRequestUrl)
     }
 
+    const fn has_pr_url(&self) -> bool {
+        self.pr_url.is_some()
+    }
+
+    const fn has_repo(&self) -> bool {
+        self.owner.is_some() && self.repo.is_some()
+    }
+
+    const fn should_export_comments(&self) -> bool {
+        self.export.is_some() && self.has_pr_url()
+    }
+
+    const fn should_review_tui(&self) -> bool {
+        self.tui && self.has_pr_url()
+    }
+
     /// Determines the operation mode based on provided configuration.
     ///
     /// Returns `ExportComments` if export format is set with a PR URL,
@@ -265,13 +281,13 @@ impl FrankieConfig {
     /// both owner and repo are provided, or `Interactive` otherwise.
     #[must_use]
     pub const fn operation_mode(&self) -> OperationMode {
-        if self.export.is_some() && self.pr_url.is_some() {
+        if self.should_export_comments() {
             OperationMode::ExportComments
-        } else if self.tui && self.pr_url.is_some() {
+        } else if self.should_review_tui() {
             OperationMode::ReviewTui
-        } else if self.pr_url.is_some() {
+        } else if self.has_pr_url() {
             OperationMode::SinglePullRequest
-        } else if self.owner.is_some() && self.repo.is_some() {
+        } else if self.has_repo() {
             OperationMode::RepositoryListing
         } else {
             OperationMode::Interactive
