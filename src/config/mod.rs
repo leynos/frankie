@@ -266,7 +266,7 @@ impl FrankieConfig {
     }
 
     const fn should_export_comments(&self) -> bool {
-        self.export.is_some() && self.has_pr_url()
+        self.export.is_some()
     }
 
     const fn should_review_tui(&self) -> bool {
@@ -275,10 +275,11 @@ impl FrankieConfig {
 
     /// Determines the operation mode based on provided configuration.
     ///
-    /// Returns `ExportComments` if export format is set with a PR URL,
-    /// `ReviewTui` if TUI mode is enabled with a PR URL, `SinglePullRequest`
-    /// if a PR URL is provided without TUI or export, `RepositoryListing` if
-    /// both owner and repo are provided, or `Interactive` otherwise.
+    /// Returns `ExportComments` if export format is set (PR URL validation
+    /// is deferred to `export_comments::run`), `ReviewTui` if TUI mode is
+    /// enabled with a PR URL, `SinglePullRequest` if a PR URL is provided
+    /// without TUI or export, `RepositoryListing` if both owner and repo
+    /// are provided, or `Interactive` otherwise.
     #[must_use]
     pub const fn operation_mode(&self) -> OperationMode {
         if self.should_export_comments() {

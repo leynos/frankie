@@ -7,6 +7,24 @@ use rstest::rstest;
 
 use super::*;
 
+/// Test data constants to reduce string argument repetition.
+mod test_data {
+    /// Default PR URL for tests that don't need a specific URL.
+    pub const DEFAULT_PR_URL: &str = "https://example.com/pr/1";
+    /// A realistic GitHub PR URL for testing header output.
+    pub const GITHUB_PR_URL: &str = "https://github.com/owner/repo/pull/123";
+    /// Sample author name for comprehensive tests.
+    pub const SAMPLE_AUTHOR: &str = "alice";
+    /// Sample file path for comprehensive tests.
+    pub const SAMPLE_FILE_PATH: &str = "src/lib.rs";
+    /// Sample comment body for comprehensive tests.
+    pub const SAMPLE_BODY: &str = "Consider using a constant here.";
+    /// Sample diff hunk for comprehensive tests.
+    pub const SAMPLE_DIFF_HUNK: &str = "@@ -40,3 +40,5 @@\n let x = 1;";
+    /// Sample timestamp for comprehensive tests.
+    pub const SAMPLE_TIMESTAMP: &str = "2025-01-15T10:00:00Z";
+}
+
 /// Builder for creating test [`ExportedComment`] instances with a fluent API.
 struct CommentBuilder {
     id: u64,
@@ -121,7 +139,7 @@ fn assert_single_comment_output_contains(
     expected_substring: &str,
 ) -> TestResult {
     let comments = vec![comment];
-    let output = write_markdown_to_string(&comments, "https://example.com/pr/1")?;
+    let output = write_markdown_to_string(&comments, test_data::DEFAULT_PR_URL)?;
     assert_contains(&output, expected_substring)?;
     Ok(())
 }
@@ -130,10 +148,10 @@ fn assert_single_comment_output_contains(
 fn writes_header_with_pr_url() -> TestResult {
     let comments: Vec<ExportedComment> = vec![];
 
-    let output = write_markdown_to_string(&comments, "https://github.com/owner/repo/pull/123")?;
+    let output = write_markdown_to_string(&comments, test_data::GITHUB_PR_URL)?;
 
     assert_contains(&output, "# Review Comments Export")?;
-    assert_contains(&output, "PR: https://github.com/owner/repo/pull/123")?;
+    assert_contains(&output, &format!("PR: {}", test_data::GITHUB_PR_URL))?;
     Ok(())
 }
 
@@ -141,21 +159,27 @@ fn writes_header_with_pr_url() -> TestResult {
 fn writes_comment_with_all_fields() -> TestResult {
     let comments = vec![
         CommentBuilder::new(1)
-            .author("alice")
-            .file_path("src/lib.rs")
+            .author(test_data::SAMPLE_AUTHOR)
+            .file_path(test_data::SAMPLE_FILE_PATH)
             .line_number(42)
-            .body("Consider using a constant here.")
-            .diff_hunk("@@ -40,3 +40,5 @@\n let x = 1;")
-            .created_at("2025-01-15T10:00:00Z")
+            .body(test_data::SAMPLE_BODY)
+            .diff_hunk(test_data::SAMPLE_DIFF_HUNK)
+            .created_at(test_data::SAMPLE_TIMESTAMP)
             .build(),
     ];
 
-    let output = write_markdown_to_string(&comments, "https://example.com/pr/1")?;
+    let output = write_markdown_to_string(&comments, test_data::DEFAULT_PR_URL)?;
 
-    assert_contains(&output, "## src/lib.rs:42")?;
-    assert_contains(&output, "**Reviewer:** alice")?;
-    assert_contains(&output, "**Created:** 2025-01-15T10:00:00Z")?;
-    assert_contains(&output, "Consider using a constant here.")?;
+    assert_contains(&output, &format!("## {}:42", test_data::SAMPLE_FILE_PATH))?;
+    assert_contains(
+        &output,
+        &format!("**Reviewer:** {}", test_data::SAMPLE_AUTHOR),
+    )?;
+    assert_contains(
+        &output,
+        &format!("**Created:** {}", test_data::SAMPLE_TIMESTAMP),
+    )?;
+    assert_contains(&output, test_data::SAMPLE_BODY)?;
     assert_contains(&output, "```rust")?;
     assert_contains(&output, "@@ -40,3 +40,5 @@")?;
     Ok(())
@@ -194,7 +218,7 @@ fn handles_completely_missing_location() -> TestResult {
 fn empty_comments_produces_header_only() -> TestResult {
     let comments: Vec<ExportedComment> = vec![];
 
-    let output = write_markdown_to_string(&comments, "https://example.com/pr/1")?;
+    let output = write_markdown_to_string(&comments, test_data::DEFAULT_PR_URL)?;
 
     assert_contains(&output, "# Review Comments Export")?;
     assert_not_contains(&output, "---")?; // No comment separators
@@ -248,7 +272,7 @@ fn multiple_comments_have_separators() -> TestResult {
             .build(),
     ];
 
-    let output = write_markdown_to_string(&comments, "https://example.com/pr/1")?;
+    let output = write_markdown_to_string(&comments, test_data::DEFAULT_PR_URL)?;
 
     let separator_count = output.matches("---").count();
     assert_eq_count(separator_count, 2, "separator count")?; // One per comment

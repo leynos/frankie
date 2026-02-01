@@ -16,6 +16,25 @@ use frankie::{
 
 use super::export::{ExportFormat, ExportedComment, sort_comments, write_jsonl, write_markdown};
 
+/// A newtype wrapper for pull request URLs.
+///
+/// Provides semantic typing for PR URL parameters to reduce string argument
+/// ratio and improve type safety.
+#[derive(Debug, Clone, Copy)]
+struct PrUrl<'a>(&'a str);
+
+impl<'a> PrUrl<'a> {
+    /// Creates a new `PrUrl` from a string slice.
+    const fn new(url: &'a str) -> Self {
+        Self(url)
+    }
+
+    /// Returns the underlying string slice.
+    const fn as_str(&self) -> &str {
+        self.0
+    }
+}
+
 /// Exports review comments from a pull request in structured format.
 ///
 /// # Errors
@@ -42,7 +61,7 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     sort_comments(&mut comments);
 
     // Write to output
-    write_output(config, &comments, pr_url, export_format)
+    write_output(config, &comments, PrUrl::new(pr_url), export_format)
 }
 
 /// Parses the export format from configuration.
@@ -61,7 +80,7 @@ fn parse_export_format(config: &FrankieConfig) -> Result<ExportFormat, IntakeErr
 fn write_output(
     config: &FrankieConfig,
     comments: &[ExportedComment],
-    pr_url: &str,
+    pr_url: PrUrl<'_>,
     format: ExportFormat,
 ) -> Result<(), IntakeError> {
     if let Some(path_str) = &config.output {
@@ -100,11 +119,11 @@ fn create_output_file(path: &Utf8Path) -> Result<cap_std::fs_utf8::File, IntakeE
 fn write_format<W: Write>(
     writer: &mut W,
     comments: &[ExportedComment],
-    pr_url: &str,
+    pr_url: PrUrl<'_>,
     format: ExportFormat,
 ) -> Result<(), IntakeError> {
     match format {
-        ExportFormat::Markdown => write_markdown(writer, comments, pr_url),
+        ExportFormat::Markdown => write_markdown(writer, comments, pr_url.as_str()),
         ExportFormat::Jsonl => write_jsonl(writer, comments),
     }
 }
@@ -139,7 +158,7 @@ mod tests {
 
     fn write_to_string(
         comments: &[ExportedComment],
-        pr_url: &str,
+        pr_url: PrUrl<'_>,
         format: ExportFormat,
     ) -> Result<String, IntakeError> {
         let mut buffer = Vec::new();
@@ -246,7 +265,7 @@ mod tests {
 
         let output = write_to_string(
             &comments,
-            "https://example.com/pr/1",
+            PrUrl::new("https://example.com/pr/1"),
             ExportFormat::Markdown,
         )?;
 
@@ -270,7 +289,11 @@ mod tests {
             created_at: None,
         }];
 
-        let output = write_to_string(&comments, "https://example.com/pr/1", ExportFormat::Jsonl)?;
+        let output = write_to_string(
+            &comments,
+            PrUrl::new("https://example.com/pr/1"),
+            ExportFormat::Jsonl,
+        )?;
 
         let parsed: serde_json::Value = serde_json::from_str(output.trim())?;
         assert_json_field_eq(&parsed, "id", 42_u64)?;
