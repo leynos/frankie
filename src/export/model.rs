@@ -174,15 +174,10 @@ mod tests {
         let result: Result<ExportFormat, _> = input.parse();
         assert!(result.is_err());
         let err = result.expect_err("should reject invalid format");
-        match err {
-            IntakeError::Configuration { message } => {
-                assert!(
-                    message.contains("unsupported export format"),
-                    "unexpected message: {message}"
-                );
-            }
-            _ => panic!("expected Configuration error, got {err:?}"),
-        }
+        assert!(
+            matches!(err, IntakeError::Configuration { ref message } if message.contains("unsupported export format")),
+            "expected Configuration error with 'unsupported export format', got {err:?}"
+        );
     }
 
     #[rstest]

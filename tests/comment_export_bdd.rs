@@ -279,10 +279,6 @@ fn assert_third_comment_location(
     assert_comment_at_index(export_state, 2, file_path, line.value())
 }
 
-#[expect(
-    clippy::indexing_slicing,
-    reason = "test code with known indices from feature file"
-)]
 fn assert_comment_at_index(
     export_state: &ExportState,
     index: usize,
@@ -292,8 +288,11 @@ fn assert_comment_at_index(
     let output = get_output(export_state)?;
 
     let lines: Vec<&str> = output.lines().filter(|l| !l.is_empty()).collect();
+    let line_content = lines
+        .get(index)
+        .ok_or_else(|| format!("no output line at index {index}"))?;
     let parsed: serde_json::Value =
-        serde_json::from_str(lines[index]).map_err(|_| "should be valid JSON")?;
+        serde_json::from_str(line_content).map_err(|_| "should be valid JSON")?;
 
     let actual_file = parsed.get("file_path").and_then(|v| v.as_str());
     if actual_file != Some(file) {

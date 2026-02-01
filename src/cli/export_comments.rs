@@ -3,8 +3,11 @@
 //! This module exports pull request review comments in structured formats
 //! (Markdown or JSONL) for downstream processing by AI tools or human review.
 
-use std::fs::File;
 use std::io::{self, BufWriter, Write};
+
+use camino::Utf8Path;
+use cap_std::ambient_authority;
+use cap_std::fs_utf8::Dir;
 
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -61,10 +64,9 @@ fn write_output(
     pr_url: &str,
     format: ExportFormat,
 ) -> Result<(), IntakeError> {
-    if let Some(path) = &config.output {
-        let file = File::create(path).map_err(|e| IntakeError::Io {
-            message: format!("failed to create output file '{path}': {e}"),
-        })?;
+    if let Some(path_str) = &config.output {
+        let path = Utf8Path::new(path_str);
+        let file = create_output_file(path)?;
         let mut writer = BufWriter::new(file);
         write_format(&mut writer, comments, pr_url, format)?;
         writer.flush().map_err(|e| IntakeError::Io {
@@ -76,6 +78,22 @@ fn write_output(
         let mut writer = stdout.lock();
         write_format(&mut writer, comments, pr_url, format)
     }
+}
+
+/// Creates a file at the given path using capability-oriented filesystem access.
+fn create_output_file(path: &Utf8Path) -> Result<cap_std::fs_utf8::File, IntakeError> {
+    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+    let file_name = path.file_name().ok_or_else(|| IntakeError::Io {
+        message: format!("invalid output path '{path}': no file name"),
+    })?;
+
+    let dir = Dir::open_ambient_dir(parent, ambient_authority()).map_err(|e| IntakeError::Io {
+        message: format!("failed to open directory '{parent}': {e}"),
+    })?;
+
+    dir.create(file_name).map_err(|e| IntakeError::Io {
+        message: format!("failed to create output file '{path}': {e}"),
+    })
 }
 
 /// Writes comments in the specified format to the writer.
@@ -97,80 +115,122 @@ mod tests {
 
     use super::*;
 
-    fn assert_parse_error_contains(config: &FrankieConfig, expected_msg_fragment: &str) {
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn assert_parse_error_contains(
+        config: &FrankieConfig,
+        expected_msg_fragment: &str,
+    ) -> Result<(), String> {
         let result = parse_export_format(config);
         match result {
             Err(IntakeError::Configuration { message }) => {
-                assert!(
-                    message.contains(expected_msg_fragment),
-                    "expected message to contain '{expected_msg_fragment}', got: {message}"
-                );
+                if message.contains(expected_msg_fragment) {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "expected message to contain '{expected_msg_fragment}', got: {message}"
+                    ))
+                }
             }
-            Err(other) => panic!("expected Configuration error, got: {other:?}"),
-            Ok(_) => panic!("expected error but got success"),
+            Err(other) => Err(format!("expected Configuration error, got: {other:?}")),
+            Ok(_) => Err("expected error but got success".to_owned()),
         }
     }
 
-    fn write_to_string(comments: &[ExportedComment], pr_url: &str, format: ExportFormat) -> String {
+    fn write_to_string(
+        comments: &[ExportedComment],
+        pr_url: &str,
+        format: ExportFormat,
+    ) -> Result<String, IntakeError> {
         let mut buffer = Vec::new();
-        write_format(&mut buffer, comments, pr_url, format).expect("write_format should succeed");
-        String::from_utf8(buffer).expect("output should be valid UTF-8")
+        write_format(&mut buffer, comments, pr_url, format)?;
+        String::from_utf8(buffer).map_err(|e| IntakeError::Io {
+            message: format!("invalid UTF-8: {e}"),
+        })
     }
 
     fn assert_json_field_eq(
         parsed: &serde_json::Value,
         field: &str,
         expected: impl Into<serde_json::Value>,
-    ) {
+    ) -> Result<(), String> {
         let actual = parsed.get(field);
         let expected_val = expected.into();
-        assert_eq!(actual, Some(&expected_val), "field '{field}' mismatch");
+        if actual == Some(&expected_val) {
+            Ok(())
+        } else {
+            Err(format!(
+                "field '{field}' mismatch: expected {expected_val:?}, got {actual:?}"
+            ))
+        }
     }
 
     #[rstest]
-    fn parse_export_format_returns_error_when_missing() {
+    fn parse_export_format_returns_error_when_missing() -> TestResult {
         let config = FrankieConfig {
             export: None,
             ..Default::default()
         };
 
-        assert_parse_error_contains(&config, "export format is required");
+        assert_parse_error_contains(&config, "export format is required")?;
+        Ok(())
+    }
+
+    fn assert_eq_format(actual: ExportFormat, expected: ExportFormat) -> Result<(), String> {
+        if actual == expected {
+            Ok(())
+        } else {
+            Err(format!("expected {expected:?}, got {actual:?}"))
+        }
+    }
+
+    fn assert_contains(haystack: &str, needle: &str) -> Result<(), String> {
+        if haystack.contains(needle) {
+            Ok(())
+        } else {
+            Err(format!(
+                "expected output to contain '{needle}', got:\n{haystack}"
+            ))
+        }
     }
 
     #[rstest]
-    fn parse_export_format_returns_markdown() {
+    fn parse_export_format_returns_markdown() -> TestResult {
         let config = FrankieConfig {
             export: Some("markdown".to_owned()),
             ..Default::default()
         };
 
-        let result = parse_export_format(&config).expect("should parse markdown format");
-        assert_eq!(result, ExportFormat::Markdown);
+        let result = parse_export_format(&config)?;
+        assert_eq_format(result, ExportFormat::Markdown)?;
+        Ok(())
     }
 
     #[rstest]
-    fn parse_export_format_returns_jsonl() {
+    fn parse_export_format_returns_jsonl() -> TestResult {
         let config = FrankieConfig {
             export: Some("jsonl".to_owned()),
             ..Default::default()
         };
 
-        let result = parse_export_format(&config).expect("should parse jsonl format");
-        assert_eq!(result, ExportFormat::Jsonl);
+        let result = parse_export_format(&config)?;
+        assert_eq_format(result, ExportFormat::Jsonl)?;
+        Ok(())
     }
 
     #[rstest]
-    fn parse_export_format_returns_error_for_invalid() {
+    fn parse_export_format_returns_error_for_invalid() -> TestResult {
         let config = FrankieConfig {
             export: Some("xml".to_owned()),
             ..Default::default()
         };
 
-        assert_parse_error_contains(&config, "unsupported export format");
+        assert_parse_error_contains(&config, "unsupported export format")?;
+        Ok(())
     }
 
     #[rstest]
-    fn write_format_markdown_writes_to_buffer() {
+    fn write_format_markdown_writes_to_buffer() -> TestResult {
         let comments = vec![ExportedComment {
             id: 1,
             author: Some("alice".to_owned()),
@@ -188,14 +248,15 @@ mod tests {
             &comments,
             "https://example.com/pr/1",
             ExportFormat::Markdown,
-        );
+        )?;
 
-        assert!(output.contains("# Review Comments Export"));
-        assert!(output.contains("test.rs:10"));
+        assert_contains(&output, "# Review Comments Export")?;
+        assert_contains(&output, "test.rs:10")?;
+        Ok(())
     }
 
     #[rstest]
-    fn write_format_jsonl_writes_to_buffer() {
+    fn write_format_jsonl_writes_to_buffer() -> TestResult {
         let comments = vec![ExportedComment {
             id: 42,
             author: Some("bob".to_owned()),
@@ -209,11 +270,11 @@ mod tests {
             created_at: None,
         }];
 
-        let output = write_to_string(&comments, "https://example.com/pr/1", ExportFormat::Jsonl);
+        let output = write_to_string(&comments, "https://example.com/pr/1", ExportFormat::Jsonl)?;
 
-        let parsed: serde_json::Value =
-            serde_json::from_str(output.trim()).expect("should be valid JSON");
-        assert_json_field_eq(&parsed, "id", 42_u64);
-        assert_json_field_eq(&parsed, "body", "LGTM");
+        let parsed: serde_json::Value = serde_json::from_str(output.trim())?;
+        assert_json_field_eq(&parsed, "id", 42_u64)?;
+        assert_json_field_eq(&parsed, "body", "LGTM")?;
+        Ok(())
     }
 }
