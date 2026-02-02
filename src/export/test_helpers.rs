@@ -26,7 +26,9 @@ impl fmt::Display for TestError {
 impl std::error::Error for TestError {}
 
 impl From<String> for TestError {
-    fn from(s: String) -> Self { Self(s) }
+    fn from(s: String) -> Self {
+        Self(s)
+    }
 }
 
 /// Test data constants to reduce string argument repetition.
@@ -56,8 +58,11 @@ pub struct CommentBuilder {
     author: Option<String>,
     file_path: Option<String>,
     line_number: Option<u32>,
+    original_line_number: Option<u32>,
     body: Option<String>,
     diff_hunk: Option<String>,
+    commit_sha: Option<String>,
+    in_reply_to_id: Option<u64>,
     created_at: Option<String>,
 }
 
@@ -69,8 +74,11 @@ impl CommentBuilder {
             author: None,
             file_path: None,
             line_number: None,
+            original_line_number: None,
             body: None,
             diff_hunk: None,
+            commit_sha: None,
+            in_reply_to_id: None,
             created_at: None,
         }
     }
@@ -111,6 +119,24 @@ impl CommentBuilder {
         self
     }
 
+    /// Sets the original line number before changes.
+    pub const fn original_line_number(mut self, original_line_number: u32) -> Self {
+        self.original_line_number = Some(original_line_number);
+        self
+    }
+
+    /// Sets the commit SHA this comment was made against.
+    pub fn commit_sha(mut self, commit_sha: &str) -> Self {
+        self.commit_sha = Some(commit_sha.to_owned());
+        self
+    }
+
+    /// Sets the ID of the parent comment if this is a reply.
+    pub const fn in_reply_to_id(mut self, in_reply_to_id: u64) -> Self {
+        self.in_reply_to_id = Some(in_reply_to_id);
+        self
+    }
+
     /// Sets the author to [`test_data::SAMPLE_AUTHOR`].
     pub fn with_sample_author(self) -> Self {
         self.author(test_data::SAMPLE_AUTHOR)
@@ -144,11 +170,11 @@ impl CommentBuilder {
             author: self.author,
             file_path: self.file_path,
             line_number: self.line_number,
-            original_line_number: None,
+            original_line_number: self.original_line_number,
             body: self.body,
             diff_hunk: self.diff_hunk,
-            commit_sha: None,
-            in_reply_to_id: None,
+            commit_sha: self.commit_sha,
+            in_reply_to_id: self.in_reply_to_id,
             created_at: self.created_at,
         }
     }
