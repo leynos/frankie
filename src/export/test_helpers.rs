@@ -26,15 +26,7 @@ impl fmt::Display for TestError {
 impl std::error::Error for TestError {}
 
 impl From<String> for TestError {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl From<&str> for TestError {
-    fn from(s: &str) -> Self {
-        Self(s.to_owned())
-    }
+    fn from(s: String) -> Self { Self(s) }
 }
 
 /// Test data constants to reduce string argument repetition.

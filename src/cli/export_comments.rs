@@ -136,7 +136,7 @@ mod tests {
                 }
             }
             Err(other) => Err(format!("expected Configuration error, got: {other:?}").into()),
-            Ok(_) => Err("expected error but got success".into()),
+            Ok(_) => Err("expected error but got success".to_owned().into()),
         }
     }
 
