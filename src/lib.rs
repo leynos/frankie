@@ -5,6 +5,7 @@
 //! displayed in the CLI.
 
 pub mod config;
+pub mod export;
 pub mod github;
 pub mod local;
 pub mod persistence;
@@ -12,6 +13,9 @@ pub mod telemetry;
 pub mod tui;
 
 pub use config::{FrankieConfig, OperationMode};
+pub use export::{
+    ExportFormat, ExportedComment, PrUrl, sort_comments, write_jsonl, write_markdown,
+};
 pub use github::{
     IntakeError, ListPullRequestsParams, OctocrabCachingGateway, OctocrabGateway,
     OctocrabRepositoryGateway, OctocrabReviewCommentGateway, PageInfo, PaginatedPullRequests,

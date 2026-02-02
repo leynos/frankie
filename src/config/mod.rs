@@ -48,6 +48,8 @@ pub enum OperationMode {
     Interactive,
     /// Interactive TUI for reviewing PR comments.
     ReviewTui,
+    /// Export review comments in structured format.
+    ExportComments,
 }
 
 /// Application configuration supporting CLI, environment, and file sources.
@@ -178,6 +180,31 @@ pub struct FrankieConfig {
     /// - Config file: `tui = true`
     #[ortho_config(cli_short = 'T')]
     pub tui: bool,
+
+    /// Export format for review comments.
+    ///
+    /// When set, Frankie exports review comments in the specified format
+    /// instead of displaying them interactively. Valid values are `markdown`
+    /// and `jsonl`.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--export <FORMAT>` or `-e <FORMAT>`
+    /// - Environment: `FRANKIE_EXPORT`
+    /// - Config file: `export = "markdown"`
+    #[ortho_config(cli_short = 'e')]
+    pub export: Option<String>,
+
+    /// Output file path for exported comments.
+    ///
+    /// When set, Frankie writes exported comments to the specified file
+    /// instead of stdout. Requires `--export` to be set.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--output <PATH>`
+    /// - Environment: `FRANKIE_OUTPUT`
+    /// - Config file: `output = "comments.md"`
+    #[ortho_config()]
+    pub output: Option<String>,
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
@@ -194,6 +221,8 @@ impl Default for FrankieConfig {
             pr_metadata_cache_ttl_seconds: DEFAULT_PR_METADATA_CACHE_TTL_SECONDS,
             no_local_discovery: false,
             tui: false,
+            export: None,
+            output: None,
         }
     }
 }
@@ -228,18 +257,38 @@ impl FrankieConfig {
             .ok_or(IntakeError::MissingPullRequestUrl)
     }
 
+    const fn has_pr_url(&self) -> bool {
+        self.pr_url.is_some()
+    }
+
+    const fn has_repo(&self) -> bool {
+        self.owner.is_some() && self.repo.is_some()
+    }
+
+    const fn should_export_comments(&self) -> bool {
+        self.export.is_some()
+    }
+
+    const fn should_review_tui(&self) -> bool {
+        self.tui && self.has_pr_url()
+    }
+
     /// Determines the operation mode based on provided configuration.
     ///
-    /// Returns `ReviewTui` if TUI mode is enabled with a PR URL, `SinglePullRequest`
-    /// if a PR URL is provided without TUI, `RepositoryListing` if both owner and
-    /// repo are provided, or `Interactive` otherwise.
+    /// Returns `ExportComments` if export format is set (PR URL validation
+    /// is deferred to `export_comments::run`), `ReviewTui` if TUI mode is
+    /// enabled with a PR URL, `SinglePullRequest` if a PR URL is provided
+    /// without TUI or export, `RepositoryListing` if both owner and repo
+    /// are provided, or `Interactive` otherwise.
     #[must_use]
     pub const fn operation_mode(&self) -> OperationMode {
-        if self.tui && self.pr_url.is_some() {
+        if self.should_export_comments() {
+            OperationMode::ExportComments
+        } else if self.should_review_tui() {
             OperationMode::ReviewTui
-        } else if self.pr_url.is_some() {
+        } else if self.has_pr_url() {
             OperationMode::SinglePullRequest
-        } else if self.owner.is_some() && self.repo.is_some() {
+        } else if self.has_repo() {
             OperationMode::RepositoryListing
         } else {
             OperationMode::Interactive
