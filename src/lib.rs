@@ -15,6 +15,7 @@ pub mod tui;
 pub use config::{FrankieConfig, OperationMode};
 pub use export::{
     ExportFormat, ExportedComment, PrUrl, sort_comments, write_jsonl, write_markdown,
+    write_template,
 };
 pub use github::{
     IntakeError, ListPullRequestsParams, OctocrabCachingGateway, OctocrabGateway,

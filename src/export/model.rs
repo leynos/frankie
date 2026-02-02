@@ -93,6 +93,8 @@ pub enum ExportFormat {
     Markdown,
     /// Machine-readable JSON Lines (one object per line).
     Jsonl,
+    /// Custom Jinja2-compatible template format.
+    Template,
 }
 
 impl FromStr for ExportFormat {
@@ -102,9 +104,10 @@ impl FromStr for ExportFormat {
         match s.to_lowercase().as_str() {
             "markdown" | "md" => Ok(Self::Markdown),
             "jsonl" | "json-lines" | "jsonlines" => Ok(Self::Jsonl),
+            "template" | "tpl" | "jinja" | "jinja2" => Ok(Self::Template),
             _ => Err(IntakeError::Configuration {
                 message: format!(
-                    "unsupported export format '{s}': valid options are 'markdown' or 'jsonl'"
+                    "unsupported export format '{s}': valid options are 'markdown', 'jsonl', or 'template'"
                 ),
             }),
         }
@@ -116,6 +119,7 @@ impl fmt::Display for ExportFormat {
         match self {
             Self::Markdown => write!(f, "markdown"),
             Self::Jsonl => write!(f, "jsonl"),
+            Self::Template => write!(f, "template"),
         }
     }
 }
@@ -181,6 +185,12 @@ mod tests {
     #[case("JSONL", ExportFormat::Jsonl)]
     #[case("json-lines", ExportFormat::Jsonl)]
     #[case("jsonlines", ExportFormat::Jsonl)]
+    #[case("template", ExportFormat::Template)]
+    #[case("Template", ExportFormat::Template)]
+    #[case("TEMPLATE", ExportFormat::Template)]
+    #[case("tpl", ExportFormat::Template)]
+    #[case("jinja", ExportFormat::Template)]
+    #[case("jinja2", ExportFormat::Template)]
     fn export_format_parses_valid_values(#[case] input: &str, #[case] expected: ExportFormat) {
         let parsed: ExportFormat = input.parse().expect("should parse valid format");
         assert_eq!(parsed, expected);
@@ -204,5 +214,6 @@ mod tests {
     fn export_format_display() {
         assert_eq!(ExportFormat::Markdown.to_string(), "markdown");
         assert_eq!(ExportFormat::Jsonl.to_string(), "jsonl");
+        assert_eq!(ExportFormat::Template.to_string(), "template");
     }
 }

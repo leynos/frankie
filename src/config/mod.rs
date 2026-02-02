@@ -205,6 +205,19 @@ pub struct FrankieConfig {
     /// - Config file: `output = "comments.md"`
     #[ortho_config()]
     pub output: Option<String>,
+
+    /// Template file path for custom export format.
+    ///
+    /// When `--export template` is used, this specifies the Jinja2-compatible
+    /// template file. The template uses `minijinja` syntax with placeholders
+    /// for comment fields (`{{ file }}`, `{{ line }}`, `{{ reviewer }}`, etc.).
+    ///
+    /// Can be provided via:
+    /// - CLI: `--template <PATH>`
+    /// - Environment: `FRANKIE_TEMPLATE`
+    /// - Config file: `template = "my-template.j2"`
+    #[ortho_config()]
+    pub template: Option<String>,
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
@@ -223,6 +236,7 @@ impl Default for FrankieConfig {
             tui: false,
             export: None,
             output: None,
+            template: None,
         }
     }
 }

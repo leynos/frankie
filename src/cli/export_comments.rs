@@ -1,7 +1,8 @@
 //! Comment export operation for structured output.
 //!
 //! This module exports pull request review comments in structured formats
-//! (Markdown or JSONL) for downstream processing by AI tools or human review.
+//! (Markdown, JSONL, or custom templates) for downstream processing by AI
+//! tools or human review.
 
 use std::io::{self, BufWriter, Write};
 
@@ -14,7 +15,17 @@ use frankie::{
     PullRequestLocator, ReviewCommentGateway,
 };
 
-use super::export::{ExportFormat, ExportedComment, sort_comments, write_jsonl, write_markdown};
+use super::export::{
+    ExportFormat, ExportedComment, sort_comments, write_jsonl, write_markdown, write_template,
+};
+
+/// Context for export operations, bundling related parameters.
+struct ExportContext<'a> {
+    comments: &'a [ExportedComment],
+    pr_url: PrUrl<'a>,
+    format: ExportFormat,
+    template_content: Option<&'a str>,
+}
 
 /// Exports review comments from a pull request in structured format.
 ///
@@ -24,11 +35,15 @@ use super::export::{ExportFormat, ExportedComment, sort_comments, write_jsonl, w
 /// - The PR URL is missing or invalid
 /// - The token is missing or invalid
 /// - The export format is invalid
+/// - The template file is missing when using template format
 /// - The GitHub API call fails
 /// - Writing to the output fails
 pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     let pr_url = config.require_pr_url()?;
     let export_format = parse_export_format(config)?;
+
+    // Load template content if using template format
+    let template_content = load_template_if_needed(config, export_format)?;
 
     let locator = PullRequestLocator::parse(pr_url)?;
     let token = PersonalAccessToken::new(config.resolve_token()?)?;
@@ -42,7 +57,13 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     sort_comments(&mut comments);
 
     // Write to output
-    write_output(config, &comments, PrUrl::new(pr_url), export_format)
+    let ctx = ExportContext {
+        comments: &comments,
+        pr_url: PrUrl::new(pr_url),
+        format: export_format,
+        template_content: template_content.as_deref(),
+    };
+    write_output(config, &ctx)
 }
 
 /// Parses the export format from configuration.
@@ -51,24 +72,59 @@ fn parse_export_format(config: &FrankieConfig) -> Result<ExportFormat, IntakeErr
         .export
         .as_ref()
         .ok_or_else(|| IntakeError::Configuration {
-            message: "export format is required (use --export markdown or --export jsonl)"
-                .to_owned(),
+            message: concat!(
+                "export format is required ",
+                "(use --export markdown, --export jsonl, or --export template)"
+            )
+            .to_owned(),
         })?
         .parse()
 }
 
-/// Writes comments to the configured output destination.
-fn write_output(
+/// Loads template content from file if using template format.
+fn load_template_if_needed(
     config: &FrankieConfig,
-    comments: &[ExportedComment],
-    pr_url: PrUrl<'_>,
     format: ExportFormat,
-) -> Result<(), IntakeError> {
+) -> Result<Option<String>, IntakeError> {
+    if format != ExportFormat::Template {
+        return Ok(None);
+    }
+
+    let template_path = config
+        .template
+        .as_ref()
+        .ok_or_else(|| IntakeError::Configuration {
+            message: "--template <PATH> is required when using --export template".to_owned(),
+        })?;
+
+    read_template_file(Utf8Path::new(template_path))
+}
+
+/// Reads template content from the specified file path.
+fn read_template_file(path: &Utf8Path) -> Result<Option<String>, IntakeError> {
+    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+    let file_name = path.file_name().ok_or_else(|| IntakeError::Io {
+        message: format!("invalid template path '{path}': no file name"),
+    })?;
+
+    let dir = Dir::open_ambient_dir(parent, ambient_authority()).map_err(|e| IntakeError::Io {
+        message: format!("failed to open directory '{parent}': {e}"),
+    })?;
+
+    let content = dir.read_to_string(file_name).map_err(|e| IntakeError::Io {
+        message: format!("failed to read template file '{path}': {e}"),
+    })?;
+
+    Ok(Some(content))
+}
+
+/// Writes comments to the configured output destination.
+fn write_output(config: &FrankieConfig, ctx: &ExportContext<'_>) -> Result<(), IntakeError> {
     if let Some(path_str) = &config.output {
         let path = Utf8Path::new(path_str);
         let file = create_output_file(path)?;
         let mut writer = BufWriter::new(file);
-        write_format(&mut writer, comments, pr_url, format)?;
+        write_format(&mut writer, ctx)?;
         writer.flush().map_err(|e| IntakeError::Io {
             message: format!("failed to flush output file: {e}"),
         })?;
@@ -76,7 +132,7 @@ fn write_output(
     } else {
         let stdout = io::stdout();
         let mut writer = stdout.lock();
-        write_format(&mut writer, comments, pr_url, format)
+        write_format(&mut writer, ctx)
     }
 }
 
@@ -97,15 +153,19 @@ fn create_output_file(path: &Utf8Path) -> Result<cap_std::fs_utf8::File, IntakeE
 }
 
 /// Writes comments in the specified format to the writer.
-fn write_format<W: Write>(
-    writer: &mut W,
-    comments: &[ExportedComment],
-    pr_url: PrUrl<'_>,
-    format: ExportFormat,
-) -> Result<(), IntakeError> {
-    match format {
-        ExportFormat::Markdown => write_markdown(writer, comments, pr_url.as_str()),
-        ExportFormat::Jsonl => write_jsonl(writer, comments),
+fn write_format<W: Write>(writer: &mut W, ctx: &ExportContext<'_>) -> Result<(), IntakeError> {
+    match ctx.format {
+        ExportFormat::Markdown => write_markdown(writer, ctx.comments, ctx.pr_url.as_str()),
+        ExportFormat::Jsonl => write_jsonl(writer, ctx.comments),
+        ExportFormat::Template => {
+            // Template content is guaranteed to be present by load_template_if_needed
+            let content = ctx
+                .template_content
+                .ok_or_else(|| IntakeError::Configuration {
+                    message: "template content missing (internal error)".to_owned(),
+                })?;
+            write_template(writer, ctx.comments, ctx.pr_url.as_str(), content)
+        }
     }
 }
 
@@ -146,7 +206,31 @@ mod tests {
         format: ExportFormat,
     ) -> Result<String, IntakeError> {
         let mut buffer = Vec::new();
-        write_format(&mut buffer, comments, pr_url, format)?;
+        let ctx = ExportContext {
+            comments,
+            pr_url,
+            format,
+            template_content: None,
+        };
+        write_format(&mut buffer, &ctx)?;
+        String::from_utf8(buffer).map_err(|e| IntakeError::Io {
+            message: format!("invalid UTF-8: {e}"),
+        })
+    }
+
+    fn write_template_to_string(
+        comments: &[ExportedComment],
+        pr_url: PrUrl<'_>,
+        template: &str,
+    ) -> Result<String, IntakeError> {
+        let mut buffer = Vec::new();
+        let ctx = ExportContext {
+            comments,
+            pr_url,
+            format: ExportFormat::Template,
+            template_content: Some(template),
+        };
+        write_format(&mut buffer, &ctx)?;
         String::from_utf8(buffer).map_err(|e| IntakeError::Io {
             message: format!("invalid UTF-8: {e}"),
         })
@@ -172,6 +256,7 @@ mod tests {
     #[rstest]
     #[case("markdown", ExportFormat::Markdown)]
     #[case("jsonl", ExportFormat::Jsonl)]
+    #[case("template", ExportFormat::Template)]
     fn parse_export_format_returns_expected_format(
         #[case] input: &str,
         #[case] expected: ExportFormat,
@@ -239,5 +324,74 @@ mod tests {
         assert_json_field_eq(&parsed, "id", 42_u64)?;
         assert_json_field_eq(&parsed, "body", "LGTM")?;
         Ok(())
+    }
+
+    #[rstest]
+    fn write_format_template_writes_to_buffer() -> TestResult {
+        let comments = vec![
+            CommentBuilder::new(1)
+                .author("alice")
+                .file_path("test.rs")
+                .line_number(10)
+                .body("Fix this")
+                .build(),
+        ];
+
+        let template = "{% for c in comments %}{{ c.reviewer }}: {{ c.body }}{% endfor %}";
+        let output =
+            write_template_to_string(&comments, PrUrl::new("https://example.com/pr/1"), template)?;
+
+        assert_contains(&output, "alice: Fix this")?;
+        Ok(())
+    }
+
+    #[rstest]
+    fn template_format_without_content_returns_error() {
+        let comments: Vec<ExportedComment> = vec![];
+        let mut buffer = Vec::new();
+
+        let ctx = ExportContext {
+            comments: &comments,
+            pr_url: PrUrl::new("https://example.com/pr/1"),
+            format: ExportFormat::Template,
+            template_content: None,
+        };
+        let result = write_format(&mut buffer, &ctx);
+
+        let err = result.expect_err("should fail without template content");
+        assert!(
+            matches!(err, IntakeError::Configuration { ref message } if message.contains("template content missing")),
+            "expected Configuration error, got: {err:?}"
+        );
+    }
+
+    #[rstest]
+    fn load_template_if_needed_returns_none_for_non_template_formats() -> TestResult {
+        let config = FrankieConfig::default();
+
+        let markdown_result = load_template_if_needed(&config, ExportFormat::Markdown)?;
+        if markdown_result.is_some() {
+            return Err("expected None for Markdown format".into());
+        }
+
+        let jsonl_result = load_template_if_needed(&config, ExportFormat::Jsonl)?;
+        if jsonl_result.is_some() {
+            return Err("expected None for Jsonl format".into());
+        }
+
+        Ok(())
+    }
+
+    #[rstest]
+    fn load_template_if_needed_errors_when_template_path_missing() {
+        let config = FrankieConfig::default();
+
+        let result = load_template_if_needed(&config, ExportFormat::Template);
+        let err = result.expect_err("should fail without template path");
+
+        assert!(
+            matches!(err, IntakeError::Configuration { ref message } if message.contains("--template")),
+            "expected Configuration error mentioning --template, got: {err:?}"
+        );
     }
 }
