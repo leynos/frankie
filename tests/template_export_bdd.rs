@@ -21,16 +21,12 @@ fn template_state() -> TemplateExportState {
     TemplateExportState::default()
 }
 
-#[given(
-    "a mock GitHub API server with {count:CommentCount} review comments for owner/repo/pull/42"
-)]
-fn seed_server_with_comments(
+/// Mounts a mock GET endpoint for pull request comments on the test server.
+fn mount_comments_mock(
     template_state: &TemplateExportState,
-    count: CommentCount,
+    comments: impl serde::Serialize,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let runtime = ensure_runtime_and_server(template_state)?;
-
-    let comments = generate_review_comments(count);
     let comments_path = "/api/v3/repos/owner/repo/pulls/42/comments";
 
     let mock = Mock::given(method("GET"))
@@ -47,27 +43,21 @@ fn seed_server_with_comments(
     Ok(())
 }
 
+#[given(
+    "a mock GitHub API server with {count:CommentCount} review comments for owner/repo/pull/42"
+)]
+fn seed_server_with_comments(
+    template_state: &TemplateExportState,
+    count: CommentCount,
+) -> Result<(), Box<dyn std::error::Error>> {
+    mount_comments_mock(template_state, generate_review_comments(count))
+}
+
 #[given("a mock GitHub API server with a reply comment for owner/repo/pull/42")]
 fn seed_server_with_reply_comment(
     template_state: &TemplateExportState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let runtime = ensure_runtime_and_server(template_state)?;
-
-    let comments = generate_reply_comment();
-    let comments_path = "/api/v3/repos/owner/repo/pulls/42/comments";
-
-    let mock = Mock::given(method("GET"))
-        .and(path(comments_path))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&comments));
-
-    template_state
-        .server
-        .with_ref(|server| {
-            runtime.block_on(mock.mount(server));
-        })
-        .ok_or("mock server not initialised")?;
-
-    Ok(())
+    mount_comments_mock(template_state, generate_reply_comment())
 }
 
 #[given("a personal access token {token}")]

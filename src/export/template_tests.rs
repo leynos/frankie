@@ -20,50 +20,41 @@ fn render_template(
 }
 
 #[rstest]
-fn substitutes_file_placeholder() -> TestResult {
-    let comments = vec![CommentBuilder::new(1).file_path("src/main.rs").build()];
+#[case::file("file", "src/main.rs", |b: CommentBuilder| b.file_path("src/main.rs"))]
+#[case::line("line", "42", |b: CommentBuilder| b.line_number(42))]
+#[case::reviewer("reviewer", "alice", |b: CommentBuilder| b.author("alice"))]
+#[case::body("body", "Please fix this issue", |b: CommentBuilder| b.body("Please fix this issue"))]
+#[case::commit("commit", "abc123def", |b: CommentBuilder| b.commit_sha("abc123def"))]
+#[case::timestamp("timestamp", "2025-01-15T10:30:00Z", |b: CommentBuilder| b.created_at("2025-01-15T10:30:00Z"))]
+#[case::id("id", "1", |b: CommentBuilder| b)]
+#[case::reply_to("reply_to", "999", |b: CommentBuilder| b.in_reply_to_id(999))]
+fn substitutes_placeholder(
+    #[case] field: &str,
+    #[case] expected: &str,
+    #[case] configure: fn(CommentBuilder) -> CommentBuilder,
+) -> TestResult {
+    let comments = vec![configure(CommentBuilder::new(1)).build()];
+    let template = format!("{{% for c in comments %}}{{{{ c.{field} }}}}{{% endfor %}}");
 
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.file }}{% endfor %}",
-    )?;
+    let output = render_template(&comments, "https://example.com/pr/1", &template)?;
 
-    assert_contains(&output, "src/main.rs")?;
+    assert_contains(&output, expected)?;
     Ok(())
 }
 
 #[rstest]
-fn substitutes_line_placeholder() -> TestResult {
-    let comments = vec![CommentBuilder::new(1).line_number(42).build()];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.line }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "42")?;
-    Ok(())
-}
-
-#[rstest]
-fn substitutes_reviewer_placeholder() -> TestResult {
-    let comments = vec![CommentBuilder::new(1).author("alice").build()];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.reviewer }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "alice")?;
-    Ok(())
-}
-
-#[rstest]
-fn status_is_comment_for_root_comments() -> TestResult {
-    let comments = vec![CommentBuilder::new(1).build()];
+#[case::root_comment(None, "comment", "reply")]
+#[case::threaded_reply(Some(1), "reply", "comment")]
+fn status_field_reflects_comment_type(
+    #[case] in_reply_to: Option<u64>,
+    #[case] expected: &str,
+    #[case] unexpected: &str,
+) -> TestResult {
+    let mut builder = CommentBuilder::new(2);
+    if let Some(parent_id) = in_reply_to {
+        builder = builder.in_reply_to_id(parent_id);
+    }
+    let comments = vec![builder.build()];
 
     let output = render_template(
         &comments,
@@ -71,37 +62,8 @@ fn status_is_comment_for_root_comments() -> TestResult {
         "{% for c in comments %}{{ c.status }}{% endfor %}",
     )?;
 
-    assert_contains(&output, "comment")?;
-    assert_not_contains(&output, "reply")?;
-    Ok(())
-}
-
-#[rstest]
-fn status_is_reply_for_threaded_comments() -> TestResult {
-    let comments = vec![CommentBuilder::new(2).in_reply_to_id(1).build()];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.status }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "reply")?;
-    assert_not_contains(&output, "comment")?;
-    Ok(())
-}
-
-#[rstest]
-fn substitutes_body_placeholder() -> TestResult {
-    let comments = vec![CommentBuilder::new(1).body("Please fix this issue").build()];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.body }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "Please fix this issue")?;
+    assert_contains(&output, expected)?;
+    assert_not_contains(&output, unexpected)?;
     Ok(())
 }
 
@@ -121,66 +83,6 @@ fn substitutes_context_placeholder() -> TestResult {
 
     assert_contains(&output, "@@ -1,3 +1,4 @@")?;
     assert_contains(&output, "+new line")?;
-    Ok(())
-}
-
-#[rstest]
-fn substitutes_commit_placeholder() -> TestResult {
-    let comments = vec![CommentBuilder::new(1).commit_sha("abc123def").build()];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.commit }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "abc123def")?;
-    Ok(())
-}
-
-#[rstest]
-fn substitutes_timestamp_placeholder() -> TestResult {
-    let comments = vec![
-        CommentBuilder::new(1)
-            .created_at("2025-01-15T10:30:00Z")
-            .build(),
-    ];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.timestamp }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "2025-01-15T10:30:00Z")?;
-    Ok(())
-}
-
-#[rstest]
-fn substitutes_id_placeholder() -> TestResult {
-    let comments = vec![CommentBuilder::new(12345).build()];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.id }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "12345")?;
-    Ok(())
-}
-
-#[rstest]
-fn substitutes_reply_to_placeholder() -> TestResult {
-    let comments = vec![CommentBuilder::new(2).in_reply_to_id(999).build()];
-
-    let output = render_template(
-        &comments,
-        "https://example.com/pr/1",
-        "{% for c in comments %}{{ c.reply_to }}{% endfor %}",
-    )?;
-
-    assert_contains(&output, "999")?;
     Ok(())
 }
 

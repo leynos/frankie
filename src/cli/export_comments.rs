@@ -100,16 +100,26 @@ fn load_template_if_needed(
     read_template_file(Utf8Path::new(template_path))
 }
 
-/// Reads template content from the specified file path.
-fn read_template_file(path: &Utf8Path) -> Result<Option<String>, IntakeError> {
+/// Opens the parent directory for a given path and returns the directory handle and file name.
+fn open_dir_for_path<'a>(
+    path: &'a Utf8Path,
+    path_type: &str,
+) -> Result<(Dir, &'a str), IntakeError> {
     let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
     let file_name = path.file_name().ok_or_else(|| IntakeError::Io {
-        message: format!("invalid template path '{path}': no file name"),
+        message: format!("invalid {path_type} path '{path}': no file name"),
     })?;
 
     let dir = Dir::open_ambient_dir(parent, ambient_authority()).map_err(|e| IntakeError::Io {
         message: format!("failed to open directory '{parent}': {e}"),
     })?;
+
+    Ok((dir, file_name))
+}
+
+/// Reads template content from the specified file path.
+fn read_template_file(path: &Utf8Path) -> Result<Option<String>, IntakeError> {
+    let (dir, file_name) = open_dir_for_path(path, "template")?;
 
     let content = dir.read_to_string(file_name).map_err(|e| IntakeError::Io {
         message: format!("failed to read template file '{path}': {e}"),
@@ -138,14 +148,7 @@ fn write_output(config: &FrankieConfig, ctx: &ExportContext<'_>) -> Result<(), I
 
 /// Creates a file at the given path using capability-oriented filesystem access.
 fn create_output_file(path: &Utf8Path) -> Result<cap_std::fs_utf8::File, IntakeError> {
-    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-    let file_name = path.file_name().ok_or_else(|| IntakeError::Io {
-        message: format!("invalid output path '{path}': no file name"),
-    })?;
-
-    let dir = Dir::open_ambient_dir(parent, ambient_authority()).map_err(|e| IntakeError::Io {
-        message: format!("failed to open directory '{parent}': {e}"),
-    })?;
+    let (dir, file_name) = open_dir_for_path(path, "output")?;
 
     dir.create(file_name).map_err(|e| IntakeError::Io {
         message: format!("failed to create output file '{path}': {e}"),
@@ -204,31 +207,14 @@ mod tests {
         comments: &[ExportedComment],
         pr_url: PrUrl<'_>,
         format: ExportFormat,
+        template_content: Option<&str>,
     ) -> Result<String, IntakeError> {
         let mut buffer = Vec::new();
         let ctx = ExportContext {
             comments,
             pr_url,
             format,
-            template_content: None,
-        };
-        write_format(&mut buffer, &ctx)?;
-        String::from_utf8(buffer).map_err(|e| IntakeError::Io {
-            message: format!("invalid UTF-8: {e}"),
-        })
-    }
-
-    fn write_template_to_string(
-        comments: &[ExportedComment],
-        pr_url: PrUrl<'_>,
-        template: &str,
-    ) -> Result<String, IntakeError> {
-        let mut buffer = Vec::new();
-        let ctx = ExportContext {
-            comments,
-            pr_url,
-            format: ExportFormat::Template,
-            template_content: Some(template),
+            template_content,
         };
         write_format(&mut buffer, &ctx)?;
         String::from_utf8(buffer).map_err(|e| IntakeError::Io {
@@ -303,6 +289,7 @@ mod tests {
             &comments,
             PrUrl::new("https://example.com/pr/1"),
             ExportFormat::Markdown,
+            None,
         )?;
 
         assert_contains(&output, "# Review Comments Export")?;
@@ -318,6 +305,7 @@ mod tests {
             &comments,
             PrUrl::new("https://example.com/pr/1"),
             ExportFormat::Jsonl,
+            None,
         )?;
 
         let parsed: serde_json::Value = serde_json::from_str(output.trim())?;
@@ -338,8 +326,12 @@ mod tests {
         ];
 
         let template = "{% for c in comments %}{{ c.reviewer }}: {{ c.body }}{% endfor %}";
-        let output =
-            write_template_to_string(&comments, PrUrl::new("https://example.com/pr/1"), template)?;
+        let output = write_to_string(
+            &comments,
+            PrUrl::new("https://example.com/pr/1"),
+            ExportFormat::Template,
+            Some(template),
+        )?;
 
         assert_contains(&output, "alice: Fix this")?;
         Ok(())
