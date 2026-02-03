@@ -275,7 +275,21 @@ mod tests {
     }
 
     #[rstest]
-    fn write_format_markdown_writes_to_buffer() -> TestResult {
+    #[case::markdown(
+        ExportFormat::Markdown,
+        None,
+        &["# Review Comments Export", "test.rs:10"]
+    )]
+    #[case::template(
+        ExportFormat::Template,
+        Some("{% for c in comments %}{{ c.reviewer }}: {{ c.body }}{% endfor %}"),
+        &["alice: Fix this"]
+    )]
+    fn write_format_to_buffer(
+        #[case] format: ExportFormat,
+        #[case] template_content: Option<&str>,
+        #[case] expected_fragments: &[&str],
+    ) -> TestResult {
         let comments = vec![
             CommentBuilder::new(1)
                 .author("alice")
@@ -288,12 +302,13 @@ mod tests {
         let output = write_to_string(
             &comments,
             PrUrl::new("https://example.com/pr/1"),
-            ExportFormat::Markdown,
-            None,
+            format,
+            template_content,
         )?;
 
-        assert_contains(&output, "# Review Comments Export")?;
-        assert_contains(&output, "test.rs:10")?;
+        for fragment in expected_fragments {
+            assert_contains(&output, fragment)?;
+        }
         Ok(())
     }
 
@@ -311,29 +326,6 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(output.trim())?;
         assert_json_field_eq(&parsed, "id", 42_u64)?;
         assert_json_field_eq(&parsed, "body", "LGTM")?;
-        Ok(())
-    }
-
-    #[rstest]
-    fn write_format_template_writes_to_buffer() -> TestResult {
-        let comments = vec![
-            CommentBuilder::new(1)
-                .author("alice")
-                .file_path("test.rs")
-                .line_number(10)
-                .body("Fix this")
-                .build(),
-        ];
-
-        let template = "{% for c in comments %}{{ c.reviewer }}: {{ c.body }}{% endfor %}";
-        let output = write_to_string(
-            &comments,
-            PrUrl::new("https://example.com/pr/1"),
-            ExportFormat::Template,
-            Some(template),
-        )?;
-
-        assert_contains(&output, "alice: Fix this")?;
         Ok(())
     }
 
