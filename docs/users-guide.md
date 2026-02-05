@@ -18,8 +18,8 @@ Frankie supports five operation modes:
 2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
 3. **Repository listing mode** — List PRs for a repository using `--owner` and
    `--repo`
-4. **Review TUI mode** — Interactive terminal interface for navigating and
-   filtering review comments using `--tui` with `--pr-url`
+4. **Review text user interface (TUI) mode** — Interactive terminal interface
+   for navigating and filtering review comments using `--tui` with `--pr-url`
 5. **Comment export mode** — Export review comments in structured formats using
    `--export` with `--pr-url`
 
@@ -442,7 +442,7 @@ Total: {{ comments | length }} comments
 
 - **Missing template file** — The `--template` flag is required when using
   `--export template`.
-- **Invalid template syntax** — Check your Jinja2 syntax (unclosed blocks,
+- **Invalid template syntax** — Verify the Jinja2 syntax (unclosed blocks,
   invalid expressions).
 
 ### Export errors

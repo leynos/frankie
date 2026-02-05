@@ -34,7 +34,7 @@ crossterm = "0.29"
 syntect = "5.2.0"
 
 # Template engine
-minijinja = "2"
+minijinja = "2.14.0"
 
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }

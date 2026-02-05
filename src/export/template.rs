@@ -1,6 +1,6 @@
 //! Template-driven comment export using Jinja2-compatible syntax.
 //!
-//! This module provides customisable export formatting using the `minijinja`
+//! This module provides customizable export formatting using the `minijinja`
 //! template engine. Users can supply a template file with Jinja2 syntax to
 //! control the structure and content of exported comments.
 //!
@@ -8,8 +8,8 @@
 //!
 //! Templates use Jinja2 syntax:
 //! - `{{ variable }}` — variable interpolation
-//! - `{% for item in list %}...{% endfor %}` — loops
-//! - `{{ list | length }}` — filters
+//! - `{% for c in comments %}...{% endfor %}` — loops
+//! - `{{ comments | length }}` — filters
 //!
 //! # Available Variables
 //!
@@ -18,17 +18,17 @@
 //! - `generated_at` — export timestamp (ISO 8601)
 //! - `comments` — list of comment objects
 //!
-//! **Comment-level** (inside `{% for comment in comments %}`):
-//! - `comment.id` — comment ID
-//! - `comment.file` — file path
-//! - `comment.line` — line number
-//! - `comment.reviewer` — comment author
-//! - `comment.status` — "reply" or "comment"
-//! - `comment.body` — comment text
-//! - `comment.context` — diff hunk
-//! - `comment.commit` — commit SHA
-//! - `comment.timestamp` — creation timestamp
-//! - `comment.reply_to` — parent comment ID
+//! **Comment-level** (inside `{% for c in comments %}`):
+//! - `c.id` — comment ID
+//! - `c.file` — file path
+//! - `c.line` — line number
+//! - `c.reviewer` — comment author
+//! - `c.status` — "reply" or "comment"
+//! - `c.body` — comment text
+//! - `c.context` — diff hunk
+//! - `c.commit` — commit secure hash algorithm (SHA)
+//! - `c.timestamp` — creation timestamp
+//! - `c.reply_to` — parent comment ID
 
 use std::io::Write;
 
@@ -147,9 +147,11 @@ pub fn write_template<W: Write>(
         comments => template_comments,
     };
 
-    let tmpl = env.get_template("export").map_err(|e| IntakeError::Io {
-        message: format!("failed to retrieve template: {e}"),
-    })?;
+    let tmpl = env
+        .get_template("export")
+        .map_err(|e| IntakeError::Configuration {
+            message: format!("failed to retrieve template: {e}"),
+        })?;
 
     let output = tmpl.render(ctx).map_err(|e| IntakeError::Configuration {
         message: format!("template rendering failed: {e}"),

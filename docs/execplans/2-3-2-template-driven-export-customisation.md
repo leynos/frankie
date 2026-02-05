@@ -1,4 +1,4 @@
-# Template-driven export customisation
+# Template-driven export customization
 
 This execution plan (ExecPlan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
@@ -12,7 +12,7 @@ governance applies.
 
 ## Purpose / Big picture
 
-Introduce template-driven export customisation to the comment export pipeline.
+Introduce template-driven export customization to the comment export pipeline.
 Users can specify a Jinja2-compatible template file via `--template <PATH>` to
 control the structure and content of exported comments. The implementation uses
 `minijinja` for battle-tested template rendering. Success is visible when users
@@ -109,7 +109,7 @@ All acceptance criteria met:
 - Unit tests (rstest) cover substitution rules for all placeholders.
 - Unit tests cover escaping rules (special characters, Unicode, no HTML
   escaping by default).
-- BDD tests (rstest-bdd) cover 7 scenarios: simple template, document
+- Behaviour-driven development (BDD) tests (rstest-bdd) cover 7 scenarios: simple template, document
   variables, file/line placeholders, status for replies, status for root
   comments, empty comments, and invalid syntax error.
 - `make check-fmt`, `make lint`, and `make test` succeed.
@@ -145,7 +145,7 @@ The `ExportedComment` struct contains:
 - `line_number: Option<u32>` — line in diff
 - `body: Option<String>` — comment text
 - `diff_hunk: Option<String>` — code context
-- `commit_sha: Option<String>` — commit SHA
+- `commit_sha: Option<String>` — commit secure hash algorithm (SHA)
 - `in_reply_to_id: Option<u64>` — parent comment ID (used to derive status)
 - `created_at: Option<String>` — ISO 8601 timestamp
 
@@ -365,7 +365,7 @@ Total: {{ comments | length }} comments
 - Modified: `docs/users-guide.md` — feature documentation
 - Modified: `docs/roadmap.md` — mark entry done
 
-## CLI interface
+## CLI
 
 Template export CLI flags:
 
@@ -389,6 +389,6 @@ frankie --pr-url https://github.com/owner/repo/pull/123 --export template \
 
 ## Revision note
 
-Initial draft created to cover template-driven export customisation using
+Initial draft created to cover template-driven export customization using
 minijinja for Jinja2-compatible template rendering, with placeholders for file,
 line, reviewer, and status.

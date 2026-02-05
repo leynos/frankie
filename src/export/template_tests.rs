@@ -249,6 +249,24 @@ fn invalid_template_syntax_returns_error() {
 }
 
 #[rstest]
+fn runtime_error_returns_configuration_error() {
+    let comments: Vec<ExportedComment> = vec![];
+
+    // Using an unknown filter causes a runtime error
+    let result = render_template(
+        &comments,
+        "https://example.com/pr/1",
+        "{{ pr_url | nonexistent_filter }}",
+    );
+
+    let err = result.expect_err("should fail with unknown filter");
+    assert!(
+        matches!(err, IntakeError::Configuration { ref message } if message.contains("template rendering failed")),
+        "expected Configuration error about rendering failure, got: {err:?}"
+    );
+}
+
+#[rstest]
 fn complex_template_renders_correctly() -> TestResult {
     let comments = vec![
         CommentBuilder::new(1)
