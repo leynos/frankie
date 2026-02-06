@@ -31,7 +31,7 @@ pub(crate) fn ensure_runtime_and_server(
 ) -> Result<SharedRuntime, IntakeError> {
     super::runtime::ensure_runtime_and_server(&state.runtime, &state.server).map_err(|error| {
         IntakeError::Api {
-            message: format!("failed to create Tokio runtime: {error}"),
+            message: format!("failed to initialise test environment: {error}"),
         }
     })
 }

@@ -232,7 +232,7 @@ fn no_html_escaping_by_default() -> TestResult {
 }
 
 #[rstest]
-fn invalid_template_syntax_returns_error() {
+fn invalid_template_syntax_returns_error() -> TestResult {
     let comments: Vec<ExportedComment> = vec![];
 
     let result = render_template(
@@ -241,15 +241,19 @@ fn invalid_template_syntax_returns_error() {
         "{% for x in %}broken{% endfor %}",
     );
 
-    let err = result.expect_err("should fail with invalid syntax");
-    assert!(
-        matches!(err, IntakeError::Configuration { ref message } if message.contains("invalid template syntax")),
-        "expected Configuration error, got: {err:?}"
-    );
+    match result {
+        Err(IntakeError::Configuration { ref message })
+            if message.contains("invalid template syntax") =>
+        {
+            Ok(())
+        }
+        Err(other) => Err(format!("expected Configuration error, got: {other:?}").into()),
+        Ok(_) => Err("expected error but got success".into()),
+    }
 }
 
 #[rstest]
-fn runtime_error_returns_configuration_error() {
+fn runtime_error_returns_configuration_error() -> TestResult {
     let comments: Vec<ExportedComment> = vec![];
 
     // Using an unknown filter causes a runtime error
@@ -259,11 +263,18 @@ fn runtime_error_returns_configuration_error() {
         "{{ pr_url | nonexistent_filter }}",
     );
 
-    let err = result.expect_err("should fail with unknown filter");
-    assert!(
-        matches!(err, IntakeError::Configuration { ref message } if message.contains("template rendering failed")),
-        "expected Configuration error about rendering failure, got: {err:?}"
-    );
+    match result {
+        Err(IntakeError::Configuration { ref message })
+            if message.contains("template rendering failed") =>
+        {
+            Ok(())
+        }
+        Err(other) => Err(format!(
+            "expected Configuration error about rendering failure, got: {other:?}"
+        )
+        .into()),
+        Ok(_) => Err("expected error but got success".into()),
+    }
 }
 
 #[rstest]

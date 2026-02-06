@@ -121,7 +121,7 @@ All acceptance criteria met:
 
 - Using an established template engine (minijinja) significantly reduced
   implementation complexity compared to a custom regex-based solution.
-- The Jinja2 syntax is familiar to many developers, reducing learning curve.
+- The Jinja2 syntax is familiar to many developers, reducing the learning curve.
 - Separating template context structs (`TemplateComment`) from domain models
   (`ExportedComment`) allows clean field mapping and derived fields like
   `status`.

@@ -184,8 +184,8 @@ pub struct FrankieConfig {
     /// Export format for review comments.
     ///
     /// When set, Frankie exports review comments in the specified format
-    /// instead of displaying them interactively. Valid values are `markdown`
-    /// and `jsonl`.
+    /// instead of displaying them interactively. Valid values are `markdown`,
+    /// `jsonl`, and `template` (requires `--template` to specify a template file).
     ///
     /// Can be provided via:
     /// - CLI: `--export <FORMAT>` or `-e <FORMAT>`

@@ -522,7 +522,7 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | Flag                                        | Short | Description                                       |
 | ------------------------------------------- | ----- | ------------------------------------------------- |
 | `--pr-url <URL>`                            | `-u`  | GitHub pull request URL                           |
-| `--owner <OWNER>`                           | `-o`  | Repository owner (user or organisation)           |
+| `--owner <OWNER>`                           | `-o`  | Repository owner (user or organization)           |
 | `--repo <REPO>`                             | `-r`  | Repository name                                   |
 | `--token <TOKEN>`                           | `-t`  | Personal access token                             |
 | `--database-url <PATH>`                     | —     | Local SQLite database path                        |

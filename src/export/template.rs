@@ -96,7 +96,7 @@ impl From<&ExportedComment> for TemplateComment {
 /// Writes comments using a user-provided Jinja2 template.
 ///
 /// The template has access to document-level variables (`pr_url`, `generated_at`,
-/// `comments`) and can iterate over comments using `{% for comment in comments %}`.
+/// `comments`) and can iterate over comments using `{% for c in comments %}`.
 ///
 /// # Arguments
 ///
