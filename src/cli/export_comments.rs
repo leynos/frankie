@@ -342,17 +342,16 @@ mod tests {
     }
 
     #[rstest]
-    fn load_template_if_needed_returns_none_for_non_template_formats() -> TestResult {
+    #[case::markdown(ExportFormat::Markdown)]
+    #[case::jsonl(ExportFormat::Jsonl)]
+    fn load_template_if_needed_returns_none_for_non_template_formats(
+        #[case] format: ExportFormat,
+    ) -> TestResult {
         let config = FrankieConfig::default();
 
-        let markdown_result = load_template_if_needed(&config, ExportFormat::Markdown)?;
-        if markdown_result.is_some() {
-            return Err("expected None for Markdown format".into());
-        }
-
-        let jsonl_result = load_template_if_needed(&config, ExportFormat::Jsonl)?;
-        if jsonl_result.is_some() {
-            return Err("expected None for Jsonl format".into());
+        let result = load_template_if_needed(&config, format)?;
+        if result.is_some() {
+            return Err(format!("expected None for {format:?} format").into());
         }
 
         Ok(())

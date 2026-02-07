@@ -314,7 +314,9 @@ Frankie supports three export formats:
   and syntax highlighting hints
 - **JSONL** (`--export jsonl`) — Machine-readable format with one JSON object
   per line
-- **Template** (`--export template`) — Custom Jinja2-compatible template format
+- **Template** (`--export template --template <file>`) — Custom
+  Jinja2-compatible template format; requires `--template` with the path to a
+  Jinja2 template file
 
 ### Output destination
 
@@ -398,6 +400,8 @@ Templates use Jinja2 syntax (via the `minijinja` engine):
 
 **Document-level** (available anywhere in the template):
 
+Table: Document-level variables.
+
 | Variable | Description |
 | --- | --- |
 | `pr_url` | Pull request URL |
@@ -405,6 +409,8 @@ Templates use Jinja2 syntax (via the `minijinja` engine):
 | `comments` | List of comment objects |
 
 **Comment-level** (inside `{% for c in comments %}`):
+
+Table: Comment-level variables.
 
 | Variable | Description |
 | --- | --- |
