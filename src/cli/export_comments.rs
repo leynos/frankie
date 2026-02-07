@@ -19,6 +19,30 @@ use super::export::{
     ExportFormat, ExportedComment, sort_comments, write_jsonl, write_markdown, write_template,
 };
 
+/// Parameters for export operations.
+struct ExportParams<'a> {
+    comments: &'a [ExportedComment],
+    pr_url: PrUrl<'a>,
+    format: ExportFormat,
+    template_content: Option<&'a str>,
+}
+
+impl<'a> ExportParams<'a> {
+    const fn new(
+        comments: &'a [ExportedComment],
+        pr_url: PrUrl<'a>,
+        format: ExportFormat,
+        template_content: Option<&'a str>,
+    ) -> Self {
+        Self {
+            comments,
+            pr_url,
+            format,
+            template_content,
+        }
+    }
+}
+
 /// Exports review comments from a pull request in structured format.
 ///
 /// # Errors
@@ -49,13 +73,13 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     sort_comments(&mut comments);
 
     // Write to output
-    write_output(
-        config,
+    let params = ExportParams::new(
         &comments,
         PrUrl::new(pr_url),
         export_format,
         template_content.as_deref(),
-    )
+    );
+    write_output(config, &params)
 }
 
 /// Parses the export format from configuration.
@@ -119,22 +143,12 @@ fn read_template_file(path: &Utf8Path) -> Result<String, IntakeError> {
 }
 
 /// Writes comments to the configured output destination.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "explicit parameters preferred over wrapper struct per code review"
-)]
-fn write_output(
-    config: &FrankieConfig,
-    comments: &[ExportedComment],
-    pr_url: PrUrl<'_>,
-    format: ExportFormat,
-    template_content: Option<&str>,
-) -> Result<(), IntakeError> {
+fn write_output(config: &FrankieConfig, params: &ExportParams<'_>) -> Result<(), IntakeError> {
     if let Some(path_str) = &config.output {
         let path = Utf8Path::new(path_str);
         let file = create_output_file(path)?;
         let mut writer = BufWriter::new(file);
-        write_format(&mut writer, comments, pr_url, format, template_content)?;
+        write_format(&mut writer, params)?;
         writer.flush().map_err(|e| IntakeError::Io {
             message: format!("failed to flush output file: {e}"),
         })?;
@@ -142,7 +156,7 @@ fn write_output(
     } else {
         let stdout = io::stdout();
         let mut writer = stdout.lock();
-        write_format(&mut writer, comments, pr_url, format, template_content)
+        write_format(&mut writer, params)
     }
 }
 
@@ -156,26 +170,18 @@ fn create_output_file(path: &Utf8Path) -> Result<cap_std::fs_utf8::File, IntakeE
 }
 
 /// Writes comments in the specified format to the writer.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "explicit parameters preferred over wrapper struct per code review"
-)]
-fn write_format<W: Write>(
-    writer: &mut W,
-    comments: &[ExportedComment],
-    pr_url: PrUrl<'_>,
-    format: ExportFormat,
-    template_content: Option<&str>,
-) -> Result<(), IntakeError> {
-    match format {
-        ExportFormat::Markdown => write_markdown(writer, comments, pr_url.as_str()),
-        ExportFormat::Jsonl => write_jsonl(writer, comments),
+fn write_format<W: Write>(writer: &mut W, params: &ExportParams<'_>) -> Result<(), IntakeError> {
+    match params.format {
+        ExportFormat::Markdown => write_markdown(writer, params.comments, params.pr_url.as_str()),
+        ExportFormat::Jsonl => write_jsonl(writer, params.comments),
         ExportFormat::Template => {
             // Defensive check: load_template_if_needed ensures content is present for Template format
-            let content = template_content.ok_or_else(|| IntakeError::Configuration {
-                message: "template content is required for template format".to_owned(),
-            })?;
-            write_template(writer, comments, pr_url.as_str(), content)
+            let content = params
+                .template_content
+                .ok_or_else(|| IntakeError::Configuration {
+                    message: "template content is required for template format".to_owned(),
+                })?;
+            write_template(writer, params.comments, params.pr_url.as_str(), content)
         }
     }
 }
@@ -218,7 +224,8 @@ mod tests {
         template_content: Option<&str>,
     ) -> Result<String, IntakeError> {
         let mut buffer = Vec::new();
-        write_format(&mut buffer, comments, pr_url, format, template_content)?;
+        let params = ExportParams::new(comments, pr_url, format, template_content);
+        write_format(&mut buffer, &params)?;
         String::from_utf8(buffer).map_err(|e| IntakeError::Io {
             message: format!("invalid UTF-8: {e}"),
         })
@@ -248,14 +255,17 @@ mod tests {
     fn parse_export_format_returns_expected_format(
         #[case] input: &str,
         #[case] expected: ExportFormat,
-    ) {
+    ) -> TestResult {
         let config = FrankieConfig {
             export: Some(input.to_owned()),
             ..Default::default()
         };
 
-        let result = parse_export_format(&config).expect("should parse valid format");
-        assert_eq!(result, expected);
+        let result = parse_export_format(&config)?;
+        if result != expected {
+            return Err(format!("expected {expected:?}, got {result:?}").into());
+        }
+        Ok(())
     }
 
     #[rstest]

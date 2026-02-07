@@ -404,20 +404,20 @@ Templates use Jinja2 syntax (via the `minijinja` engine):
 | `generated_at` | Export timestamp (ISO 8601) |
 | `comments` | List of comment objects |
 
-**Comment-level** (inside `{% for comment in comments %}`):
+**Comment-level** (inside `{% for c in comments %}`):
 
 | Variable | Description |
 | --- | --- |
-| `comment.id` | Comment ID |
-| `comment.file` | File path |
-| `comment.line` | Line number |
-| `comment.reviewer` | Comment author |
-| `comment.status` | "reply" or "comment" |
-| `comment.body` | Comment text |
-| `comment.context` | Diff hunk (code context) |
-| `comment.commit` | Commit SHA |
-| `comment.timestamp` | Creation timestamp |
-| `comment.reply_to` | Parent comment ID (if reply) |
+| `c.id` | Comment ID |
+| `c.file` | File path |
+| `c.line` | Line number |
+| `c.reviewer` | Comment author |
+| `c.status` | "reply" or "comment" |
+| `c.body` | Comment text |
+| `c.context` | Diff hunk (code context) |
+| `c.commit` | Commit SHA |
+| `c.timestamp` | Creation timestamp |
+| `c.reply_to` | Parent comment ID (if reply) |
 
 #### Example template
 

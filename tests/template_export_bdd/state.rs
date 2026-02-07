@@ -1,4 +1,4 @@
-//! Scenario state and runtime/server initialisation for the template export
+//! Scenario state and runtime/server initialization for the template export
 //! BDD tests.
 
 use frankie::IntakeError;
@@ -25,13 +25,13 @@ pub(crate) struct TemplateExportState {
     pub(crate) error: Slot<IntakeError>,
 }
 
-/// Ensures the runtime and server are initialised in `TemplateExportState`.
+/// Ensures the runtime and server are initialized in `TemplateExportState`.
 pub(crate) fn ensure_runtime_and_server(
     state: &TemplateExportState,
 ) -> Result<SharedRuntime, IntakeError> {
     super::runtime::ensure_runtime_and_server(&state.runtime, &state.server).map_err(|error| {
         IntakeError::Api {
-            message: format!("failed to initialise test environment: {error}"),
+            message: format!("failed to initialize test environment: {error}"),
         }
     })
 }

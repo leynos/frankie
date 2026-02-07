@@ -12,9 +12,10 @@
 //! 1. **Defaults** – Built-in application defaults
 //! 2. **Configuration file** – `.frankie.toml` in current directory, home
 //!    directory, or XDG config directory
-//! 3. **Environment variables** – `FRANKIE_PR_URL`, `FRANKIE_TOKEN`, or legacy
-//!    `GITHUB_TOKEN`
-//! 4. **Command-line arguments** – `--pr-url`/`-u` and `--token`/`-t`
+//! 3. **Environment variables** – `FRANKIE_PR_URL`, `FRANKIE_TOKEN`,
+//!    `FRANKIE_TEMPLATE`, or legacy `GITHUB_TOKEN`
+//! 4. **Command-line arguments** – `--pr-url`/`-u`, `--token`/`-t`, and
+//!    `--template`
 //!
 //! # Configuration File
 //!
