@@ -452,6 +452,9 @@ impl Model for ReviewApp {
 
         // Handle key events from bubbletea-rs with context-aware mapping
         if let Some(key_msg) = msg.downcast_ref::<bubbletea_rs::event::KeyMsg>() {
+            if self.show_help {
+                return self.handle_message(&AppMsg::ToggleHelp);
+            }
             let context = self.input_context();
             let app_msg = map_key_to_message_with_context(key_msg, context);
             if let Some(mapped) = app_msg {
@@ -541,3 +544,7 @@ impl ReviewApp {
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "help_overlay_input_tests.rs"]
+mod help_overlay_input_tests;
