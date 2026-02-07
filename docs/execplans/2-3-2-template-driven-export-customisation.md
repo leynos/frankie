@@ -109,7 +109,8 @@ All acceptance criteria met:
 - Unit tests (rstest) cover substitution rules for all placeholders.
 - Unit tests cover escaping rules (special characters, Unicode, no HTML
   escaping by default).
-- Behaviour-driven development (BDD) tests (rstest-bdd) cover 7 scenarios: simple template, document
+- Behaviour-driven development (BDD) tests (rstest-bdd) cover 7
+  scenarios: simple template, document
   variables, file/line placeholders, status for replies, status for root
   comments, empty comments, and invalid syntax error.
 - `make check-fmt`, `make lint`, and `make test` succeed.
