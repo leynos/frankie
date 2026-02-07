@@ -220,6 +220,17 @@ pub struct FrankieConfig {
     /// - Config file: `template = "my-template.j2"`
     #[ortho_config()]
     pub template: Option<String>,
+
+    /// Positional PR identifier extracted from command-line arguments.
+    ///
+    /// This field is populated programmatically by the entry point before
+    /// ortho-config loads the remaining arguments. It accepts either a bare
+    /// PR number (e.g. `123`) or a full GitHub URL
+    /// (e.g. `https://github.com/owner/repo/pull/123`).
+    ///
+    /// When set, the TUI is launched automatically without requiring `-T`.
+    #[serde(skip)]
+    pub pr_identifier: Option<String>,
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
@@ -239,6 +250,7 @@ impl Default for FrankieConfig {
             export: None,
             output: None,
             template: None,
+            pr_identifier: None,
         }
     }
 }
@@ -285,17 +297,22 @@ impl FrankieConfig {
         self.export.is_some()
     }
 
+    const fn has_pr_identifier(&self) -> bool {
+        self.pr_identifier.is_some()
+    }
+
     const fn should_review_tui(&self) -> bool {
-        self.tui && self.has_pr_url()
+        self.has_pr_identifier() || (self.tui && self.has_pr_url())
     }
 
     /// Determines the operation mode based on provided configuration.
     ///
     /// Returns `ExportComments` if export format is set (PR URL validation
-    /// is deferred to `export_comments::run`), `ReviewTui` if TUI mode is
-    /// enabled with a PR URL, `SinglePullRequest` if a PR URL is provided
-    /// without TUI or export, `RepositoryListing` if both owner and repo
-    /// are provided, or `Interactive` otherwise.
+    /// is deferred to `export_comments::run`), `ReviewTui` if a positional
+    /// PR identifier is present or TUI mode is enabled with a PR URL,
+    /// `SinglePullRequest` if a PR URL is provided without TUI or export,
+    /// `RepositoryListing` if both owner and repo are provided, or
+    /// `Interactive` otherwise.
     #[must_use]
     pub const fn operation_mode(&self) -> OperationMode {
         if self.should_export_comments() {
@@ -309,6 +326,40 @@ impl FrankieConfig {
         } else {
             OperationMode::Interactive
         }
+    }
+
+    /// Sets the positional PR identifier extracted from raw CLI arguments.
+    ///
+    /// Called by the entry point after extracting the positional argument
+    /// and before ortho-config processes the remaining flags.
+    pub fn set_pr_identifier(&mut self, value: String) {
+        self.pr_identifier = Some(value);
+    }
+
+    /// Returns the positional PR identifier, if provided.
+    #[must_use]
+    pub fn pr_identifier(&self) -> Option<&str> {
+        self.pr_identifier.as_deref()
+    }
+
+    /// Validates that the configuration is internally consistent.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntakeError::Configuration`] when both `pr_identifier` and
+    /// `pr_url` are provided, since they are mutually exclusive ways to
+    /// specify a pull request.
+    pub fn validate(&self) -> Result<(), IntakeError> {
+        if self.has_pr_identifier() && self.has_pr_url() {
+            return Err(IntakeError::Configuration {
+                message: concat!(
+                    "positional PR identifier and --pr-url are mutually ",
+                    "exclusive; provide one or the other"
+                )
+                .to_owned(),
+            });
+        }
+        Ok(())
     }
 
     /// Returns owner and repo if both are configured.

@@ -346,7 +346,7 @@ This ensures consistent output across runs for the same PR state.
 The output includes a header, then each comment with location, reviewer, body,
 and code context (if available):
 
-````markdown
+```markdown
 # Review Comments Export
 
 PR: https://github.com/owner/repo/pull/123
@@ -361,15 +361,13 @@ PR: https://github.com/owner/repo/pull/123
 Consider using a constant here instead of a magic number.
 
 ```rust
-@@ -40,3 +40,5 @@
- fn validate_token(token: &str) -> bool {
+@@ -40,3 +40,5 @@ fn validate_token(token: &str) -> bool {
 -    token.len() > 0
 +    token.len() > 8
  }
 ```
 
----
-````
+```---
 
 ### JSONL format example
 
@@ -402,28 +400,28 @@ Templates use Jinja2 syntax (via the `minijinja` engine):
 
 Table: Document-level variables.
 
-| Variable | Description |
-| --- | --- |
-| `pr_url` | Pull request URL |
+| Variable       | Description                 |
+| -------------- | --------------------------- |
+| `pr_url`       | Pull request URL            |
 | `generated_at` | Export timestamp (ISO 8601) |
-| `comments` | List of comment objects |
+| `comments`     | List of comment objects     |
 
 **Comment-level** (inside `{% for c in comments %}`):
 
 Table: Comment-level variables.
 
-| Variable | Description |
-| --- | --- |
-| `c.id` | Comment ID |
-| `c.file` | File path |
-| `c.line` | Line number |
-| `c.reviewer` | Comment author |
-| `c.status` | "reply" or "comment" |
-| `c.body` | Comment text |
-| `c.context` | Diff hunk (code context) |
-| `c.commit` | Commit SHA |
-| `c.timestamp` | Creation timestamp |
-| `c.reply_to` | Parent comment ID (if reply) |
+| Variable      | Description                  |
+| ------------- | ---------------------------- |
+| `c.id`        | Comment ID                   |
+| `c.file`      | File path                    |
+| `c.line`      | Line number                  |
+| `c.reviewer`  | Comment author               |
+| `c.status`    | "reply" or "comment"         |
+| `c.body`      | Comment text                 |
+| `c.context`   | Diff hunk (code context)     |
+| `c.commit`    | Commit SHA                   |
+| `c.timestamp` | Creation timestamp           |
+| `c.reply_to`  | Parent comment ID (if reply) |
 
 #### Example template
 

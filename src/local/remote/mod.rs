@@ -74,6 +74,40 @@ impl GitHubOrigin {
             Self::Enterprise { port, .. } => *port,
         }
     }
+
+    /// Constructs the full HTTPS URL for a pull request on this origin.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use frankie::local::GitHubOrigin;
+    ///
+    /// let origin = GitHubOrigin::GitHubCom {
+    ///     owner: "octo".to_owned(),
+    ///     repository: "cat".to_owned(),
+    /// };
+    /// assert_eq!(
+    ///     origin.pull_request_url(42),
+    ///     "https://github.com/octo/cat/pull/42"
+    /// );
+    /// ```
+    #[must_use]
+    pub fn pull_request_url(&self, number: u64) -> String {
+        match self {
+            Self::GitHubCom { owner, repository } => {
+                format!("https://github.com/{owner}/{repository}/pull/{number}")
+            }
+            Self::Enterprise {
+                host,
+                port,
+                owner,
+                repository,
+            } => port.map_or_else(
+                || format!("https://{host}/{owner}/{repository}/pull/{number}"),
+                |p| format!("https://{host}:{p}/{owner}/{repository}/pull/{number}"),
+            ),
+        }
+    }
 }
 
 /// Parses a Git remote URL and extracts GitHub origin information.

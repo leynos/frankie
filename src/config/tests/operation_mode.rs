@@ -75,3 +75,61 @@ fn pr_url_takes_precedence_over_owner_repo() {
         "pr_url should take precedence over owner/repo"
     );
 }
+
+#[rstest]
+fn review_tui_when_pr_identifier_present() {
+    let config = FrankieConfig {
+        pr_identifier: Some("42".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::ReviewTui,
+        "should be ReviewTui when pr_identifier is set"
+    );
+}
+
+#[rstest]
+fn review_tui_when_pr_identifier_and_tui_flag() {
+    let config = FrankieConfig {
+        pr_identifier: Some("42".to_owned()),
+        tui: true,
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::ReviewTui,
+        "should be ReviewTui when pr_identifier is set with tui flag"
+    );
+}
+
+#[rstest]
+fn export_takes_precedence_over_pr_identifier() {
+    let config = FrankieConfig {
+        pr_identifier: Some("42".to_owned()),
+        export: Some("markdown".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::ExportComments,
+        "export should take precedence over pr_identifier"
+    );
+}
+
+#[rstest]
+fn pr_identifier_url_triggers_review_tui() {
+    let config = FrankieConfig {
+        pr_identifier: Some("https://github.com/o/r/pull/1".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::ReviewTui,
+        "URL identifier should trigger ReviewTui"
+    );
+}

@@ -6,7 +6,7 @@
 
 use super::error::IntakeError;
 use super::gateway::{ListPullRequestsParams, PaginatedPullRequests, RepositoryGateway};
-use super::locator::RepositoryLocator;
+use super::repository_locator::RepositoryLocator;
 
 /// Aggregates repository-level operations using a gateway.
 ///
