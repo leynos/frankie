@@ -6,10 +6,11 @@ use async_trait::async_trait;
 use octocrab::{Octocrab, Page};
 
 use crate::github::error::IntakeError;
-use crate::github::locator::{PersonalAccessToken, RepositoryLocator};
+use crate::github::locator::PersonalAccessToken;
 use crate::github::models::{ApiPullRequestSummary, PullRequestSummary};
 use crate::github::pagination::PageInfo;
 use crate::github::rate_limit::RateLimitInfo;
+use crate::github::repository_locator::RepositoryLocator;
 
 use super::RepositoryGateway;
 use super::client::build_octocrab_client;

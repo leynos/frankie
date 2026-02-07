@@ -4,6 +4,7 @@
 //! interface that allows users to navigate and filter review comments.
 
 use std::io::{self, Write};
+use std::path::Path;
 use std::sync::Arc;
 
 use bubbletea_rs::Program;
@@ -17,16 +18,21 @@ use frankie::{
 
 /// Runs the TUI mode for reviewing PR comments.
 ///
+/// When a positional PR identifier is present, the locator is resolved via
+/// [`PullRequestLocator::from_identifier`], using local git discovery for
+/// bare PR numbers. Otherwise the existing `--pr-url` + `parse` flow is
+/// used for backwards compatibility.
+///
 /// # Errors
 ///
 /// Returns an error if:
-/// - The PR URL is missing or invalid
+/// - The PR URL or identifier is missing or invalid
+/// - Local git discovery fails (bare PR number outside a repository)
 /// - The token is missing or invalid
 /// - The GitHub API call fails
 /// - The TUI fails to initialise
 pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
-    let pr_url = config.require_pr_url()?;
-    let locator = PullRequestLocator::parse(pr_url)?;
+    let locator = resolve_locator(config)?;
     let token = PersonalAccessToken::new(config.resolve_token()?)?;
 
     // Create gateway and fetch review comments
@@ -61,6 +67,37 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     })?;
 
     Ok(())
+}
+
+/// Resolves a [`PullRequestLocator`] from the configuration.
+///
+/// Prefers the positional `pr_identifier` when available, falling back to
+/// `--pr-url`. For bare PR numbers the local git repository is discovered
+/// to obtain the owner and repository name.
+fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeError> {
+    if let Some(identifier) = config.pr_identifier() {
+        return resolve_from_identifier(identifier);
+    }
+
+    let pr_url = config.require_pr_url()?;
+    PullRequestLocator::parse(pr_url)
+}
+
+/// Resolves a locator from a positional PR identifier (URL or bare number).
+fn resolve_from_identifier(identifier: &str) -> Result<PullRequestLocator, IntakeError> {
+    // URL identifiers are parsed directly without local discovery
+    if identifier.contains("://") {
+        return PullRequestLocator::parse(identifier);
+    }
+
+    // Bare PR number — discover owner/repo from local git remote
+    let local_repo = frankie::discover_repository(Path::new(".")).map_err(|error| {
+        IntakeError::LocalDiscovery {
+            message: format!("{error}. Provide a full PR URL instead"),
+        }
+    })?;
+
+    PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
 }
 
 /// Runs the bubbletea-rs program with the `ReviewApp` model.

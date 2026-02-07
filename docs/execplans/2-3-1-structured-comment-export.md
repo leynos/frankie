@@ -363,7 +363,7 @@ GitHub's perspective and produce deterministic output given the same input.
 
 Example Markdown output (illustrative):
 
-````markdown
+```markdown
 # Review Comments Export
 
 PR: https://github.com/owner/repo/pull/123
@@ -378,15 +378,13 @@ PR: https://github.com/owner/repo/pull/123
 Consider using a constant here instead of a magic number.
 
 ```rust
-@@ -40,3 +40,5 @@
- fn validate_token(token: &str) -> bool {
+@@ -40,3 +40,5 @@ fn validate_token(token: &str) -> bool {
 -    token.len() > 0
 +    token.len() > 8
  }
 ```
 
----
-````
+```---
 
 Example JSONL output (illustrative):
 
@@ -415,10 +413,11 @@ Example JSONL output (illustrative):
 
 Export operation CLI flags:
 
-| Flag             | Short | Description                          | Values            |
-| ---------------- | ----- | ------------------------------------ | ----------------- |
-| `--export`       | `-e`  | Export format                        | `markdown`,`jsonl`|
-| `--output`       |       | Output file path (default: stdout)   | file path         |
+| Flag                               | Short     | Description   | Values             |
+| ---------------------------------- | --------- | ------------- | ------------------ |
+| `--export`                         | `-e`      | Export format | `markdown`,`jsonl` |
+| `--output`                         |
+| Output file path (default: stdout) | file path |
 
 Example commands:
 

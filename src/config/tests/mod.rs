@@ -7,6 +7,7 @@
 //! - `field_resolution`: Token, PR URL, and repository info resolution tests
 //! - `ttl_loading`: `pr_metadata_cache_ttl_seconds` loading tests
 //! - `local_discovery_config`: `no_local_discovery` configuration tests
+//! - `validation`: Configuration consistency validation tests
 
 mod field_resolution;
 mod helpers;
@@ -14,3 +15,4 @@ mod local_discovery_config;
 mod operation_mode;
 mod precedence;
 mod ttl_loading;
+mod validation;

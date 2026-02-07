@@ -105,14 +105,15 @@ reviewer, and status, and unit/BDD tests cover substitution and escaping rules.
 All acceptance criteria met:
 
 - Templates support placeholders for file (`{{ c.file }}`), line
-  (`{{ c.line }}`), reviewer (`{{ c.reviewer }}`), and status (`{{ c.status }}`).
+  (`{{ c.line }}`), reviewer (`{{ c.reviewer }}`), and status
+  (`{{ c.status }}`).
 - Unit tests (rstest) cover substitution rules for all placeholders.
 - Unit tests cover escaping rules (special characters, Unicode, no HTML
   escaping by default).
 - Behaviour-driven development (BDD) tests (rstest-bdd) cover 7
-  scenarios: simple template, document
-  variables, file/line placeholders, status for replies, status for root
-  comments, empty comments, and invalid syntax error.
+  scenarios: simple template, document variables, file/line placeholders,
+  status for replies, status for root comments, empty comments, and invalid
+  syntax error.
 - `make check-fmt`, `make lint`, and `make test` succeed.
 - Documentation updated in `docs/users-guide.md` with template syntax,
   available variables, and example template.
@@ -370,11 +371,11 @@ Total: {{ comments | length }} comments
 
 Template export CLI flags:
 
-| Flag | Description | Values |
-| --- | --- | --- |
-| `--export` | Export format | `markdown`, `jsonl`, `template` |
-| `--template` | Template file path | file path |
-| `--output` | Output file (default: stdout) | file path |
+| Flag         | Description                   | Values                          |
+| ------------ | ----------------------------- | ------------------------------- |
+| `--export`   | Export format                 | `markdown`, `jsonl`, `template` |
+| `--template` | Template file path            | file path                       |
+| `--output`   | Output file (default: stdout) | file path                       |
 
 Example commands:
 
