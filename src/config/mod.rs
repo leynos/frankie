@@ -61,6 +61,7 @@ pub enum OperationMode {
 /// - `FRANKIE_OWNER` or `--owner`: Repository owner
 /// - `FRANKIE_REPO` or `--repo`: Repository name
 /// - `FRANKIE_DATABASE_URL` or `--database-url`: Local `SQLite` database path
+/// - `FRANKIE_TEMPLATE` or `--template`: Template file path for custom export
 ///
 /// # Example
 ///
