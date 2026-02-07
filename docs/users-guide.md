@@ -18,8 +18,8 @@ Frankie supports five operation modes:
 2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
 3. **Repository listing mode** — List PRs for a repository using `--owner` and
    `--repo`
-4. **Review TUI mode** — Interactive terminal interface for navigating and
-   filtering review comments using `--tui` with `--pr-url`
+4. **Review text user interface (TUI) mode** — Interactive terminal interface
+   for navigating and filtering review comments using `--tui` with `--pr-url`
 5. **Comment export mode** — Export review comments in structured formats using
    `--export` with `--pr-url`
 
@@ -308,12 +308,15 @@ frankie --pr-url https://github.com/owner/repo/pull/123 --export markdown
 
 ### Export formats
 
-Frankie supports two export formats:
+Frankie supports three export formats:
 
 - **Markdown** (`--export markdown`) — Human-readable format with code blocks
   and syntax highlighting hints
 - **JSONL** (`--export jsonl`) — Machine-readable format with one JSON object
   per line
+- **Template** (`--export template --template <file>`) — Custom
+  Jinja2-compatible template format; requires `--template` with the path to a
+  Jinja2 template file
 
 ### Output destination
 
@@ -375,10 +378,84 @@ Consider using a constant here instead of a magic number.
 {"id":457,"author":"bob","file_path":"src/auth.rs","line_number":50,"body":"Add error handling.","diff_hunk":"@@ -48,3 +48,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T11:00:00Z"}
 ```
 
+### Custom template format
+
+For maximum flexibility, use a Jinja2-compatible template with the `template`
+format:
+
+```bash
+frankie --pr-url https://github.com/owner/repo/pull/123 --export template \
+        --template my-template.j2 --output comments.txt
+```
+
+#### Template syntax
+
+Templates use Jinja2 syntax (via the `minijinja` engine):
+
+- `{{ variable }}` — variable interpolation
+- `{% for item in list %}...{% endfor %}` — loops
+- `{{ list | length }}` — filters
+
+#### Available variables
+
+**Document-level** (available anywhere in the template):
+
+Table: Document-level variables.
+
+| Variable | Description |
+| --- | --- |
+| `pr_url` | Pull request URL |
+| `generated_at` | Export timestamp (ISO 8601) |
+| `comments` | List of comment objects |
+
+**Comment-level** (inside `{% for c in comments %}`):
+
+Table: Comment-level variables.
+
+| Variable | Description |
+| --- | --- |
+| `c.id` | Comment ID |
+| `c.file` | File path |
+| `c.line` | Line number |
+| `c.reviewer` | Comment author |
+| `c.status` | "reply" or "comment" |
+| `c.body` | Comment text |
+| `c.context` | Diff hunk (code context) |
+| `c.commit` | Commit SHA |
+| `c.timestamp` | Creation timestamp |
+| `c.reply_to` | Parent comment ID (if reply) |
+
+#### Example template
+
+```jinja2
+# Comments for {{ pr_url }}
+Generated: {{ generated_at }}
+
+{% for c in comments %}
+## {{ c.file }}:{{ c.line }} ({{ c.status }})
+
+**By:** {{ c.reviewer }} at {{ c.timestamp }}
+
+{{ c.body }}
+
+---
+{% endfor %}
+
+Total: {{ comments | length }} comments
+```
+
+#### Template errors
+
+- **Missing template file** — The `--template` flag is required when using
+  `--export template`.
+- **Invalid template syntax** — Verify the Jinja2 syntax (unclosed blocks,
+  invalid expressions).
+
 ### Export errors
 
 - **Missing PR URL** — The `--pr-url` flag is required when using `--export`.
-- **Invalid format** — Use `markdown` or `jsonl` as the export format value.
+- **Invalid format** — Use `markdown`, `jsonl`, or `template` as the export
+  format value.
 - **File write error** — Check that the output path is writable.
 
 ## Configuration
@@ -439,6 +516,7 @@ Frankie searches for configuration files in this order:
 | `FRANKIE_TOKEN`                         | GitHub personal access token                        |
 | `FRANKIE_DATABASE_URL`                  | Local SQLite database path for persistence          |
 | `FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` | PR metadata cache TTL (seconds)                     |
+| `FRANKIE_TEMPLATE`                      | Template file path for custom export format         |
 | `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above) |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
@@ -447,20 +525,21 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 
 ### Command-line flags
 
-| Flag                                        | Short | Description                                |
-| ------------------------------------------- | ----- | ------------------------------------------ |
-| `--pr-url <URL>`                            | `-u`  | GitHub pull request URL                    |
-| `--owner <OWNER>`                           | `-o`  | Repository owner (user or organization)    |
-| `--repo <REPO>`                             | `-r`  | Repository name                            |
-| `--token <TOKEN>`                           | `-t`  | Personal access token                      |
-| `--database-url <PATH>`                     | —     | Local SQLite database path                 |
-| `--migrate-db`                              | —     | Run database migrations and exit           |
-| `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)            |
-| `--no-local-discovery`                      | `-n`  | Disable automatic local Git discovery      |
-| `--tui`                                     | `-T`  | Launch interactive TUI for review comments |
-| `--export <FORMAT>`                         | `-e`  | Export comments (`markdown` or `jsonl`)    |
-| `--output <PATH>`                           | —     | Output file for export (default: stdout)   |
-| `--help`                                    | `-h`  | Show help information                      |
+| Flag                                        | Short | Description                                       |
+| ------------------------------------------- | ----- | ------------------------------------------------- |
+| `--pr-url <URL>`                            | `-u`  | GitHub pull request URL                           |
+| `--owner <OWNER>`                           | `-o`  | Repository owner (user or organization)           |
+| `--repo <REPO>`                             | `-r`  | Repository name                                   |
+| `--token <TOKEN>`                           | `-t`  | Personal access token                             |
+| `--database-url <PATH>`                     | —     | Local SQLite database path                        |
+| `--migrate-db`                              | —     | Run database migrations and exit                  |
+| `--pr-metadata-cache-ttl-seconds <SECONDS>` | —     | PR metadata cache TTL (seconds)                   |
+| `--no-local-discovery`                      | `-n`  | Disable automatic local Git discovery             |
+| `--tui`                                     | `-T`  | Launch interactive TUI for review comments        |
+| `--export <FORMAT>`                         | `-e`  | Export comments (`markdown`, `jsonl`, `template`) |
+| `--output <PATH>`                           | —     | Output file for export (default: stdout)          |
+| `--template <PATH>`                         | —     | Template file for custom export format            |
+| `--help`                                    | `-h`  | Show help information                             |
 
 Run `frankie --help` to see all available options and their descriptions.
 

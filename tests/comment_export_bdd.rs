@@ -131,6 +131,11 @@ fn run_export(
             ExportFormat::Jsonl => {
                 write_jsonl(&mut buffer, &comments)?;
             }
+            ExportFormat::Template => {
+                return Err(IntakeError::Configuration {
+                    message: "template format requires --template flag".to_owned(),
+                });
+            }
         }
 
         String::from_utf8(buffer).map_err(|e| IntakeError::Api {

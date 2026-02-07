@@ -79,7 +79,7 @@ context.
 - [x] Deliver structured comment export (location, code context, issue text) in
       Markdown and JSONL formats; acceptance: exports include stable ordering,
       pass schema validation, and are exercised in integration tests.
-- [ ] Introduce template-driven export customisation; acceptance: templates
+- [x] Introduce template-driven export customization; acceptance: templates
       support placeholders for file, line, reviewer, and status, with unit
       tests covering substitution and escaping rules.
 

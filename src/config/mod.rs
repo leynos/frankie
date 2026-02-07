@@ -12,9 +12,10 @@
 //! 1. **Defaults** – Built-in application defaults
 //! 2. **Configuration file** – `.frankie.toml` in current directory, home
 //!    directory, or XDG config directory
-//! 3. **Environment variables** – `FRANKIE_PR_URL`, `FRANKIE_TOKEN`, or legacy
-//!    `GITHUB_TOKEN`
-//! 4. **Command-line arguments** – `--pr-url`/`-u` and `--token`/`-t`
+//! 3. **Environment variables** – `FRANKIE_PR_URL`, `FRANKIE_TOKEN`,
+//!    `FRANKIE_TEMPLATE`, or legacy `GITHUB_TOKEN`
+//! 4. **Command-line arguments** – `--pr-url`/`-u`, `--token`/`-t`, and
+//!    `--template`
 //!
 //! # Configuration File
 //!
@@ -61,6 +62,7 @@ pub enum OperationMode {
 /// - `FRANKIE_OWNER` or `--owner`: Repository owner
 /// - `FRANKIE_REPO` or `--repo`: Repository name
 /// - `FRANKIE_DATABASE_URL` or `--database-url`: Local `SQLite` database path
+/// - `FRANKIE_TEMPLATE` or `--template`: Template file path for custom export
 ///
 /// # Example
 ///
@@ -184,8 +186,8 @@ pub struct FrankieConfig {
     /// Export format for review comments.
     ///
     /// When set, Frankie exports review comments in the specified format
-    /// instead of displaying them interactively. Valid values are `markdown`
-    /// and `jsonl`.
+    /// instead of displaying them interactively. Valid values are `markdown`,
+    /// `jsonl`, and `template` (requires `--template` to specify a template file).
     ///
     /// Can be provided via:
     /// - CLI: `--export <FORMAT>` or `-e <FORMAT>`
@@ -205,6 +207,19 @@ pub struct FrankieConfig {
     /// - Config file: `output = "comments.md"`
     #[ortho_config()]
     pub output: Option<String>,
+
+    /// Template file path for custom export format.
+    ///
+    /// When `--export template` is used, this specifies the Jinja2-compatible
+    /// template file. The template uses `minijinja` syntax with placeholders
+    /// for comment fields (`{{ file }}`, `{{ line }}`, `{{ reviewer }}`, etc.).
+    ///
+    /// Can be provided via:
+    /// - CLI: `--template <PATH>`
+    /// - Environment: `FRANKIE_TEMPLATE`
+    /// - Config file: `template = "my-template.j2"`
+    #[ortho_config()]
+    pub template: Option<String>,
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
@@ -223,6 +238,7 @@ impl Default for FrankieConfig {
             tui: false,
             export: None,
             output: None,
+            template: None,
         }
     }
 }
