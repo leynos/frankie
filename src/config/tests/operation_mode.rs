@@ -77,31 +77,19 @@ fn pr_url_takes_precedence_over_owner_repo() {
 }
 
 #[rstest]
-fn review_tui_when_pr_identifier_present() {
+#[case(false, "should be ReviewTui when pr_identifier is set")]
+#[case(true, "should be ReviewTui when pr_identifier is set with tui flag")]
+fn review_tui_when_pr_identifier(#[case] tui_flag: bool, #[case] description: &str) {
     let config = FrankieConfig {
         pr_identifier: Some("42".to_owned()),
+        tui: tui_flag,
         ..Default::default()
     };
 
     assert_eq!(
         config.operation_mode(),
         OperationMode::ReviewTui,
-        "should be ReviewTui when pr_identifier is set"
-    );
-}
-
-#[rstest]
-fn review_tui_when_pr_identifier_and_tui_flag() {
-    let config = FrankieConfig {
-        pr_identifier: Some("42".to_owned()),
-        tui: true,
-        ..Default::default()
-    };
-
-    assert_eq!(
-        config.operation_mode(),
-        OperationMode::ReviewTui,
-        "should be ReviewTui when pr_identifier is set with tui flag"
+        "{description}"
     );
 }
 

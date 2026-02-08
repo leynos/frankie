@@ -9,29 +9,65 @@ fn args(values: &[&str]) -> Vec<OsString> {
     values.iter().map(OsString::from).collect()
 }
 
-#[test]
-fn extracts_bare_pr_number() {
-    let (id, remaining) = extract_positional_pr_identifier(args(&["frankie", "123"]));
-
-    assert_eq!(id.as_deref(), Some("123"), "should extract bare PR number");
-    assert_eq!(
-        remaining,
-        args(&["frankie"]),
-        "positional should be removed"
-    );
+/// A single scenario for positional PR identifier extraction.
+struct TestCase {
+    name: &'static str,
+    input: &'static [&'static str],
+    expected_id: Option<&'static str>,
+    expected_remaining: &'static [&'static str],
 }
 
 #[test]
-fn extracts_pr_url() {
-    let url = "https://github.com/owner/repo/pull/42";
-    let (id, remaining) = extract_positional_pr_identifier(args(&["frankie", url]));
+fn extracts_positional_pr_identifier_correctly() {
+    let cases = vec![
+        TestCase {
+            name: "extracts bare PR number",
+            input: &["frankie", "123"],
+            expected_id: Some("123"),
+            expected_remaining: &["frankie"],
+        },
+        TestCase {
+            name: "extracts PR URL",
+            input: &["frankie", "https://github.com/owner/repo/pull/42"],
+            expected_id: Some("https://github.com/owner/repo/pull/42"),
+            expected_remaining: &["frankie"],
+        },
+        TestCase {
+            name: "skips value of preceding flag",
+            input: &["frankie", "--token", "abc", "123"],
+            expected_id: Some("123"),
+            expected_remaining: &["frankie", "--token", "abc"],
+        },
+        TestCase {
+            name: "skips value of short flag",
+            input: &["frankie", "-t", "abc", "42"],
+            expected_id: Some("42"),
+            expected_remaining: &["frankie", "-t", "abc"],
+        },
+        TestCase {
+            name: "does not skip value for equals syntax",
+            input: &["frankie", "--token=abc", "99"],
+            expected_id: Some("99"),
+            expected_remaining: &["frankie", "--token=abc"],
+        },
+    ];
 
-    assert_eq!(id.as_deref(), Some(url), "should extract PR URL");
-    assert_eq!(
-        remaining,
-        args(&["frankie"]),
-        "positional should be removed"
-    );
+    for case in &cases {
+        let (id, remaining) = extract_positional_pr_identifier(args(case.input));
+
+        assert_eq!(
+            id.as_deref(),
+            case.expected_id,
+            "{}: unexpected extracted id",
+            case.name
+        );
+        assert_eq!(
+            remaining,
+            args(case.expected_remaining),
+            "{}: unexpected remaining args",
+            case.name
+        );
+    }
 }
 
 #[test]
@@ -43,55 +79,6 @@ fn returns_none_when_no_positional() {
         remaining,
         args(&["frankie", "--tui"]),
         "flags should be preserved"
-    );
-}
-
-#[test]
-fn skips_value_of_preceding_flag() {
-    let (id, remaining) =
-        extract_positional_pr_identifier(args(&["frankie", "--token", "abc", "123"]));
-
-    assert_eq!(
-        id.as_deref(),
-        Some("123"),
-        "should skip token value and extract 123"
-    );
-    assert_eq!(
-        remaining,
-        args(&["frankie", "--token", "abc"]),
-        "token flag and value should be preserved"
-    );
-}
-
-#[test]
-fn skips_value_of_short_flag() {
-    let (id, remaining) = extract_positional_pr_identifier(args(&["frankie", "-t", "abc", "42"]));
-
-    assert_eq!(
-        id.as_deref(),
-        Some("42"),
-        "should skip -t value and extract 42"
-    );
-    assert_eq!(
-        remaining,
-        args(&["frankie", "-t", "abc"]),
-        "short flag and value should be preserved"
-    );
-}
-
-#[test]
-fn does_not_skip_value_for_equals_syntax() {
-    let (id, remaining) = extract_positional_pr_identifier(args(&["frankie", "--token=abc", "99"]));
-
-    assert_eq!(
-        id.as_deref(),
-        Some("99"),
-        "equals syntax is self-contained; next arg is positional"
-    );
-    assert_eq!(
-        remaining,
-        args(&["frankie", "--token=abc"]),
-        "equals-style flag should be preserved"
     );
 }
 
