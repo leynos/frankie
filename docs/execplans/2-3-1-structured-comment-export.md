@@ -413,11 +413,10 @@ Example JSONL output (illustrative):
 
 Export operation CLI flags:
 
-| Flag                               | Short     | Description   | Values             |
-| ---------------------------------- | --------- | ------------- | ------------------ |
-| `--export`                         | `-e`      | Export format | `markdown`,`jsonl` |
-| `--output`                         |
-| Output file path (default: stdout) | file path |
+| Flag       | Short | Description   | Values             |
+| ---------- | ----- | ------------- | ------------------ |
+| `--export` | `-e`  | Export format | `markdown`,`jsonl` |
+| `--output` | —     | Output path   | file path          |
 
 Example commands:
 
