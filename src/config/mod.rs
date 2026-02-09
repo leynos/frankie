@@ -221,14 +221,9 @@ pub struct FrankieConfig {
     #[ortho_config()]
     pub template: Option<String>,
 
-    /// Positional PR identifier extracted from command-line arguments.
-    ///
-    /// This field is populated programmatically by the entry point before
-    /// ortho-config loads the remaining arguments. It accepts either a bare
-    /// PR number (e.g. `123`) or a full GitHub URL
-    /// (e.g. `https://github.com/owner/repo/pull/123`).
-    ///
-    /// When set, the TUI is launched automatically without requiring `-T`.
+    /// Positional PR identifier (bare number or full URL) extracted from
+    /// command-line arguments before ortho-config processes the remaining
+    /// flags. When set, the TUI is launched without requiring `-T`.
     #[serde(skip)]
     pub pr_identifier: Option<String>,
 }
@@ -256,6 +251,30 @@ impl Default for FrankieConfig {
 }
 
 impl FrankieConfig {
+    /// CLI flags that consume the following argument as their value.
+    ///
+    /// Boolean flags (`--tui`, `--migrate-db`, `--no-local-discovery`) are
+    /// omitted because they do not consume a trailing value. Update this
+    /// list whenever a value-bearing flag is added to or removed from the
+    /// struct fields above.
+    pub const VALUE_FLAGS: &[&str] = &[
+        "--pr-url",
+        "-u",
+        "--token",
+        "-t",
+        "--owner",
+        "-o",
+        "--repo",
+        "-r",
+        "--database-url",
+        "--pr-metadata-cache-ttl-seconds",
+        "--export",
+        "-e",
+        "--output",
+        "--template",
+        "--config-path",
+    ];
+
     /// Resolves the token from configuration or the legacy `GITHUB_TOKEN`
     /// environment variable.
     ///
@@ -329,9 +348,6 @@ impl FrankieConfig {
     }
 
     /// Sets the positional PR identifier extracted from raw CLI arguments.
-    ///
-    /// Called by the entry point after extracting the positional argument
-    /// and before ortho-config processes the remaining flags.
     pub fn set_pr_identifier(&mut self, value: String) {
         self.pr_identifier = Some(value);
     }

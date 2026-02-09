@@ -259,6 +259,12 @@ fn from_identifier_resolves_pr_number_for_enterprise_with_port() {
 
     assert_eq!(locator.number().get(), 3, "number mismatch");
     assert_eq!(locator.owner().as_str(), "corp", "owner mismatch");
+    assert_eq!(locator.repository().as_str(), "internal", "repo mismatch");
+    assert_eq!(
+        locator.api_base().as_str(),
+        "https://ghe.example.com:8443/api/v3",
+        "enterprise api base should preserve port"
+    );
 }
 
 #[rstest]

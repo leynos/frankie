@@ -38,28 +38,6 @@ async fn run() -> Result<(), IntakeError> {
     }
 }
 
-/// CLI flags that consume the following argument as their value.
-///
-/// Boolean flags (`--tui`, `--migrate-db`, `--no-local-discovery`) are omitted
-/// because they do not consume a trailing value.
-const VALUE_FLAGS: &[&str] = &[
-    "--pr-url",
-    "-u",
-    "--token",
-    "-t",
-    "--owner",
-    "-o",
-    "--repo",
-    "-r",
-    "--database-url",
-    "--pr-metadata-cache-ttl-seconds",
-    "--export",
-    "-e",
-    "--output",
-    "--template",
-    "--config-path",
-];
-
 /// Extracts a positional PR identifier from the raw argument list.
 ///
 /// Walks the arguments after argv\[0\] looking for the first value that is
@@ -67,13 +45,16 @@ const VALUE_FLAGS: &[&str] = &[
 /// is removed from the returned argument vector so that ortho-config never
 /// sees it (ortho-config does not support positional arguments).
 ///
+/// A bare `--` terminates option parsing: everything after it is treated as
+/// positional. The `--` marker itself is consumed and not forwarded.
+///
 /// Returns `(identifier, filtered_args)` where `identifier` is `None` when
 /// no positional argument was found.
 fn extract_positional_pr_identifier(args: Vec<OsString>) -> (Option<String>, Vec<OsString>) {
-    // argv[0] is always kept
     let mut filtered = Vec::with_capacity(args.len());
     let mut identifier: Option<String> = None;
     let mut skip_next = false;
+    let mut after_separator = false;
     let mut first = true;
 
     for arg in args {
@@ -81,6 +62,16 @@ fn extract_positional_pr_identifier(args: Vec<OsString>) -> (Option<String>, Vec
         if first {
             filtered.push(arg);
             first = false;
+            continue;
+        }
+
+        // After `--`, every argument is positional.
+        if after_separator {
+            if identifier.is_none() {
+                identifier = Some(arg.to_string_lossy().into_owned());
+            } else {
+                filtered.push(arg);
+            }
             continue;
         }
 
@@ -93,12 +84,21 @@ fn extract_positional_pr_identifier(args: Vec<OsString>) -> (Option<String>, Vec
 
         let arg_str = arg.to_string_lossy();
 
+        // `--` ends option parsing; consume the marker and treat the rest
+        // as positional arguments.
+        if arg_str == "--" {
+            after_separator = true;
+            continue;
+        }
+
         // Flags starting with - are passed through to ortho-config
         if arg_str.starts_with('-') {
             // Check if this flag consumes the next argument.
             // `--flag=value` is self-contained; `--flag value` needs a skip.
-            let needs_skip =
-                !arg_str.contains('=') && VALUE_FLAGS.iter().any(|f| *f == arg_str.as_ref());
+            let needs_skip = !arg_str.contains('=')
+                && FrankieConfig::VALUE_FLAGS
+                    .iter()
+                    .any(|f| *f == arg_str.as_ref());
             skip_next = needs_skip;
             filtered.push(arg);
             continue;

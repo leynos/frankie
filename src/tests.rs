@@ -2,6 +2,9 @@
 
 use std::ffi::OsString;
 
+use frankie::{FrankieConfig, IntakeError};
+use ortho_config::OrthoConfig;
+
 use super::extract_positional_pr_identifier;
 
 /// Helper to build an `OsString` argument vector from string slices.
@@ -17,9 +20,8 @@ struct TestCase {
     expected_remaining: &'static [&'static str],
 }
 
-#[test]
-fn extracts_positional_pr_identifier_correctly() {
-    let cases = vec![
+fn positional_extraction_cases() -> Vec<TestCase> {
+    vec![
         TestCase {
             name: "extracts bare PR number",
             input: &["frankie", "123"],
@@ -50,9 +52,36 @@ fn extracts_positional_pr_identifier_correctly() {
             expected_id: Some("99"),
             expected_remaining: &["frankie", "--token=abc"],
         },
-    ];
+        TestCase {
+            name: "unknown flag does not consume following value",
+            input: &["frankie", "--foo", "123"],
+            expected_id: Some("123"),
+            expected_remaining: &["frankie", "--foo"],
+        },
+        TestCase {
+            name: "grouped short flags treated as single flag",
+            input: &["frankie", "-Tn", "42"],
+            expected_id: Some("42"),
+            expected_remaining: &["frankie", "-Tn"],
+        },
+        TestCase {
+            name: "double-dash separator treats remainder as positional",
+            input: &["frankie", "--token", "abc", "--", "77"],
+            expected_id: Some("77"),
+            expected_remaining: &["frankie", "--token", "abc"],
+        },
+        TestCase {
+            name: "double-dash consumed even when no positional follows",
+            input: &["frankie", "--tui", "--"],
+            expected_id: None,
+            expected_remaining: &["frankie", "--tui"],
+        },
+    ]
+}
 
-    for case in &cases {
+#[test]
+fn extracts_positional_pr_identifier_correctly() {
+    for case in &positional_extraction_cases() {
         let (id, remaining) = extract_positional_pr_identifier(args(case.input));
 
         assert_eq!(
@@ -127,4 +156,33 @@ fn empty_args_returns_none() {
 
     assert_eq!(id, None, "no positional with only program name");
     assert_eq!(remaining, args(&["frankie"]));
+}
+
+/// Exercises the full CLI → config → validation pipeline to verify that
+/// supplying both a positional identifier and `--pr-url` surfaces a
+/// `Configuration` error from `validate()`.
+#[test]
+fn load_config_rejects_positional_identifier_with_pr_url() {
+    let raw_args = args(&[
+        "frankie",
+        "--pr-url",
+        "https://github.com/o/r/pull/1",
+        "123",
+    ]);
+
+    let (identifier, filtered) = extract_positional_pr_identifier(raw_args);
+
+    let mut config = FrankieConfig::load_from_iter(filtered)
+        .expect("ortho-config should parse the filtered args");
+
+    if let Some(value) = identifier {
+        config.set_pr_identifier(value);
+    }
+
+    let result = config.validate();
+
+    assert!(
+        matches!(result, Err(IntakeError::Configuration { .. })),
+        "expected Configuration error for conflicting identifier and pr_url, got {result:?}"
+    );
 }
