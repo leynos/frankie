@@ -7,7 +7,7 @@
 use url::Url;
 
 use super::error::IntakeError;
-use super::locator::{RepositoryName, RepositoryOwner, derive_api_base};
+use super::locator::{RepositoryName, RepositoryOwner, parse_owner_repo_and_api};
 
 /// Parsed repository URL with derived API base.
 ///
@@ -63,16 +63,7 @@ impl RepositoryLocator {
         let parsed =
             Url::parse(input).map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
 
-        let mut segments = parsed
-            .path_segments()
-            .ok_or(IntakeError::MissingPathSegments)?;
-
-        let owner_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
-        let repository_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
-
-        let owner = RepositoryOwner::new(owner_segment)?;
-        let repository = RepositoryName::new(repository_segment)?;
-        let api_base = derive_api_base(&parsed)?;
+        let (owner, repository, api_base) = parse_owner_repo_and_api(&parsed)?;
 
         Ok(Self {
             api_base,

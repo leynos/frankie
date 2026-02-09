@@ -6,36 +6,17 @@ use crate::FrankieConfig;
 use crate::github::error::IntakeError;
 
 #[rstest]
-fn validates_when_neither_identifier_nor_url_set() {
-    let config = FrankieConfig::default();
-
-    assert!(
-        config.validate().is_ok(),
-        "should pass with neither pr_identifier nor pr_url"
-    );
-}
-
-#[rstest]
-fn validates_when_only_pr_identifier_set() {
-    let config = FrankieConfig {
-        pr_identifier: Some("123".to_owned()),
-        ..Default::default()
-    };
-
-    assert!(
-        config.validate().is_ok(),
-        "should pass with only pr_identifier"
-    );
-}
-
-#[rstest]
-fn validates_when_only_pr_url_set() {
-    let config = FrankieConfig {
-        pr_url: Some("https://github.com/o/r/pull/1".to_owned()),
-        ..Default::default()
-    };
-
-    assert!(config.validate().is_ok(), "should pass with only pr_url");
+#[case::neither_set(FrankieConfig::default(), "neither pr_identifier nor pr_url")]
+#[case::only_identifier(
+    FrankieConfig { pr_identifier: Some("123".to_owned()), ..Default::default() },
+    "only pr_identifier"
+)]
+#[case::only_url(
+    FrankieConfig { pr_url: Some("https://github.com/o/r/pull/1".to_owned()), ..Default::default() },
+    "only pr_url"
+)]
+fn validates_with_various_pr_inputs(#[case] config: FrankieConfig, #[case] description: &str) {
+    assert!(config.validate().is_ok(), "should pass with {description}");
 }
 
 #[rstest]

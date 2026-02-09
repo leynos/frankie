@@ -4,6 +4,7 @@ use std::ffi::OsString;
 
 use frankie::{FrankieConfig, IntakeError};
 use ortho_config::OrthoConfig;
+use rstest::rstest;
 
 use super::extract_positional_pr_identifier;
 
@@ -12,91 +13,65 @@ fn args(values: &[&str]) -> Vec<OsString> {
     values.iter().map(OsString::from).collect()
 }
 
-/// A single scenario for positional PR identifier extraction.
-struct TestCase {
-    name: &'static str,
-    input: &'static [&'static str],
-    expected_id: Option<&'static str>,
-    expected_remaining: &'static [&'static str],
-}
+#[rstest]
+#[case::bare_pr_number(
+    &["frankie", "123"],
+    Some("123"),
+    &["frankie"],
+)]
+#[case::pr_url(
+    &["frankie", "https://github.com/owner/repo/pull/42"],
+    Some("https://github.com/owner/repo/pull/42"),
+    &["frankie"],
+)]
+#[case::skips_value_of_preceding_flag(
+    &["frankie", "--token", "abc", "123"],
+    Some("123"),
+    &["frankie", "--token", "abc"],
+)]
+#[case::skips_value_of_short_flag(
+    &["frankie", "-t", "abc", "42"],
+    Some("42"),
+    &["frankie", "-t", "abc"],
+)]
+#[case::equals_syntax_does_not_skip_value(
+    &["frankie", "--token=abc", "99"],
+    Some("99"),
+    &["frankie", "--token=abc"],
+)]
+#[case::unknown_flag_does_not_consume_value(
+    &["frankie", "--foo", "123"],
+    Some("123"),
+    &["frankie", "--foo"],
+)]
+#[case::grouped_short_flags_as_single_flag(
+    &["frankie", "-Tn", "42"],
+    Some("42"),
+    &["frankie", "-Tn"],
+)]
+#[case::double_dash_treats_remainder_as_positional(
+    &["frankie", "--token", "abc", "--", "77"],
+    Some("77"),
+    &["frankie", "--token", "abc"],
+)]
+#[case::double_dash_consumed_without_positional(
+    &["frankie", "--tui", "--"],
+    None,
+    &["frankie", "--tui"],
+)]
+fn extracts_positional_pr_identifier_correctly(
+    #[case] input: &[&str],
+    #[case] expected_id: Option<&str>,
+    #[case] expected_remaining: &[&str],
+) {
+    let (id, remaining) = extract_positional_pr_identifier(args(input));
 
-fn positional_extraction_cases() -> Vec<TestCase> {
-    vec![
-        TestCase {
-            name: "extracts bare PR number",
-            input: &["frankie", "123"],
-            expected_id: Some("123"),
-            expected_remaining: &["frankie"],
-        },
-        TestCase {
-            name: "extracts PR URL",
-            input: &["frankie", "https://github.com/owner/repo/pull/42"],
-            expected_id: Some("https://github.com/owner/repo/pull/42"),
-            expected_remaining: &["frankie"],
-        },
-        TestCase {
-            name: "skips value of preceding flag",
-            input: &["frankie", "--token", "abc", "123"],
-            expected_id: Some("123"),
-            expected_remaining: &["frankie", "--token", "abc"],
-        },
-        TestCase {
-            name: "skips value of short flag",
-            input: &["frankie", "-t", "abc", "42"],
-            expected_id: Some("42"),
-            expected_remaining: &["frankie", "-t", "abc"],
-        },
-        TestCase {
-            name: "does not skip value for equals syntax",
-            input: &["frankie", "--token=abc", "99"],
-            expected_id: Some("99"),
-            expected_remaining: &["frankie", "--token=abc"],
-        },
-        TestCase {
-            name: "unknown flag does not consume following value",
-            input: &["frankie", "--foo", "123"],
-            expected_id: Some("123"),
-            expected_remaining: &["frankie", "--foo"],
-        },
-        TestCase {
-            name: "grouped short flags treated as single flag",
-            input: &["frankie", "-Tn", "42"],
-            expected_id: Some("42"),
-            expected_remaining: &["frankie", "-Tn"],
-        },
-        TestCase {
-            name: "double-dash separator treats remainder as positional",
-            input: &["frankie", "--token", "abc", "--", "77"],
-            expected_id: Some("77"),
-            expected_remaining: &["frankie", "--token", "abc"],
-        },
-        TestCase {
-            name: "double-dash consumed even when no positional follows",
-            input: &["frankie", "--tui", "--"],
-            expected_id: None,
-            expected_remaining: &["frankie", "--tui"],
-        },
-    ]
-}
-
-#[test]
-fn extracts_positional_pr_identifier_correctly() {
-    for case in &positional_extraction_cases() {
-        let (id, remaining) = extract_positional_pr_identifier(args(case.input));
-
-        assert_eq!(
-            id.as_deref(),
-            case.expected_id,
-            "{}: unexpected extracted id",
-            case.name
-        );
-        assert_eq!(
-            remaining,
-            args(case.expected_remaining),
-            "{}: unexpected remaining args",
-            case.name
-        );
-    }
+    assert_eq!(id.as_deref(), expected_id, "unexpected extracted id");
+    assert_eq!(
+        remaining,
+        args(expected_remaining),
+        "unexpected remaining args"
+    );
 }
 
 #[test]

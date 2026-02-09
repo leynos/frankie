@@ -363,7 +363,7 @@ GitHub's perspective and produce deterministic output given the same input.
 
 Example Markdown output (illustrative):
 
-```markdown
+````markdown
 # Review Comments Export
 
 PR: https://github.com/owner/repo/pull/123
@@ -384,7 +384,8 @@ Consider using a constant here instead of a magic number.
  }
 ```
 
-```---
+---
+````
 
 Example JSONL output (illustrative):
 

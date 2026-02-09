@@ -76,7 +76,7 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
 /// to obtain the owner and repository name.
 fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeError> {
     if let Some(identifier) = config.pr_identifier() {
-        return resolve_from_identifier(identifier);
+        return resolve_from_identifier(identifier, config.no_local_discovery);
     }
 
     let pr_url = config.require_pr_url()?;
@@ -84,10 +84,36 @@ fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeE
 }
 
 /// Resolves a locator from a positional PR identifier (URL or bare number).
-fn resolve_from_identifier(identifier: &str) -> Result<PullRequestLocator, IntakeError> {
-    // URL identifiers are parsed directly without local discovery
+///
+/// URL identifiers are forwarded directly to [`PullRequestLocator::parse`]
+/// without local git discovery, avoiding unnecessary
+/// `frankie::discover_repository` calls.
+///
+/// For bare PR numbers, local git discovery provides the owner/repo
+/// context needed to construct a full URL. When `no_local_discovery` is
+/// `true`, a bare number is rejected with a [`IntakeError::Configuration`]
+/// error instructing the user to supply a full PR URL.
+fn resolve_from_identifier(
+    identifier: &str,
+    no_local_discovery: bool,
+) -> Result<PullRequestLocator, IntakeError> {
+    // URL identifiers skip local discovery entirely;
+    // PullRequestLocator::from_identifier also handles URLs (see
+    // locator.rs line ~215) but this early return avoids the unnecessary
+    // discover_repository call below.
     if identifier.contains("://") {
         return PullRequestLocator::parse(identifier);
+    }
+
+    if no_local_discovery {
+        return Err(IntakeError::Configuration {
+            message: concat!(
+                "bare PR numbers require local git discovery to determine ",
+                "owner/repo, but --no-local-discovery is set; provide a ",
+                "full PR URL instead"
+            )
+            .to_owned(),
+        });
     }
 
     // Bare PR number — discover owner/repo from local git remote
@@ -122,6 +148,26 @@ mod tests {
     fn review_app_can_be_created_empty() {
         let app = ReviewApp::empty();
         assert_eq!(app.filtered_count(), 0);
+    }
+
+    #[test]
+    fn bare_number_rejected_when_local_discovery_disabled() {
+        let result = resolve_from_identifier("42", true);
+
+        assert!(
+            matches!(result, Err(IntakeError::Configuration { .. })),
+            "bare number with no_local_discovery should fail, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn url_identifier_allowed_when_local_discovery_disabled() {
+        let result = resolve_from_identifier("https://github.com/octo/repo/pull/42", true);
+
+        assert!(
+            result.is_ok(),
+            "URL identifier should succeed even with no_local_discovery, got {result:?}"
+        );
     }
 
     /// Verifies that `StderrJsonlTelemetrySink` implements `TelemetrySink`

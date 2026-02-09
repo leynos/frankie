@@ -128,6 +128,28 @@ pub(crate) fn derive_api_base(parsed: &Url) -> Result<Url, IntakeError> {
     derive_api_base_from_host(parsed.scheme(), host, parsed.port())
 }
 
+/// Parsed owner, repository, and API base extracted from a GitHub URL.
+///
+/// Shared helper that centralises the URL → segments → validated newtypes
+/// conversion used by both [`PullRequestLocator::parse`] and
+/// [`RepositoryLocator::parse`](super::repository_locator::RepositoryLocator::parse).
+pub(crate) fn parse_owner_repo_and_api(
+    url: &Url,
+) -> Result<(RepositoryOwner, RepositoryName, Url), IntakeError> {
+    let mut segments = url
+        .path_segments()
+        .ok_or(IntakeError::MissingPathSegments)?;
+
+    let owner_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+    let repo_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+
+    let owner = RepositoryOwner::new(owner_segment)?;
+    let repository = RepositoryName::new(repo_segment)?;
+    let api_base = derive_api_base(url)?;
+
+    Ok((owner, repository, api_base))
+}
+
 /// Parsed pull request URL and derived API base.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequestLocator {
@@ -155,8 +177,9 @@ impl PullRequestLocator {
             .path_segments()
             .ok_or(IntakeError::MissingPathSegments)?;
 
-        let owner_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
-        let repository_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+        // Skip owner and repo (validated below via the shared helper)
+        let _ = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+        let _ = segments.next().ok_or(IntakeError::MissingPathSegments)?;
         let marker = segments.next().ok_or(IntakeError::MissingPathSegments)?;
         let number_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
 
@@ -168,14 +191,12 @@ impl PullRequestLocator {
             return Err(IntakeError::MissingPathSegments);
         }
 
-        let owner = RepositoryOwner::new(owner_segment)?;
-        let repository = RepositoryName::new(repository_segment)?;
         let number = number_segment
             .parse::<u64>()
             .map_err(|_| IntakeError::InvalidPullRequestNumber)
             .and_then(PullRequestNumber::new)?;
 
-        let api_base = derive_api_base(&parsed)?;
+        let (owner, repository, api_base) = parse_owner_repo_and_api(&parsed)?;
 
         Ok(Self {
             api_base,
@@ -220,10 +241,8 @@ impl PullRequestLocator {
             message: format!("invalid PR identifier '{input}': expected a PR number or URL"),
         })?;
 
-        if number == 0 {
-            return Err(IntakeError::InvalidPullRequestNumber);
-        }
-
+        // Zero is rejected downstream by PullRequestNumber::new inside
+        // Self::parse; no explicit check needed here.
         Self::parse(&origin.pull_request_url(number))
     }
 
