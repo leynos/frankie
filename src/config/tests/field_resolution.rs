@@ -1,5 +1,5 @@
 //! Tests for field resolution methods (`resolve_token`, `require_pr_url`,
-//! `require_repository_info`).
+//! `require_repository_info`, `set_pr_identifier`, `pr_identifier`).
 
 use rstest::rstest;
 
@@ -104,5 +104,28 @@ fn resolve_token_ignores_database_fields() {
         config.resolve_token().ok(),
         Some("legacy-token".to_owned()),
         "token resolution should not be affected by database fields"
+    );
+}
+
+#[rstest]
+fn default_pr_identifier_is_none() {
+    let config = FrankieConfig::default();
+
+    assert_eq!(
+        config.pr_identifier(),
+        None,
+        "default config should have no pr_identifier"
+    );
+}
+
+#[rstest]
+fn set_pr_identifier_populates_accessor() {
+    let mut config = FrankieConfig::default();
+    config.set_pr_identifier("42".to_owned());
+
+    assert_eq!(
+        config.pr_identifier(),
+        Some("42"),
+        "pr_identifier should return the value set via set_pr_identifier"
     );
 }

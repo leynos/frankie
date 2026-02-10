@@ -23,8 +23,9 @@ pub use review_comments::OctocrabReviewCommentGateway;
 use async_trait::async_trait;
 
 use crate::github::error::IntakeError;
-use crate::github::locator::{PullRequestLocator, RepositoryLocator};
+use crate::github::locator::PullRequestLocator;
 use crate::github::models::{PullRequestComment, PullRequestMetadata, ReviewComment};
+use crate::github::repository_locator::RepositoryLocator;
 
 /// Gateway that can load pull request data.
 #[cfg_attr(test, mockall::automock)]

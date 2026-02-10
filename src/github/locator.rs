@@ -3,6 +3,7 @@
 use url::Url;
 
 use super::error::IntakeError;
+use crate::local::GitHubOrigin;
 
 /// Repository owner wrapper to avoid stringly typed parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +94,7 @@ impl AsRef<str> for PersonalAccessToken {
 }
 
 /// Derives the GitHub API base URL from a host string.
-fn derive_api_base_from_host(
+pub(crate) fn derive_api_base_from_host(
     scheme: &str,
     host: &str,
     port: Option<u16>,
@@ -119,12 +120,34 @@ fn derive_api_base_from_host(
 }
 
 /// Derives the GitHub API base URL from a parsed URL.
-fn derive_api_base(parsed: &Url) -> Result<Url, IntakeError> {
+pub(crate) fn derive_api_base(parsed: &Url) -> Result<Url, IntakeError> {
     let host = parsed
         .host_str()
         .ok_or_else(|| IntakeError::InvalidUrl("URL must include a host".to_owned()))?;
 
     derive_api_base_from_host(parsed.scheme(), host, parsed.port())
+}
+
+/// Parsed owner, repository, and API base extracted from a GitHub URL.
+///
+/// Shared helper that centralises the URL → segments → validated newtypes
+/// conversion used by both [`PullRequestLocator::parse`] and
+/// [`RepositoryLocator::parse`](super::repository_locator::RepositoryLocator::parse).
+pub(crate) fn parse_owner_repo_and_api(
+    url: &Url,
+) -> Result<(RepositoryOwner, RepositoryName, Url), IntakeError> {
+    let mut segments = url
+        .path_segments()
+        .ok_or(IntakeError::MissingPathSegments)?;
+
+    let owner_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+    let repo_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+
+    let owner = RepositoryOwner::new(owner_segment)?;
+    let repository = RepositoryName::new(repo_segment)?;
+    let api_base = derive_api_base(url)?;
+
+    Ok((owner, repository, api_base))
 }
 
 /// Parsed pull request URL and derived API base.
@@ -154,8 +177,9 @@ impl PullRequestLocator {
             .path_segments()
             .ok_or(IntakeError::MissingPathSegments)?;
 
-        let owner_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
-        let repository_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+        // Skip owner and repo (validated below via the shared helper)
+        let _ = segments.next().ok_or(IntakeError::MissingPathSegments)?;
+        let _ = segments.next().ok_or(IntakeError::MissingPathSegments)?;
         let marker = segments.next().ok_or(IntakeError::MissingPathSegments)?;
         let number_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
 
@@ -167,14 +191,12 @@ impl PullRequestLocator {
             return Err(IntakeError::MissingPathSegments);
         }
 
-        let owner = RepositoryOwner::new(owner_segment)?;
-        let repository = RepositoryName::new(repository_segment)?;
         let number = number_segment
             .parse::<u64>()
             .map_err(|_| IntakeError::InvalidPullRequestNumber)
             .and_then(PullRequestNumber::new)?;
 
-        let api_base = derive_api_base(&parsed)?;
+        let (owner, repository, api_base) = parse_owner_repo_and_api(&parsed)?;
 
         Ok(Self {
             api_base,
@@ -182,6 +204,46 @@ impl PullRequestLocator {
             repository,
             number,
         })
+    }
+
+    /// Resolves a PR identifier into a locator.
+    ///
+    /// The identifier can be either a full GitHub URL (containing `://`) or a
+    /// bare PR number. When a bare number is provided, the `origin` is used to
+    /// construct the full URL before delegating to [`Self::parse`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntakeError::Configuration`] when the identifier is neither a
+    /// valid URL nor a positive integer, or when URL parsing/validation fails.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use frankie::local::GitHubOrigin;
+    /// use frankie::PullRequestLocator;
+    ///
+    /// let origin = GitHubOrigin::GitHubCom {
+    ///     owner: "octo".to_owned(),
+    ///     repository: "cat".to_owned(),
+    /// };
+    /// let locator = PullRequestLocator::from_identifier("42", &origin)
+    ///     .expect("should resolve PR number");
+    /// assert_eq!(locator.number().get(), 42);
+    /// assert_eq!(locator.owner().as_str(), "octo");
+    /// ```
+    pub fn from_identifier(input: &str, origin: &GitHubOrigin) -> Result<Self, IntakeError> {
+        if input.contains("://") {
+            return Self::parse(input);
+        }
+
+        let number: u64 = input.parse().map_err(|_| IntakeError::Configuration {
+            message: format!("invalid PR identifier '{input}': expected a PR number or URL"),
+        })?;
+
+        // Zero is rejected downstream by PullRequestNumber::new inside
+        // Self::parse; no explicit check needed here.
+        Self::parse(&origin.pull_request_url(number))
     }
 
     /// API base URL derived from the pull request host.
@@ -234,151 +296,5 @@ impl PullRequestLocator {
             self.repository.as_str(),
             self.number.get()
         )
-    }
-}
-
-/// Parsed repository URL with derived API base.
-///
-/// Unlike `PullRequestLocator`, this type represents a repository without
-/// a specific pull request number, suitable for listing operations.
-///
-/// # Example
-///
-/// ```
-/// use frankie::github::locator::RepositoryLocator;
-///
-/// let locator = RepositoryLocator::parse("https://github.com/octo/repo")
-///     .expect("should parse repository URL");
-/// assert_eq!(locator.owner().as_str(), "octo");
-/// assert_eq!(locator.repository().as_str(), "repo");
-/// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RepositoryLocator {
-    api_base: Url,
-    owner: RepositoryOwner,
-    repository: RepositoryName,
-}
-
-impl RepositoryLocator {
-    /// Creates a repository locator from owner and repository name strings.
-    ///
-    /// Uses `github.com` as the default host.
-    ///
-    /// # Errors
-    ///
-    /// Returns `IntakeError::MissingPathSegments` when owner or repo is empty.
-    pub fn from_owner_repo(owner: &str, repo: &str) -> Result<Self, IntakeError> {
-        let validated_owner = RepositoryOwner::new(owner)?;
-        let repository = RepositoryName::new(repo)?;
-        let api_base = Url::parse("https://api.github.com")
-            .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
-
-        Ok(Self {
-            api_base,
-            owner: validated_owner,
-            repository,
-        })
-    }
-
-    /// Parses a GitHub repository URL in the form
-    /// `https://github.com/<owner>/<repo>`.
-    ///
-    /// # Errors
-    ///
-    /// Returns `IntakeError::InvalidUrl` when parsing fails or
-    /// `MissingPathSegments` when the URL path is not `/owner/repo`.
-    pub fn parse(input: &str) -> Result<Self, IntakeError> {
-        let parsed =
-            Url::parse(input).map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
-
-        let mut segments = parsed
-            .path_segments()
-            .ok_or(IntakeError::MissingPathSegments)?;
-
-        let owner_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
-        let repository_segment = segments.next().ok_or(IntakeError::MissingPathSegments)?;
-
-        let owner = RepositoryOwner::new(owner_segment)?;
-        let repository = RepositoryName::new(repository_segment)?;
-        let api_base = derive_api_base(&parsed)?;
-
-        Ok(Self {
-            api_base,
-            owner,
-            repository,
-        })
-    }
-
-    /// API base URL derived from the repository host.
-    #[must_use]
-    pub const fn api_base(&self) -> &Url {
-        &self.api_base
-    }
-
-    /// Repository owner.
-    #[must_use]
-    pub const fn owner(&self) -> &RepositoryOwner {
-        &self.owner
-    }
-
-    /// Repository name.
-    #[must_use]
-    pub const fn repository(&self) -> &RepositoryName {
-        &self.repository
-    }
-
-    /// Returns the API path for listing pull requests.
-    pub(crate) fn pulls_path(&self) -> String {
-        format!(
-            "/repos/{}/{}/pulls",
-            self.owner.as_str(),
-            self.repository.as_str()
-        )
-    }
-
-    /// Creates a repository locator from a discovered GitHub origin.
-    ///
-    /// For standard `github.com` origins, uses the public API base. For GitHub
-    /// Enterprise origins, derives the API base from the host.
-    ///
-    /// # Errors
-    ///
-    /// Returns `IntakeError::MissingPathSegments` if owner or repo is empty, or
-    /// `IntakeError::InvalidUrl` if the URL cannot be parsed.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use frankie::github::locator::RepositoryLocator;
-    /// use frankie::local::GitHubOrigin;
-    ///
-    /// let origin = GitHubOrigin::GitHubCom {
-    ///     owner: "octo".to_owned(),
-    ///     repository: "cat".to_owned(),
-    /// };
-    /// let locator = RepositoryLocator::from_github_origin(&origin)
-    ///     .expect("should create locator");
-    /// assert_eq!(locator.owner().as_str(), "octo");
-    /// assert_eq!(locator.repository().as_str(), "cat");
-    /// ```
-    pub fn from_github_origin(origin: &crate::local::GitHubOrigin) -> Result<Self, IntakeError> {
-        match origin {
-            crate::local::GitHubOrigin::GitHubCom { owner, repository } => {
-                Self::from_owner_repo(owner, repository)
-            }
-            crate::local::GitHubOrigin::Enterprise {
-                host,
-                port,
-                owner,
-                repository,
-            } => {
-                // Build a URL to parse and derive API base, preserving port if present
-                let url = port.map_or_else(
-                    || format!("https://{host}/{owner}/{repository}"),
-                    |p| format!("https://{host}:{p}/{owner}/{repository}"),
-                );
-                Self::parse(&url)
-            }
-        }
     }
 }

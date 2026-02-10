@@ -10,7 +10,8 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 use super::{ListPullRequestsParams, OctocrabRepositoryGateway, PullRequestState};
 use crate::github::error::IntakeError;
 use crate::github::gateway::RepositoryGateway;
-use crate::github::locator::{PersonalAccessToken, RepositoryLocator};
+use crate::github::locator::PersonalAccessToken;
+use crate::github::repository_locator::RepositoryLocator;
 
 const EXPECTED_RATE_LIMIT_RESET_AT: u64 = 1_700_000_000;
 

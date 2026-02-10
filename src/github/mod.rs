@@ -13,6 +13,7 @@ pub mod models;
 pub mod pagination;
 pub mod rate_limit;
 pub mod repository_intake;
+pub mod repository_locator;
 
 pub use error::IntakeError;
 pub use gateway::{
@@ -22,8 +23,7 @@ pub use gateway::{
 };
 pub use intake::PullRequestIntake;
 pub use locator::{
-    PersonalAccessToken, PullRequestLocator, PullRequestNumber, RepositoryLocator, RepositoryName,
-    RepositoryOwner,
+    PersonalAccessToken, PullRequestLocator, PullRequestNumber, RepositoryName, RepositoryOwner,
 };
 pub use models::{
     PullRequestComment, PullRequestDetails, PullRequestMetadata, PullRequestSummary, ReviewComment,
@@ -31,6 +31,7 @@ pub use models::{
 pub use pagination::PageInfo;
 pub use rate_limit::RateLimitInfo;
 pub use repository_intake::RepositoryIntake;
+pub use repository_locator::RepositoryLocator;
 
 #[cfg(test)]
 pub use gateway::{MockPullRequestGateway, MockRepositoryGateway, MockReviewCommentGateway};
