@@ -50,19 +50,12 @@ fn from_owner_repo() {
 }
 
 #[rstest]
-fn rejects_empty_owner() {
-    let result = RepositoryLocator::from_owner_repo("", "repo");
+#[case::empty_owner("", "repo")]
+#[case::empty_repo("octo", "")]
+fn rejects_empty_segment(#[case] owner: &str, #[case] repo: &str) {
+    let result = RepositoryLocator::from_owner_repo(owner, repo);
     assert!(
         matches!(result, Err(IntakeError::MissingPathSegments)),
-        "expected MissingPathSegments for empty owner, got {result:?}"
-    );
-}
-
-#[rstest]
-fn rejects_empty_repo() {
-    let result = RepositoryLocator::from_owner_repo("octo", "");
-    assert!(
-        matches!(result, Err(IntakeError::MissingPathSegments)),
-        "expected MissingPathSegments for empty repo, got {result:?}"
+        "expected MissingPathSegments, got {result:?}"
     );
 }
