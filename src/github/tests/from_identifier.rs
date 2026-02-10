@@ -1,5 +1,13 @@
 //! Tests for [`PullRequestLocator::from_identifier`].
 
+// rstest macro expansion duplicates parameters into generated test functions,
+// triggering `too_many_arguments` on the expanded code. A function-level
+// `#[expect]` is not propagated by rstest, so we scope this to the module.
+#![expect(
+    clippy::too_many_arguments,
+    reason = "rstest #[case] expansion creates functions with the full parameter list"
+)]
+
 use rstest::rstest;
 
 use crate::github::error::IntakeError;
@@ -31,46 +39,52 @@ fn enterprise_origin_with_port() -> GitHubOrigin {
     }
 }
 
-struct ExpectedLocator {
-    number: u64,
-    owner: &'static str,
-    repo: &'static str,
-    api_base: &'static str,
-}
-
 #[rstest]
-#[case::github_com(
-    github_com_origin(),
+#[case(
     "42",
-    ExpectedLocator { number: 42, owner: "octo", repo: "repo", api_base: "https://api.github.com/" },
+    github_com_origin(),
+    42,
+    "octo",
+    "repo",
+    "https://api.github.com/"
 )]
-#[case::enterprise(
-    enterprise_origin(),
+#[case(
     "7",
-    ExpectedLocator { number: 7, owner: "corp", repo: "internal", api_base: "https://ghe.example.com/api/v3" },
+    enterprise_origin(),
+    7,
+    "corp",
+    "internal",
+    "https://ghe.example.com/api/v3"
 )]
-#[case::enterprise_with_port(
-    enterprise_origin_with_port(),
+#[case(
     "3",
-    ExpectedLocator { number: 3, owner: "corp", repo: "internal", api_base: "https://ghe.example.com:8443/api/v3" },
+    enterprise_origin_with_port(),
+    3,
+    "corp",
+    "internal",
+    "https://ghe.example.com:8443/api/v3"
 )]
-fn resolves_pr_number(
+fn from_identifier_resolves_pr_number(
+    #[case] pr_number: &str,
     #[case] origin: GitHubOrigin,
-    #[case] identifier: &str,
-    #[case] expected: ExpectedLocator,
+    #[case] expected_number: u64,
+    #[case] expected_owner: &str,
+    #[case] expected_repo: &str,
+    #[case] expected_api_base: &str,
 ) {
-    let locator = PullRequestLocator::from_identifier(identifier, &origin).expect("should resolve");
+    let locator =
+        PullRequestLocator::from_identifier(pr_number, &origin).expect("should resolve PR number");
 
-    assert_eq!(locator.number().get(), expected.number, "number mismatch");
-    assert_eq!(locator.owner().as_str(), expected.owner, "owner mismatch");
+    assert_eq!(locator.number().get(), expected_number, "number mismatch");
+    assert_eq!(locator.owner().as_str(), expected_owner, "owner mismatch");
     assert_eq!(
         locator.repository().as_str(),
-        expected.repo,
+        expected_repo,
         "repo mismatch"
     );
     assert_eq!(
         locator.api_base().as_str(),
-        expected.api_base,
+        expected_api_base,
         "api base mismatch"
     );
 }

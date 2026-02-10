@@ -51,70 +51,110 @@ async fn run() -> Result<(), IntakeError> {
 /// Returns `(identifier, filtered_args)` where `identifier` is `None` when
 /// no positional argument was found.
 fn extract_positional_pr_identifier(args: Vec<OsString>) -> (Option<String>, Vec<OsString>) {
-    let mut filtered = Vec::with_capacity(args.len());
-    let mut identifier: Option<String> = None;
-    let mut skip_next = false;
-    let mut after_separator = false;
-    let mut first = true;
+    let mut iter = args.into_iter();
+    let mut state = ArgParserState::new(iter.size_hint().0);
 
-    for arg in args {
-        // Always keep argv[0]
-        if first {
-            filtered.push(arg);
-            first = false;
-            continue;
-        }
+    // Always keep argv[0]
+    if let Some(program) = iter.next() {
+        state.filtered.push(program);
+    }
 
-        // After `--`, every argument is positional.
-        if after_separator {
-            if identifier.is_none() {
-                identifier = Some(arg.to_string_lossy().into_owned());
-            } else {
-                filtered.push(arg);
-            }
-            continue;
-        }
-
-        if skip_next {
-            // This arg is the value of a preceding flag — keep it
-            filtered.push(arg);
-            skip_next = false;
-            continue;
-        }
-
-        let arg_str = arg.to_string_lossy();
-
-        // `--` ends option parsing; consume the marker and treat the rest
-        // as positional arguments.
-        if arg_str == "--" {
-            after_separator = true;
-            continue;
-        }
-
-        // Flags starting with - are passed through to ortho-config
-        if arg_str.starts_with('-') {
-            // Check if this flag consumes the next argument.
-            // `--flag=value` is self-contained; `--flag value` needs a skip.
-            let needs_skip = !arg_str.contains('=')
-                && FrankieConfig::VALUE_FLAGS
-                    .iter()
-                    .any(|f| *f == arg_str.as_ref());
-            skip_next = needs_skip;
-            filtered.push(arg);
-            continue;
-        }
-
-        // First non-flag, non-consumed argument is the positional identifier
-        if identifier.is_none() {
-            identifier = Some(arg_str.into_owned());
-        } else {
-            // Subsequent positional args are unexpected — pass them through
-            // and let ortho-config report the error.
-            filtered.push(arg);
+    for arg in iter {
+        match state.phase {
+            ParsePhase::Normal => state.handle_normal_arg(arg),
+            ParsePhase::SkipNext => state.handle_flag_value(arg),
+            ParsePhase::AfterSeparator => state.handle_post_separator_arg(arg),
         }
     }
 
-    (identifier, filtered)
+    (state.identifier, state.filtered)
+}
+
+/// State machine for argument parsing.
+enum ParsePhase {
+    Normal,
+    SkipNext,
+    AfterSeparator,
+}
+
+struct ArgParserState {
+    filtered: Vec<OsString>,
+    identifier: Option<String>,
+    phase: ParsePhase,
+}
+
+impl ArgParserState {
+    fn new(capacity: usize) -> Self {
+        Self {
+            filtered: Vec::with_capacity(capacity),
+            identifier: None,
+            phase: ParsePhase::Normal,
+        }
+    }
+
+    /// Handles arguments after `--` — the first becomes the identifier,
+    /// the rest are passed through.
+    fn handle_post_separator_arg(&mut self, arg: OsString) {
+        if self.identifier.is_none() {
+            self.identifier = Some(arg.to_string_lossy().into_owned());
+        } else {
+            self.filtered.push(arg);
+        }
+    }
+
+    /// Handles the value argument consumed by a preceding flag.
+    fn handle_flag_value(&mut self, arg: OsString) {
+        self.filtered.push(arg);
+        self.phase = ParsePhase::Normal;
+    }
+
+    /// Handles an argument during normal parsing (not after `--`, not a
+    /// flag value).
+    fn handle_normal_arg(&mut self, arg: OsString) {
+        let arg_string = arg.to_string_lossy().into_owned();
+
+        // `--` ends option parsing; consume the marker and treat the rest
+        // as positional arguments.
+        if arg_string == "--" {
+            self.phase = ParsePhase::AfterSeparator;
+            return;
+        }
+
+        // Flags starting with - are passed through to ortho-config
+        if arg_string.starts_with('-') {
+            self.handle_flag(arg, &arg_string);
+            return;
+        }
+
+        self.handle_positional(arg, arg_string);
+    }
+
+    /// Handles flag arguments, checking whether the flag consumes the
+    /// next argument as its value.
+    fn handle_flag(&mut self, arg: OsString, arg_str: &str) {
+        if is_flag_requiring_value(arg_str) {
+            self.phase = ParsePhase::SkipNext;
+        }
+        self.filtered.push(arg);
+    }
+
+    /// Handles positional arguments — the first becomes the identifier,
+    /// subsequent ones are passed through and let ortho-config report
+    /// the error.
+    fn handle_positional(&mut self, arg: OsString, arg_string: String) {
+        if self.identifier.is_none() {
+            self.identifier = Some(arg_string);
+        } else {
+            self.filtered.push(arg);
+        }
+    }
+}
+
+/// Checks whether a flag requires a following value argument.
+///
+/// `--flag=value` is self-contained; `--flag value` needs a skip.
+fn is_flag_requiring_value(flag: &str) -> bool {
+    !flag.contains('=') && FrankieConfig::VALUE_FLAGS.contains(&flag)
 }
 
 /// Loads configuration from CLI, environment, and files.

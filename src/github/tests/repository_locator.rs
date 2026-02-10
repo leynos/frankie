@@ -37,6 +37,17 @@ fn parses_enterprise_repository_url() {
 }
 
 #[rstest]
+fn parses_enterprise_repository_url_with_port() {
+    let locator = RepositoryLocator::parse("https://ghe.example.com:8443/foo/bar")
+        .expect("should parse enterprise repository URL with port");
+    assert_eq!(
+        locator.api_base().as_str(),
+        "https://ghe.example.com:8443/api/v3",
+        "enterprise api base should preserve port"
+    );
+}
+
+#[rstest]
 fn from_owner_repo() {
     let locator =
         RepositoryLocator::from_owner_repo("octo", "repo").expect("should create locator");
