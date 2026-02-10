@@ -113,15 +113,12 @@ impl ArgParserState {
     fn handle_normal_arg(&mut self, arg: OsString) {
         let arg_string = arg.to_string_lossy().into_owned();
 
-        // `--` ends option parsing; consume the marker and treat the rest
-        // as positional arguments.
-        if arg_string == "--" {
+        if is_separator(&arg_string) {
             self.phase = ParsePhase::AfterSeparator;
             return;
         }
 
-        // Flags starting with - are passed through to ortho-config
-        if arg_string.starts_with('-') {
+        if is_flag_token(&arg_string) {
             self.handle_flag(arg, &arg_string);
             return;
         }
@@ -148,6 +145,16 @@ impl ArgParserState {
             self.filtered.push(arg);
         }
     }
+}
+
+/// Returns `true` when the argument is the `--` option-parsing terminator.
+fn is_separator(arg: &str) -> bool {
+    arg == "--"
+}
+
+/// Returns `true` when the argument looks like a flag (starts with `-`).
+fn is_flag_token(arg: &str) -> bool {
+    arg.starts_with('-')
 }
 
 /// Checks whether a flag requires a following value argument.
