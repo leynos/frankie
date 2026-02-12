@@ -14,16 +14,40 @@ fn codex_state() -> CodexExecState {
     CodexExecState::default()
 }
 
-#[given("a Codex run that streams progress and completes successfully")]
-fn given_successful_run(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
+/// Helper to set up a Codex execution scenario with a transcript file.
+fn setup_codex_scenario(
+    codex_state: &CodexExecState,
+    filename: &str,
+    initial_content: &str,
+    plan: StubPlan,
+) -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::TempDir::new()?;
-    let transcript_path = temp_dir.path().join("success.jsonl");
-    std::fs::write(&transcript_path, "{\"type\":\"turn.started\"}\n")?;
+    let transcript_path = temp_dir.path().join(filename);
+    std::fs::write(&transcript_path, initial_content)?;
 
     let transcript_path_str = transcript_path
         .to_str()
         .ok_or("transcript path must be valid UTF-8")?
         .to_owned();
+
+    codex_state.app.set(app_with_plan(plan)?);
+    codex_state.temp_dir.set(temp_dir);
+    codex_state.transcript_path.set(transcript_path_str);
+    Ok(())
+}
+
+#[given("a Codex run that streams progress and completes successfully")]
+fn given_successful_run(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
+    setup_codex_scenario(
+        codex_state,
+        "success.jsonl",
+        "{\"type\":\"turn.started\"}\n",
+        StubPlan::TimedUpdates(Vec::new()),
+    )?;
+    let transcript_path_str = codex_state
+        .transcript_path
+        .with_ref(Clone::clone)
+        .ok_or("expected transcript path")?;
 
     let plan = StubPlan::TimedUpdates(vec![
         (
@@ -41,21 +65,21 @@ fn given_successful_run(codex_state: &CodexExecState) -> Result<(), Box<dyn std:
     ]);
 
     codex_state.app.set(app_with_plan(plan)?);
-    codex_state.temp_dir.set(temp_dir);
-    codex_state.transcript_path.set(transcript_path_str);
     Ok(())
 }
 
 #[given("a Codex run that exits non-zero with transcript")]
 fn given_non_zero_exit(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = tempfile::TempDir::new()?;
-    let transcript_path = temp_dir.path().join("failure.jsonl");
-    std::fs::write(&transcript_path, "{\"type\":\"turn.started\"}\n")?;
-
-    let transcript_path_str = transcript_path
-        .to_str()
-        .ok_or("transcript path must be valid UTF-8")?
-        .to_owned();
+    setup_codex_scenario(
+        codex_state,
+        "failure.jsonl",
+        "{\"type\":\"turn.started\"}\n",
+        StubPlan::TimedUpdates(Vec::new()),
+    )?;
+    let transcript_path_str = codex_state
+        .transcript_path
+        .with_ref(Clone::clone)
+        .ok_or("expected transcript path")?;
 
     let plan = StubPlan::TimedUpdates(vec![(
         40,
@@ -67,20 +91,21 @@ fn given_non_zero_exit(codex_state: &CodexExecState) -> Result<(), Box<dyn std::
     )]);
 
     codex_state.app.set(app_with_plan(plan)?);
-    codex_state.temp_dir.set(temp_dir);
-    codex_state.transcript_path.set(transcript_path_str);
     Ok(())
 }
 
 #[given("a Codex run that emits a malformed stream line")]
 fn given_malformed_line(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = tempfile::TempDir::new()?;
-    let transcript_path = temp_dir.path().join("malformed.jsonl");
-    std::fs::write(&transcript_path, "not-json\n")?;
-    let transcript_path_str = transcript_path
-        .to_str()
-        .ok_or("transcript path must be valid UTF-8")?
-        .to_owned();
+    setup_codex_scenario(
+        codex_state,
+        "malformed.jsonl",
+        "not-json\n",
+        StubPlan::TimedUpdates(Vec::new()),
+    )?;
+    let transcript_path_str = codex_state
+        .transcript_path
+        .with_ref(Clone::clone)
+        .ok_or("expected transcript path")?;
 
     let plan = StubPlan::TimedUpdates(vec![
         (
@@ -98,8 +123,6 @@ fn given_malformed_line(codex_state: &CodexExecState) -> Result<(), Box<dyn std:
     ]);
 
     codex_state.app.set(app_with_plan(plan)?);
-    codex_state.temp_dir.set(temp_dir);
-    codex_state.transcript_path.set(transcript_path_str);
     Ok(())
 }
 
