@@ -287,3 +287,105 @@ fn test_line_mapping_no_change(
     drop(dir);
     Ok(())
 }
+
+#[rstest]
+fn test_line_mapping_shifts_when_line_moves_within_hunk(
+    test_repo: Result<(TempDir, Repository), TestError>,
+) -> Result<(), TestError> {
+    let (dir, repo) = test_repo?;
+    let old_oid = create_commit(
+        &repo,
+        "Add initial file",
+        &[("test.txt", "alpha\nbeta\ngamma\n")],
+    )?;
+    let new_oid = create_commit(
+        &repo,
+        "Insert line at top",
+        &[("test.txt", "inserted\nalpha\nbeta\ngamma\n")],
+    )?;
+
+    let ops = Git2Operations::from_repository(repo);
+    let request = LineMappingRequest::new(
+        old_oid.to_string(),
+        new_oid.to_string(),
+        "test.txt".to_owned(),
+        2,
+    );
+    let verification = ops.verify_line_mapping(&request)?;
+
+    assert_eq!(verification.status(), LineMappingStatus::Moved);
+    assert_eq!(verification.original_line(), 2);
+    assert_eq!(verification.current_line(), Some(3));
+    assert_eq!(verification.offset(), Some(1));
+
+    drop(dir);
+    Ok(())
+}
+
+#[rstest]
+fn test_line_mapping_shifts_after_deletion_within_hunk(
+    test_repo: Result<(TempDir, Repository), TestError>,
+) -> Result<(), TestError> {
+    let (dir, repo) = test_repo?;
+    let old_oid = create_commit(
+        &repo,
+        "Add initial file",
+        &[("test.txt", "drop\nkeep-one\nkeep-two\n")],
+    )?;
+    let new_oid = create_commit(
+        &repo,
+        "Delete first line",
+        &[("test.txt", "keep-one\nkeep-two\n")],
+    )?;
+
+    let ops = Git2Operations::from_repository(repo);
+    let request = LineMappingRequest::new(
+        old_oid.to_string(),
+        new_oid.to_string(),
+        "test.txt".to_owned(),
+        3,
+    );
+    let verification = ops.verify_line_mapping(&request)?;
+
+    assert_eq!(verification.status(), LineMappingStatus::Moved);
+    assert_eq!(verification.original_line(), 3);
+    assert_eq!(verification.current_line(), Some(2));
+    assert_eq!(verification.offset(), Some(-1));
+
+    drop(dir);
+    Ok(())
+}
+
+#[rstest]
+fn test_line_mapping_marks_deleted_line_inside_hunk(
+    test_repo: Result<(TempDir, Repository), TestError>,
+) -> Result<(), TestError> {
+    let (dir, repo) = test_repo?;
+    let old_oid = create_commit(
+        &repo,
+        "Add initial file",
+        &[("test.txt", "line-1\nline-2\nline-3\n")],
+    )?;
+    let new_oid = create_commit(
+        &repo,
+        "Delete middle line",
+        &[("test.txt", "line-1\nline-3\n")],
+    )?;
+
+    let ops = Git2Operations::from_repository(repo);
+    let request = LineMappingRequest::new(
+        old_oid.to_string(),
+        new_oid.to_string(),
+        "test.txt".to_owned(),
+        2,
+    );
+    let verification = ops.verify_line_mapping(&request)?;
+
+    assert_eq!(verification.status(), LineMappingStatus::Deleted);
+    assert_eq!(verification.original_line(), 2);
+    assert_eq!(verification.current_line(), None);
+    assert_eq!(verification.offset(), None);
+
+    drop(dir);
+    Ok(())
+}

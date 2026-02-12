@@ -1,5 +1,6 @@
 //! Helper functions for Git operations, particularly diff analysis.
 
+use std::cell::Cell;
 use std::path::Path;
 
 use git2::{DiffOptions, Oid, Repository};
@@ -36,27 +37,6 @@ impl HunkRange {
         line >= self.start && line < self.end_line()
     }
 
-    /// Checks if a line was deleted in this hunk.
-    ///
-    /// A line is considered deleted if the hunk removed more lines than it added
-    /// and the line falls within the removed section.
-    ///
-    /// # Positional assumption
-    ///
-    /// This method assumes deleted lines are located at the *end* of the hunk
-    /// (starting at `start + new_lines`). In practice, deletions can occur
-    /// anywhere within a hunk—at the beginning, interleaved with additions, or
-    /// scattered throughout. This assumption aligns with the broader heuristic
-    /// limitations documented in [`compute_line_offset_from_hunks`].
-    pub const fn is_line_deleted(self, line: u32) -> bool {
-        if self.old_lines > self.new_lines {
-            let removed_start = self.start + self.new_lines;
-            line >= removed_start
-        } else {
-            false
-        }
-    }
-
     /// Calculates the line offset contribution from this hunk.
     ///
     /// Returns `new_lines - old_lines` as a signed offset. Values exceeding
@@ -70,6 +50,14 @@ impl HunkRange {
     pub const fn end_line(self) -> u32 {
         self.start + self.old_lines
     }
+}
+
+/// Calculates line-number offset from an old line to a mapped new line.
+///
+/// Falls back to zero for extreme values outside `i32` bounds, which are not
+/// realistic for source files but are handled defensively.
+fn calculate_line_offset(old_line: u32, new_line: u32) -> i32 {
+    i32::try_from(i64::from(new_line) - i64::from(old_line)).unwrap_or(0)
 }
 
 /// Parses a SHA string into an Oid using the repository.
@@ -137,68 +125,88 @@ pub(super) fn has_no_changes(diff: &git2::Diff<'_>) -> bool {
     diff.deltas().next().is_none()
 }
 
-/// Computes the line offset by processing diff hunks.
+/// Computes the line offset by processing diff hunks and diff lines.
 ///
-/// # Heuristic Approach
+/// The algorithm uses hunk headers for coarse positioning and then resolves
+/// target lines *inside* hunks by inspecting individual `DiffLine` entries.
+/// This captures intra-hunk insertions and deletions that affect the target
+/// line's mapped position.
 ///
-/// This function uses **hunk-level aggregate counts** rather than examining
-/// individual `DiffLine` entries. For each hunk, it computes:
-///
-/// ```text
-/// offset = new_lines - old_lines
-/// ```
-///
-/// This approach is a reasonable approximation for most cases but may be
-/// imprecise for complex hunks containing interleaved additions and deletions.
-/// For example, a hunk that adds 3 lines and removes 2 lines contributes +1
-/// to the offset, regardless of where within the hunk those changes occur.
-///
-/// # Limitations
-///
-/// - Cannot detect whether a specific line was modified (changed in place)
-/// - Treats all lines within a hunk uniformly based on aggregate counts
-/// - May report incorrect offsets if a target line falls within a hunk where
-///   the exact position matters (e.g., some lines added above and some below)
-///
-/// For more precise line tracking, an alternative implementation could iterate
-/// through `diff.foreach(..., Some(&mut line_cb), ...)` to examine each
-/// `DiffLine` individually, but this comes at increased complexity.
+/// A target line that appears as a deletion (`-`) is reported as deleted.
+/// A target line that appears as context (` `) maps exactly to its reported
+/// `new_lineno` in the hunk.
 pub(super) fn compute_line_offset_from_hunks(
     diff: &git2::Diff<'_>,
     target_line: u32,
 ) -> Result<(i32, bool), GitOperationError> {
-    let mut line_offset: i32 = 0;
-    let mut line_deleted = false;
-    let mut passed_line = false;
+    let line_offset = Cell::new(0_i32);
+    let line_deleted = Cell::new(false);
+    let target_resolved = Cell::new(false);
+    let target_in_current_hunk = Cell::new(false);
 
     diff.foreach(
         &mut |_, _| true,
         None,
         Some(&mut |_delta, hunk| {
-            let range = HunkRange::from_hunk(&hunk);
-
-            if passed_line {
+            if target_resolved.get() {
                 return true;
             }
 
-            if range.contains_line(target_line) {
-                line_deleted = range.is_line_deleted(target_line);
-                passed_line = true;
-            } else if target_line >= range.end_line() {
-                line_offset += range.offset();
+            if target_in_current_hunk.get() {
+                // If we advanced to another hunk without seeing the target old
+                // line in the previous one, treat it as removed.
+                line_deleted.set(true);
+                target_resolved.set(true);
+                target_in_current_hunk.set(false);
+                return true;
+            }
+
+            let range = HunkRange::from_hunk(&hunk);
+
+            if target_line >= range.end_line() {
+                line_offset.set(line_offset.get().saturating_add(range.offset()));
+                target_in_current_hunk.set(false);
+            } else if range.contains_line(target_line) {
+                target_in_current_hunk.set(true);
             } else {
-                passed_line = true;
+                target_resolved.set(true);
+                target_in_current_hunk.set(false);
             }
 
             true
         }),
-        None,
+        Some(&mut |_delta, _hunk, line| {
+            if target_resolved.get() || !target_in_current_hunk.get() {
+                return true;
+            }
+
+            let Some(old_line) = line.old_lineno() else {
+                return true;
+            };
+
+            if old_line != target_line {
+                return true;
+            }
+
+            line_deleted.set(line.origin() == '-');
+            if let Some(new_line) = line.new_lineno() {
+                line_offset.set(calculate_line_offset(target_line, new_line));
+            }
+
+            target_resolved.set(true);
+            target_in_current_hunk.set(false);
+            true
+        }),
     )
     .map_err(|e| GitOperationError::DiffComputationFailed {
         message: e.message().to_owned(),
     })?;
 
-    Ok((line_offset, line_deleted))
+    if target_in_current_hunk.get() && !target_resolved.get() {
+        line_deleted.set(true);
+    }
+
+    Ok((line_offset.get(), line_deleted.get()))
 }
 
 /// Creates the appropriate line mapping result from offset and deletion state.
