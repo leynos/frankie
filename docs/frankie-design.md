@@ -2846,6 +2846,36 @@ ID-based selection tracking.
 - Selection is preserved across syncs unless the selected comment is deleted
 - Latency metrics enable performance monitoring
 
+#### ADR-002: Codex execution stream and transcript model
+
+**Context**: The review TUI must trigger `codex exec` directly from filtered
+comments, display live progress, and preserve machine-readable execution
+transcripts for diagnostics.
+
+**Decision**: Integrate Codex execution through a dedicated AI service module
+that runs `codex exec --json`, polls progress updates in the TUI loop, and
+writes one JSONL transcript file per run to the local state directory.
+
+**Rationale**:
+
+1. **Boundary clarity**: Process execution and stream parsing live in `src/ai/`
+   so TUI state transitions remain in `src/tui/`.
+
+2. **Deterministic persistence**: Transcript files use a deterministic naming
+   pattern `<owner>-<repo>-pr-<number>-<utc-yyyymmddThhmmssZ>.jsonl` under
+   `${XDG_STATE_HOME:-$HOME/.local/state}/frankie/codex-transcripts/`.
+
+3. **Operational visibility**: The TUI status bar shows streamed progress
+   events while runs are active and maps non-zero exits into explicit error
+   messages including exit code and transcript path.
+
+**Consequences**:
+
+- Users can launch Codex with a single key (`x`) from the review list view.
+- Transcripts are retained on disk for both successful and failed runs.
+- Non-zero Codex exits are no longer silent and are surfaced immediately in the
+  interface.
+
 ## 5.4 Cross-cutting Concerns
 
 ### 5.4.1 Monitoring And Observability Approach

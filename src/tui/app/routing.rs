@@ -123,6 +123,9 @@ impl ReviewApp {
         if msg.is_time_travel() {
             return self.handle_time_travel_msg(msg);
         }
+        if msg.is_codex() {
+            return self.handle_codex_msg(msg);
+        }
         if msg.is_data() {
             return self.handle_data_msg(msg);
         }

@@ -1,11 +1,11 @@
-# Wire Comment Exports Into `codex exec`
+# Wire comment exports into `codex exec`
 
 This execution plan (ExecPlan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -92,13 +92,17 @@ TUI if Codex exits with a non-zero status.
 
 - [x] (2026-02-10 00:00Z) Drafted self-contained ExecPlan with constraints,
       tolerances, staged implementation, and validation approach.
-- [ ] Confirm and implement command invocation prototype for
-      `codex exec --json`.
-- [ ] Implement export-to-Codex execution service and transcript persistence.
-- [ ] Integrate TUI trigger, streaming progress, and non-zero exit surfacing.
-- [ ] Add/upgrade unit and behavioural tests (`rstest`, `rstest-bdd` v0.5.0).
-- [ ] Update design and user documentation.
-- [ ] Run full validation gates and mark roadmap step done.
+- [x] (2026-02-12 00:00Z) Implemented command invocation and JSONL event
+      parsing for `codex exec --json`.
+- [x] (2026-02-12 00:00Z) Implemented Codex execution service and transcript
+      persistence in `src/ai/`.
+- [x] (2026-02-12 00:00Z) Integrated TUI trigger (`x`), polling-based progress
+      streaming, and non-zero exit surfacing.
+- [x] (2026-02-12 00:00Z) Added unit and behavioural coverage for happy and
+      unhappy paths, including malformed stream and transcript failure cases.
+- [x] (2026-02-12 00:00Z) Updated design and user documentation.
+- [x] (2026-02-12 00:00Z) Marked roadmap item complete and ran full quality
+      gates.
 
 ## Surprises & discoveries
 
@@ -136,8 +140,18 @@ TUI if Codex exits with a non-zero status.
 
 ## Outcomes & retrospective
 
-Not started. This section will be updated after implementation milestones and
-final validation.
+- Implemented `src/ai/` with a dedicated execution path that launches
+  `codex exec --json`, parses progress events, and persists transcript JSONL.
+- Added TUI integration for `x`-triggered execution with periodic poll ticks,
+  live status updates, and explicit error surfacing for non-zero exits.
+- Added unit tests for transcript directory/path logic, parser behaviour, and
+  execution success/failure outcomes using scripted command stubs.
+- Added behavioural coverage in `tests/codex_exec_bdd.rs` and
+  `tests/features/codex_exec.feature` for:
+  - streaming progress visibility
+  - transcript persistence visibility
+  - non-zero exit propagation
+  - malformed event and transcript-write failure handling
 
 ## Context and orientation
 

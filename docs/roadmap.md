@@ -89,7 +89,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
 
 ### Step: Codex execution integration
 
-- [ ] Wire comment exports into `codex exec` with streaming progress and JSONL
+- [x] Wire comment exports into `codex exec` with streaming progress and JSONL
       capture; acceptance: executions stream status updates, write transcripts
       to disk, and surface non-zero Codex exits to the TUI.
 - [ ] Enable session resumption for interrupted Codex runs; acceptance:

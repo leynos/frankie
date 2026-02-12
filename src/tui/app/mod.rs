@@ -6,6 +6,7 @@
 //!
 //! # Module Structure
 //!
+//! - `codex_handlers`: Codex execution trigger and stream polling
 //! - `rendering`: View rendering methods for terminal output
 //! - `sync_handlers`: Background sync and refresh handling
 //! - `time_travel_handlers`: Time-travel navigation handlers
@@ -15,6 +16,7 @@ use std::sync::Arc;
 
 use bubbletea_rs::{Cmd, Model};
 
+use crate::ai::{CodexExecutionHandle, CodexExecutionService, SystemCodexExecutionService};
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
 
@@ -29,6 +31,7 @@ use super::state::{
     find_hunk_index,
 };
 
+mod codex_handlers;
 mod navigation;
 mod rendering;
 mod routing;
@@ -74,6 +77,12 @@ pub struct ReviewApp {
     git_ops: Option<Arc<dyn GitOperations>>,
     /// HEAD commit SHA for line mapping verification.
     head_sha: Option<String>,
+    /// Service used to execute Codex runs.
+    codex_service: Arc<dyn CodexExecutionService>,
+    /// Active Codex execution handle while a run is in progress.
+    codex_handle: Option<CodexExecutionHandle>,
+    /// Latest Codex status line shown in the status bar.
+    codex_status: Option<String>,
 }
 
 /// Tracks which view is currently active in the TUI.
@@ -113,6 +122,9 @@ impl ReviewApp {
             time_travel_state: None,
             git_ops: None,
             head_sha: None,
+            codex_service: Arc::new(SystemCodexExecutionService::new()),
+            codex_handle: None,
+            codex_status: None,
         }
     }
 
@@ -131,6 +143,19 @@ impl ReviewApp {
         self.git_ops = Some(git_ops);
         self.head_sha = Some(head_sha);
         self
+    }
+
+    /// Sets the Codex execution service used by this app instance.
+    #[must_use]
+    pub fn with_codex_service(mut self, codex_service: Arc<dyn CodexExecutionService>) -> Self {
+        self.codex_service = codex_service;
+        self
+    }
+
+    /// Returns whether a Codex execution run is currently active.
+    #[must_use]
+    pub(super) const fn is_codex_running(&self) -> bool {
+        self.codex_handle.is_some()
     }
 
     /// Returns the currently filtered reviews.
@@ -177,6 +202,18 @@ impl ReviewApp {
     #[must_use]
     pub const fn active_filter(&self) -> &ReviewFilter {
         &self.filter_state.active_filter
+    }
+
+    /// Returns the current TUI error message, if any.
+    #[must_use]
+    pub fn error_message(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    /// Returns the latest Codex status line, if any.
+    #[must_use]
+    pub fn codex_status_message(&self) -> Option<&str> {
+        self.codex_status.as_deref()
     }
 
     /// Returns the ID of the currently selected comment, if any.

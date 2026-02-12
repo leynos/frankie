@@ -4,6 +4,7 @@
 //! retrieve pull request metadata, and surface friendly errors that can be
 //! displayed in the CLI.
 
+pub mod ai;
 pub mod config;
 pub mod export;
 pub mod github;
