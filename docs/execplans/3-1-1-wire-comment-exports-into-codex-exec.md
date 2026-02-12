@@ -60,9 +60,9 @@ TUI if Codex exits with a non-zero status.
 - Runtime model: if bubbletea-rs cannot support practical progress streaming
   through message polling/dispatch without invasive framework changes, stop and
   escalate with alternatives.
-- Test migration: if upgrading to `rstest-bdd` v0.5.0 breaks unrelated BDD
-  suites in ways that cannot be fixed within three iterations, stop and
-  escalate.
+- Test migration: if upgrading to `rstest-bdd` v0.5.0 breaks unrelated
+  behaviour-driven development (BDD) suites in ways that cannot be fixed within
+  three iterations, stop and escalate.
 - Validation: if `make check-fmt`, `make lint`, or `make test` still fails
   after three fix cycles, stop and escalate with logs.
 
