@@ -150,15 +150,13 @@ pub fn transcript_path(
 }
 
 fn sanitize_segment(segment: &str) -> String {
+    const fn is_safe_for_filename(ch: char) -> bool {
+        ch.is_ascii_alphanumeric() || ch == '-' || ch == '_'
+    }
+
     segment
         .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '-'
-            }
-        })
+        .map(|ch| if is_safe_for_filename(ch) { ch } else { '-' })
         .collect()
 }
 
