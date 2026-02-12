@@ -366,6 +366,7 @@ impl ReviewApp {
     /// Dispatches lifecycle and window messages to their handlers.
     fn handle_lifecycle_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
         match msg {
+            AppMsg::Initialized => Some(Self::arm_sync_timer()),
             AppMsg::Quit => Some(bubbletea_rs::quit()),
             AppMsg::ToggleHelp => {
                 self.show_help = !self.show_help;
@@ -438,8 +439,9 @@ impl Model for ReviewApp {
         let reviews = super::get_initial_reviews();
         let model = Self::new(reviews);
 
-        // Start the background sync timer
-        let cmd = Self::arm_sync_timer();
+        // Emit an immediate startup message to trigger the first render cycle.
+        // The sync timer is armed when `AppMsg::Initialized` is handled.
+        let cmd = Self::immediate_init_cmd();
 
         (model, Some(cmd))
     }
