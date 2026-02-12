@@ -4,6 +4,8 @@
 //! users to view the code state at the time a comment was made and verify
 //! line mapping correctness.
 
+mod error_messages;
+
 use std::any::Any;
 use std::sync::Arc;
 
@@ -106,7 +108,7 @@ impl ReviewApp {
         };
 
         let Some(ref git_ops) = self.git_ops else {
-            self.error = Some("No local repository available".to_owned());
+            self.error = Some(build_no_repo_error());
             return None;
         };
 
@@ -198,6 +200,14 @@ impl ReviewApp {
         }
         None
     }
+}
+
+/// Builds the error message for missing repository, using stored context.
+fn build_no_repo_error() -> String {
+    crate::tui::get_time_travel_context()
+        .map_or_else(error_messages::build_fallback_time_travel_error, |ctx| {
+            error_messages::build_time_travel_error(&ctx)
+        })
 }
 
 /// Spawns an async task that loads data and maps the result to a message.

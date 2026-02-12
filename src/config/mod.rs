@@ -1,35 +1,15 @@
 //! Application configuration loaded from CLI, environment, and files.
 //!
-//! This module provides a unified configuration struct that merges values
-//! from command-line arguments, environment variables, and configuration
-//! files using ortho-config's layered approach.
+//! Provides a unified configuration struct merging values from command-line
+//! arguments, environment variables, and configuration files using
+//! ortho-config's layered approach.
 //!
-//! # Precedence
-//!
-//! Configuration values are loaded with the following precedence (lowest to
-//! highest):
+//! # Precedence (lowest to highest)
 //!
 //! 1. **Defaults** – Built-in application defaults
-//! 2. **Configuration file** – `.frankie.toml` in current directory, home
-//!    directory, or XDG config directory
-//! 3. **Environment variables** – `FRANKIE_PR_URL`, `FRANKIE_TOKEN`,
-//!    `FRANKIE_TEMPLATE`, or legacy `GITHUB_TOKEN`
-//! 4. **Command-line arguments** – `--pr-url`/`-u`, `--token`/`-t`, and
-//!    `--template`
-//!
-//! # Configuration File
-//!
-//! Place `.frankie.toml` in the current directory, home directory, or
-//! XDG config directory with:
-//!
-//! ```toml
-//! pr_url = "https://github.com/owner/repo/pull/123"
-//! token = "ghp_example"
-//! owner = "octocat"
-//! repo = "hello-world"
-//! database_url = "frankie.sqlite"
-//! migrate_db = true
-//! ```
+//! 2. **Configuration file** – `.frankie.toml` (current dir, home, or XDG)
+//! 3. **Environment variables** – `FRANKIE_*` or legacy `GITHUB_TOKEN`
+//! 4. **Command-line arguments** – `--pr-url`/`-u`, `--token`/`-t`, etc.
 
 use std::env;
 
@@ -221,6 +201,12 @@ pub struct FrankieConfig {
     #[ortho_config()]
     pub template: Option<String>,
 
+    /// Local repository path for time-travel features (`--repo-path`,
+    /// `FRANKIE_REPO_PATH`). Overrides auto-discovery from the current
+    /// working directory.
+    #[ortho_config()]
+    pub repo_path: Option<String>,
+
     /// Positional PR identifier (bare number or full URL) extracted from
     /// command-line arguments before ortho-config processes the remaining
     /// flags. When set, the TUI is launched without requiring `-T`.
@@ -245,6 +231,7 @@ impl Default for FrankieConfig {
             export: None,
             output: None,
             template: None,
+            repo_path: None,
             pr_identifier: None,
         }
     }
@@ -272,6 +259,7 @@ impl FrankieConfig {
         "-e",
         "--output",
         "--template",
+        "--repo-path",
         "--config-path",
     ];
 
