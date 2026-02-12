@@ -10,6 +10,24 @@ use bubbletea_rs::Cmd;
 use super::ReviewApp;
 
 impl ReviewApp {
+    /// Adjusts the scroll offset so the cursor remains within the viewport.
+    pub(super) const fn ensure_cursor_visible(&mut self) {
+        let cursor_position = self.filter_state.cursor_position;
+        let scroll_offset = self.filter_state.scroll_offset;
+        let visible_height = self.review_list.visible_height();
+
+        if cursor_position < scroll_offset {
+            self.filter_state.scroll_offset = cursor_position;
+            return;
+        }
+
+        let viewport_end = scroll_offset.saturating_add(visible_height);
+        if cursor_position >= viewport_end {
+            self.filter_state.scroll_offset =
+                cursor_position.saturating_sub(visible_height.saturating_sub(1));
+        }
+    }
+
     /// Handles cursor up navigation.
     pub(super) fn handle_cursor_up(&mut self) -> Option<Cmd> {
         let new_pos = self.filter_state.cursor_position.saturating_sub(1);
@@ -65,11 +83,6 @@ impl ReviewApp {
     /// Handles End key navigation.
     pub(super) fn handle_end(&mut self) -> Option<Cmd> {
         let max_index = self.filtered_count().saturating_sub(1);
-        // Adjust scroll offset so the last item is visible at the bottom.
-        // This mirrors handle_home which resets scroll_offset to 0.
-        let visible_height = self.review_list.visible_height();
-        self.filter_state.scroll_offset =
-            max_index.saturating_sub(visible_height.saturating_sub(1));
         self.set_cursor(max_index);
         None
     }
