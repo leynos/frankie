@@ -10,7 +10,10 @@ use std::sync::Arc;
 use bubbletea_rs::Program;
 
 use frankie::telemetry::StderrJsonlTelemetrySink;
-use frankie::tui::{ReviewApp, set_initial_reviews, set_refresh_context, set_telemetry_sink};
+use frankie::tui::{
+    ReviewApp, set_initial_reviews, set_initial_terminal_size, set_refresh_context,
+    set_telemetry_sink,
+};
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
     PullRequestLocator, ReviewCommentGateway,
@@ -128,6 +131,11 @@ fn resolve_from_identifier(
 
 /// Runs the bubbletea-rs program with the `ReviewApp` model.
 async fn run_tui() -> Result<(), bubbletea_rs::Error> {
+    // Seed initial terminal dimensions so first render uses the actual size.
+    if let Ok((width, height)) = crossterm::terminal::size() {
+        let _ = set_initial_terminal_size(width, height);
+    }
+
     // Build and run the program using the builder pattern.
     // ReviewApp::init() will retrieve data from module-level storage.
     let program = Program::<ReviewApp>::builder().alt_screen(true).build()?;

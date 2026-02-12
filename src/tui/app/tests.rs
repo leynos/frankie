@@ -1,6 +1,5 @@
 //! Tests for the review TUI application model.
 
-use bubbletea_rs::Model;
 use rstest::{fixture, rstest};
 
 use super::*;
@@ -33,6 +32,12 @@ fn reviews_without_hunks() -> Vec<ReviewComment> {
         diff_hunk: None,
         ..minimal_review(1, "First comment", "alice")
     }]
+}
+
+fn many_reviews(count: u64) -> Vec<ReviewComment> {
+    (1..=count)
+        .map(|id| minimal_review(id, &format!("Comment {id}"), "alice"))
+        .collect()
 }
 
 #[rstest]
@@ -73,6 +78,72 @@ fn filter_changes_preserve_valid_cursor(sample_reviews: Vec<ReviewComment>) {
     )));
     assert_eq!(app.filtered_count(), 1);
     assert_eq!(app.cursor_position(), 0); // Clamped to valid range
+}
+
+#[test]
+fn new_app_uses_initial_terminal_size_when_available() {
+    let was_set = crate::tui::set_initial_terminal_size(120, 40);
+    let app = ReviewApp::empty();
+
+    if was_set {
+        assert_eq!(app.width, 120);
+        assert_eq!(app.height, 40);
+        assert_eq!(app.review_list.visible_height(), 28);
+    }
+}
+
+#[test]
+fn resize_updates_visible_list_height_with_shared_layout_rules() {
+    let mut app = ReviewApp::empty();
+
+    app.handle_message(&AppMsg::WindowResized {
+        width: 120,
+        height: 16,
+    });
+
+    assert_eq!(app.review_list.visible_height(), 4);
+}
+
+#[test]
+fn cursor_navigation_adjusts_scroll_to_keep_selection_visible() {
+    let mut app = ReviewApp::new(many_reviews(10));
+    app.handle_message(&AppMsg::WindowResized {
+        width: 120,
+        height: 16,
+    });
+
+    for _ in 0..5 {
+        app.handle_message(&AppMsg::CursorDown);
+    }
+
+    assert_eq!(app.cursor_position(), 5);
+    assert_eq!(app.filter_state.scroll_offset, 2);
+
+    for _ in 0..4 {
+        app.handle_message(&AppMsg::CursorUp);
+    }
+
+    assert_eq!(app.cursor_position(), 1);
+    assert_eq!(app.filter_state.scroll_offset, 1);
+}
+
+#[rstest]
+fn filter_changes_adjust_scroll_offset_after_cursor_clamp(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+    app.handle_message(&AppMsg::WindowResized {
+        width: 120,
+        height: 13,
+    });
+    app.handle_message(&AppMsg::CursorDown);
+    assert_eq!(app.filter_state.scroll_offset, 1);
+
+    app.handle_message(&AppMsg::SetFilter(ReviewFilter::ByFile(
+        "src/main.rs".to_owned(),
+    )));
+
+    assert_eq!(app.filtered_count(), 1);
+    assert_eq!(app.cursor_position(), 0);
+    assert_eq!(app.filter_state.scroll_offset, 0);
 }
 
 #[rstest]
