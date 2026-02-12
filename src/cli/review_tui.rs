@@ -9,10 +9,12 @@ use std::sync::Arc;
 
 use bubbletea_rs::Program;
 
+use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
-    ReviewApp, set_initial_reviews, set_initial_terminal_size, set_refresh_context,
+    ReviewApp, TimeTravelContext, set_git_ops_context, set_initial_reviews, set_initial_terminal_size, set_refresh_context,
     set_telemetry_sink,
+set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -54,6 +56,18 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
             ),
         });
     }
+
+    // Attempt repository discovery for time-travel features.
+    // Failure is non-fatal: the TUI launches without time-travel.
+    let discovery_failure = try_setup_git_ops(config, &locator);
+
+    // Store time-travel context for contextual error messages.
+    let _ = set_time_travel_context(TimeTravelContext {
+        owner: locator.owner().as_str().to_owned(),
+        repo: locator.repository().as_str().to_owned(),
+        pr_number: locator.number().get(),
+        discovery_failure,
+    });
 
     // Store refresh context for the refresh feature.
     // Returns false if already set; this is non-fatal since refresh will
@@ -127,6 +141,97 @@ fn resolve_from_identifier(
     })?;
 
     PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
+}
+
+/// Attempts to set up Git operations for time-travel navigation.
+///
+/// Tries to discover or open a local repository matching the PR, then
+/// creates git ops and stores them in global state for `Model::init()`.
+///
+/// Returns `None` on success, or a failure reason string when discovery
+/// fails. Failures are non-fatal: the TUI launches without time-travel.
+fn try_setup_git_ops(config: &FrankieConfig, locator: &PullRequestLocator) -> Option<String> {
+    let result = discover_repo_for_locator(config, locator);
+
+    match result {
+        Ok((repo_path, head_sha)) => match create_git_ops(&repo_path) {
+            Ok(git_ops) => {
+                let _ = set_git_ops_context(git_ops, head_sha);
+                None
+            }
+            Err(e) => Some(format!("failed to open repository: {e}")),
+        },
+        Err(reason) => Some(reason),
+    }
+}
+
+/// Discovers a local repository matching the PR's origin.
+///
+/// Uses `--repo-path` if configured, otherwise auto-discovers from the
+/// current directory. Validates that the discovered repository's origin
+/// matches the PR's owner and repository.
+///
+/// Returns the repository path and HEAD SHA on success.
+fn discover_repo_for_locator(
+    config: &FrankieConfig,
+    locator: &PullRequestLocator,
+) -> Result<(std::path::PathBuf, String), String> {
+    let local_repo = if let Some(ref repo_path) = config.repo_path {
+        discover_repository(Path::new(repo_path))
+            .map_err(|e| format!("--repo-path '{repo_path}': {e}"))?
+    } else if config.no_local_discovery {
+        return Err("local repository discovery is disabled (--no-local-discovery)".to_owned());
+    } else {
+        discover_repository(Path::new(".")).map_err(|e| format!("{e}"))?
+    };
+
+    // Validate the discovered repository matches the PR's origin
+    validate_repo_matches_locator(local_repo.github_origin(), locator)?;
+
+    // Get HEAD SHA for line mapping verification
+    let head_sha = resolve_head_sha(local_repo.workdir())?;
+
+    Ok((local_repo.workdir().to_path_buf(), head_sha))
+}
+
+/// Validates that a discovered repository's origin matches the PR's owner/repo.
+fn validate_repo_matches_locator(
+    origin: &GitHubOrigin,
+    locator: &PullRequestLocator,
+) -> Result<(), String> {
+    let expected_owner = locator.owner().as_str();
+    let expected_repo = locator.repository().as_str();
+
+    if !origin.owner().eq_ignore_ascii_case(expected_owner)
+        || !origin.repository().eq_ignore_ascii_case(expected_repo)
+    {
+        return Err(format!(
+            concat!(
+                "local repository origin ({found_owner}/{found_repo}) does not ",
+                "match the PR repository ({expected_owner}/{expected_repo})"
+            ),
+            found_owner = origin.owner(),
+            found_repo = origin.repository(),
+            expected_owner = expected_owner,
+            expected_repo = expected_repo,
+        ));
+    }
+
+    Ok(())
+}
+
+/// Resolves the HEAD commit SHA from a repository working directory.
+fn resolve_head_sha(workdir: &Path) -> Result<String, String> {
+    let repo = git2::Repository::open(workdir)
+        .map_err(|e| format!("failed to open repository for HEAD: {e}"))?;
+    let head = repo
+        .head()
+        .map_err(|e| format!("failed to resolve HEAD: {e}"))?;
+    let oid = head
+        .peel_to_commit()
+        .map_err(|e| format!("failed to resolve HEAD commit: {e}"))?
+        .id();
+    Ok(oid.to_string())
 }
 
 /// Runs the bubbletea-rs program with the `ReviewApp` model.
@@ -204,5 +309,70 @@ mod tests {
         // The call may fail due to OnceLock if already set by another test,
         // but we verify the wiring pattern compiles and the sink is usable.
         let _ = set_telemetry_sink(sink);
+    }
+
+    #[test]
+    fn validate_matching_repo_succeeds() {
+        let locator = PullRequestLocator::parse("https://github.com/octocat/hello-world/pull/42")
+            .expect("valid URL should parse");
+        let origin = GitHubOrigin::GitHubCom {
+            owner: "octocat".to_owned(),
+            repository: "hello-world".to_owned(),
+        };
+
+        let result = validate_repo_matches_locator(&origin, &locator);
+        assert!(result.is_ok(), "matching origin should succeed: {result:?}");
+    }
+
+    #[test]
+    fn validate_matching_repo_is_case_insensitive() {
+        let locator = PullRequestLocator::parse("https://github.com/OctoCat/Hello-World/pull/1")
+            .expect("valid URL should parse");
+        let origin = GitHubOrigin::GitHubCom {
+            owner: "octocat".to_owned(),
+            repository: "hello-world".to_owned(),
+        };
+
+        let result = validate_repo_matches_locator(&origin, &locator);
+        assert!(
+            result.is_ok(),
+            "case-insensitive match should succeed: {result:?}"
+        );
+    }
+
+    #[test]
+    fn validate_mismatched_owner_fails() {
+        let locator = PullRequestLocator::parse("https://github.com/alice/hello-world/pull/1")
+            .expect("valid URL should parse");
+        let origin = GitHubOrigin::GitHubCom {
+            owner: "bob".to_owned(),
+            repository: "hello-world".to_owned(),
+        };
+
+        let result = validate_repo_matches_locator(&origin, &locator);
+        let Err(err) = result else {
+            panic!("mismatched owner should fail");
+        };
+        assert!(
+            err.contains("bob/hello-world"),
+            "error should mention found origin: {err}"
+        );
+        assert!(
+            err.contains("alice/hello-world"),
+            "error should mention expected origin: {err}"
+        );
+    }
+
+    #[test]
+    fn validate_mismatched_repo_fails() {
+        let locator = PullRequestLocator::parse("https://github.com/octocat/hello-world/pull/1")
+            .expect("valid URL should parse");
+        let origin = GitHubOrigin::GitHubCom {
+            owner: "octocat".to_owned(),
+            repository: "other-repo".to_owned(),
+        };
+
+        let result = validate_repo_matches_locator(&origin, &locator);
+        assert!(result.is_err(), "mismatched repo should fail");
     }
 }

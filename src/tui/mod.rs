@@ -37,6 +37,7 @@ use std::sync::{Arc, OnceLock};
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
+use crate::local::GitOperations;
 use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 
 pub mod app;
@@ -75,10 +76,44 @@ static TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
 /// avoiding repeated `Arc::new` allocations.
 static DEFAULT_TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
 
+/// Global storage for Git operations context.
+///
+/// This is set before the TUI program starts when a valid local repository
+/// is discovered or configured. Enables time-travel navigation in the TUI.
+static GIT_OPS_CONTEXT: OnceLock<GitOpsContext> = OnceLock::new();
+
+/// Global storage for time-travel context (PR info and discovery status).
+///
+/// Always set before TUI startup; provides context for error messages when
+/// time-travel is attempted without a valid local repository.
+static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
+
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
     locator: PullRequestLocator,
     token: PersonalAccessToken,
+}
+
+/// Git operations context for time-travel navigation.
+struct GitOpsContext {
+    git_ops: Arc<dyn GitOperations>,
+    head_sha: String,
+}
+
+/// Context describing the PR and any discovery failure for error messages.
+///
+/// Stored alongside git ops to provide contextual error messages when
+/// time-travel is attempted without a valid local repository.
+#[derive(Debug, Clone)]
+pub struct TimeTravelContext {
+    /// PR owner (e.g. "octocat").
+    pub owner: String,
+    /// PR repository name (e.g. "hello-world").
+    pub repo: String,
+    /// PR number.
+    pub pr_number: u64,
+    /// Reason discovery failed, if applicable.
+    pub discovery_failure: Option<String>,
 }
 
 /// Sets the initial reviews for the TUI application.
@@ -148,6 +183,56 @@ pub fn set_refresh_context(locator: PullRequestLocator, token: PersonalAccessTok
 /// `true` if the sink was set, `false` if it was already set.
 pub fn set_telemetry_sink(sink: Arc<dyn TelemetrySink>) -> bool {
     TELEMETRY_SINK.set(sink).is_ok()
+}
+
+/// Sets the Git operations context for time-travel navigation.
+///
+/// This must be called before starting the bubbletea-rs program. When a
+/// valid local repository is available, this enables time-travel features.
+///
+/// # Arguments
+///
+/// * `git_ops` - The Git operations implementation.
+/// * `head_sha` - The HEAD commit SHA for line mapping verification.
+///
+/// # Returns
+///
+/// `true` if the context was set, `false` if it was already set.
+pub fn set_git_ops_context(git_ops: Arc<dyn GitOperations>, head_sha: String) -> bool {
+    GIT_OPS_CONTEXT
+        .set(GitOpsContext { git_ops, head_sha })
+        .is_ok()
+}
+
+/// Sets the time-travel context (PR info and discovery status).
+///
+/// This must be called before starting the bubbletea-rs program. It stores
+/// PR metadata used to generate contextual error messages when time-travel
+/// is unavailable.
+///
+/// # Returns
+///
+/// `true` if the context was set, `false` if it was already set.
+pub fn set_time_travel_context(context: TimeTravelContext) -> bool {
+    TIME_TRAVEL_CONTEXT.set(context).is_ok()
+}
+
+/// Gets the Git operations context, if configured.
+///
+/// Called internally by `ReviewApp::init()`. Returns the stored git ops
+/// and HEAD SHA, or `None` if no local repository was configured.
+pub(crate) fn get_git_ops_context() -> Option<(Arc<dyn GitOperations>, String)> {
+    GIT_OPS_CONTEXT
+        .get()
+        .map(|ctx| (Arc::clone(&ctx.git_ops), ctx.head_sha.clone()))
+}
+
+/// Gets the time-travel context, if configured.
+///
+/// Called internally by the time-travel error handler to generate
+/// contextual error messages.
+pub(crate) fn get_time_travel_context() -> Option<TimeTravelContext> {
+    TIME_TRAVEL_CONTEXT.get().cloned()
 }
 
 /// Gets the telemetry sink, returning a no-op sink if not configured.
