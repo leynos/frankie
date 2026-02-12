@@ -15,12 +15,16 @@ fn codex_state() -> CodexExecState {
 }
 
 /// Helper to set up a Codex execution scenario with a transcript file.
-fn setup_codex_scenario(
+/// The `plan_builder` closure receives the transcript path and returns the plan.
+fn setup_codex_scenario_with_plan<F>(
     codex_state: &CodexExecState,
     filename: &str,
     initial_content: &str,
-    plan: StubPlan,
-) -> Result<(), Box<dyn std::error::Error>> {
+    plan_builder: F,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: FnOnce(&str) -> StubPlan,
+{
     let temp_dir = tempfile::TempDir::new()?;
     let transcript_path = temp_dir.path().join(filename);
     std::fs::write(&transcript_path, initial_content)?;
@@ -30,6 +34,8 @@ fn setup_codex_scenario(
         .ok_or("transcript path must be valid UTF-8")?
         .to_owned();
 
+    let plan = plan_builder(&transcript_path_str);
+
     codex_state.app.set(app_with_plan(plan)?);
     codex_state.temp_dir.set(temp_dir);
     codex_state.transcript_path.set(transcript_path_str);
@@ -38,92 +44,71 @@ fn setup_codex_scenario(
 
 #[given("a Codex run that streams progress and completes successfully")]
 fn given_successful_run(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
-    setup_codex_scenario(
+    setup_codex_scenario_with_plan(
         codex_state,
         "success.jsonl",
         "{\"type\":\"turn.started\"}\n",
-        StubPlan::TimedUpdates(Vec::new()),
-    )?;
-    let transcript_path_str = codex_state
-        .transcript_path
-        .with_ref(Clone::clone)
-        .ok_or("expected transcript path")?;
-
-    let plan = StubPlan::TimedUpdates(vec![
-        (
-            0,
-            CodexExecutionUpdate::Progress(CodexProgressEvent::Status {
-                message: "event: turn.started".to_owned(),
-            }),
-        ),
-        (
-            120,
-            CodexExecutionUpdate::Finished(CodexExecutionOutcome::Succeeded {
-                transcript_path: camino::Utf8PathBuf::from(transcript_path_str.as_str()),
-            }),
-        ),
-    ]);
-
-    codex_state.app.set(app_with_plan(plan)?);
-    Ok(())
+        |transcript_path| {
+            StubPlan::TimedUpdates(vec![
+                (
+                    0,
+                    CodexExecutionUpdate::Progress(CodexProgressEvent::Status {
+                        message: "event: turn.started".to_owned(),
+                    }),
+                ),
+                (
+                    120,
+                    CodexExecutionUpdate::Finished(CodexExecutionOutcome::Succeeded {
+                        transcript_path: camino::Utf8PathBuf::from(transcript_path),
+                    }),
+                ),
+            ])
+        },
+    )
 }
 
 #[given("a Codex run that exits non-zero with transcript")]
 fn given_non_zero_exit(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
-    setup_codex_scenario(
+    setup_codex_scenario_with_plan(
         codex_state,
         "failure.jsonl",
         "{\"type\":\"turn.started\"}\n",
-        StubPlan::TimedUpdates(Vec::new()),
-    )?;
-    let transcript_path_str = codex_state
-        .transcript_path
-        .with_ref(Clone::clone)
-        .ok_or("expected transcript path")?;
-
-    let plan = StubPlan::TimedUpdates(vec![(
-        40,
-        CodexExecutionUpdate::Finished(CodexExecutionOutcome::Failed {
-            message: "codex exited with a non-zero status".to_owned(),
-            exit_code: Some(17),
-            transcript_path: Some(camino::Utf8PathBuf::from(transcript_path_str.as_str())),
-        }),
-    )]);
-
-    codex_state.app.set(app_with_plan(plan)?);
-    Ok(())
+        |transcript_path| {
+            StubPlan::TimedUpdates(vec![(
+                40,
+                CodexExecutionUpdate::Finished(CodexExecutionOutcome::Failed {
+                    message: "codex exited with a non-zero status".to_owned(),
+                    exit_code: Some(17),
+                    transcript_path: Some(camino::Utf8PathBuf::from(transcript_path)),
+                }),
+            )])
+        },
+    )
 }
 
 #[given("a Codex run that emits a malformed stream line")]
 fn given_malformed_line(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
-    setup_codex_scenario(
+    setup_codex_scenario_with_plan(
         codex_state,
         "malformed.jsonl",
         "not-json\n",
-        StubPlan::TimedUpdates(Vec::new()),
-    )?;
-    let transcript_path_str = codex_state
-        .transcript_path
-        .with_ref(Clone::clone)
-        .ok_or("expected transcript path")?;
-
-    let plan = StubPlan::TimedUpdates(vec![
-        (
-            0,
-            CodexExecutionUpdate::Progress(CodexProgressEvent::ParseWarning {
-                raw_line: "not-json".to_owned(),
-            }),
-        ),
-        (
-            200,
-            CodexExecutionUpdate::Finished(CodexExecutionOutcome::Succeeded {
-                transcript_path: camino::Utf8PathBuf::from(transcript_path_str.as_str()),
-            }),
-        ),
-    ]);
-
-    codex_state.app.set(app_with_plan(plan)?);
-    Ok(())
+        |transcript_path| {
+            StubPlan::TimedUpdates(vec![
+                (
+                    0,
+                    CodexExecutionUpdate::Progress(CodexProgressEvent::ParseWarning {
+                        raw_line: "not-json".to_owned(),
+                    }),
+                ),
+                (
+                    200,
+                    CodexExecutionUpdate::Finished(CodexExecutionOutcome::Succeeded {
+                        transcript_path: camino::Utf8PathBuf::from(transcript_path),
+                    }),
+                ),
+            ])
+        },
+    )
 }
 
 #[given("a Codex run that fails because transcript writing failed")]
