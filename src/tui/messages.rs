@@ -94,6 +94,8 @@ pub enum AppMsg {
     },
 
     // Application lifecycle
+    /// Synthetic startup event emitted immediately after launch.
+    Initialized,
     /// Quit the application.
     Quit,
     /// Toggle help overlay.

@@ -378,7 +378,7 @@ async fn arm_sync_timer_schedules_sync_tick_after_interval() {
 // Tests for ReviewApp::init (via Model trait)
 
 #[test]
-fn review_app_init_returns_sync_timer_command() {
+fn review_app_init_returns_startup_command() {
     use bubbletea_rs::Model;
 
     // Try to set initial reviews. Due to OnceLock, this may fail if another
@@ -394,8 +394,43 @@ fn review_app_init_returns_sync_timer_command() {
         assert_eq!(app.current_selected_id(), Some(1));
     }
 
-    // Should return a command (the sync timer) regardless of review content
+    // Should return a startup command regardless of review content
     assert!(cmd.is_some());
+}
+
+#[tokio::test]
+async fn review_app_init_emits_initialized_message_immediately() {
+    use std::time::Duration;
+
+    use bubbletea_rs::Model;
+
+    let (_app, cmd) = ReviewApp::init();
+    let startup_cmd = cmd.expect("init should return a startup command");
+
+    let result = tokio::time::timeout(Duration::from_millis(10), startup_cmd)
+        .await
+        .expect("startup command should resolve immediately");
+
+    assert!(result.is_some(), "startup command should return a message");
+
+    let msg = result.expect("result should be Some");
+    let app_msg = msg.downcast_ref::<AppMsg>();
+    assert!(
+        matches!(app_msg, Some(AppMsg::Initialized)),
+        "startup command should emit AppMsg::Initialized"
+    );
+}
+
+#[test]
+fn initialized_message_arms_sync_timer() {
+    let mut app = ReviewApp::empty();
+
+    let cmd = app.handle_message(&AppMsg::Initialized);
+
+    assert!(
+        cmd.is_some(),
+        "initialized message should arm the background sync timer"
+    );
 }
 
 #[test]
@@ -406,7 +441,7 @@ fn init_returns_expected_commands_and_state_regardless_of_prior_reviews() {
     // invariants that hold regardless of initial review data.
     let (app, cmd) = ReviewApp::init();
 
-    // Should return a sync timer command regardless of review count
+    // Should return a startup command regardless of review count
     assert!(cmd.is_some());
     // App should not be in loading state initially
     assert!(!app.loading);

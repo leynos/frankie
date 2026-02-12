@@ -150,4 +150,12 @@ impl ReviewApp {
             Some(Box::new(AppMsg::SyncTick) as Box<dyn Any + Send>)
         })
     }
+
+    /// Creates a command that emits `Initialized` immediately.
+    ///
+    /// This synthetic startup event triggers the first render cycle without
+    /// waiting for user input.
+    pub(super) fn immediate_init_cmd() -> Cmd {
+        Box::pin(async { Some(Box::new(AppMsg::Initialized) as Box<dyn Any + Send>) })
+    }
 }
