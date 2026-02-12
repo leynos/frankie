@@ -37,6 +37,11 @@ mod time_travel_handlers;
 
 use routing::MessageRouting;
 
+/// Layout rows reserved for header, filter bar, separator newline, and status bar.
+const CHROME_HEIGHT: usize = 4;
+/// Minimum rows reserved for the comment detail pane.
+const DETAIL_HEIGHT: usize = 8;
+
 /// Main application model for the review listing TUI.
 #[derive(Debug)]
 pub struct ReviewApp {
@@ -88,6 +93,7 @@ impl ReviewApp {
     /// Creates a new application with the given review comments.
     #[must_use]
     pub fn new(reviews: Vec<ReviewComment>) -> Self {
+        let (width, height) = super::get_initial_terminal_size();
         // Build initial cache with all indices (default filter is All)
         let filtered_indices: Vec<_> = (0..reviews.len()).collect();
         // Track ID of first comment for selection preservation
@@ -95,14 +101,14 @@ impl ReviewApp {
             .first()
             .and_then(|&i| reviews.get(i))
             .map(|r| r.id);
-        Self {
+        let mut app = Self {
             reviews,
             filtered_indices,
             filter_state: FilterState::new(),
             loading: false,
             error: None,
-            width: 80,
-            height: 24,
+            width,
+            height,
             show_help: false,
             review_list: ReviewListComponent::new(),
             comment_detail: CommentDetailComponent::new(),
@@ -113,7 +119,10 @@ impl ReviewApp {
             time_travel_state: None,
             git_ops: None,
             head_sha: None,
-        }
+        };
+        app.review_list
+            .set_visible_height(app.calculate_list_height());
+        app
     }
 
     /// Creates an empty application (for initial loading state).
@@ -229,6 +238,7 @@ impl ReviewApp {
     /// filter changes and then updating the tracked selection.
     fn clamp_cursor_and_update_selection(&mut self) {
         self.filter_state.clamp_cursor(self.filtered_count());
+        self.adjust_scroll_to_cursor();
         self.update_selected_id();
     }
 
@@ -239,6 +249,40 @@ impl ReviewApp {
     fn set_cursor(&mut self, position: usize) {
         self.filter_state.cursor_position = position;
         self.update_selected_id();
+    }
+
+    /// Calculates the number of rows available for the review list.
+    ///
+    /// Layout: `height - chrome_height - detail_height`.
+    const fn calculate_list_height(&self) -> usize {
+        (self.height as usize)
+            .saturating_sub(CHROME_HEIGHT)
+            .saturating_sub(DETAIL_HEIGHT)
+    }
+
+    /// Adjusts scroll offset so the selected cursor remains visible.
+    const fn adjust_scroll_to_cursor(&mut self) {
+        let cursor = self.filter_state.cursor_position;
+        let visible_height = self.review_list.visible_height();
+
+        if visible_height == 0 {
+            self.filter_state.scroll_offset = cursor;
+            return;
+        }
+
+        if cursor < self.filter_state.scroll_offset {
+            self.filter_state.scroll_offset = cursor;
+            return;
+        }
+
+        let viewport_end = self
+            .filter_state
+            .scroll_offset
+            .saturating_add(visible_height);
+        if cursor >= viewport_end {
+            self.filter_state.scroll_offset =
+                cursor.saturating_sub(visible_height.saturating_sub(1));
+        }
     }
 
     /// Rebuilds the diff context state from the current filtered reviews.
@@ -421,8 +465,9 @@ impl ReviewApp {
     fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
         self.width = width;
         self.height = height;
-        let list_height = height.saturating_sub(4) as usize;
+        let list_height = self.calculate_list_height();
         self.review_list.set_visible_height(list_height);
+        self.adjust_scroll_to_cursor();
         if self.view_mode == ViewMode::DiffContext
             && self.diff_context_state.cached_width() != width as usize
         {
@@ -495,15 +540,7 @@ impl Model for ReviewApp {
         output.push_str(&self.render_filter_bar());
         output.push('\n');
 
-        // Calculate layout heights
-        // Layout: header (1) + filter bar (1) + newline (1) + list + detail + status bar (1)
-        // Reserve space for detail pane (minimum 8 lines) and chrome (4 lines)
-        let chrome_height = 4_usize; // header + filter bar + newline + status bar
-        let detail_height = 8_usize; // minimum height for detail pane
-        let total_height = self.height as usize;
-        let list_height = total_height
-            .saturating_sub(chrome_height)
-            .saturating_sub(detail_height);
+        let list_height = self.calculate_list_height();
 
         let list_ctx = ReviewListViewContext {
             reviews: &self.reviews,
@@ -519,7 +556,7 @@ impl Model for ReviewApp {
         let detail_ctx = CommentDetailViewContext {
             selected_comment: self.selected_comment(),
             max_width: 80.min(self.width as usize),
-            max_height: detail_height,
+            max_height: DETAIL_HEIGHT,
         };
         output.push_str(&self.comment_detail.view(&detail_ctx));
 
