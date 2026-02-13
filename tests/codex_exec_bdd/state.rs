@@ -58,22 +58,47 @@ fn spawn_timed_updates(
     timed_updates: TimedUpdates,
 ) -> std::sync::mpsc::Receiver<CodexExecutionUpdate> {
     let (sender, receiver) = std::sync::mpsc::channel();
+    let (immediate, delayed) = partition_by_delay(timed_updates);
+    send_immediate_updates(&sender, immediate);
+    spawn_delayed_sender(sender, delayed);
+    receiver
+}
 
-    // Send leading zero-delay updates synchronously to avoid races between
-    // scenario steps and the background worker thread under slower coverage
-    // instrumentation.
-    let mut delayed_updates = Vec::new();
+/// Partition updates into immediate (leading zero-delay) and delayed groups.
+fn partition_by_delay(
+    timed_updates: TimedUpdates,
+) -> (Vec<CodexExecutionUpdate>, Vec<(u64, CodexExecutionUpdate)>) {
+    let mut immediate = Vec::new();
+    let mut delayed = Vec::new();
     let mut delay_phase_started = false;
+
     for (delay_ms, update) in timed_updates {
         if !delay_phase_started && delay_ms == 0 {
-            drop(sender.send(update));
-            continue;
+            immediate.push(update);
+        } else {
+            delay_phase_started = true;
+            delayed.push((delay_ms, update));
         }
-
-        delay_phase_started = true;
-        delayed_updates.push((delay_ms, update));
     }
 
+    (immediate, delayed)
+}
+
+/// Send immediate updates synchronously to avoid races under coverage instrumentation.
+fn send_immediate_updates(
+    sender: &std::sync::mpsc::Sender<CodexExecutionUpdate>,
+    updates: Vec<CodexExecutionUpdate>,
+) {
+    for update in updates {
+        drop(sender.send(update));
+    }
+}
+
+/// Spawn background thread to send delayed updates.
+fn spawn_delayed_sender(
+    sender: std::sync::mpsc::Sender<CodexExecutionUpdate>,
+    delayed_updates: Vec<(u64, CodexExecutionUpdate)>,
+) {
     if !delayed_updates.is_empty() {
         std::thread::spawn(move || {
             for (delay_ms, update) in delayed_updates {
@@ -82,8 +107,6 @@ fn spawn_timed_updates(
             }
         });
     }
-
-    receiver
 }
 
 impl CodexExecutionService for StubCodexExecutionService {
