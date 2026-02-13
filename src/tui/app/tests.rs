@@ -1,5 +1,6 @@
 //! Tests for the review TUI application model.
 
+use bubbletea_rs::Model;
 use rstest::{fixture, rstest};
 
 use super::*;
