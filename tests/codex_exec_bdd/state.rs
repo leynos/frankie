@@ -58,12 +58,31 @@ fn spawn_timed_updates(
     timed_updates: TimedUpdates,
 ) -> std::sync::mpsc::Receiver<CodexExecutionUpdate> {
     let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        for (delay_ms, update) in timed_updates {
-            sleep_for_delay(delay_ms);
+
+    // Send leading zero-delay updates synchronously to avoid races between
+    // scenario steps and the background worker thread under slower coverage
+    // instrumentation.
+    let mut delayed_updates = Vec::new();
+    let mut delay_phase_started = false;
+    for (delay_ms, update) in timed_updates {
+        if !delay_phase_started && delay_ms == 0 {
             drop(sender.send(update));
+            continue;
         }
-    });
+
+        delay_phase_started = true;
+        delayed_updates.push((delay_ms, update));
+    }
+
+    if !delayed_updates.is_empty() {
+        std::thread::spawn(move || {
+            for (delay_ms, update) in delayed_updates {
+                sleep_for_delay(delay_ms);
+                drop(sender.send(update));
+            }
+        });
+    }
+
     receiver
 }
 
