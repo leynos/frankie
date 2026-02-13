@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::mpsc::{self, Sender};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use serde_json::{Value, json};
 
 use crate::ai::codex_exec::{
@@ -46,14 +46,13 @@ pub(crate) fn run_codex(
     CodexExecutionHandle::new(receiver)
 }
 
-fn execute_codex(
-    command_path: &str,
-    request: &CodexExecutionRequest,
-    transcript_path: Utf8PathBuf,
+/// Create the transcript writer, sending failure on error.
+fn create_transcript(
+    transcript_path: &Utf8Path,
     sender: &Sender<CodexExecutionUpdate>,
-) {
-    let mut transcript = match TranscriptWriter::create(transcript_path.clone()) {
-        Ok(writer) => writer,
+) -> Option<TranscriptWriter> {
+    match TranscriptWriter::create(transcript_path.to_path_buf()) {
+        Ok(writer) => Some(writer),
         Err(error) => {
             send_failure(
                 sender,
@@ -61,22 +60,72 @@ fn execute_codex(
                 None,
                 None,
             );
-            return;
+            None
         }
+    }
+}
+
+/// Spawn the Codex child process and capture stdout and stdin.
+/// Returns `None` on failure (failure already sent via sender).
+fn setup_codex_process(
+    command_spec: &CodexCommandSpec,
+    sender: &Sender<CodexExecutionUpdate>,
+    transcript_path: Utf8PathBuf,
+) -> Option<(Child, ChildStdout, Option<ChildStdin>)> {
+    let mut child = spawn_child(command_spec, sender, transcript_path.clone())?;
+    let stdout = take_stdout(&mut child, sender, transcript_path)?;
+    let stdin = child.stdin.take();
+    Some((child, stdout, stdin))
+}
+
+/// Handle the completion outcome from streaming, either from app-server or
+/// process exit.
+fn handle_completion(
+    completion: StreamCompletion,
+    mut child: Child,
+    sender: &Sender<CodexExecutionUpdate>,
+    transcript_path: Utf8PathBuf,
+) {
+    match completion {
+        StreamCompletion::AppServer(outcome) => {
+            terminate_child(&mut child);
+            match outcome {
+                AppServerCompletion::Succeeded => {
+                    drop(sender.send(CodexExecutionUpdate::Finished(
+                        CodexExecutionOutcome::Succeeded { transcript_path },
+                    )));
+                }
+                AppServerCompletion::Failed(message) => {
+                    send_failure(sender, message, None, Some(transcript_path));
+                }
+            }
+        }
+        StreamCompletion::ProcessExit => {
+            let runtime_path = transcript_path.clone();
+            complete_with_exit_status(child, sender, runtime_path, transcript_path);
+        }
+    }
+}
+
+fn execute_codex(
+    command_path: &str,
+    request: &CodexExecutionRequest,
+    transcript_path: Utf8PathBuf,
+    sender: &Sender<CodexExecutionUpdate>,
+) {
+    let Some(mut transcript) = create_transcript(&transcript_path, sender) else {
+        return;
     };
 
     let prompt = build_prompt(request);
     let command_spec = build_command_spec(command_path);
-    let Some(mut child) = spawn_child(&command_spec, sender, transcript.path().to_path_buf())
+
+    let Some((child, stdout, stdin)) =
+        setup_codex_process(&command_spec, sender, transcript.path().to_path_buf())
     else {
         return;
     };
 
-    let Some(stdout) = take_stdout(&mut child, sender, transcript.path().to_path_buf()) else {
-        return;
-    };
-
-    let stdin = child.stdin.take();
     let completion = {
         let mut stream_context = StreamProgressContext {
             prompt: prompt.as_str(),
@@ -102,27 +151,7 @@ fn execute_codex(
         return;
     }
 
-    match completion {
-        StreamCompletion::AppServer(outcome) => {
-            terminate_child(&mut child);
-            match outcome {
-                AppServerCompletion::Succeeded => {
-                    drop(sender.send(CodexExecutionUpdate::Finished(
-                        CodexExecutionOutcome::Succeeded { transcript_path },
-                    )));
-                }
-                AppServerCompletion::Failed(message) => {
-                    send_failure(sender, message, None, Some(transcript.path().to_path_buf()));
-                }
-            }
-        }
-        StreamCompletion::ProcessExit => complete_with_exit_status(
-            child,
-            sender,
-            transcript.path().to_path_buf(),
-            transcript_path,
-        ),
-    }
+    handle_completion(completion, child, sender, transcript_path);
 }
 
 fn spawn_child(
