@@ -311,33 +311,61 @@ mod tests {
         let _ = set_telemetry_sink(sink);
     }
 
-    #[test]
-    fn validate_matching_repo_succeeds() {
-        let locator = PullRequestLocator::parse("https://github.com/octocat/hello-world/pull/42")
-            .expect("valid URL should parse");
-        let origin = GitHubOrigin::GitHubCom {
-            owner: "octocat".to_owned(),
-            repository: "hello-world".to_owned(),
-        };
-
-        let result = validate_repo_matches_locator(&origin, &locator);
-        assert!(result.is_ok(), "matching origin should succeed: {result:?}");
+    struct TestCase {
+        name: &'static str,
+        locator_url: &'static str,
+        origin_owner: &'static str,
+        origin_repo: &'static str,
+        should_succeed: bool,
+        failure_message: &'static str,
     }
 
     #[test]
-    fn validate_matching_repo_is_case_insensitive() {
-        let locator = PullRequestLocator::parse("https://github.com/OctoCat/Hello-World/pull/1")
-            .expect("valid URL should parse");
-        let origin = GitHubOrigin::GitHubCom {
-            owner: "octocat".to_owned(),
-            repository: "hello-world".to_owned(),
-        };
+    fn validate_repo_matches_locator_cases() {
+        let cases = vec![
+            TestCase {
+                name: "matching repo",
+                locator_url: "https://github.com/octocat/hello-world/pull/42",
+                origin_owner: "octocat",
+                origin_repo: "hello-world",
+                should_succeed: true,
+                failure_message: "matching origin should succeed",
+            },
+            TestCase {
+                name: "case-insensitive matching",
+                locator_url: "https://github.com/OctoCat/Hello-World/pull/1",
+                origin_owner: "octocat",
+                origin_repo: "hello-world",
+                should_succeed: true,
+                failure_message: "case-insensitive match should succeed",
+            },
+            TestCase {
+                name: "mismatched repo",
+                locator_url: "https://github.com/octocat/hello-world/pull/1",
+                origin_owner: "octocat",
+                origin_repo: "other-repo",
+                should_succeed: false,
+                failure_message: "mismatched repo should fail",
+            },
+        ];
 
-        let result = validate_repo_matches_locator(&origin, &locator);
-        assert!(
-            result.is_ok(),
-            "case-insensitive match should succeed: {result:?}"
-        );
+        for case in &cases {
+            let locator =
+                PullRequestLocator::parse(case.locator_url).expect("valid URL should parse");
+            let origin = GitHubOrigin::GitHubCom {
+                owner: case.origin_owner.to_owned(),
+                repository: case.origin_repo.to_owned(),
+            };
+
+            let result = validate_repo_matches_locator(&origin, &locator);
+            assert_eq!(
+                result.is_ok(),
+                case.should_succeed,
+                "{}: {}: {result:?}",
+                case.name,
+                case.failure_message,
+            );
+        }
     }
 
     #[test]
@@ -361,18 +389,5 @@ mod tests {
             err.contains("alice/hello-world"),
             "error should mention expected origin: {err}"
         );
-    }
-
-    #[test]
-    fn validate_mismatched_repo_fails() {
-        let locator = PullRequestLocator::parse("https://github.com/octocat/hello-world/pull/1")
-            .expect("valid URL should parse");
-        let origin = GitHubOrigin::GitHubCom {
-            owner: "octocat".to_owned(),
-            repository: "other-repo".to_owned(),
-        };
-
-        let result = validate_repo_matches_locator(&origin, &locator);
-        assert!(result.is_err(), "mismatched repo should fail");
     }
 }
