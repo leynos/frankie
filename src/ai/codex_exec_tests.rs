@@ -103,10 +103,10 @@ fn create_script(
 }
 
 #[rstest]
-fn command_spec_includes_exec_json_and_prompt() {
-    let spec = build_command_spec("codex", "fix this");
+fn command_spec_includes_app_server_subcommand() {
+    let spec = build_command_spec("codex");
     assert_eq!(spec.program, "codex");
-    assert_eq!(spec.args, vec!["exec", "--json", "fix this"]);
+    assert_eq!(spec.args, vec!["app-server"]);
 }
 
 #[rstest]

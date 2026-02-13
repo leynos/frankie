@@ -1,7 +1,7 @@
 //! AI integration services for Codex-assisted workflows.
 //!
 //! This module contains process execution and transcript persistence utilities
-//! used by the review TUI when launching `codex exec`.
+//! used by the review TUI when launching `codex app-server`.
 
 pub mod codex_exec;
 mod codex_process;

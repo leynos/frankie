@@ -1,7 +1,7 @@
 //! Codex execution service interfaces.
 //!
 //! This module defines request/response types and provides the default
-//! `codex exec --json` service implementation used by the TUI.
+//! `codex app-server` service implementation used by the TUI.
 
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -190,7 +190,7 @@ pub trait CodexExecutionService: Send + Sync + std::fmt::Debug {
     fn start(&self, request: CodexExecutionRequest) -> Result<CodexExecutionHandle, IntakeError>;
 }
 
-/// Real `codex exec` implementation backed by local process execution.
+/// Real `codex app-server` implementation backed by local process execution.
 #[derive(Debug, Clone)]
 pub struct SystemCodexExecutionService {
     command_path: String,
