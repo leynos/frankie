@@ -85,6 +85,8 @@ pub struct ReviewApp {
     codex_status: Option<String>,
     /// Poll interval for draining Codex progress events.
     codex_poll_interval: std::time::Duration,
+    /// Tracks whether startup initialization has been handled.
+    has_initialized: bool,
 }
 
 /// Tracks which view is currently active in the TUI.
@@ -128,6 +130,7 @@ impl ReviewApp {
             codex_handle: None,
             codex_status: None,
             codex_poll_interval: std::time::Duration::from_millis(150),
+            has_initialized: false,
         }
     }
 
@@ -365,7 +368,7 @@ impl ReviewApp {
     /// Dispatches lifecycle and window messages to their handlers.
     fn handle_lifecycle_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
         match msg {
-            AppMsg::Initialized => Some(Self::arm_sync_timer()),
+            AppMsg::Initialized => self.handle_initialized(),
             AppMsg::Quit => Some(bubbletea_rs::quit()),
             AppMsg::ToggleHelp => {
                 self.show_help = !self.show_help;
@@ -380,6 +383,20 @@ impl ReviewApp {
     }
 
     // Window event handlers
+
+    /// Handles the synthetic startup message.
+    ///
+    /// `Initialized` is intended as a one-shot event emitted during startup.
+    /// Subsequent `Initialized` messages are ignored to avoid re-arming the
+    /// sync timer unintentionally.
+    fn handle_initialized(&mut self) -> Option<Cmd> {
+        if self.has_initialized {
+            return None;
+        }
+
+        self.has_initialized = true;
+        Some(Self::arm_sync_timer())
+    }
 
     fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
         self.width = width;
@@ -398,6 +415,10 @@ impl ReviewApp {
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "init_tests.rs"]
+mod init_tests;
 
 #[cfg(test)]
 #[path = "help_overlay_input_tests.rs"]
