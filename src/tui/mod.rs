@@ -1,36 +1,12 @@
 //! Terminal User Interface for review listing and filtering.
 //!
-//! This module provides an interactive TUI for navigating and filtering
-//! pull request review comments using the bubbletea-rs framework.
+//! Provides an interactive TUI for navigating and filtering pull request
+//! review comments using the bubbletea-rs Model-View-Update (MVU) pattern.
 //!
-//! # Architecture
-//!
-//! The TUI follows the Model-View-Update (MVU) pattern:
-//!
-//! - **Model**: Application state in [`app::ReviewApp`]
-//! - **View**: Rendering logic in each component's `view()` method
-//! - **Update**: Message-driven state transitions in `update()`
-//!
-//! # Modules
-//!
-//! - [`app`]: Main application model and entry point
-//! - [`messages`]: Message types for the update loop
-//! - [`state`]: Filter and cursor state management
-//! - [`components`]: Reusable UI components
-//! - [`input`]: Key-to-message mapping for input handling
-//!
-//! # Initial Data Loading
-//!
-//! Because bubbletea-rs's `Model` trait requires `init()` to be a static
-//! function, we use a module-level storage pattern for initial data. Call
-//! [`set_initial_reviews`] before starting the program, and `ReviewApp::init()`
-//! will automatically retrieve the data.
-//!
-//! # Refresh Functionality
-//!
-//! Similarly, [`set_refresh_context`] must be called to enable the refresh
-//! feature. This stores the necessary context (locator, token) for fetching
-//! fresh review data from the GitHub API.
+//! Because bubbletea-rs requires `Model::init()` to be static, this module
+//! uses `OnceLock`-based storage for initial data, refresh context, git
+//! operations, time-travel context, and telemetry. Call the corresponding
+//! `set_*` functions before starting the program.
 
 use std::sync::{Arc, OnceLock};
 
@@ -106,6 +82,8 @@ struct GitOpsContext {
 /// time-travel is attempted without a valid local repository.
 #[derive(Debug, Clone)]
 pub struct TimeTravelContext {
+    /// PR host (e.g. "github.com" or "ghe.corp.com").
+    pub host: String,
     /// PR owner (e.g. "octocat").
     pub owner: String,
     /// PR repository name (e.g. "hello-world").
@@ -302,16 +280,55 @@ pub(crate) async fn fetch_reviews() -> Result<Vec<ReviewComment>, IntakeError> {
 mod tests {
     use std::sync::Arc;
 
+    use crate::local::{
+        CommitSha, CommitSnapshot, GitOperationError, GitOperations, LineMappingRequest,
+        LineMappingVerification, RepoFilePath,
+    };
     use crate::telemetry::test_support::RecordingTelemetrySink;
     use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 
     use super::*;
 
+    /// Minimal stub satisfying `GitOperations` for `OnceLock` wiring tests.
+    #[derive(Debug)]
+    struct StubGitOps;
+
+    impl GitOperations for StubGitOps {
+        fn get_commit_snapshot(
+            &self,
+            _: &CommitSha,
+            _: Option<&RepoFilePath>,
+        ) -> Result<CommitSnapshot, GitOperationError> {
+            unimplemented!()
+        }
+        fn get_file_at_commit(
+            &self,
+            _: &CommitSha,
+            _: &RepoFilePath,
+        ) -> Result<String, GitOperationError> {
+            unimplemented!()
+        }
+        fn verify_line_mapping(
+            &self,
+            _: &LineMappingRequest,
+        ) -> Result<LineMappingVerification, GitOperationError> {
+            unimplemented!()
+        }
+        fn get_parent_commits(
+            &self,
+            _: &CommitSha,
+            _: usize,
+        ) -> Result<Vec<CommitSha>, GitOperationError> {
+            unimplemented!()
+        }
+        fn commit_exists(&self, _: &CommitSha) -> bool {
+            unimplemented!()
+        }
+    }
+
     #[test]
     fn get_telemetry_sink_returns_usable_sink() {
-        // get_telemetry_sink returns a sink that implements TelemetrySink.
-        // Due to OnceLock, we can't control whether it's Noop or a previously-set sink,
-        // but we verify the returned sink is usable without panicking.
+        // OnceLock may return Noop or a previously-set sink; verify no panic.
         let sink = get_telemetry_sink();
         sink.record(TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 100,
@@ -322,24 +339,17 @@ mod tests {
 
     #[test]
     fn noop_telemetry_sink_can_record_without_panic() {
-        // Verify NoopTelemetrySink (the default fallback) handles events correctly
         let sink = NoopTelemetrySink;
         sink.record(TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 42,
             comment_count: 3,
             incremental: false,
         });
-        // Test passes if no panic occurs
     }
 
     #[test]
     fn recording_sink_captures_sync_latency_event() {
-        // Test that a RecordingTelemetrySink captures the exact event structure
-        // that record_sync_telemetry would produce. This verifies the event
-        // construction is correct, independent of OnceLock state.
         let sink = RecordingTelemetrySink::default();
-
-        // Record directly to the sink (bypassing OnceLock)
         sink.record(TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 150,
             comment_count: 10,
@@ -368,16 +378,10 @@ mod tests {
 
     #[test]
     fn set_telemetry_sink_wires_sink_for_record_sync_telemetry() {
-        // This test verifies the wiring works when our sink is first to set.
-        // Due to OnceLock, if another test ran first, our sink won't be used,
-        // but the function should still not panic.
+        // OnceLock: only verify events if our sink was first to be set.
         let sink = Arc::new(RecordingTelemetrySink::default());
         let was_set = set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
-
-        // Call the public API
         record_sync_telemetry(200, 15, true);
-
-        // Only verify events if we were first to set the sink
         if was_set {
             let events = sink.events();
             assert_eq!(events.len(), 1);
@@ -391,6 +395,42 @@ mod tests {
                 }
             ));
         }
-        // If not set, test still passes - we verified no panic occurs
+    }
+
+    #[test]
+    fn set_git_ops_context_wires_ops_for_get() {
+        let ops: Arc<dyn GitOperations> = Arc::new(StubGitOps);
+        let was_set = set_git_ops_context(ops, "abc123".to_owned());
+
+        let retrieved = get_git_ops_context();
+        assert!(retrieved.is_some(), "context should always be available");
+
+        if was_set {
+            let (_, head_sha) = retrieved.expect("already asserted Some");
+            assert_eq!(head_sha, "abc123");
+        }
+    }
+
+    #[test]
+    fn set_time_travel_context_wires_context_for_get() {
+        let ctx = TimeTravelContext {
+            host: "github.com".to_owned(),
+            owner: "octocat".to_owned(),
+            repo: "hello-world".to_owned(),
+            pr_number: 42,
+            discovery_failure: Some("no repo found".to_owned()),
+        };
+        let was_set = set_time_travel_context(ctx);
+
+        let retrieved = get_time_travel_context();
+        assert!(retrieved.is_some(), "context should always be available");
+
+        if was_set {
+            let stored = retrieved.expect("already asserted Some");
+            assert_eq!(stored.owner, "octocat");
+            assert_eq!(stored.repo, "hello-world");
+            assert_eq!(stored.pr_number, 42);
+            assert_eq!(stored.discovery_failure.as_deref(), Some("no repo found"));
+        }
     }
 }

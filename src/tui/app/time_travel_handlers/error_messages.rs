@@ -31,7 +31,7 @@ use crate::tui::TimeTravelContext;
 ///
 /// To use time travel:
 ///   1. Clone the repository:
-///      git clone https://github.com/owner/repo
+///      git clone https://ghe.corp.com/owner/repo
 ///   2. Fetch the PR branch:
 ///      git fetch origin pull/42/head:pr-42 && git checkout pr-42
 ///   3. Run frankie from within the repository directory
@@ -41,6 +41,7 @@ use crate::tui::TimeTravelContext;
 #[must_use]
 pub(crate) fn build_time_travel_error(context: &TimeTravelContext) -> String {
     let TimeTravelContext {
+        host,
         owner,
         repo,
         pr_number,
@@ -82,7 +83,7 @@ pub(crate) fn build_time_travel_error(context: &TimeTravelContext) -> String {
             "\n",
             "To use time travel:\n",
             "  1. Clone the repository:\n",
-            "     git clone https://github.com/{owner}/{repo}\n",
+            "     git clone https://{host}/{owner}/{repo}\n",
             "  2. Fetch the PR branch:\n",
             "     git fetch origin pull/{pr_number}/head:pr-{pr_number}",
             " && git checkout pr-{pr_number}\n",
@@ -90,6 +91,7 @@ pub(crate) fn build_time_travel_error(context: &TimeTravelContext) -> String {
             "\n",
             "Alternatively, use --repo-path to specify your local checkout.",
         ),
+        host = host,
         owner = owner,
         repo = repo,
         pr_number = pr_number,
@@ -120,6 +122,7 @@ mod tests {
     #[test]
     fn error_message_includes_pr_metadata() {
         let context = TimeTravelContext {
+            host: "github.com".to_owned(),
             owner: "octocat".to_owned(),
             repo: "hello-world".to_owned(),
             pr_number: 42,
@@ -150,6 +153,7 @@ mod tests {
     #[test]
     fn error_message_includes_discovery_failure_reason() {
         let context = TimeTravelContext {
+            host: "github.com".to_owned(),
             owner: "octocat".to_owned(),
             repo: "hello-world".to_owned(),
             pr_number: 7,
@@ -171,6 +175,7 @@ mod tests {
     #[test]
     fn error_message_omits_discovery_line_when_no_failure() {
         let context = TimeTravelContext {
+            host: "github.com".to_owned(),
             owner: "octocat".to_owned(),
             repo: "hello-world".to_owned(),
             pr_number: 1,
@@ -188,6 +193,7 @@ mod tests {
     #[test]
     fn error_message_includes_mismatch_reason() {
         let context = TimeTravelContext {
+            host: "github.com".to_owned(),
             owner: "alice".to_owned(),
             repo: "project".to_owned(),
             pr_number: 99,
@@ -207,6 +213,24 @@ mod tests {
         assert!(
             msg.contains("alice/project"),
             "should include expected repo info: {msg}"
+        );
+    }
+
+    #[test]
+    fn error_message_uses_enterprise_host_in_clone_url() {
+        let context = TimeTravelContext {
+            host: "ghe.corp.com".to_owned(),
+            owner: "team".to_owned(),
+            repo: "project".to_owned(),
+            pr_number: 5,
+            discovery_failure: None,
+        };
+
+        let msg = build_time_travel_error(&context);
+
+        assert!(
+            msg.contains("git clone https://ghe.corp.com/team/project"),
+            "should use enterprise host in clone URL: {msg}"
         );
     }
 

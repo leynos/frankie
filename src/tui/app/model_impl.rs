@@ -21,8 +21,7 @@ impl Model for ReviewApp {
 
         // Wire up git operations for time-travel if available
         if let Some((git_ops, head_sha)) = crate::tui::get_git_ops_context() {
-            model.git_ops = Some(git_ops);
-            model.head_sha = Some(head_sha);
+            model = model.with_git_ops(git_ops, head_sha);
         }
 
         // Emit an immediate startup message to trigger the first render cycle.
