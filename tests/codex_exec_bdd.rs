@@ -42,6 +42,23 @@ where
     Ok(())
 }
 
+/// Helper to build a plan with a single progress event followed by successful completion.
+fn plan_with_progress_then_success(
+    progress_event: CodexProgressEvent,
+    success_delay_ms: u64,
+    transcript_path: &str,
+) -> StubPlan {
+    StubPlan::TimedUpdates(vec![
+        (0, CodexExecutionUpdate::Progress(progress_event)),
+        (
+            success_delay_ms,
+            CodexExecutionUpdate::Finished(CodexExecutionOutcome::Succeeded {
+                transcript_path: camino::Utf8PathBuf::from(transcript_path),
+            }),
+        ),
+    ])
+}
+
 #[given("a Codex run that streams progress and completes successfully")]
 fn given_successful_run(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error::Error>> {
     setup_codex_scenario_with_plan(
@@ -49,20 +66,13 @@ fn given_successful_run(codex_state: &CodexExecState) -> Result<(), Box<dyn std:
         "success.jsonl",
         "{\"type\":\"turn.started\"}\n",
         |transcript_path| {
-            StubPlan::TimedUpdates(vec![
-                (
-                    0,
-                    CodexExecutionUpdate::Progress(CodexProgressEvent::Status {
-                        message: "event: turn.started".to_owned(),
-                    }),
-                ),
-                (
-                    120,
-                    CodexExecutionUpdate::Finished(CodexExecutionOutcome::Succeeded {
-                        transcript_path: camino::Utf8PathBuf::from(transcript_path),
-                    }),
-                ),
-            ])
+            plan_with_progress_then_success(
+                CodexProgressEvent::Status {
+                    message: "event: turn.started".to_owned(),
+                },
+                120,
+                transcript_path,
+            )
         },
     )
 }
@@ -93,20 +103,13 @@ fn given_malformed_line(codex_state: &CodexExecState) -> Result<(), Box<dyn std:
         "malformed.jsonl",
         "not-json\n",
         |transcript_path| {
-            StubPlan::TimedUpdates(vec![
-                (
-                    0,
-                    CodexExecutionUpdate::Progress(CodexProgressEvent::ParseWarning {
-                        raw_line: "not-json".to_owned(),
-                    }),
-                ),
-                (
-                    200,
-                    CodexExecutionUpdate::Finished(CodexExecutionOutcome::Succeeded {
-                        transcript_path: camino::Utf8PathBuf::from(transcript_path),
-                    }),
-                ),
-            ])
+            plan_with_progress_then_success(
+                CodexProgressEvent::ParseWarning {
+                    raw_line: "not-json".to_owned(),
+                },
+                200,
+                transcript_path,
+            )
         },
     )
 }
