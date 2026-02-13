@@ -60,6 +60,94 @@ fn calculate_line_offset(old_line: u32, new_line: u32) -> i32 {
     i32::try_from(i64::from(new_line) - i64::from(old_line)).unwrap_or(0)
 }
 
+/// Mutable state for computing a target line offset across diff hunks.
+struct LineOffsetState {
+    line_offset: Cell<i32>,
+    line_deleted: Cell<bool>,
+    target_resolved: Cell<bool>,
+    target_in_current_hunk: Cell<bool>,
+}
+
+impl LineOffsetState {
+    /// Creates fresh line-offset computation state.
+    const fn new() -> Self {
+        Self {
+            line_offset: Cell::new(0),
+            line_deleted: Cell::new(false),
+            target_resolved: Cell::new(false),
+            target_in_current_hunk: Cell::new(false),
+        }
+    }
+
+    /// Processes one diff hunk to update search boundaries and aggregate offset.
+    fn process_hunk(&self, hunk: &git2::DiffHunk<'_>, target_line: u32) -> bool {
+        if self.target_resolved.get() {
+            return true;
+        }
+
+        if self.target_in_current_hunk.get() {
+            // If we advanced to another hunk without seeing the target old
+            // line in the previous one, treat it as removed.
+            self.line_deleted.set(true);
+            self.target_resolved.set(true);
+            self.target_in_current_hunk.set(false);
+            return true;
+        }
+
+        let range = HunkRange::from_hunk(hunk);
+
+        if target_line >= range.end_line() {
+            self.line_offset
+                .set(self.line_offset.get().saturating_add(range.offset()));
+            self.target_in_current_hunk.set(false);
+        } else if range.contains_line(target_line) {
+            self.target_in_current_hunk.set(true);
+        } else {
+            self.target_resolved.set(true);
+            self.target_in_current_hunk.set(false);
+        }
+
+        true
+    }
+
+    /// Processes one diff line to resolve the target line inside the active hunk.
+    fn process_line(&self, line: &git2::DiffLine<'_>, target_line: u32) -> bool {
+        if self.target_resolved.get() || !self.target_in_current_hunk.get() {
+            return true;
+        }
+
+        let Some(old_line) = line.old_lineno() else {
+            return true;
+        };
+
+        if old_line != target_line {
+            return true;
+        }
+
+        self.line_deleted.set(line.origin() == '-');
+        if let Some(new_line) = line.new_lineno() {
+            self.line_offset
+                .set(calculate_line_offset(target_line, new_line));
+        }
+
+        self.target_resolved.set(true);
+        self.target_in_current_hunk.set(false);
+        true
+    }
+
+    /// Finalises state after diff traversal completes.
+    fn finalize(&self) {
+        if self.target_in_current_hunk.get() && !self.target_resolved.get() {
+            self.line_deleted.set(true);
+        }
+    }
+
+    /// Returns the final `(line_offset, line_deleted)` tuple.
+    const fn result(&self) -> (i32, bool) {
+        (self.line_offset.get(), self.line_deleted.get())
+    }
+}
+
 /// Parses a SHA string into an Oid using the repository.
 ///
 /// Attempts to parse as a full SHA first, then tries as a short SHA or ref.
@@ -139,74 +227,21 @@ pub(super) fn compute_line_offset_from_hunks(
     diff: &git2::Diff<'_>,
     target_line: u32,
 ) -> Result<(i32, bool), GitOperationError> {
-    let line_offset = Cell::new(0_i32);
-    let line_deleted = Cell::new(false);
-    let target_resolved = Cell::new(false);
-    let target_in_current_hunk = Cell::new(false);
+    let state = LineOffsetState::new();
 
     diff.foreach(
         &mut |_, _| true,
         None,
-        Some(&mut |_delta, hunk| {
-            if target_resolved.get() {
-                return true;
-            }
-
-            if target_in_current_hunk.get() {
-                // If we advanced to another hunk without seeing the target old
-                // line in the previous one, treat it as removed.
-                line_deleted.set(true);
-                target_resolved.set(true);
-                target_in_current_hunk.set(false);
-                return true;
-            }
-
-            let range = HunkRange::from_hunk(&hunk);
-
-            if target_line >= range.end_line() {
-                line_offset.set(line_offset.get().saturating_add(range.offset()));
-                target_in_current_hunk.set(false);
-            } else if range.contains_line(target_line) {
-                target_in_current_hunk.set(true);
-            } else {
-                target_resolved.set(true);
-                target_in_current_hunk.set(false);
-            }
-
-            true
-        }),
-        Some(&mut |_delta, _hunk, line| {
-            if target_resolved.get() || !target_in_current_hunk.get() {
-                return true;
-            }
-
-            let Some(old_line) = line.old_lineno() else {
-                return true;
-            };
-
-            if old_line != target_line {
-                return true;
-            }
-
-            line_deleted.set(line.origin() == '-');
-            if let Some(new_line) = line.new_lineno() {
-                line_offset.set(calculate_line_offset(target_line, new_line));
-            }
-
-            target_resolved.set(true);
-            target_in_current_hunk.set(false);
-            true
-        }),
+        Some(&mut |_delta, hunk| state.process_hunk(&hunk, target_line)),
+        Some(&mut |_delta, _hunk, line| state.process_line(&line, target_line)),
     )
     .map_err(|e| GitOperationError::DiffComputationFailed {
         message: e.message().to_owned(),
     })?;
 
-    if target_in_current_hunk.get() && !target_resolved.get() {
-        line_deleted.set(true);
-    }
+    state.finalize();
 
-    Ok((line_offset.get(), line_deleted.get()))
+    Ok(state.result())
 }
 
 /// Creates the appropriate line mapping result from offset and deletion state.
