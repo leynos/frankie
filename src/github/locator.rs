@@ -270,6 +270,21 @@ impl PullRequestLocator {
         self.number
     }
 
+    /// Web host derived from the API base URL.
+    ///
+    /// Returns `"github.com"` for standard GitHub URLs and the API base
+    /// host for GitHub Enterprise installations.
+    #[must_use]
+    pub fn host(&self) -> &str {
+        self.api_base.host_str().map_or("github.com", |h| {
+            if h.eq_ignore_ascii_case("api.github.com") {
+                "github.com"
+            } else {
+                h
+            }
+        })
+    }
+
     pub(crate) fn pull_request_path(&self) -> String {
         format!(
             "/repos/{}/{}/pulls/{}",
