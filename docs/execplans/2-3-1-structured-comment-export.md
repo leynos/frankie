@@ -384,8 +384,6 @@ Consider using a constant here instead of a magic number.
  }
 ```
 
-```
-
 Example JSONL output (illustrative):
 
 ```jsonl
