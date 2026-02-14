@@ -1,5 +1,6 @@
 //! Tests for the review TUI application model.
 
+use bubbletea_rs::Model;
 use rstest::{fixture, rstest};
 
 use super::*;
@@ -81,15 +82,13 @@ fn filter_changes_preserve_valid_cursor(sample_reviews: Vec<ReviewComment>) {
 }
 
 #[test]
-fn new_app_uses_initial_terminal_size_when_available() {
-    let was_set = crate::tui::set_initial_terminal_size(120, 40);
-    let app = ReviewApp::empty();
+fn with_dimensions_applies_explicit_terminal_size() {
+    let app = ReviewApp::with_dimensions(Vec::new(), 120, 40);
 
-    if was_set {
-        assert_eq!(app.width, 120);
-        assert_eq!(app.height, 40);
-        assert_eq!(app.review_list.visible_height(), 28);
-    }
+    assert_eq!(app.width, 120);
+    assert_eq!(app.height, 40);
+    // 40 - CHROME_HEIGHT(4) - DETAIL_HEIGHT(8) = 28
+    assert_eq!(app.review_list.visible_height(), 28);
 }
 
 #[test]
@@ -102,6 +101,22 @@ fn resize_updates_visible_list_height_with_shared_layout_rules() {
     });
 
     assert_eq!(app.review_list.visible_height(), 4);
+}
+
+#[rstest]
+#[case::zero_height(0, 1)]
+#[case::below_chrome(10, 1)]
+#[case::at_chrome_plus_detail(12, 1)]
+#[case::one_row_above_threshold(13, 1)]
+#[case::normal_terminal(24, 12)]
+fn short_terminal_clamps_list_height_to_minimum(#[case] height: u16, #[case] expected: usize) {
+    let app = ReviewApp::with_dimensions(Vec::new(), 80, height);
+    assert!(
+        app.review_list.visible_height() >= 1,
+        "visible_height must never be zero (was {} for height {height})",
+        app.review_list.visible_height()
+    );
+    assert_eq!(app.review_list.visible_height(), expected);
 }
 
 #[test]
@@ -144,6 +159,21 @@ fn filter_changes_adjust_scroll_offset_after_cursor_clamp(sample_reviews: Vec<Re
     assert_eq!(app.filtered_count(), 1);
     assert_eq!(app.cursor_position(), 0);
     assert_eq!(app.filter_state.scroll_offset, 0);
+}
+
+#[test]
+fn short_terminal_still_renders_list_items() {
+    let reviews = vec![minimal_review(1, "Visible comment", "alice")];
+    let mut app = ReviewApp::with_dimensions(reviews, 80, 8);
+    app.handle_message(&AppMsg::WindowResized {
+        width: 80,
+        height: 8,
+    });
+    let output = app.view();
+    assert!(
+        output.contains("alice"),
+        "list should render at least one item in a short terminal"
+    );
 }
 
 #[rstest]

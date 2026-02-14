@@ -44,6 +44,9 @@ use routing::MessageRouting;
 const CHROME_HEIGHT: usize = 4;
 /// Minimum rows reserved for the comment detail pane.
 const DETAIL_HEIGHT: usize = 8;
+/// Minimum rows for the review list, ensuring at least one row is visible
+/// even when the terminal height is very small.
+const MIN_LIST_HEIGHT: usize = 1;
 
 /// Main application model for the review listing TUI.
 #[derive(Debug)]
@@ -104,9 +107,22 @@ pub(crate) enum ViewMode {
 
 impl ReviewApp {
     /// Creates a new application with the given review comments.
+    ///
+    /// Terminal dimensions are read from the global initial size storage
+    /// (see [`super::set_initial_terminal_size`]).
     #[must_use]
     pub fn new(reviews: Vec<ReviewComment>) -> Self {
         let (width, height) = super::get_initial_terminal_size();
+        Self::with_dimensions(reviews, width, height)
+    }
+
+    /// Creates an application with explicit terminal dimensions.
+    ///
+    /// Use this constructor in tests to avoid depending on the global
+    /// `OnceLock`-backed terminal size, which cannot be reset between test
+    /// cases.
+    #[must_use]
+    pub fn with_dimensions(reviews: Vec<ReviewComment>, width: u16, height: u16) -> Self {
         // Build initial cache with all indices (default filter is All)
         let filtered_indices: Vec<_> = (0..reviews.len()).collect();
         // Track ID of first comment for selection preservation
@@ -303,11 +319,18 @@ impl ReviewApp {
 
     /// Calculates the number of rows available for the review list.
     ///
-    /// Layout: `height - chrome_height - detail_height`.
+    /// Layout: `max(height - chrome - detail, MIN_LIST_HEIGHT)`.
+    /// The lower bound ensures at least one row is visible even in very
+    /// short terminals.
     const fn calculate_list_height(&self) -> usize {
-        (self.height as usize)
+        let raw = (self.height as usize)
             .saturating_sub(CHROME_HEIGHT)
-            .saturating_sub(DETAIL_HEIGHT)
+            .saturating_sub(DETAIL_HEIGHT);
+        if raw < MIN_LIST_HEIGHT {
+            MIN_LIST_HEIGHT
+        } else {
+            raw
+        }
     }
 
     /// Adjusts scroll offset so the selected cursor remains visible.
