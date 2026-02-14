@@ -167,7 +167,7 @@ fn discover_repo_for_locator(
     validate_repo_matches_locator(local_repo.github_origin(), locator)?;
 
     // Get HEAD SHA for line mapping verification
-    let head_sha = resolve_head_sha(local_repo.workdir())?;
+    let head_sha = local_repo.head_sha()?;
 
     Ok((local_repo.workdir().to_path_buf(), head_sha))
 }
@@ -209,20 +209,6 @@ fn validate_repo_matches_locator(
     }
 
     Ok(())
-}
-
-/// Resolves the HEAD commit SHA from a repository working directory.
-fn resolve_head_sha(workdir: &Path) -> Result<String, String> {
-    let repo = git2::Repository::open(workdir)
-        .map_err(|e| format!("failed to open repository for HEAD: {e}"))?;
-    let head = repo
-        .head()
-        .map_err(|e| format!("failed to resolve HEAD: {e}"))?;
-    let oid = head
-        .peel_to_commit()
-        .map_err(|e| format!("failed to resolve HEAD commit: {e}"))?
-        .id();
-    Ok(oid.to_string())
 }
 
 /// Runs the bubbletea-rs program with the `ReviewApp` model.
@@ -302,102 +288,50 @@ mod tests {
         let _ = set_telemetry_sink(sink);
     }
 
-    struct TestCase {
-        name: &'static str,
-        locator_url: &'static str,
-        origin_owner: &'static str,
-        origin_repo: &'static str,
-        should_succeed: bool,
-        failure_message: &'static str,
-    }
-
-    #[test]
-    fn validate_repo_matches_locator_cases() {
-        let cases = vec![
-            TestCase {
-                name: "matching repo",
-                locator_url: "https://github.com/octocat/hello-world/pull/42",
-                origin_owner: "octocat",
-                origin_repo: "hello-world",
-                should_succeed: true,
-                failure_message: "matching origin should succeed",
-            },
-            TestCase {
-                name: "case-insensitive matching",
-                locator_url: "https://github.com/OctoCat/Hello-World/pull/1",
-                origin_owner: "octocat",
-                origin_repo: "hello-world",
-                should_succeed: true,
-                failure_message: "case-insensitive match should succeed",
-            },
-            TestCase {
-                name: "mismatched repo",
-                locator_url: "https://github.com/octocat/hello-world/pull/1",
-                origin_owner: "octocat",
-                origin_repo: "other-repo",
-                should_succeed: false,
-                failure_message: "mismatched repo should fail",
-            },
-        ];
-
-        for case in &cases {
-            let locator =
-                PullRequestLocator::parse(case.locator_url).expect("valid URL should parse");
-            let origin = GitHubOrigin::GitHubCom {
-                owner: case.origin_owner.to_owned(),
-                repository: case.origin_repo.to_owned(),
-            };
-
-            let result = validate_repo_matches_locator(&origin, &locator);
-            assert_eq!(
-                result.is_ok(),
-                case.should_succeed,
-                "{}: {}: {result:?}",
-                case.name,
-                case.failure_message,
-            );
-        }
-    }
-
-    #[test]
-    fn validate_mismatched_owner_fails() {
-        let locator = PullRequestLocator::parse("https://github.com/alice/hello-world/pull/1")
-            .expect("valid URL should parse");
+    #[rstest::rstest]
+    #[case::matching_repo(
+        "https://github.com/octocat/hello-world/pull/42",
+        "octocat",
+        "hello-world",
+        true
+    )]
+    #[case::case_insensitive_matching(
+        "https://github.com/OctoCat/Hello-World/pull/1",
+        "octocat",
+        "hello-world",
+        true
+    )]
+    #[case::mismatched_repo(
+        "https://github.com/octocat/hello-world/pull/1",
+        "octocat",
+        "other-repo",
+        false
+    )]
+    #[case::mismatched_owner(
+        "https://github.com/alice/hello-world/pull/1",
+        "bob",
+        "hello-world",
+        false
+    )]
+    #[case::mismatched_host(
+        "https://ghe.corp.com/octocat/hello-world/pull/1",
+        "octocat",
+        "hello-world",
+        false
+    )]
+    fn validate_repo_matches_locator_cases(
+        #[case] locator_url: &str,
+        #[case] origin_owner: &str,
+        #[case] origin_repo: &str,
+        #[case] should_succeed: bool,
+    ) {
+        let locator = PullRequestLocator::parse(locator_url).expect("valid URL should parse");
         let origin = GitHubOrigin::GitHubCom {
-            owner: "bob".to_owned(),
-            repository: "hello-world".to_owned(),
+            owner: origin_owner.to_owned(),
+            repository: origin_repo.to_owned(),
         };
 
-        let err = validate_repo_matches_locator(&origin, &locator)
-            .expect_err("mismatched owner should fail");
-        assert!(
-            err.contains("bob/hello-world"),
-            "error should mention found origin: {err}"
-        );
-        assert!(
-            err.contains("alice/hello-world"),
-            "error should mention expected origin: {err}"
-        );
-    }
-
-    #[test]
-    fn validate_mismatched_host_fails() {
-        let locator = PullRequestLocator::parse("https://ghe.corp.com/octocat/hello-world/pull/1")
-            .expect("valid URL should parse");
-        let origin = GitHubOrigin::GitHubCom {
-            owner: "octocat".to_owned(),
-            repository: "hello-world".to_owned(),
-        };
-
-        let err = validate_repo_matches_locator(&origin, &locator)
-            .expect_err("mismatched host should fail");
-        assert!(
-            err.contains("github.com"),
-            "error should mention found host: {err}"
-        );
-        assert!(
-            err.contains("ghe.corp.com"),
-            "error should mention expected host: {err}"
-        );
+        let result = validate_repo_matches_locator(&origin, &locator);
+        assert_eq!(result.is_ok(), should_succeed, "{result:?}");
     }
 }

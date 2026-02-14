@@ -80,7 +80,7 @@ struct GitOpsContext {
 ///
 /// Stored alongside git ops to provide contextual error messages when
 /// time-travel is attempted without a valid local repository.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TimeTravelContext {
     /// PR host (e.g. "github.com" or "ghe.corp.com").
     pub host: String,
