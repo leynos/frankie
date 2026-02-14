@@ -5,8 +5,8 @@
 
 use crate::github::models::ReviewComment;
 
-/// Default visible height for the review list component.
-const DEFAULT_VISIBLE_HEIGHT: usize = 20;
+/// Defensive fallback for visible height when layout has not yet been applied.
+const FALLBACK_VISIBLE_HEIGHT: usize = 5;
 
 /// Context for rendering the review list view.
 ///
@@ -44,7 +44,7 @@ impl ReviewListComponent {
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            visible_height: DEFAULT_VISIBLE_HEIGHT,
+            visible_height: FALLBACK_VISIBLE_HEIGHT,
         }
     }
 
@@ -74,7 +74,7 @@ impl ReviewListComponent {
 
         let mut output = String::new();
 
-        // Use context's visible_height, falling back to component's default
+        // Use context height when provided, otherwise fall back defensively.
         let visible_height = if ctx.visible_height > 0 {
             ctx.visible_height
         } else {
