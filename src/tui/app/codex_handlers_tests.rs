@@ -209,7 +209,8 @@ fn start_failure_is_surfaced_as_error(
 async fn codex_poll_timer_emits_poll_tick_message() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::pause();
 
-    let cmd = ReviewApp::arm_codex_poll_timer();
+    let app = ReviewApp::empty();
+    let cmd = app.arm_codex_poll_timer();
 
     tokio::time::advance(std::time::Duration::from_millis(200)).await;
 

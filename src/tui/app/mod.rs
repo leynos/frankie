@@ -83,6 +83,8 @@ pub struct ReviewApp {
     codex_handle: Option<CodexExecutionHandle>,
     /// Latest Codex status line shown in the status bar.
     codex_status: Option<String>,
+    /// Poll interval for draining Codex progress events.
+    codex_poll_interval: std::time::Duration,
 }
 
 /// Tracks which view is currently active in the TUI.
@@ -125,6 +127,7 @@ impl ReviewApp {
             codex_service: Arc::new(SystemCodexExecutionService::new()),
             codex_handle: None,
             codex_status: None,
+            codex_poll_interval: std::time::Duration::from_millis(150),
         }
     }
 
@@ -149,6 +152,13 @@ impl ReviewApp {
     #[must_use]
     pub fn with_codex_service(mut self, codex_service: Arc<dyn CodexExecutionService>) -> Self {
         self.codex_service = codex_service;
+        self
+    }
+
+    /// Sets the poll interval used when draining Codex progress events.
+    #[must_use]
+    pub const fn with_codex_poll_interval(mut self, interval: std::time::Duration) -> Self {
+        self.codex_poll_interval = interval;
         self
     }
 

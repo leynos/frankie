@@ -4,7 +4,6 @@
 //! from the main app update routing.
 
 use std::any::Any;
-use std::time::Duration;
 
 use bubbletea_rs::Cmd;
 
@@ -16,9 +15,6 @@ use crate::github::IntakeError;
 use crate::tui::messages::AppMsg;
 
 use super::ReviewApp;
-
-/// Poll interval for draining Codex progress events.
-const CODEX_POLL_INTERVAL: Duration = Duration::from_millis(150);
 
 impl ReviewApp {
     /// Dispatches Codex lifecycle messages to their handlers.
@@ -42,7 +38,7 @@ impl ReviewApp {
     fn handle_start_codex_execution(&mut self) -> Option<Cmd> {
         if self.is_codex_running() {
             self.codex_status = Some("Codex run already in progress".to_owned());
-            return Some(Self::arm_codex_poll_timer());
+            return Some(self.arm_codex_poll_timer());
         }
 
         let request = match self.build_codex_request() {
@@ -58,7 +54,7 @@ impl ReviewApp {
                 self.codex_handle = Some(handle);
                 self.codex_status = Some("launching Codex execution".to_owned());
                 self.error = None;
-                Some(Self::arm_codex_poll_timer())
+                Some(self.arm_codex_poll_timer())
             }
             Err(error) => {
                 self.error = Some(format!("Codex execution failed to start: {error}"));
@@ -78,7 +74,7 @@ impl ReviewApp {
             return None;
         }
 
-        Some(Self::arm_codex_poll_timer())
+        Some(self.arm_codex_poll_timer())
     }
 
     fn drain_codex_updates(&mut self) -> Option<CodexExecutionOutcome> {
@@ -172,9 +168,10 @@ impl ReviewApp {
         })
     }
 
-    pub(super) fn arm_codex_poll_timer() -> Cmd {
-        Box::pin(async {
-            tokio::time::sleep(CODEX_POLL_INTERVAL).await;
+    pub(super) fn arm_codex_poll_timer(&self) -> Cmd {
+        let interval = self.codex_poll_interval;
+        Box::pin(async move {
+            tokio::time::sleep(interval).await;
             Some(Box::new(AppMsg::CodexPollTick) as Box<dyn Any + Send>)
         })
     }
