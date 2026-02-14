@@ -8,6 +8,17 @@ use git2::{DiffOptions, Oid, Repository};
 use crate::local::commit::LineMappingVerification;
 use crate::local::error::GitOperationError;
 
+/// Where a target line falls relative to a hunk's old-file range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinePosition {
+    /// The target line is past (after) the hunk's old range.
+    Past,
+    /// The target line falls inside the hunk's old range.
+    Inside,
+    /// The target line is before the hunk's old range.
+    Before,
+}
+
 /// Represents a range of lines in a diff hunk.
 ///
 /// Encapsulates the old file line range and new file line count from a diff hunk,
@@ -39,28 +50,49 @@ impl HunkRange {
 
     /// Calculates the line offset contribution from this hunk.
     ///
-    /// Returns `new_lines - old_lines` as a signed offset. Values exceeding
-    /// `i32::MAX` are treated as zero, though this is unreachable in practice
-    /// since diff hunks cannot contain billions of lines.
+    /// Returns `new_lines - old_lines` as a signed offset, using saturating
+    /// conversion so extreme values clamp rather than collapsing to zero.
+    /// This is unreachable in practice since diff hunks cannot contain
+    /// billions of lines.
     pub fn offset(self) -> i32 {
-        i32::try_from(self.new_lines).unwrap_or(0) - i32::try_from(self.old_lines).unwrap_or(0)
+        let new = i64::from(self.new_lines);
+        let old = i64::from(self.old_lines);
+        let diff = new - old;
+        i32::try_from(diff).unwrap_or(if diff < 0 { i32::MIN } else { i32::MAX })
     }
 
     /// Returns the end line number (exclusive) of the old range.
     pub const fn end_line(self) -> u32 {
         self.start + self.old_lines
     }
+
+    /// Classifies where `line` falls relative to this hunk's old-file range.
+    const fn classify_line(self, line: u32) -> LinePosition {
+        if line >= self.end_line() {
+            LinePosition::Past
+        } else if self.contains_line(line) {
+            LinePosition::Inside
+        } else {
+            LinePosition::Before
+        }
+    }
 }
 
 /// Calculates line-number offset from an old line to a mapped new line.
 ///
-/// Falls back to zero for extreme values outside `i32` bounds, which are not
-/// realistic for source files but are handled defensively.
+/// Uses saturating conversion so extreme values outside `i32` bounds clamp
+/// to `i32::MIN` / `i32::MAX` rather than collapsing to zero, preserving
+/// the direction of the shift.
 fn calculate_line_offset(old_line: u32, new_line: u32) -> i32 {
-    i32::try_from(i64::from(new_line) - i64::from(old_line)).unwrap_or(0)
+    let diff = i64::from(new_line) - i64::from(old_line);
+    i32::try_from(diff).unwrap_or(if diff < 0 { i32::MIN } else { i32::MAX })
 }
 
 /// Mutable state for computing a target line offset across diff hunks.
+///
+/// The `target_line` threaded through methods is **1-based** and refers to
+/// the **old (pre-image) side** of the diff, matching git2's convention for
+/// `DiffLine::old_lineno`.
 struct LineOffsetState {
     line_offset: Cell<i32>,
     line_deleted: Cell<bool>,
@@ -96,15 +128,19 @@ impl LineOffsetState {
 
         let range = HunkRange::from_hunk(hunk);
 
-        if target_line >= range.end_line() {
-            self.line_offset
-                .set(self.line_offset.get().saturating_add(range.offset()));
-            self.target_in_current_hunk.set(false);
-        } else if range.contains_line(target_line) {
-            self.target_in_current_hunk.set(true);
-        } else {
-            self.target_resolved.set(true);
-            self.target_in_current_hunk.set(false);
+        match range.classify_line(target_line) {
+            LinePosition::Past => {
+                self.line_offset
+                    .set(self.line_offset.get().saturating_add(range.offset()));
+                self.target_in_current_hunk.set(false);
+            }
+            LinePosition::Inside => {
+                self.target_in_current_hunk.set(true);
+            }
+            LinePosition::Before => {
+                self.target_resolved.set(true);
+                self.target_in_current_hunk.set(false);
+            }
         }
 
         true
@@ -214,6 +250,11 @@ pub(super) fn has_no_changes(diff: &git2::Diff<'_>) -> bool {
 }
 
 /// Computes the line offset by processing diff hunks and diff lines.
+///
+/// `target_line` is **1-based** and refers to a line number on the **old
+/// (pre-image) side** of the diff. The function determines where that line
+/// ends up on the new (post-image) side, returning the signed offset and a
+/// flag indicating whether the line was deleted.
 ///
 /// The algorithm uses hunk headers for coarse positioning and then resolves
 /// target lines *inside* hunks by inspecting individual `DiffLine` entries.
