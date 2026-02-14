@@ -15,7 +15,7 @@ use crate::tui::app::ViewMode;
 use crate::tui::messages::AppMsg;
 
 /// Default interval between background syncs.
-const SYNC_INTERVAL: Duration = Duration::from_secs(30);
+pub(super) const SYNC_INTERVAL: Duration = Duration::from_secs(30);
 
 impl ReviewApp {
     /// Handles a manual refresh request by delegating to sync logic.
