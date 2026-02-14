@@ -54,6 +54,28 @@ impl LocalRepository {
     pub fn remote_name(&self) -> &str {
         &self.remote_name
     }
+
+    /// Resolves the HEAD commit SHA from the repository working directory.
+    ///
+    /// Opens the repository from `self.workdir`, resolves HEAD, peels to the
+    /// commit, and returns the OID as a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns a descriptive error string if the repository cannot be opened,
+    /// HEAD cannot be resolved, or the reference cannot be peeled to a commit.
+    pub fn head_sha(&self) -> Result<String, String> {
+        let repo = Repository::open(&self.workdir)
+            .map_err(|e| format!("failed to open repository for HEAD: {e}"))?;
+        let head = repo
+            .head()
+            .map_err(|e| format!("failed to resolve HEAD: {e}"))?;
+        let oid = head
+            .peel_to_commit()
+            .map_err(|e| format!("failed to resolve HEAD commit: {e}"))?
+            .id();
+        Ok(oid.to_string())
+    }
 }
 
 /// Discovers the local Git repository and extracts GitHub origin information.
