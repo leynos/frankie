@@ -5,6 +5,17 @@ use rstest::rstest;
 use super::*;
 use crate::github::models::test_support::create_reviews;
 
+fn setup_app(review_count: usize, visible_height: usize) -> ReviewApp {
+    let mut app = ReviewApp::new(create_reviews(review_count));
+    app.review_list.set_visible_height(visible_height);
+    app
+}
+
+fn assert_state(app: &ReviewApp, expected_cursor: usize, expected_scroll: usize) {
+    assert_eq!(app.cursor_position(), expected_cursor);
+    assert_eq!(app.filter_state.scroll_offset, expected_scroll);
+}
+
 #[rstest]
 fn cursor_down_scrolls_when_moving_beyond_bottom_of_viewport() {
     let mut app = ReviewApp::new(create_reviews(8));
@@ -20,19 +31,16 @@ fn cursor_down_scrolls_when_moving_beyond_bottom_of_viewport() {
 
 #[rstest]
 fn cursor_up_scrolls_when_moving_above_top_of_viewport() {
-    let mut app = ReviewApp::new(create_reviews(10));
-    app.review_list.set_visible_height(3);
+    let mut app = setup_app(10, 3);
 
     app.handle_message(&AppMsg::End);
-    assert_eq!(app.cursor_position(), 9);
-    assert_eq!(app.filter_state.scroll_offset, 7);
+    assert_state(&app, 9, 7);
 
     for _ in 0..3 {
         app.handle_message(&AppMsg::CursorUp);
     }
 
-    assert_eq!(app.cursor_position(), 6);
-    assert_eq!(app.filter_state.scroll_offset, 6);
+    assert_state(&app, 6, 6);
 }
 
 #[rstest]
@@ -60,16 +68,13 @@ fn page_up_adjusts_scroll_offset_to_keep_cursor_visible() {
 
 #[rstest]
 fn home_and_end_navigation_keep_cursor_visible() {
-    let mut app = ReviewApp::new(create_reviews(10));
-    app.review_list.set_visible_height(4);
+    let mut app = setup_app(10, 4);
 
     app.handle_message(&AppMsg::End);
-    assert_eq!(app.cursor_position(), 9);
-    assert_eq!(app.filter_state.scroll_offset, 6);
+    assert_state(&app, 9, 6);
 
     app.handle_message(&AppMsg::Home);
-    assert_eq!(app.cursor_position(), 0);
-    assert_eq!(app.filter_state.scroll_offset, 0);
+    assert_state(&app, 0, 0);
 }
 
 #[rstest]
