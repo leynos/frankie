@@ -67,11 +67,16 @@ fn temp_dir() -> TempDir {
     TempDir::new().expect("failed to create temporary directory")
 }
 
-fn utf8_path_from_temp(temp_dir: &TempDir) -> Result<Utf8PathBuf, IntakeError> {
+#[fixture]
+fn utf8_path_from_temp(temp_dir: TempDir) -> Result<Utf8PathBuf, IntakeError> {
     Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).map_err(|_| IntakeError::Io {
         message: "temporary directory path is not valid UTF-8".to_owned(),
     })
 }
+
+// `create_script` and `collect_until_finished` remain plain helpers because
+// they require test-specific arguments (script name/contents and a runtime
+// execution handle, respectively) that cannot be expressed as fixtures.
 
 fn create_script(
     temp_dir: &TempDir,
@@ -155,6 +160,7 @@ fn start_rejects_empty_comment_export() {
 #[rstest]
 fn successful_run_streams_events_and_writes_transcript(
     temp_dir: TempDir,
+    utf8_path_from_temp: Result<Utf8PathBuf, IntakeError>,
     rendered_jsonl: Result<String, IntakeError>,
 ) -> TestResult {
     let script = create_script(
@@ -168,8 +174,8 @@ fn successful_run_streams_events_and_writes_transcript(
         ),
     )?;
 
-    let context = CodexExecutionContext::new("owner", "repo", 42)
-        .with_transcript_dir(utf8_path_from_temp(&temp_dir)?);
+    let context =
+        CodexExecutionContext::new("owner", "repo", 42).with_transcript_dir(utf8_path_from_temp?);
     let request = CodexExecutionRequest::new(
         context,
         rendered_jsonl?,
@@ -224,6 +230,7 @@ fn successful_run_streams_events_and_writes_transcript(
 #[rstest]
 fn non_zero_exit_is_reported_with_exit_code(
     temp_dir: TempDir,
+    utf8_path_from_temp: Result<Utf8PathBuf, IntakeError>,
     rendered_jsonl: Result<String, IntakeError>,
 ) -> TestResult {
     let script = create_script(
@@ -236,8 +243,8 @@ fn non_zero_exit_is_reported_with_exit_code(
         ),
     )?;
 
-    let context = CodexExecutionContext::new("owner", "repo", 42)
-        .with_transcript_dir(utf8_path_from_temp(&temp_dir)?);
+    let context =
+        CodexExecutionContext::new("owner", "repo", 42).with_transcript_dir(utf8_path_from_temp?);
     let request = CodexExecutionRequest::new(context, rendered_jsonl?, None);
     let service = SystemCodexExecutionService::with_command_path(script);
 
@@ -267,6 +274,56 @@ fn non_zero_exit_is_reported_with_exit_code(
         }
         CodexExecutionOutcome::Succeeded { .. } => {
             return Err("expected non-zero exit failure".into());
+        }
+    }
+
+    Ok(())
+}
+
+#[rstest]
+fn stderr_from_failing_process_appears_in_failure_message(
+    temp_dir: TempDir,
+    utf8_path_from_temp: Result<Utf8PathBuf, IntakeError>,
+    rendered_jsonl: Result<String, IntakeError>,
+) -> TestResult {
+    let script = create_script(
+        &temp_dir,
+        "codex-stderr.sh",
+        concat!(
+            "#!/bin/sh\n",
+            "echo '{\"type\":\"turn.started\"}'\n",
+            "echo 'something went wrong on stderr' >&2\n",
+            "exit 1\n"
+        ),
+    )?;
+
+    let context =
+        CodexExecutionContext::new("owner", "repo", 42).with_transcript_dir(utf8_path_from_temp?);
+    let request = CodexExecutionRequest::new(context, rendered_jsonl?, None);
+    let service = SystemCodexExecutionService::with_command_path(script);
+
+    let handle = service.start(request)?;
+    let updates = collect_until_finished(&handle);
+
+    let outcome = updates
+        .iter()
+        .find_map(|update| match update {
+            CodexExecutionUpdate::Finished(outcome) => Some(outcome.clone()),
+            CodexExecutionUpdate::Progress(_) => None,
+        })
+        .ok_or("expected finished update")?;
+
+    match outcome {
+        CodexExecutionOutcome::Failed { message, .. } => {
+            if !message.contains("stderr:") {
+                return Err(format!("expected 'stderr:' in message, got: {message}").into());
+            }
+            if !message.contains("something went wrong on stderr") {
+                return Err(format!("expected stderr content in message, got: {message}").into());
+            }
+        }
+        CodexExecutionOutcome::Succeeded { .. } => {
+            return Err("expected failure outcome".into());
         }
     }
 
