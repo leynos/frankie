@@ -290,7 +290,7 @@ fn then_view_shows_commit_not_found(state: &TimeTravelTestState) -> StepResult {
 
 #[then("the view shows no repository error")]
 fn then_view_shows_no_repository(state: &TimeTravelTestState) -> StepResult {
-    state.assert_view_contains("No local repository")
+    state.assert_view_contains("local repository checkout")
 }
 
 #[then("the review list is visible")]

@@ -436,7 +436,12 @@ impl Model for ReviewApp {
     fn init() -> (Self, Option<Cmd>) {
         // Retrieve initial data from module-level storage
         let reviews = super::get_initial_reviews();
-        let model = Self::new(reviews);
+        let mut model = Self::new(reviews);
+
+        // Wire up git operations for time-travel if available
+        if let Some((git_ops, head_sha)) = super::get_git_ops_context() {
+            model = model.with_git_ops(git_ops, head_sha);
+        }
 
         // Start the background sync timer
         let cmd = Self::arm_sync_timer();
