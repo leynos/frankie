@@ -4,6 +4,9 @@
 mod codex_exec_bdd_support;
 
 use bubbletea_rs::Model;
+use camino::Utf8Path;
+use cap_std::ambient_authority;
+use cap_std::fs_utf8::Dir;
 use codex_exec_bdd_support::{CodexExecState, StubPlan, app_with_plan};
 use frankie::ai::{CodexExecutionOutcome, CodexExecutionUpdate, CodexProgressEvent};
 use rstest::fixture;
@@ -26,13 +29,12 @@ where
     F: FnOnce(&str) -> StubPlan,
 {
     let temp_dir = tempfile::TempDir::new()?;
-    let transcript_path = temp_dir.path().join(filename);
-    std::fs::write(&transcript_path, initial_content)?;
+    let temp_utf8 = camino::Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
+        .map_err(|_| "temporary directory path is not valid UTF-8")?;
+    let dir = Dir::open_ambient_dir(&temp_utf8, ambient_authority())?;
+    dir.write(filename, initial_content)?;
 
-    let transcript_path_str = transcript_path
-        .to_str()
-        .ok_or("transcript path must be valid UTF-8")?
-        .to_owned();
+    let transcript_path_str = temp_utf8.join(filename).to_string();
 
     let plan = plan_builder(&transcript_path_str);
 
@@ -213,7 +215,13 @@ fn then_transcript_exists(codex_state: &CodexExecState) -> Result<(), Box<dyn st
         .transcript_path
         .with_ref(Clone::clone)
         .ok_or("expected transcript path")?;
-    if !std::path::Path::new(&path).exists() {
+    let utf8_path = Utf8Path::new(&path);
+    let parent = utf8_path.parent().ok_or("transcript path has no parent")?;
+    let file_name = utf8_path
+        .file_name()
+        .ok_or("transcript path has no file name")?;
+    let dir = Dir::open_ambient_dir(parent, ambient_authority())?;
+    if !dir.exists(file_name) {
         return Err(format!("expected transcript file '{path}' to exist").into());
     }
 
@@ -230,7 +238,13 @@ fn then_transcript_contains(
         .with_ref(Clone::clone)
         .ok_or("expected transcript path")?;
     let expected = text.trim_matches('"');
-    let content = std::fs::read_to_string(path)?;
+    let utf8_path = Utf8Path::new(&path);
+    let parent = utf8_path.parent().ok_or("transcript path has no parent")?;
+    let file_name = utf8_path
+        .file_name()
+        .ok_or("transcript path has no file name")?;
+    let dir = Dir::open_ambient_dir(parent, ambient_authority())?;
+    let content = dir.read_to_string(file_name)?;
 
     if !content.contains(expected) {
         return Err(format!("expected transcript content to contain '{expected}'").into());

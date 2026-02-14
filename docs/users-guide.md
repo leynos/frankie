@@ -150,6 +150,8 @@ comments.
 
 ### Keyboard shortcuts
 
+Table: Review list keyboard shortcuts.
+
 | Key         | Action                         |
 | ----------- | ------------------------------ |
 | `j`, `↓`    | Move cursor down               |
@@ -195,9 +197,9 @@ A `[Loading…]` indicator appears in the header during sync. Manual refresh wit
 
 ### Codex execution from the TUI
 
-Press `x` in the review list to run `codex exec --json` using the currently
+Press `x` in the review list to run `codex app-server` using the currently
 filtered comments as input. Frankie serializes the filtered comments as JSONL,
-starts Codex, and polls the process stream.
+starts Codex, and polls the process stream via the app-server JSON-RPC protocol.
 
 During execution, the status bar switches from key hints to live Codex status
 updates. Each update is derived from streamed JSONL events (or from malformed

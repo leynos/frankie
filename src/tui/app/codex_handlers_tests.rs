@@ -1,15 +1,10 @@
 //! Tests for Codex TUI handlers.
 
-#![expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
-
 use std::sync::{Mutex, MutexGuard};
 
 use bubbletea_rs::Model;
 use camino::Utf8PathBuf;
-use rstest::rstest;
+use rstest::{fixture, rstest};
 
 use crate::ai::{
     CodexExecutionHandle, CodexExecutionOutcome, CodexExecutionRequest, CodexExecutionService,
@@ -78,13 +73,17 @@ impl CodexExecutionService for StubCodexService {
     }
 }
 
-fn ensure_refresh_context() -> Result<(), IntakeError> {
+#[fixture]
+fn refresh_context() -> Result<(), IntakeError> {
     let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/42")?;
     let token = PersonalAccessToken::new("test-token")?;
-    let _ = crate::tui::set_refresh_context(locator, token);
+    // Returns false when already initialised; safe to ignore in tests
+    // sharing a process-wide OnceLock.
+    let _already_set = crate::tui::set_refresh_context(locator, token);
     Ok(())
 }
 
+#[fixture]
 fn sample_reviews() -> Vec<crate::github::models::ReviewComment> {
     vec![crate::github::models::ReviewComment {
         file_path: Some("src/main.rs".to_owned()),
@@ -95,8 +94,14 @@ fn sample_reviews() -> Vec<crate::github::models::ReviewComment> {
 }
 
 #[rstest]
-fn start_codex_execution_requires_filtered_comments() -> Result<(), Box<dyn std::error::Error>> {
-    ensure_refresh_context()?;
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+fn start_codex_execution_requires_filtered_comments(
+    refresh_context: Result<(), IntakeError>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    refresh_context?;
 
     let service = std::sync::Arc::new(StubCodexService::with_updates(Vec::new()));
     let mut app = ReviewApp::empty().with_codex_service(service);
@@ -110,8 +115,15 @@ fn start_codex_execution_requires_filtered_comments() -> Result<(), Box<dyn std:
 }
 
 #[rstest]
-fn codex_progress_and_success_are_reflected_in_state() -> Result<(), Box<dyn std::error::Error>> {
-    ensure_refresh_context()?;
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+fn codex_progress_and_success_are_reflected_in_state(
+    refresh_context: Result<(), IntakeError>,
+    sample_reviews: Vec<crate::github::models::ReviewComment>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    refresh_context?;
 
     let transcript_path = Utf8PathBuf::from("/tmp/frankie-codex-success.jsonl");
     let updates = vec![
@@ -124,7 +136,7 @@ fn codex_progress_and_success_are_reflected_in_state() -> Result<(), Box<dyn std
     ];
 
     let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
-    let mut app = ReviewApp::new(sample_reviews()).with_codex_service(service);
+    let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     app.handle_message(&AppMsg::StartCodexExecution);
     app.handle_message(&AppMsg::CodexPollTick);
@@ -143,8 +155,15 @@ fn codex_progress_and_success_are_reflected_in_state() -> Result<(), Box<dyn std
 }
 
 #[rstest]
-fn non_zero_exit_sets_tui_error_message() -> Result<(), Box<dyn std::error::Error>> {
-    ensure_refresh_context()?;
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+fn non_zero_exit_sets_tui_error_message(
+    refresh_context: Result<(), IntakeError>,
+    sample_reviews: Vec<crate::github::models::ReviewComment>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    refresh_context?;
 
     let transcript_path = Utf8PathBuf::from("/tmp/frankie-codex-failure.jsonl");
     let updates = vec![CodexExecutionUpdate::Finished(
@@ -156,7 +175,7 @@ fn non_zero_exit_sets_tui_error_message() -> Result<(), Box<dyn std::error::Erro
     )];
 
     let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
-    let mut app = ReviewApp::new(sample_reviews()).with_codex_service(service);
+    let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     app.handle_message(&AppMsg::StartCodexExecution);
     app.handle_message(&AppMsg::CodexPollTick);
@@ -169,13 +188,20 @@ fn non_zero_exit_sets_tui_error_message() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[rstest]
-fn start_failure_is_surfaced_as_error() -> Result<(), Box<dyn std::error::Error>> {
-    ensure_refresh_context()?;
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+fn start_failure_is_surfaced_as_error(
+    refresh_context: Result<(), IntakeError>,
+    sample_reviews: Vec<crate::github::models::ReviewComment>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    refresh_context?;
 
     let service = std::sync::Arc::new(StubCodexService::with_start_error(IntakeError::Api {
         message: "codex not found".to_owned(),
     }));
-    let mut app = ReviewApp::new(sample_reviews()).with_codex_service(service);
+    let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     app.handle_message(&AppMsg::StartCodexExecution);
 
@@ -186,7 +212,11 @@ fn start_failure_is_surfaced_as_error() -> Result<(), Box<dyn std::error::Error>
 }
 
 #[tokio::test]
-async fn codex_poll_timer_emits_poll_tick_message() {
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+async fn codex_poll_timer_emits_poll_tick_message() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::pause();
 
     let cmd = ReviewApp::arm_codex_poll_timer();
@@ -194,8 +224,9 @@ async fn codex_poll_timer_emits_poll_tick_message() {
     tokio::time::advance(std::time::Duration::from_millis(200)).await;
 
     let result = cmd.await;
-    assert!(result.is_some());
-    let msg = result.expect("expected poll message");
+    let msg = result.ok_or("expected poll message")?;
     let app_msg = msg.downcast_ref::<AppMsg>();
     assert!(matches!(app_msg, Some(AppMsg::CodexPollTick)));
+
+    Ok(())
 }

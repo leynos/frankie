@@ -1,6 +1,6 @@
 //! Transcript path resolution and JSONL transcript persistence.
 //!
-//! Codex execution emits JSON Lines (JSONL) events. This module standardises
+//! Codex execution emits JSON Lines (JSONL) events. This module standardizes
 //! where transcripts are written and provides a small writer abstraction for
 //! appending event lines.
 
@@ -49,15 +49,12 @@ impl TranscriptWriter {
     ///
     /// Returns [`IntakeError::Io`] when the parent directory cannot be created
     /// or the transcript file cannot be created.
-    pub fn create(path: Utf8PathBuf) -> Result<Self, IntakeError> {
-        ensure_parent_dirs(path.as_path())?;
-
-        let (dir, file_name) = open_dir_for_path(path.as_path(), "transcript")?;
-        let file = dir.create(file_name).map_err(|error| IntakeError::Io {
-            message: format!("failed to create transcript file '{path}': {error}"),
-        })?;
-
-        Ok(Self { path, file })
+    pub fn create(path: &Utf8Path) -> Result<Self, IntakeError> {
+        let (resolved, file) = create_file_with_parents(path, "transcript")?;
+        Ok(Self {
+            path: resolved,
+            file,
+        })
     }
 
     /// Appends one transcript line.
@@ -102,33 +99,41 @@ impl TranscriptWriter {
 /// Returns [`IntakeError::Configuration`] when neither `XDG_STATE_HOME` nor
 /// `HOME` is available.
 pub fn default_transcript_base_dir() -> Result<Utf8PathBuf, IntakeError> {
-    resolve_transcript_base_dir(
-        std::env::var("XDG_STATE_HOME")
-            .ok()
-            .filter(|value| !value.is_empty()),
-        std::env::var("HOME").ok().filter(|value| !value.is_empty()),
-    )
+    let xdg = std::env::var("XDG_STATE_HOME")
+        .ok()
+        .filter(|v| !v.is_empty());
+    let home = std::env::var("HOME").ok().filter(|v| !v.is_empty());
+
+    resolve_transcript_base_dir(xdg.as_deref(), home.as_deref())
 }
 
 /// Resolves the transcript root from optional environment values.
 ///
-/// This helper exists to keep environment-sensitive logic unit-testable without
-/// mutating process environment variables in tests.
+/// This helper exists to keep environment-sensitive logic unit-testable
+/// without mutating process environment variables in tests.
 pub(crate) fn resolve_transcript_base_dir(
-    xdg_state_home: Option<String>,
-    home: Option<String>,
+    xdg_state_home: Option<&str>,
+    home: Option<&str>,
 ) -> Result<Utf8PathBuf, IntakeError> {
-    let base = if let Some(state_home) = xdg_state_home {
-        Utf8PathBuf::from(state_home)
-    } else if let Some(home_dir) = home {
-        Utf8PathBuf::from(home_dir).join(".local").join("state")
-    } else {
-        return Err(IntakeError::Configuration {
-            message: "unable to resolve transcript directory: HOME is not set".to_owned(),
-        });
-    };
+    if let Some(state_home) = xdg_state_home {
+        return Ok(Utf8PathBuf::from(state_home)
+            .join("frankie")
+            .join("codex-transcripts"));
+    }
 
-    Ok(base.join("frankie").join("codex-transcripts"))
+    if let Some(home_dir) = home {
+        return Ok(Utf8PathBuf::from(home_dir)
+            .join(".local")
+            .join("state")
+            .join("frankie")
+            .join("codex-transcripts"));
+    }
+
+    Err(IntakeError::Configuration {
+        message: "unable to resolve transcript directory: \
+                  neither XDG_STATE_HOME nor HOME is set"
+            .to_owned(),
+    })
 }
 
 /// Builds a deterministic transcript file path.
@@ -160,64 +165,68 @@ fn sanitize_segment(segment: &str) -> String {
         .collect()
 }
 
-fn ensure_parent_dirs(path: &Utf8Path) -> Result<(), IntakeError> {
-    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-
-    if parent == Utf8Path::new(".") || parent.as_str().is_empty() {
-        return Ok(());
-    }
-
-    if parent.is_absolute() {
-        let root =
-            Dir::open_ambient_dir("/", ambient_authority()).map_err(|error| IntakeError::Io {
-                message: format!("failed to open root directory for transcripts: {error}"),
-            })?;
-        let relative_parent = parent.strip_prefix("/").map_err(|_| IntakeError::Io {
-            message: format!("failed to normalise transcript directory '{parent}'"),
-        })?;
-
-        if !relative_parent.as_str().is_empty() {
-            root.create_dir_all(relative_parent)
-                .map_err(|error| IntakeError::Io {
-                    message: format!("failed to create transcript directory '{parent}': {error}"),
-                })?;
-        }
-
-        return Ok(());
-    }
-
-    let cwd = Dir::open_ambient_dir(".", ambient_authority()).map_err(|error| IntakeError::Io {
-        message: format!("failed to open current directory for transcripts: {error}"),
-    })?;
-    cwd.create_dir_all(parent).map_err(|error| IntakeError::Io {
-        message: format!("failed to create transcript directory '{parent}': {error}"),
-    })
-}
-
-fn open_dir_for_path<'a>(
-    path: &'a Utf8Path,
+/// Creates a file at `path`, ensuring parent directories exist first.
+///
+/// Returns the canonical path and the opened file handle.  All directory
+/// and path logic is centralised here so callers do not need to coordinate
+/// `ensure_parent_dirs` and `open_dir_for_path` separately.
+fn create_file_with_parents(
+    path: &Utf8Path,
     path_type: &str,
-) -> Result<(Dir, &'a str), IntakeError> {
+) -> Result<(Utf8PathBuf, cap_std::fs_utf8::File), IntakeError> {
     let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
     let file_name = path.file_name().ok_or_else(|| IntakeError::Io {
         message: format!("invalid {path_type} path '{path}': no file name"),
     })?;
 
-    let dir =
-        Dir::open_ambient_dir(parent, ambient_authority()).map_err(|error| IntakeError::Io {
-            message: format!("failed to open directory '{parent}': {error}"),
+    let (dir, rel_parent) = if parent == Utf8Path::new(".") || parent.as_str().is_empty() {
+        (
+            Dir::open_ambient_dir(".", ambient_authority()).map_err(|error| IntakeError::Io {
+                message: format!("failed to open current directory for {path_type}s: {error}"),
+            })?,
+            Utf8Path::new("."),
+        )
+    } else if parent.is_absolute() {
+        let root =
+            Dir::open_ambient_dir("/", ambient_authority()).map_err(|error| IntakeError::Io {
+                message: format!("failed to open root directory for {path_type}s: {error}"),
+            })?;
+        let rel = parent.strip_prefix("/").map_err(|_| IntakeError::Io {
+            message: format!("failed to normalise {path_type} directory '{parent}'"),
+        })?;
+        (root, rel)
+    } else {
+        (
+            Dir::open_ambient_dir(".", ambient_authority()).map_err(|error| IntakeError::Io {
+                message: format!("failed to open current directory for {path_type}s: {error}"),
+            })?,
+            parent,
+        )
+    };
+
+    let target_dir = if !rel_parent.as_str().is_empty() && rel_parent != Utf8Path::new(".") {
+        dir.create_dir_all(rel_parent)
+            .map_err(|error| IntakeError::Io {
+                message: format!("failed to create {path_type} directory '{parent}': {error}"),
+            })?;
+        dir.open_dir(rel_parent).map_err(|error| IntakeError::Io {
+            message: format!("failed to open {path_type} directory '{parent}': {error}"),
+        })?
+    } else {
+        dir
+    };
+
+    let file = target_dir
+        .create(file_name)
+        .map_err(|error| IntakeError::Io {
+            message: format!("failed to create {path_type} file '{path}': {error}"),
         })?;
 
-    Ok((dir, file_name))
+    Ok((path.to_path_buf(), file))
 }
 
 #[cfg(test)]
 mod tests {
-    #![expect(
-        clippy::panic_in_result_fn,
-        reason = "Test assertions are expected to panic on failure"
-    )]
-
     use chrono::TimeZone;
     use rstest::rstest;
     use tempfile::TempDir;
@@ -227,11 +236,12 @@ mod tests {
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     #[rstest]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "Test assertions are expected to panic on failure"
+    )]
     fn resolve_transcript_base_dir_prefers_xdg_state_home() -> TestResult {
-        let path = resolve_transcript_base_dir(
-            Some("/tmp/state-root".to_owned()),
-            Some("/home/example".to_owned()),
-        )?;
+        let path = resolve_transcript_base_dir(Some("/tmp/state-root"), Some("/home/example"))?;
 
         assert_eq!(
             path,
@@ -242,8 +252,12 @@ mod tests {
     }
 
     #[rstest]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "Test assertions are expected to panic on failure"
+    )]
     fn resolve_transcript_base_dir_falls_back_to_home() -> TestResult {
-        let path = resolve_transcript_base_dir(None, Some("/home/example".to_owned()))?;
+        let path = resolve_transcript_base_dir(None, Some("/home/example"))?;
 
         assert_eq!(
             path,
@@ -278,18 +292,25 @@ mod tests {
     }
 
     #[rstest]
+    #[expect(
+        clippy::panic_in_result_fn,
+        reason = "Test assertions are expected to panic on failure"
+    )]
     fn transcript_writer_creates_parent_dirs_and_appends_lines() -> TestResult {
         let temp_dir = TempDir::new()?;
         let base = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
             .map_err(|_| "temp directory path must be UTF-8")?;
         let path = base.join("nested").join("run.jsonl");
 
-        let mut writer = TranscriptWriter::create(path.clone())?;
+        let mut writer = TranscriptWriter::create(&path)?;
         writer.append_line("line-1")?;
         writer.append_line("line-2")?;
         writer.flush()?;
 
-        let content = std::fs::read_to_string(path.as_std_path())?;
+        let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+        let dir = Dir::open_ambient_dir(parent, ambient_authority())?;
+        let file_name = path.file_name().ok_or("path has no file name")?;
+        let content = dir.read_to_string(file_name)?;
         assert_eq!(content, "line-1\nline-2\n");
 
         Ok(())

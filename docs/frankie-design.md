@@ -2812,7 +2812,7 @@ flowchart LR
     N --> W
 ```
 
-#### ADR-001: incremental sync for review comments
+#### Architecture decision record (ADR-001): incremental sync for review comments
 
 **Context**: The TUI needs to keep review comments up to date without losing
 the user's current selection or requiring manual refresh.
@@ -2848,13 +2848,14 @@ ID-based selection tracking.
 
 #### ADR-002: Codex execution stream and transcript model
 
-**Context**: The review TUI must trigger `codex exec` directly from filtered
-comments, display live progress, and preserve machine-readable execution
-transcripts for diagnostics.
+**Context**: The review TUI must trigger `codex app-server` directly from
+filtered comments, display live progress, and preserve machine-readable
+execution transcripts for diagnostics.
 
 **Decision**: Integrate Codex execution through a dedicated AI service module
-that runs `codex exec --json`, polls progress updates in the TUI loop, and
-writes one JSONL transcript file per run to the local state directory.
+that runs `codex app-server` via the JSON-RPC protocol, polls progress updates
+in the TUI loop, and writes one JSONL transcript file per run to the local
+state directory.
 
 **Rationale**:
 

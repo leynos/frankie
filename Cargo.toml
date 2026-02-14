@@ -24,6 +24,7 @@ url = "2.5.4"
 git2 = "0.20.3"
 chrono = { version = "0.4.43", features = ["serde"] }
 cap-std = { version = "4.0.0", features = ["fs_utf8"] }
+tracing = "0.1.41"
 
 # TUI framework
 bubbletea-rs = "0.0.9"

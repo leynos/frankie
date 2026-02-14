@@ -144,7 +144,9 @@ pub(crate) fn app_with_plan(plan: StubPlan) -> Result<ReviewApp, IntakeError> {
 fn ensure_refresh_context() -> Result<(), IntakeError> {
     let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/42")?;
     let token = PersonalAccessToken::new("test-token")?;
-    let _ = frankie::tui::set_refresh_context(locator, token);
+    // Returns false when already initialised; safe to ignore in tests
+    // sharing a process-wide OnceLock.
+    let _already_set = frankie::tui::set_refresh_context(locator, token);
     Ok(())
 }
 

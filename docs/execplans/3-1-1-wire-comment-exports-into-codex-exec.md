@@ -1,4 +1,4 @@
-# Wire comment exports into `codex exec`
+# Wire comment exports into `codex app-server`
 
 This execution plan (ExecPlan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
@@ -10,11 +10,11 @@ Status: COMPLETE
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
 
-## Purpose / Big picture
+## Purpose / big picture
 
 Enable artificial intelligence (AI)-assisted resolution directly from Frankie’s
 review terminal user interface (TUI) by wiring the existing structured comment
-export pipeline into `codex exec --json`, showing live progress in the
+export pipeline into `codex app-server`, showing live progress in the
 interface, and persisting a per-run transcript to disk. Success is observable
 when a user can launch Codex from the TUI, watch status updates as events
 arrive, inspect transcript files after completion, and see a clear error in the
@@ -35,7 +35,7 @@ TUI if Codex exits with a non-zero status.
   transcript and intermediate export files.
 - Preserve existing operation modes and current export command-line interface
   (CLI) behaviour.
-- Streaming progress must be derived from `codex exec --json` JSON Lines
+- Streaming progress must be derived from `codex app-server` JSON Lines
   (JSONL) events.
 - Non-zero Codex exits must be surfaced as TUI-visible failures.
 - Unit tests must use `rstest`; behavioural tests must use `rstest-bdd` v0.5.0
@@ -68,7 +68,7 @@ TUI if Codex exits with a non-zero status.
 
 ## Risks
 
-- Risk: `codex exec` argument semantics may differ from assumptions.
+- Risk: `codex app-server` argument semantics may differ from assumptions.
   Severity: high. Likelihood: medium. Mitigation: add an early prototype stage
   to validate command invocation and JSONL stream handling before full
   integration.
@@ -93,7 +93,7 @@ TUI if Codex exits with a non-zero status.
 - [x] (2026-02-10 00:00Z) Drafted self-contained ExecPlan with constraints,
       tolerances, staged implementation, and validation approach.
 - [x] (2026-02-12 00:00Z) Implemented command invocation and JSONL event
-      parsing for `codex exec --json`.
+      parsing for `codex app-server`.
 - [x] (2026-02-12 00:00Z) Implemented Codex execution service and transcript
       persistence in `src/ai/`.
 - [x] (2026-02-12 00:00Z) Integrated TUI trigger (`x`), polling-based progress
@@ -141,7 +141,7 @@ TUI if Codex exits with a non-zero status.
 ## Outcomes & retrospective
 
 - Implemented `src/ai/` with a dedicated execution path that launches
-  `codex exec --json`, parses progress events, and persists transcript JSONL.
+  `codex app-server`, parses progress events, and persists transcript JSONL.
 - Added TUI integration for `x`-triggered execution with periodic poll ticks,
   live status updates, and explicit error surfacing for non-zero exits.
 - Added unit tests for transcript directory/path logic, parser behaviour, and
@@ -180,7 +180,7 @@ Documentation targets for this feature:
 
 ## Plan of work
 
-Stage A (prototype and dependency alignment): verify `codex exec --json`
+Stage A (prototype and dependency alignment): verify `codex app-server`
 invocation assumptions and upgrade behavioural test dependencies to
 `rstest-bdd` v0.5.0. Do not proceed until the command-shape and test baseline
 are stable.
@@ -210,7 +210,7 @@ Each stage ends with validation and a go/no-go checkpoint.
    - `rstest-bdd-macros = { version = "0.5.0", features = [
      "compile-time-validation"] }`
 2. Run behavioural tests and fix compatibility issues introduced by v0.5.0.
-3. Add a small prototype test/module that validates expected `codex exec --json`
+3. Add a small prototype test/module that validates expected `codex app-server`
    process contract (stdout JSONL lines, stderr progress, exit status handling)
    using an injectable fake command runner.
 4. Go/no-go:
@@ -280,7 +280,7 @@ Each stage ends with validation and a go/no-go checkpoint.
    - where transcripts are written
    - what users see on success and non-zero Codex exits.
 3. Mark roadmap item done in `docs/roadmap.md`:
-   - set `Wire comment exports into codex exec …` checklist entry to `[x]`
+   - set `Wire comment exports into codex app-server …` checklist entry to `[x]`
      only after all acceptance checks pass.
 4. Run full validation gates (commands listed below) and capture logs.
 

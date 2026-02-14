@@ -1,15 +1,12 @@
 //! Unit tests for Codex execution services.
 
-#![expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
-
 use std::thread;
 use std::time::{Duration, Instant};
 
 use camino::Utf8PathBuf;
-use rstest::rstest;
+use cap_std::ambient_authority;
+use cap_std::fs_utf8::Dir;
+use rstest::{fixture, rstest};
 use tempfile::TempDir;
 
 use super::*;
@@ -19,6 +16,7 @@ use crate::export::{ExportedComment, write_jsonl};
 /// Result type used by Codex execution tests.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+#[fixture]
 fn sample_comment() -> ExportedComment {
     ExportedComment {
         id: 1,
@@ -63,6 +61,11 @@ fn collect_until_finished(handle: &CodexExecutionHandle) -> Vec<CodexExecutionUp
     updates
 }
 
+#[fixture]
+fn temp_dir() -> TempDir {
+    TempDir::new().expect("failed to create temporary directory")
+}
+
 fn utf8_path_from_temp(temp_dir: &TempDir) -> Result<Utf8PathBuf, IntakeError> {
     Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).map_err(|_| IntakeError::Io {
         message: "temporary directory path is not valid UTF-8".to_owned(),
@@ -79,24 +82,32 @@ fn create_script(
             message: "script path is not valid UTF-8".to_owned(),
         })?;
 
-    std::fs::write(path.as_std_path(), contents).map_err(|error| IntakeError::Io {
+    let temp_utf8 =
+        Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).map_err(|_| IntakeError::Io {
+            message: "temporary directory path is not valid UTF-8".to_owned(),
+        })?;
+    let dir = Dir::open_ambient_dir(&temp_utf8, ambient_authority()).map_err(|error| {
+        IntakeError::Io {
+            message: format!("failed to open temp directory: {error}"),
+        }
+    })?;
+    dir.write(name, contents).map_err(|error| IntakeError::Io {
         message: format!("failed to write script: {error}"),
     })?;
 
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
+        use cap_std::fs::PermissionsExt;
 
-        let metadata = std::fs::metadata(path.as_std_path()).map_err(|error| IntakeError::Io {
+        let metadata = dir.metadata(name).map_err(|error| IntakeError::Io {
             message: format!("failed to stat script: {error}"),
         })?;
         let mut permissions = metadata.permissions();
         permissions.set_mode(0o755);
-        std::fs::set_permissions(path.as_std_path(), permissions).map_err(|error| {
-            IntakeError::Io {
+        dir.set_permissions(name, permissions)
+            .map_err(|error| IntakeError::Io {
                 message: format!("failed to chmod script: {error}"),
-            }
-        })?;
+            })?;
     }
 
     Ok(path)
@@ -141,8 +152,14 @@ fn start_rejects_empty_comment_export() {
 }
 
 #[rstest]
-fn successful_run_streams_events_and_writes_transcript() -> TestResult {
-    let temp_dir = TempDir::new()?;
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+fn successful_run_streams_events_and_writes_transcript(
+    temp_dir: TempDir,
+    sample_comment: ExportedComment,
+) -> TestResult {
     let script = create_script(
         &temp_dir,
         "codex-success.sh",
@@ -158,7 +175,7 @@ fn successful_run_streams_events_and_writes_transcript() -> TestResult {
         .with_transcript_dir(utf8_path_from_temp(&temp_dir)?);
     let request = CodexExecutionRequest::new(
         context,
-        rendered_jsonl(&[sample_comment()])?,
+        rendered_jsonl(&[sample_comment])?,
         Some("https://github.com/owner/repo/pull/42".to_owned()),
     );
     let service = SystemCodexExecutionService::with_command_path(script);
@@ -188,7 +205,14 @@ fn successful_run_streams_events_and_writes_transcript() -> TestResult {
         }
     };
 
-    let transcript = std::fs::read_to_string(transcript_path.as_std_path())?;
+    let parent = transcript_path
+        .parent()
+        .ok_or("transcript path has no parent")?;
+    let dir = Dir::open_ambient_dir(parent, ambient_authority())?;
+    let file_name = transcript_path
+        .file_name()
+        .ok_or("transcript path has no file name")?;
+    let transcript = dir.read_to_string(file_name)?;
     assert!(transcript.contains("turn.started"));
     assert!(transcript.contains("item.completed"));
 
@@ -196,8 +220,14 @@ fn successful_run_streams_events_and_writes_transcript() -> TestResult {
 }
 
 #[rstest]
-fn non_zero_exit_is_reported_with_exit_code() -> TestResult {
-    let temp_dir = TempDir::new()?;
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+fn non_zero_exit_is_reported_with_exit_code(
+    temp_dir: TempDir,
+    sample_comment: ExportedComment,
+) -> TestResult {
     let script = create_script(
         &temp_dir,
         "codex-fail.sh",
@@ -210,7 +240,7 @@ fn non_zero_exit_is_reported_with_exit_code() -> TestResult {
 
     let context = CodexExecutionContext::new("owner", "repo", 42)
         .with_transcript_dir(utf8_path_from_temp(&temp_dir)?);
-    let request = CodexExecutionRequest::new(context, rendered_jsonl(&[sample_comment()])?, None);
+    let request = CodexExecutionRequest::new(context, rendered_jsonl(&[sample_comment])?, None);
     let service = SystemCodexExecutionService::with_command_path(script);
 
     let handle = service.start(request)?;
