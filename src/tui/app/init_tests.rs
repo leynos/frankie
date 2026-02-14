@@ -5,9 +5,16 @@ use std::io;
 use std::time::Duration;
 
 use bubbletea_rs::Model;
+use rstest::{fixture, rstest};
 
+use super::sync_handlers::SYNC_INTERVAL;
 use super::*;
 use crate::github::models::test_support::minimal_review;
+
+#[fixture]
+fn empty_app() -> ReviewApp {
+    ReviewApp::empty()
+}
 
 #[test]
 fn review_app_init_returns_startup_command() {
@@ -45,16 +52,20 @@ async fn review_app_init_emits_initialized_message_immediately() -> Result<(), B
     Ok(())
 }
 
+#[rstest]
 #[tokio::test]
-async fn initialized_message_arms_sync_timer() -> Result<(), Box<dyn Error>> {
+async fn initialized_message_arms_sync_timer(
+    mut empty_app: ReviewApp,
+) -> Result<(), Box<dyn Error>> {
     tokio::time::pause();
 
-    let mut app = ReviewApp::empty();
-    let cmd = app.handle_message(&AppMsg::Initialized).ok_or_else(|| {
-        io::Error::other("initialized message should return a sync timer command")
-    })?;
+    let cmd = empty_app
+        .handle_message(&AppMsg::Initialized)
+        .ok_or_else(|| {
+            io::Error::other("initialized message should return a sync timer command")
+        })?;
 
-    tokio::time::advance(Duration::from_secs(31)).await;
+    tokio::time::advance(Duration::from_secs(SYNC_INTERVAL.as_secs() + 1)).await;
     let result = cmd.await;
     let msg = result.ok_or_else(|| io::Error::other("sync timer command should emit a message"))?;
 
@@ -68,16 +79,15 @@ async fn initialized_message_arms_sync_timer() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[rstest]
 #[test]
-fn initialized_message_is_one_shot() {
-    let mut app = ReviewApp::empty();
-
+fn initialized_message_is_one_shot(mut empty_app: ReviewApp) {
     assert!(
-        app.handle_message(&AppMsg::Initialized).is_some(),
+        empty_app.handle_message(&AppMsg::Initialized).is_some(),
         "first initialized message should arm the sync timer"
     );
     assert!(
-        app.handle_message(&AppMsg::Initialized).is_none(),
+        empty_app.handle_message(&AppMsg::Initialized).is_none(),
         "subsequent initialized messages should be ignored"
     );
 }
