@@ -13,6 +13,7 @@ use serde_json::Value;
 use crate::ai::codex_exec::{CodexExecutionUpdate, CodexProgressEvent};
 use crate::ai::transcript::TranscriptWriter;
 
+use super::RunError;
 use super::app_server::{self, AppServerCompletion};
 
 /// Outcome of the stdout streaming loop.
@@ -39,17 +40,18 @@ pub(super) fn stream_progress(
     stdout: ChildStdout,
     mut stdin: Option<ChildStdin>,
     context: &mut StreamProgressContext<'_>,
-) -> Result<StreamCompletion, String> {
+) -> Result<StreamCompletion, RunError> {
     let mut session = app_server::maybe_start_session(stdin.as_mut(), context.prompt);
     let reader = BufReader::new(stdout);
     let mut lines = reader.lines();
 
     while let Some(line_result) = lines.next() {
-        let line = line_result.map_err(|error| format!("failed to read Codex output: {error}"))?;
+        let line = line_result
+            .map_err(|error| RunError::new(format!("failed to read Codex output: {error}")))?;
         context
             .transcript
             .append_line(&line)
-            .map_err(|error| format!("failed to write transcript: {error}"))?;
+            .map_err(|error| RunError::new(format!("failed to write transcript: {error}")))?;
 
         if context
             .sender

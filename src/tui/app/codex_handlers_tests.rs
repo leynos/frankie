@@ -94,10 +94,6 @@ fn sample_reviews() -> Vec<crate::github::models::ReviewComment> {
 }
 
 #[rstest]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
 fn start_codex_execution_requires_filtered_comments(
     refresh_context: Result<(), IntakeError>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -109,16 +105,14 @@ fn start_codex_execution_requires_filtered_comments(
     app.handle_message(&AppMsg::StartCodexExecution);
 
     let error = app.error_message().ok_or("expected error")?;
-    assert!(error.contains("no filtered comments available"));
+    if !error.contains("no filtered comments available") {
+        return Err(format!("expected 'no filtered comments available', got: {error:?}").into());
+    }
 
     Ok(())
 }
 
 #[rstest]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
 fn codex_progress_and_success_are_reflected_in_state(
     refresh_context: Result<(), IntakeError>,
     sample_reviews: Vec<crate::github::models::ReviewComment>,
@@ -141,24 +135,22 @@ fn codex_progress_and_success_are_reflected_in_state(
     app.handle_message(&AppMsg::StartCodexExecution);
     app.handle_message(&AppMsg::CodexPollTick);
 
-    assert!(
-        app.error_message().is_none(),
-        "unexpected error: {:?}",
-        app.error_message()
-    );
+    if let Some(error) = app.error_message() {
+        return Err(format!("unexpected error: {error:?}").into());
+    }
 
     let rendered = app.view();
-    assert!(rendered.contains("Codex execution completed"));
-    assert!(rendered.contains(transcript_path.as_str()));
+    if !rendered.contains("Codex execution completed") {
+        return Err("expected 'Codex execution completed' in view".into());
+    }
+    if !rendered.contains(transcript_path.as_str()) {
+        return Err(format!("expected transcript path in view: {transcript_path}").into());
+    }
 
     Ok(())
 }
 
 #[rstest]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
 fn non_zero_exit_sets_tui_error_message(
     refresh_context: Result<(), IntakeError>,
     sample_reviews: Vec<crate::github::models::ReviewComment>,
@@ -181,17 +173,17 @@ fn non_zero_exit_sets_tui_error_message(
     app.handle_message(&AppMsg::CodexPollTick);
 
     let error = app.error_message().ok_or("expected Codex failure error")?;
-    assert!(error.contains("exit code: 7"));
-    assert!(error.contains("Transcript:"));
+    if !error.contains("exit code: 7") {
+        return Err(format!("expected 'exit code: 7' in error, got: {error:?}").into());
+    }
+    if !error.contains("Transcript:") {
+        return Err(format!("expected 'Transcript:' in error, got: {error:?}").into());
+    }
 
     Ok(())
 }
 
 #[rstest]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
 fn start_failure_is_surfaced_as_error(
     refresh_context: Result<(), IntakeError>,
     sample_reviews: Vec<crate::github::models::ReviewComment>,
@@ -206,16 +198,14 @@ fn start_failure_is_surfaced_as_error(
     app.handle_message(&AppMsg::StartCodexExecution);
 
     let error = app.error_message().ok_or("expected start failure")?;
-    assert!(error.contains("codex not found"));
+    if !error.contains("codex not found") {
+        return Err(format!("expected 'codex not found' in error, got: {error:?}").into());
+    }
 
     Ok(())
 }
 
 #[tokio::test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
 async fn codex_poll_timer_emits_poll_tick_message() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::pause();
 
@@ -226,7 +216,9 @@ async fn codex_poll_timer_emits_poll_tick_message() -> Result<(), Box<dyn std::e
     let result = cmd.await;
     let msg = result.ok_or("expected poll message")?;
     let app_msg = msg.downcast_ref::<AppMsg>();
-    assert!(matches!(app_msg, Some(AppMsg::CodexPollTick)));
+    if !matches!(app_msg, Some(AppMsg::CodexPollTick)) {
+        return Err(format!("expected CodexPollTick, got {app_msg:?}").into());
+    }
 
     Ok(())
 }

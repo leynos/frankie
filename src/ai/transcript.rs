@@ -227,6 +227,8 @@ fn create_file_with_parents(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for transcript path resolution and JSONL persistence.
+
     use chrono::TimeZone;
     use rstest::rstest;
     use tempfile::TempDir;
@@ -236,66 +238,59 @@ mod tests {
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
     #[rstest]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "Test assertions are expected to panic on failure"
-    )]
     fn resolve_transcript_base_dir_prefers_xdg_state_home() -> TestResult {
         let path = resolve_transcript_base_dir(Some("/tmp/state-root"), Some("/home/example"))?;
 
-        assert_eq!(
-            path,
-            Utf8PathBuf::from("/tmp/state-root/frankie/codex-transcripts")
-        );
+        let expected = Utf8PathBuf::from("/tmp/state-root/frankie/codex-transcripts");
+        if path != expected {
+            return Err(format!("expected {expected:?}, got {path:?}").into());
+        }
 
         Ok(())
     }
 
     #[rstest]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "Test assertions are expected to panic on failure"
-    )]
     fn resolve_transcript_base_dir_falls_back_to_home() -> TestResult {
         let path = resolve_transcript_base_dir(None, Some("/home/example"))?;
 
-        assert_eq!(
-            path,
-            Utf8PathBuf::from("/home/example/.local/state/frankie/codex-transcripts")
-        );
+        let expected = Utf8PathBuf::from("/home/example/.local/state/frankie/codex-transcripts");
+        if path != expected {
+            return Err(format!("expected {expected:?}, got {path:?}").into());
+        }
 
         Ok(())
     }
 
     #[rstest]
-    fn resolve_transcript_base_dir_errors_without_any_base() {
-        let error =
-            resolve_transcript_base_dir(None, None).expect_err("expected configuration error");
+    fn resolve_transcript_base_dir_errors_without_any_base() -> TestResult {
+        let result = resolve_transcript_base_dir(None, None);
+        if !matches!(result, Err(IntakeError::Configuration { .. })) {
+            return Err(format!("expected Configuration error, got {result:?}").into());
+        }
 
-        assert!(matches!(error, IntakeError::Configuration { .. }));
+        Ok(())
     }
 
     #[rstest]
-    fn transcript_path_is_deterministic_and_sanitized() {
+    fn transcript_path_is_deterministic_and_sanitized() -> TestResult {
         let metadata = TranscriptMetadata::new("owner/name", "repo.name", 42);
         let now = Utc
             .with_ymd_and_hms(2026, 2, 12, 10, 11, 12)
             .single()
-            .expect("fixed timestamp should be valid");
+            .ok_or("fixed timestamp should be valid")?;
 
         let path = transcript_path(Utf8Path::new("/tmp/transcripts"), &metadata, now);
 
-        assert_eq!(
-            path,
-            Utf8PathBuf::from("/tmp/transcripts/owner-name-repo-name-pr-42-20260212T101112Z.jsonl")
-        );
+        let expected =
+            Utf8PathBuf::from("/tmp/transcripts/owner-name-repo-name-pr-42-20260212T101112Z.jsonl");
+        if path != expected {
+            return Err(format!("expected {expected:?}, got {path:?}").into());
+        }
+
+        Ok(())
     }
 
     #[rstest]
-    #[expect(
-        clippy::panic_in_result_fn,
-        reason = "Test assertions are expected to panic on failure"
-    )]
     fn transcript_writer_creates_parent_dirs_and_appends_lines() -> TestResult {
         let temp_dir = TempDir::new()?;
         let base = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
@@ -311,7 +306,9 @@ mod tests {
         let dir = Dir::open_ambient_dir(parent, ambient_authority())?;
         let file_name = path.file_name().ok_or("path has no file name")?;
         let content = dir.read_to_string(file_name)?;
-        assert_eq!(content, "line-1\nline-2\n");
+        if content != "line-1\nline-2\n" {
+            return Err(format!("expected 'line-1\\nline-2\\n', got {content:?}").into());
+        }
 
         Ok(())
     }

@@ -8,6 +8,8 @@ use std::process::ChildStdin;
 
 use serde_json::{Value, json};
 
+use super::RunError;
+
 const INITIALIZE_REQUEST_ID: u64 = 1;
 const THREAD_START_REQUEST_ID: u64 = 2;
 const TURN_START_REQUEST_ID: u64 = 3;
@@ -40,7 +42,7 @@ impl AppServerSession {
         &mut self,
         stdin: &mut ChildStdin,
         message: &Value,
-    ) -> Result<Option<AppServerCompletion>, String> {
+    ) -> Result<Option<AppServerCompletion>, RunError> {
         if let Some(failure) = check_error_responses(message) {
             return Ok(Some(failure));
         }
@@ -89,7 +91,7 @@ pub(super) fn maybe_handle_message(
     maybe_session: Option<&mut AppServerSession>,
     maybe_stdin: Option<&mut ChildStdin>,
     line: &str,
-) -> Result<Option<AppServerCompletion>, String> {
+) -> Result<Option<AppServerCompletion>, RunError> {
     let Some(session) = maybe_session else {
         return Ok(None);
     };
@@ -163,23 +165,23 @@ fn response_error_for_id(message: &Value, id: u64) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn start_protocol(stdin: &mut ChildStdin) -> Result<(), String> {
+fn start_protocol(stdin: &mut ChildStdin) -> Result<(), RunError> {
     write_message(stdin, &initialize_request())?;
     write_message(stdin, &initialized_notification())?;
     write_message(stdin, &thread_start_request())?;
     Ok(())
 }
 
-fn write_message(stdin: &mut ChildStdin, message: &Value) -> Result<(), String> {
+fn write_message(stdin: &mut ChildStdin, message: &Value) -> Result<(), RunError> {
     let mut encoded = serde_json::to_vec(message)
-        .map_err(|error| format!("failed to encode app-server request: {error}"))?;
+        .map_err(|error| RunError::new(format!("failed to encode app-server request: {error}")))?;
     encoded.push(b'\n');
     stdin
         .write_all(&encoded)
-        .map_err(|error| format!("failed writing app-server request: {error}"))?;
+        .map_err(|error| RunError::new(format!("failed writing app-server request: {error}")))?;
     stdin
         .flush()
-        .map_err(|error| format!("failed flushing app-server request: {error}"))?;
+        .map_err(|error| RunError::new(format!("failed flushing app-server request: {error}")))?;
     Ok(())
 }
 

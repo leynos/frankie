@@ -8,10 +8,10 @@ mod app_server;
 mod stream;
 
 use std::fmt::Write as _;
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{self, Sender};
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 
 use crate::ai::codex_exec::{
     CodexExecutionHandle, CodexExecutionOutcome, CodexExecutionRequest, CodexExecutionUpdate,
@@ -24,6 +24,20 @@ use self::stream::{StreamCompletion, StreamProgressContext};
 
 #[cfg(test)]
 pub(crate) use self::stream::parse_progress_event;
+
+/// Error arising during a Codex child-process run.
+///
+/// Wraps a human-readable description of the failure so callers can
+/// forward it through the TUI channel without matching on variants.
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+pub(super) struct RunError(String);
+
+impl RunError {
+    pub(super) fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
 
 /// Command name and arguments used to launch the Codex process.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,7 +72,7 @@ pub(crate) fn run_codex(
 
 /// Create the transcript writer, sending failure on error.
 fn create_transcript(
-    transcript_path: &Utf8Path,
+    transcript_path: &Utf8PathBuf,
     sender: &Sender<CodexExecutionUpdate>,
 ) -> Option<TranscriptWriter> {
     match TranscriptWriter::create(transcript_path) {
@@ -75,18 +89,18 @@ fn create_transcript(
     }
 }
 
-/// Spawn the Codex child process and capture stdout and stdin.
-///
-/// Returns `None` on failure (failure already sent via sender).
-fn setup_codex_process(
-    command_spec: &CodexCommandSpec,
-    sender: &Sender<CodexExecutionUpdate>,
-    transcript_path: Utf8PathBuf,
-) -> Option<(Child, ChildStdout, Option<ChildStdin>)> {
-    let mut child = spawn_child(command_spec, sender, transcript_path.clone())?;
-    let stdout = take_stdout(&mut child, sender, transcript_path)?;
-    let stdin = child.stdin.take();
-    Some((child, stdout, stdin))
+/// Spawn the Codex child process with piped stdin, stdout, and stderr.
+fn spawn_codex(command_spec: &CodexCommandSpec) -> Result<Child, RunError> {
+    let mut command = Command::new(&command_spec.program);
+    command
+        .args(&command_spec.args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    command
+        .spawn()
+        .map_err(|error| RunError::new(format!("failed to launch Codex: {error}")))
 }
 
 /// Handle the completion outcome from streaming, either from
@@ -112,8 +126,7 @@ fn handle_completion(
             }
         }
         StreamCompletion::ProcessExit => {
-            let runtime_path = transcript_path.clone();
-            complete_with_exit_status(child, sender, runtime_path, transcript_path);
+            complete_with_exit_status(child, sender, transcript_path);
         }
     }
 }
@@ -131,11 +144,30 @@ fn execute_codex(
     let prompt = build_prompt(request);
     let command_spec = build_command_spec(command_path);
 
-    let Some((child, stdout, stdin)) =
-        setup_codex_process(&command_spec, sender, transcript.path().to_path_buf())
-    else {
+    let mut child = match spawn_codex(&command_spec) {
+        Ok(child) => child,
+        Err(error) => {
+            send_failure(
+                sender,
+                error.to_string(),
+                None,
+                Some(transcript.path().to_path_buf()),
+            );
+            return;
+        }
+    };
+
+    let Some(stdout) = child.stdout.take() else {
+        send_failure(
+            sender,
+            "codex stdout stream was unavailable".to_owned(),
+            None,
+            Some(transcript.path().to_path_buf()),
+        );
         return;
     };
+
+    let stdin = child.stdin.take();
 
     let completion = {
         let mut stream_context = StreamProgressContext {
@@ -146,7 +178,12 @@ fn execute_codex(
         match stream::stream_progress(stdout, stdin, &mut stream_context) {
             Ok(completion) => completion,
             Err(error) => {
-                send_failure(sender, error, None, Some(transcript.path().to_path_buf()));
+                send_failure(
+                    sender,
+                    error.to_string(),
+                    None,
+                    Some(transcript.path().to_path_buf()),
+                );
                 return;
             }
         }
@@ -165,54 +202,9 @@ fn execute_codex(
     handle_completion(completion, child, sender, transcript_path);
 }
 
-fn spawn_child(
-    command_spec: &CodexCommandSpec,
-    sender: &Sender<CodexExecutionUpdate>,
-    transcript_path: Utf8PathBuf,
-) -> Option<Child> {
-    let mut command = Command::new(&command_spec.program);
-    command
-        .args(&command_spec.args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    match command.spawn() {
-        Ok(child) => Some(child),
-        Err(error) => {
-            send_failure(
-                sender,
-                format!("failed to launch Codex: {error}"),
-                None,
-                Some(transcript_path),
-            );
-            None
-        }
-    }
-}
-
-fn take_stdout(
-    child: &mut Child,
-    sender: &Sender<CodexExecutionUpdate>,
-    transcript_path: Utf8PathBuf,
-) -> Option<ChildStdout> {
-    let Some(stdout) = child.stdout.take() else {
-        send_failure(
-            sender,
-            "codex stdout stream was unavailable".to_owned(),
-            None,
-            Some(transcript_path),
-        );
-        return None;
-    };
-
-    Some(stdout)
-}
-
 fn complete_with_exit_status(
     mut child: Child,
     sender: &Sender<CodexExecutionUpdate>,
-    transcript_runtime_path: Utf8PathBuf,
     transcript_path: Utf8PathBuf,
 ) {
     let status = match child.wait() {
@@ -222,7 +214,7 @@ fn complete_with_exit_status(
                 sender,
                 format!("failed waiting for Codex exit: {error}"),
                 None,
-                Some(transcript_runtime_path),
+                Some(transcript_path),
             );
             return;
         }
@@ -239,7 +231,7 @@ fn complete_with_exit_status(
         sender,
         "codex exited with a non-zero status".to_owned(),
         status.code(),
-        Some(transcript_runtime_path),
+        Some(transcript_path),
     );
 }
 

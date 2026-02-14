@@ -2846,7 +2846,7 @@ ID-based selection tracking.
 - Selection is preserved across syncs unless the selected comment is deleted
 - Latency metrics enable performance monitoring
 
-#### ADR-002: Codex execution stream and transcript model
+#### Architecture decision record (ADR-002): Codex execution stream and transcript model
 
 **Context**: The review TUI must trigger `codex app-server` directly from
 filtered comments, display live progress, and preserve machine-readable

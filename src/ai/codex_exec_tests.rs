@@ -32,9 +32,10 @@ fn sample_comment() -> ExportedComment {
     }
 }
 
-fn rendered_jsonl(comments: &[ExportedComment]) -> Result<String, IntakeError> {
+#[fixture]
+fn rendered_jsonl(sample_comment: ExportedComment) -> Result<String, IntakeError> {
     let mut buffer = Vec::new();
-    write_jsonl(&mut buffer, comments)?;
+    write_jsonl(&mut buffer, &[sample_comment])?;
     String::from_utf8(buffer).map_err(|error| IntakeError::Io {
         message: format!("failed to encode JSONL as UTF-8: {error}"),
     })
@@ -152,13 +153,9 @@ fn start_rejects_empty_comment_export() {
 }
 
 #[rstest]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
 fn successful_run_streams_events_and_writes_transcript(
     temp_dir: TempDir,
-    sample_comment: ExportedComment,
+    rendered_jsonl: Result<String, IntakeError>,
 ) -> TestResult {
     let script = create_script(
         &temp_dir,
@@ -175,7 +172,7 @@ fn successful_run_streams_events_and_writes_transcript(
         .with_transcript_dir(utf8_path_from_temp(&temp_dir)?);
     let request = CodexExecutionRequest::new(
         context,
-        rendered_jsonl(&[sample_comment])?,
+        rendered_jsonl?,
         Some("https://github.com/owner/repo/pull/42".to_owned()),
     );
     let service = SystemCodexExecutionService::with_command_path(script);
@@ -183,12 +180,12 @@ fn successful_run_streams_events_and_writes_transcript(
     let handle = service.start(request)?;
     let updates = collect_until_finished(&handle);
 
-    assert!(
-        updates
-            .iter()
-            .any(|update| matches!(update, CodexExecutionUpdate::Progress(_))),
-        "expected at least one progress update"
-    );
+    if !updates
+        .iter()
+        .any(|update| matches!(update, CodexExecutionUpdate::Progress(_)))
+    {
+        return Err("expected at least one progress update".into());
+    }
 
     let outcome = updates
         .iter()
@@ -213,20 +210,21 @@ fn successful_run_streams_events_and_writes_transcript(
         .file_name()
         .ok_or("transcript path has no file name")?;
     let transcript = dir.read_to_string(file_name)?;
-    assert!(transcript.contains("turn.started"));
-    assert!(transcript.contains("item.completed"));
+
+    if !transcript.contains("turn.started") {
+        return Err("transcript missing turn.started".into());
+    }
+    if !transcript.contains("item.completed") {
+        return Err("transcript missing item.completed".into());
+    }
 
     Ok(())
 }
 
 #[rstest]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions are expected to panic on failure"
-)]
 fn non_zero_exit_is_reported_with_exit_code(
     temp_dir: TempDir,
-    sample_comment: ExportedComment,
+    rendered_jsonl: Result<String, IntakeError>,
 ) -> TestResult {
     let script = create_script(
         &temp_dir,
@@ -240,7 +238,7 @@ fn non_zero_exit_is_reported_with_exit_code(
 
     let context = CodexExecutionContext::new("owner", "repo", 42)
         .with_transcript_dir(utf8_path_from_temp(&temp_dir)?);
-    let request = CodexExecutionRequest::new(context, rendered_jsonl(&[sample_comment])?, None);
+    let request = CodexExecutionRequest::new(context, rendered_jsonl?, None);
     let service = SystemCodexExecutionService::with_command_path(script);
 
     let handle = service.start(request)?;
@@ -260,8 +258,12 @@ fn non_zero_exit_is_reported_with_exit_code(
             transcript_path,
             ..
         } => {
-            assert_eq!(exit_code, Some(9));
-            assert!(transcript_path.is_some());
+            if exit_code != Some(9) {
+                return Err(format!("expected exit code 9, got {exit_code:?}").into());
+            }
+            if transcript_path.is_none() {
+                return Err("expected transcript path to be present".into());
+            }
         }
         CodexExecutionOutcome::Succeeded { .. } => {
             return Err("expected non-zero exit failure".into());
