@@ -4,6 +4,7 @@
 //! update function. Messages represent user actions, async command results,
 //! and system events.
 
+use crate::ai::{CodexExecutionOutcome, CodexProgressEvent};
 use crate::github::error::IntakeError;
 use crate::github::models::ReviewComment;
 
@@ -62,6 +63,16 @@ pub enum AppMsg {
     PreviousCommit,
     /// Commit navigation completed with updated state.
     CommitNavigated(Box<TimeTravelState>),
+
+    // Codex execution
+    /// Start Codex execution using currently filtered comments.
+    StartCodexExecution,
+    /// Poll for Codex execution updates.
+    CodexPollTick,
+    /// Codex execution reported a progress event.
+    CodexProgress(CodexProgressEvent),
+    /// Codex execution finished with an outcome.
+    CodexFinished(CodexExecutionOutcome),
 
     // Data loading
     /// Request a refresh of review data from the API.
@@ -139,6 +150,18 @@ impl AppMsg {
                 | Self::RefreshFailed(_)
                 | Self::SyncTick
                 | Self::SyncComplete { .. }
+        )
+    }
+
+    /// Returns `true` if this is a Codex execution message.
+    #[must_use]
+    pub const fn is_codex(&self) -> bool {
+        matches!(
+            self,
+            Self::StartCodexExecution
+                | Self::CodexPollTick
+                | Self::CodexProgress(_)
+                | Self::CodexFinished(_)
         )
     }
 

@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "title": "Relax duplication rules for test code",
+      "glob": "tests/**/*.rs",
+      "function_duplication_min_lines_of_code_for_check": 20,
+      "function_duplication_min_similarity_percentage": 85
+    }
+  ]
+}

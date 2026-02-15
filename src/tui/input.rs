@@ -34,10 +34,6 @@ pub fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
 /// in the review list.
 #[must_use]
 #[doc(hidden)]
-#[expect(
-    clippy::missing_const_for_fn,
-    reason = "KeyCode match patterns prevent const evaluation"
-)]
 pub fn map_key_to_message_with_context(
     key: &bubbletea_rs::event::KeyMsg,
     context: InputContext,
@@ -60,7 +56,11 @@ pub fn map_key_to_message_with_context(
             KeyCode::Char('q') => return Some(AppMsg::Quit),
             _ => {}
         },
-        InputContext::ReviewList => {}
+        InputContext::ReviewList => {
+            if key.key == KeyCode::Char('x') {
+                return Some(AppMsg::StartCodexExecution);
+            }
+        }
     }
 
     // Default/shared mappings
@@ -119,6 +119,12 @@ mod tests {
         Some(InputContext::ReviewList),
         Some(AppMsg::EnterTimeTravel)
     )]
+    #[case::review_list_x_start_codex(
+        KeyCode::Char('x'),
+        Some(InputContext::ReviewList),
+        Some(AppMsg::StartCodexExecution)
+    )]
+    #[case::time_travel_x_unmapped(KeyCode::Char('x'), Some(InputContext::TimeTravel), None)]
     #[case::diff_context_esc_hide(
         KeyCode::Esc,
         Some(InputContext::DiffContext),

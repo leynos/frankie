@@ -6,29 +6,32 @@
 //!
 //! # Module Structure
 //!
+//! - `codex_handlers`: Codex execution trigger and stream polling
+//! - `diff_context_handlers`: Full-screen diff context view management
+//! - `filter_handlers`: Review filter application and cycling
+//! - `model_impl`: `bubbletea_rs::Model` trait implementation
+//! - `navigation`: Cursor and page navigation handlers
 //! - `rendering`: View rendering methods for terminal output
+//! - `routing`: Mode-aware message routing and category dispatch
 //! - `sync_handlers`: Background sync and refresh handling
 //! - `time_travel_handlers`: Time-travel navigation handlers
 
-use std::any::Any;
 use std::sync::Arc;
 
-use bubbletea_rs::{Cmd, Model};
+use bubbletea_rs::Cmd;
 
+use crate::ai::{CodexExecutionHandle, CodexExecutionService, SystemCodexExecutionService};
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
 
-use super::components::{
-    CommentDetailComponent, CommentDetailViewContext, DiffContextComponent, ReviewListComponent,
-    ReviewListViewContext,
-};
-use super::input::{InputContext, map_key_to_message_with_context};
+use super::components::{CommentDetailComponent, DiffContextComponent, ReviewListComponent};
 use super::messages::AppMsg;
-use super::state::{
-    DiffContextState, FilterState, ReviewFilter, TimeTravelState, collect_diff_hunks,
-    find_hunk_index,
-};
+use super::state::{DiffContextState, FilterState, ReviewFilter, TimeTravelState};
 
+mod codex_handlers;
+mod diff_context_handlers;
+mod filter_handlers;
+mod model_impl;
 mod navigation;
 mod rendering;
 mod routing;
@@ -74,6 +77,14 @@ pub struct ReviewApp {
     git_ops: Option<Arc<dyn GitOperations>>,
     /// HEAD commit SHA for line mapping verification.
     head_sha: Option<String>,
+    /// Service used to execute Codex runs.
+    codex_service: Arc<dyn CodexExecutionService>,
+    /// Active Codex execution handle while a run is in progress.
+    codex_handle: Option<CodexExecutionHandle>,
+    /// Latest Codex status line shown in the status bar.
+    codex_status: Option<String>,
+    /// Poll interval for draining Codex progress events.
+    codex_poll_interval: std::time::Duration,
 }
 
 /// Tracks which view is currently active in the TUI.
@@ -113,6 +124,10 @@ impl ReviewApp {
             time_travel_state: None,
             git_ops: None,
             head_sha: None,
+            codex_service: Arc::new(SystemCodexExecutionService::new()),
+            codex_handle: None,
+            codex_status: None,
+            codex_poll_interval: std::time::Duration::from_millis(150),
         }
     }
 
@@ -131,6 +146,26 @@ impl ReviewApp {
         self.git_ops = Some(git_ops);
         self.head_sha = Some(head_sha);
         self
+    }
+
+    /// Sets the Codex execution service used by this app instance.
+    #[must_use]
+    pub fn with_codex_service(mut self, codex_service: Arc<dyn CodexExecutionService>) -> Self {
+        self.codex_service = codex_service;
+        self
+    }
+
+    /// Sets the poll interval used when draining Codex progress events.
+    #[must_use]
+    pub const fn with_codex_poll_interval(mut self, interval: std::time::Duration) -> Self {
+        self.codex_poll_interval = interval;
+        self
+    }
+
+    /// Returns whether a Codex execution run is currently active.
+    #[must_use]
+    pub(super) const fn is_codex_running(&self) -> bool {
+        self.codex_handle.is_some()
     }
 
     /// Returns the currently filtered reviews.
@@ -177,6 +212,18 @@ impl ReviewApp {
     #[must_use]
     pub const fn active_filter(&self) -> &ReviewFilter {
         &self.filter_state.active_filter
+    }
+
+    /// Returns the current TUI error message, if any.
+    #[must_use]
+    pub fn error_message(&self) -> Option<&str> {
+        self.error.as_deref()
+    }
+
+    /// Returns the latest Codex status line, if any.
+    #[must_use]
+    pub fn codex_status_message(&self) -> Option<&str> {
+        self.codex_status.as_deref()
     }
 
     /// Returns the ID of the currently selected comment, if any.
@@ -239,54 +286,6 @@ impl ReviewApp {
     fn set_cursor(&mut self, position: usize) {
         self.filter_state.cursor_position = position;
         self.update_selected_id();
-    }
-
-    /// Rebuilds the diff context state from the current filtered reviews.
-    fn rebuild_diff_context_state(&mut self) {
-        let max_width = self.width as usize;
-        let hunks = collect_diff_hunks(&self.reviews, &self.filtered_indices);
-        let preferred_index = find_hunk_index(&hunks, self.selected_comment());
-        let rendered = self.diff_context_component.render_hunks(&hunks, max_width);
-
-        self.diff_context_state
-            .rebuild(rendered, max_width, preferred_index);
-    }
-
-    /// Enters the full-screen diff context view.
-    fn enter_diff_context(&mut self) {
-        self.rebuild_diff_context_state();
-        self.view_mode = ViewMode::DiffContext;
-    }
-
-    /// Exits the full-screen diff context view.
-    const fn exit_diff_context(&mut self) {
-        self.view_mode = ViewMode::ReviewList;
-    }
-
-    /// Handles diff context navigation messages.
-    fn handle_diff_context_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        match msg {
-            AppMsg::ShowDiffContext => {
-                self.enter_diff_context();
-                None
-            }
-            AppMsg::HideDiffContext | AppMsg::EscapePressed => {
-                self.exit_diff_context();
-                None
-            }
-            AppMsg::NextHunk => {
-                self.diff_context_state.move_next();
-                None
-            }
-            AppMsg::PreviousHunk => {
-                self.diff_context_state.move_previous();
-                None
-            }
-            _ => {
-                // Unreachable: caller filters to diff-context messages.
-                None
-            }
-        }
     }
 
     /// Dispatches time-travel messages to their handlers.
@@ -379,43 +378,6 @@ impl ReviewApp {
         }
     }
 
-    // Filter handlers
-
-    fn handle_set_filter(&mut self, filter: &ReviewFilter) -> Option<Cmd> {
-        self.filter_state.active_filter = filter.clone();
-        self.rebuild_filter_cache();
-        self.clamp_cursor_and_update_selection();
-        None
-    }
-
-    fn handle_clear_filter(&mut self) -> Option<Cmd> {
-        self.filter_state.active_filter = ReviewFilter::All;
-        self.rebuild_filter_cache();
-        self.clamp_cursor_and_update_selection();
-        None
-    }
-
-    /// Cycles the active filter between `All` and `Unresolved`.
-    ///
-    /// This method only toggles between the two primary filter modes:
-    /// - From `All` -> switches to `Unresolved`
-    /// - From any other filter (including `ByFile`, `ByReviewer`, `ByCommitRange`)
-    ///   -> resets to `All`
-    ///
-    /// This simplified cycling is intentional: other filter variants require
-    /// parameters (file path, reviewer name, commit range) that cannot be
-    /// cycled through without additional user input.
-    fn handle_cycle_filter(&mut self) -> Option<Cmd> {
-        let next_filter = match &self.filter_state.active_filter {
-            ReviewFilter::All => ReviewFilter::Unresolved,
-            _ => ReviewFilter::All,
-        };
-        self.filter_state.active_filter = next_filter;
-        self.rebuild_filter_cache();
-        self.clamp_cursor_and_update_selection();
-        None
-    }
-
     // Window event handlers
 
     fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
@@ -429,115 +391,6 @@ impl ReviewApp {
             self.rebuild_diff_context_state();
         }
         None
-    }
-}
-
-impl Model for ReviewApp {
-    fn init() -> (Self, Option<Cmd>) {
-        // Retrieve initial data from module-level storage
-        let reviews = super::get_initial_reviews();
-        let model = Self::new(reviews);
-
-        // Start the background sync timer
-        let cmd = Self::arm_sync_timer();
-
-        (model, Some(cmd))
-    }
-
-    fn update(&mut self, msg: Box<dyn Any + Send>) -> Option<Cmd> {
-        // Try to downcast to our message type
-        if let Some(app_msg) = msg.downcast_ref::<AppMsg>() {
-            return self.handle_message(app_msg);
-        }
-
-        // Handle key events from bubbletea-rs with context-aware mapping
-        if let Some(key_msg) = msg.downcast_ref::<bubbletea_rs::event::KeyMsg>() {
-            if self.show_help {
-                return self.handle_message(&AppMsg::ToggleHelp);
-            }
-            let context = self.input_context();
-            let app_msg = map_key_to_message_with_context(key_msg, context);
-            if let Some(mapped) = app_msg {
-                return self.handle_message(&mapped);
-            }
-        }
-
-        // Handle window size messages
-        if let Some(size_msg) = msg.downcast_ref::<bubbletea_rs::event::WindowSizeMsg>() {
-            let resize_msg = AppMsg::WindowResized {
-                width: size_msg.width,
-                height: size_msg.height,
-            };
-            return self.handle_message(&resize_msg);
-        }
-
-        None
-    }
-
-    fn view(&self) -> String {
-        // If help is shown, render overlay instead
-        if self.show_help {
-            return self.render_help_overlay();
-        }
-
-        // Handle special view modes with early returns
-        if self.view_mode == ViewMode::DiffContext {
-            return self.render_diff_context_view();
-        }
-        if self.view_mode == ViewMode::TimeTravel {
-            return self.render_time_travel_view();
-        }
-
-        // Render main ReviewList view
-        let mut output = String::new();
-
-        output.push_str(&self.render_header());
-        output.push_str(&self.render_filter_bar());
-        output.push('\n');
-
-        // Calculate layout heights
-        // Layout: header (1) + filter bar (1) + newline (1) + list + detail + status bar (1)
-        // Reserve space for detail pane (minimum 8 lines) and chrome (4 lines)
-        let chrome_height = 4_usize; // header + filter bar + newline + status bar
-        let detail_height = 8_usize; // minimum height for detail pane
-        let total_height = self.height as usize;
-        let list_height = total_height
-            .saturating_sub(chrome_height)
-            .saturating_sub(detail_height);
-
-        let list_ctx = ReviewListViewContext {
-            reviews: &self.reviews,
-            filtered_indices: &self.filtered_indices,
-            cursor_position: self.filter_state.cursor_position,
-            scroll_offset: self.filter_state.scroll_offset,
-            visible_height: list_height,
-        };
-        let list_view = self.review_list.view(&list_ctx);
-        output.push_str(&list_view);
-
-        // Render comment detail pane
-        let detail_ctx = CommentDetailViewContext {
-            selected_comment: self.selected_comment(),
-            max_width: 80.min(self.width as usize),
-            max_height: detail_height,
-        };
-        output.push_str(&self.comment_detail.view(&detail_ctx));
-
-        output.push('\n');
-        output.push_str(&self.render_status_bar());
-
-        output
-    }
-}
-
-impl ReviewApp {
-    /// Returns the current input context for context-aware key mapping.
-    const fn input_context(&self) -> InputContext {
-        match self.view_mode {
-            ViewMode::ReviewList => InputContext::ReviewList,
-            ViewMode::DiffContext => InputContext::DiffContext,
-            ViewMode::TimeTravel => InputContext::TimeTravel,
-        }
     }
 }
 

@@ -150,23 +150,26 @@ comments.
 
 ### Keyboard shortcuts
 
-| Key         | Action                        |
-| ----------- | ----------------------------- |
-| `j`, `↓`    | Move cursor down              |
-| `k`, `↑`    | Move cursor up                |
-| `PgDn`      | Page down                     |
-| `PgUp`      | Page up                       |
-| `Home`, `g` | Go to first item              |
-| `End`, `G`  | Go to last item               |
-| `f`         | Cycle filter (All/Unresolved) |
-| `Esc`       | Clear filter or exit context  |
-| `c`         | Open full-screen diff context |
-| `[`         | Previous diff hunk            |
-| `]`         | Next diff hunk                |
-| `t`         | Enter time-travel mode        |
-| `r`         | Refresh from GitHub           |
-| `?`         | Toggle help overlay           |
-| `q`         | Quit                          |
+Table: Review list keyboard shortcuts.
+
+| Key         | Action                         |
+| ----------- | ------------------------------ |
+| `j`, `↓`    | Move cursor down               |
+| `k`, `↑`    | Move cursor up                 |
+| `PgDn`      | Page down                      |
+| `PgUp`      | Page up                        |
+| `Home`, `g` | Go to first item               |
+| `End`, `G`  | Go to last item                |
+| `f`         | Cycle filter (All/Unresolved)  |
+| `Esc`       | Clear filter or exit context   |
+| `c`         | Open full-screen diff context  |
+| `[`         | Previous diff hunk             |
+| `]`         | Next diff hunk                 |
+| `t`         | Enter time-travel mode         |
+| `x`         | Run Codex on filtered comments |
+| `r`         | Refresh from GitHub            |
+| `?`         | Toggle help overlay            |
+| `q`         | Quit                           |
 
 #### Time-travel mode keyboard shortcuts
 
@@ -191,6 +194,27 @@ During a background sync:
 
 A `[Loading…]` indicator appears in the header during sync. Manual refresh with
 `r` uses the same incremental sync logic.
+
+### Codex execution from the TUI
+
+Press `x` in the review list to run `codex app-server` using the currently
+filtered comments as input. Frankie serializes the filtered comments as JSONL,
+starts Codex, and polls the process stream via the app-server JSON-RPC protocol.
+
+During execution, the status bar switches from key hints to live Codex status
+updates. Each update is derived from streamed JSONL events (or from malformed
+line warnings when an event cannot be parsed).
+
+Each run writes a transcript to:
+
+- `${XDG_STATE_HOME:-$HOME/.local/state}/frankie/codex-transcripts/`
+
+Transcript filenames follow this pattern:
+
+- `<owner>-<repo>-pr-<number>-<utc-yyyymmddThhmmssZ>.jsonl`
+
+If Codex exits with a non-zero status, Frankie shows an explicit TUI error that
+includes the exit code (when available) and transcript path to aid diagnosis.
 
 ### Filters
 

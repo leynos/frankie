@@ -31,9 +31,18 @@ impl ReviewApp {
             return format!("Error: {error}\n");
         }
 
+        if let Some(codex_status) = &self.codex_status {
+            let running_suffix = if self.is_codex_running() {
+                " (running)"
+            } else {
+                ""
+            };
+            return format!("Codex: {codex_status}{running_suffix}\n");
+        }
+
         let hints = match self.view_mode {
             super::ViewMode::ReviewList => {
-                "j/k:navigate  f:filter  c:context  t:time-travel  r:refresh  ?:help  q:quit"
+                "j/k:move  f:filter  c:context  t:travel  x:codex  r:refresh  ?:help  q:quit"
             }
             super::ViewMode::DiffContext => "[/]:hunks  Esc:back  ?:help  q:quit",
             super::ViewMode::TimeTravel => "h/l:commits  Esc:back  ?:help  q:quit",
@@ -66,6 +75,7 @@ Other:
   r          Refresh from GitHub
   c          View full-screen context
   t          Time-travel to comment's commit
+  x          Run Codex using filtered comments
   ?          Toggle this help
   q          Quit
 

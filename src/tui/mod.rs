@@ -160,6 +160,12 @@ pub(crate) fn get_initial_reviews() -> Vec<ReviewComment> {
     INITIAL_REVIEWS.get().cloned().unwrap_or_default()
 }
 
+/// Returns the configured pull request locator for refresh-dependent features.
+#[must_use]
+pub(crate) fn get_refresh_locator() -> Option<PullRequestLocator> {
+    REFRESH_CONTEXT.get().map(|context| context.locator.clone())
+}
+
 /// Fetches fresh review comments from GitHub.
 ///
 /// Uses the refresh context set by [`set_refresh_context`]. Returns an error
