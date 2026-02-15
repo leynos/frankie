@@ -401,9 +401,38 @@ mod tests {
         }
     }
 
+    /// Creates a `MockGitOps` with default expectations that return
+    /// deterministic errors, so accidental calls produce predictable
+    /// results instead of panicking.
+    fn default_mock_git_ops() -> MockGitOps {
+        let mut mock = MockGitOps::new();
+        mock.expect_get_commit_snapshot().returning(|_, _| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_get_file_at_commit().returning(|_, _| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_verify_line_mapping().returning(|_| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_get_parent_commits().returning(|_, _| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_commit_exists().returning(|_| false);
+        mock
+    }
+
     #[test]
     fn set_git_ops_context_wires_ops_for_get() {
-        let ops: Arc<dyn GitOperations> = Arc::new(MockGitOps::new());
+        let ops: Arc<dyn GitOperations> = Arc::new(default_mock_git_ops());
         let was_set = set_git_ops_context(ops, "abc123".to_owned());
 
         let retrieved = get_git_ops_context();

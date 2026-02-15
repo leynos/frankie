@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use bubbletea_rs::Program;
 
-use frankie::local::{GitHubOrigin, LocalRepository, create_git_ops, discover_repository};
+use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
     ReviewApp, TimeTravelContext, set_git_ops_context, set_initial_reviews,
@@ -153,7 +153,14 @@ fn discover_repo_for_locator(
     config: &FrankieConfig,
     locator: &PullRequestLocator,
 ) -> Result<(std::path::PathBuf, String), String> {
-    let local_repo = select_local_repo(config)?;
+    let discovery_path = choose_repo_discovery_path(config)?;
+    let local_repo = discover_repository(&discovery_path).map_err(|e| {
+        if config.repo_path.is_some() {
+            format!("--repo-path '{}': {e}", discovery_path.display())
+        } else {
+            format!("{e}")
+        }
+    })?;
 
     // Validate the discovered repository matches the PR's origin
     validate_repo_matches_locator(local_repo.github_origin(), locator)?;
@@ -164,22 +171,21 @@ fn discover_repo_for_locator(
     Ok((local_repo.workdir().to_path_buf(), head_sha))
 }
 
-/// Selects a local repository based on CLI configuration.
+/// Chooses the path to use for local repository discovery.
 ///
-/// Prefers `--repo-path` when provided, rejects discovery when
-/// `--no-local-discovery` is set, and falls back to auto-discovery
-/// from the current directory.
-fn select_local_repo(config: &FrankieConfig) -> Result<LocalRepository, String> {
+/// Returns the explicit `--repo-path` when provided, rejects discovery
+/// when `--no-local-discovery` is set, and falls back to the current
+/// directory.
+fn choose_repo_discovery_path(config: &FrankieConfig) -> Result<std::path::PathBuf, String> {
     if let Some(ref repo_path) = config.repo_path {
-        return discover_repository(Path::new(repo_path))
-            .map_err(|e| format!("--repo-path '{repo_path}': {e}"));
+        return Ok(std::path::PathBuf::from(repo_path));
     }
 
     if config.no_local_discovery {
         return Err("local repository discovery is disabled (--no-local-discovery)".to_owned());
     }
 
-    discover_repository(Path::new(".")).map_err(|e| format!("{e}"))
+    Ok(std::path::PathBuf::from("."))
 }
 
 /// Validates that a discovered repository's origin matches the PR's
