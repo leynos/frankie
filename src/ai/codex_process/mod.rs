@@ -13,7 +13,7 @@ use std::process::{Child, ChildStderr, Command, Stdio};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::ai::codex_exec::{
     CodexExecutionHandle, CodexExecutionOutcome, CodexExecutionRequest, CodexExecutionUpdate,
@@ -105,6 +105,33 @@ fn spawn_codex(command_spec: &CodexCommandSpec) -> Result<Child, RunError> {
         .map_err(|error| RunError::new(format!("failed to launch Codex: {error}")))
 }
 
+/// Set up I/O streams for the spawned Codex process.
+/// Returns None on failure (failure already sent via sender).
+fn setup_process_io(
+    child: &mut std::process::Child,
+    sender: &Sender<CodexExecutionUpdate>,
+    transcript_path: &Utf8Path,
+) -> Option<(
+    std::process::ChildStdout,
+    Option<std::process::ChildStdin>,
+    StderrCapture,
+)> {
+    let Some(stdout) = child.stdout.take() else {
+        send_failure(
+            sender,
+            "codex stdout stream was unavailable".to_owned(),
+            None,
+            Some(transcript_path.to_path_buf()),
+        );
+        return None;
+    };
+
+    let stdin = child.stdin.take();
+    let stderr_capture = StderrCapture::spawn(child.stderr.take());
+
+    Some((stdout, stdin, stderr_capture))
+}
+
 fn execute_codex(
     command_path: &str,
     request: &CodexExecutionRequest,
@@ -131,18 +158,11 @@ fn execute_codex(
         }
     };
 
-    let Some(stdout) = child.stdout.take() else {
-        send_failure(
-            sender,
-            "codex stdout stream was unavailable".to_owned(),
-            None,
-            Some(transcript.path().to_path_buf()),
-        );
+    let Some((stdout, stdin, mut stderr_capture)) =
+        setup_process_io(&mut child, sender, transcript.path())
+    else {
         return;
     };
-
-    let stdin = child.stdin.take();
-    let mut stderr_capture = StderrCapture::spawn(child.stderr.take());
 
     let completion = {
         let mut stream_context = StreamProgressContext {

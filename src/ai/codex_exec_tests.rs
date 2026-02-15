@@ -16,6 +16,10 @@ use crate::export::{ExportedComment, write_jsonl};
 /// Result type used by Codex execution tests.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+/// A shell script written to a temporary directory. The `TempDir` guard
+/// keeps the directory alive for the lifetime of the owning test.
+type ScriptFixture = Result<(TempDir, Utf8PathBuf), IntakeError>;
+
 #[fixture]
 fn sample_comment() -> ExportedComment {
     ExportedComment {
@@ -74,11 +78,11 @@ fn utf8_path_from_temp(temp_dir: TempDir) -> Result<Utf8PathBuf, IntakeError> {
     })
 }
 
-// `create_script` and `collect_until_finished` remain plain helpers because
-// they require test-specific arguments (script name/contents and a runtime
-// execution handle, respectively) that cannot be expressed as fixtures.
+// `collect_until_finished` remains a plain helper because it requires a
+// runtime execution handle that cannot be expressed as a fixture.
 
-fn create_script(
+/// Writes an executable shell script into a temporary directory.
+fn write_script(
     temp_dir: &TempDir,
     name: &str,
     contents: &str,
@@ -117,6 +121,50 @@ fn create_script(
     }
 
     Ok(path)
+}
+
+#[fixture]
+fn success_script(temp_dir: TempDir) -> ScriptFixture {
+    let path = write_script(
+        &temp_dir,
+        "codex-success.sh",
+        concat!(
+            "#!/bin/sh\n",
+            "printf '%s\\n' '{\"type\":\"turn.started\"}'\n",
+            "printf '%s\\n' '{\"type\":\"item.completed\"}'\n",
+            "exit 0\n"
+        ),
+    )?;
+    Ok((temp_dir, path))
+}
+
+#[fixture]
+fn failure_script(temp_dir: TempDir) -> ScriptFixture {
+    let path = write_script(
+        &temp_dir,
+        "codex-fail.sh",
+        concat!(
+            "#!/bin/sh\n",
+            "printf '%s\\n' '{\"type\":\"turn.started\"}'\n",
+            "exit 9\n"
+        ),
+    )?;
+    Ok((temp_dir, path))
+}
+
+#[fixture]
+fn stderr_failure_script(temp_dir: TempDir) -> ScriptFixture {
+    let path = write_script(
+        &temp_dir,
+        "codex-stderr.sh",
+        concat!(
+            "#!/bin/sh\n",
+            "echo '{\"type\":\"turn.started\"}'\n",
+            "echo 'something went wrong on stderr' >&2\n",
+            "exit 1\n"
+        ),
+    )?;
+    Ok((temp_dir, path))
 }
 
 #[rstest]
@@ -159,20 +207,11 @@ fn start_rejects_empty_comment_export() {
 
 #[rstest]
 fn successful_run_streams_events_and_writes_transcript(
-    temp_dir: TempDir,
+    success_script: ScriptFixture,
     utf8_path_from_temp: Result<Utf8PathBuf, IntakeError>,
     rendered_jsonl: Result<String, IntakeError>,
 ) -> TestResult {
-    let script = create_script(
-        &temp_dir,
-        "codex-success.sh",
-        concat!(
-            "#!/bin/sh\n",
-            "printf '%s\\n' '{\"type\":\"turn.started\"}'\n",
-            "printf '%s\\n' '{\"type\":\"item.completed\"}'\n",
-            "exit 0\n"
-        ),
-    )?;
+    let (_dir, script) = success_script?;
 
     let context =
         CodexExecutionContext::new("owner", "repo", 42).with_transcript_dir(utf8_path_from_temp?);
@@ -229,19 +268,11 @@ fn successful_run_streams_events_and_writes_transcript(
 
 #[rstest]
 fn non_zero_exit_is_reported_with_exit_code(
-    temp_dir: TempDir,
+    failure_script: ScriptFixture,
     utf8_path_from_temp: Result<Utf8PathBuf, IntakeError>,
     rendered_jsonl: Result<String, IntakeError>,
 ) -> TestResult {
-    let script = create_script(
-        &temp_dir,
-        "codex-fail.sh",
-        concat!(
-            "#!/bin/sh\n",
-            "printf '%s\\n' '{\"type\":\"turn.started\"}'\n",
-            "exit 9\n"
-        ),
-    )?;
+    let (_dir, script) = failure_script?;
 
     let context =
         CodexExecutionContext::new("owner", "repo", 42).with_transcript_dir(utf8_path_from_temp?);
@@ -282,20 +313,11 @@ fn non_zero_exit_is_reported_with_exit_code(
 
 #[rstest]
 fn stderr_from_failing_process_appears_in_failure_message(
-    temp_dir: TempDir,
+    stderr_failure_script: ScriptFixture,
     utf8_path_from_temp: Result<Utf8PathBuf, IntakeError>,
     rendered_jsonl: Result<String, IntakeError>,
 ) -> TestResult {
-    let script = create_script(
-        &temp_dir,
-        "codex-stderr.sh",
-        concat!(
-            "#!/bin/sh\n",
-            "echo '{\"type\":\"turn.started\"}'\n",
-            "echo 'something went wrong on stderr' >&2\n",
-            "exit 1\n"
-        ),
-    )?;
+    let (_dir, script) = stderr_failure_script?;
 
     let context =
         CodexExecutionContext::new("owner", "repo", 42).with_transcript_dir(utf8_path_from_temp?);
