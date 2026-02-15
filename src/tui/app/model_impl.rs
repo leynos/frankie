@@ -19,8 +19,9 @@ impl Model for ReviewApp {
         let reviews = crate::tui::get_initial_reviews();
         let model = Self::new(reviews);
 
-        // Start the background sync timer
-        let cmd = Self::arm_sync_timer();
+        // Emit an immediate startup message to trigger the first render cycle.
+        // The sync timer is armed when `AppMsg::Initialized` is handled.
+        let cmd = Self::immediate_init_cmd();
 
         (model, Some(cmd))
     }

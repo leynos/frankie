@@ -15,7 +15,7 @@ use crate::tui::app::ViewMode;
 use crate::tui::messages::AppMsg;
 
 /// Default interval between background syncs.
-const SYNC_INTERVAL: Duration = Duration::from_secs(30);
+pub(super) const SYNC_INTERVAL: Duration = Duration::from_secs(30);
 
 impl ReviewApp {
     /// Handles a manual refresh request by delegating to sync logic.
@@ -149,5 +149,13 @@ impl ReviewApp {
             tokio::time::sleep(SYNC_INTERVAL).await;
             Some(Box::new(AppMsg::SyncTick) as Box<dyn Any + Send>)
         })
+    }
+
+    /// Creates a command that emits `Initialized` immediately.
+    ///
+    /// This synthetic startup event triggers the first render cycle without
+    /// waiting for user input.
+    pub(super) fn immediate_init_cmd() -> Cmd {
+        Box::pin(async { Some(Box::new(AppMsg::Initialized) as Box<dyn Any + Send>) })
     }
 }
