@@ -123,10 +123,16 @@ fn write_script(
     Ok(path)
 }
 
+/// Helper to create a script fixture with given name and contents.
+fn script_fixture(temp_dir: TempDir, name: &str, contents: &str) -> ScriptFixture {
+    let path = write_script(&temp_dir, name, contents)?;
+    Ok((temp_dir, path))
+}
+
 #[fixture]
 fn success_script(temp_dir: TempDir) -> ScriptFixture {
-    let path = write_script(
-        &temp_dir,
+    script_fixture(
+        temp_dir,
         "codex-success.sh",
         concat!(
             "#!/bin/sh\n",
@@ -134,28 +140,26 @@ fn success_script(temp_dir: TempDir) -> ScriptFixture {
             "printf '%s\\n' '{\"type\":\"item.completed\"}'\n",
             "exit 0\n"
         ),
-    )?;
-    Ok((temp_dir, path))
+    )
 }
 
 #[fixture]
 fn failure_script(temp_dir: TempDir) -> ScriptFixture {
-    let path = write_script(
-        &temp_dir,
+    script_fixture(
+        temp_dir,
         "codex-fail.sh",
         concat!(
             "#!/bin/sh\n",
             "printf '%s\\n' '{\"type\":\"turn.started\"}'\n",
             "exit 9\n"
         ),
-    )?;
-    Ok((temp_dir, path))
+    )
 }
 
 #[fixture]
 fn stderr_failure_script(temp_dir: TempDir) -> ScriptFixture {
-    let path = write_script(
-        &temp_dir,
+    script_fixture(
+        temp_dir,
         "codex-stderr.sh",
         concat!(
             "#!/bin/sh\n",
@@ -163,8 +167,7 @@ fn stderr_failure_script(temp_dir: TempDir) -> ScriptFixture {
             "echo 'something went wrong on stderr' >&2\n",
             "exit 1\n"
         ),
-    )?;
-    Ok((temp_dir, path))
+    )
 }
 
 #[rstest]
