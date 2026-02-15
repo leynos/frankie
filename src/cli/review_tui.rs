@@ -12,9 +12,8 @@ use bubbletea_rs::Program;
 use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
-    ReviewApp, TimeTravelContext, set_git_ops_context, set_initial_reviews, set_initial_terminal_size, set_refresh_context,
-    set_telemetry_sink,
-set_time_travel_context,
+    ReviewApp, TimeTravelContext, set_git_ops_context, set_initial_reviews,
+    set_initial_terminal_size, set_refresh_context, set_telemetry_sink, set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -313,12 +312,6 @@ mod tests {
         "hello-world",
         false
     )]
-    #[case::mismatched_host(
-        "https://ghe.corp.com/octocat/hello-world/pull/1",
-        "octocat",
-        "hello-world",
-        false
-    )]
     fn validate_repo_matches_locator_cases(
         #[case] locator_url: &str,
         #[case] origin_owner: &str,
@@ -333,5 +326,31 @@ mod tests {
 
         let result = validate_repo_matches_locator(&origin, &locator);
         assert_eq!(result.is_ok(), should_succeed, "{result:?}");
+    }
+
+    #[test]
+    fn validate_repo_rejects_mismatched_enterprise_host() {
+        let locator = PullRequestLocator::parse("https://ghe.corp.com/octocat/hello-world/pull/1")
+            .expect("valid URL should parse");
+
+        let origin = GitHubOrigin::Enterprise {
+            host: "ghe.other.com".to_owned(),
+            port: None,
+            owner: "octocat".to_owned(),
+            repository: "hello-world".to_owned(),
+        };
+
+        let result = validate_repo_matches_locator(&origin, &locator);
+        assert!(result.is_err(), "mismatched enterprise host should fail");
+
+        let err = result.expect_err("already asserted Err");
+        assert!(
+            err.contains("ghe.other.com"),
+            "error should mention local host: {err}",
+        );
+        assert!(
+            err.contains("ghe.corp.com"),
+            "error should mention PR host: {err}",
+        );
     }
 }
