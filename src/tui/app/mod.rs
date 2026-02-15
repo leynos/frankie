@@ -282,9 +282,10 @@ impl ReviewApp {
     /// Sets the cursor position and updates the selected comment ID.
     ///
     /// This helper centralises the common pattern of moving the cursor and
-    /// updating the tracked selection in navigation handlers.
+    /// updating viewport/selection state in navigation handlers.
     fn set_cursor(&mut self, position: usize) {
         self.filter_state.cursor_position = position;
+        self.ensure_cursor_visible();
         self.update_selected_id();
     }
 
@@ -401,3 +402,7 @@ mod tests;
 #[cfg(test)]
 #[path = "help_overlay_input_tests.rs"]
 mod help_overlay_input_tests;
+
+#[cfg(test)]
+#[path = "navigation_tests.rs"]
+mod navigation_tests;
