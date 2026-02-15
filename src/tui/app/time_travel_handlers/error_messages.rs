@@ -117,121 +117,117 @@ pub(crate) fn build_fallback_time_travel_error() -> String {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
-    #[test]
-    fn error_message_includes_pr_metadata() {
-        let context = TimeTravelContext {
-            host: "github.com".to_owned(),
-            owner: "octocat".to_owned(),
-            repo: "hello-world".to_owned(),
-            pr_number: 42,
-            discovery_failure: None,
-        };
-
-        let msg = build_time_travel_error(&context);
-
-        assert!(
-            msg.contains("octocat/hello-world"),
-            "should include owner/repo: {msg}"
-        );
-        assert!(msg.contains("PR #42"), "should include PR number: {msg}");
-        assert!(
-            msg.contains("git clone https://github.com/octocat/hello-world"),
-            "should include clone URL: {msg}"
-        );
-        assert!(
-            msg.contains("pull/42/head:pr-42"),
-            "should include fetch command: {msg}"
-        );
-        assert!(
-            msg.contains("--repo-path"),
-            "should mention --repo-path: {msg}"
-        );
+    /// Test expectation for a time-travel error message.
+    struct ErrorExpectation {
+        context: TimeTravelContext,
+        expected: &'static [&'static str],
+        unexpected: &'static [&'static str],
     }
 
-    #[test]
-    fn error_message_includes_discovery_failure_reason() {
-        let context = TimeTravelContext {
-            host: "github.com".to_owned(),
-            owner: "octocat".to_owned(),
-            repo: "hello-world".to_owned(),
-            pr_number: 7,
-            discovery_failure: Some("not inside a Git repository".to_owned()),
-        };
-
-        let msg = build_time_travel_error(&context);
-
-        assert!(
-            msg.contains("not inside a Git repository"),
-            "should include discovery failure reason: {msg}"
-        );
-        assert!(
-            msg.contains("Discovery:"),
-            "should label the discovery status: {msg}"
-        );
+    fn pr_metadata() -> ErrorExpectation {
+        ErrorExpectation {
+            context: TimeTravelContext {
+                host: "github.com".to_owned(),
+                owner: "octocat".to_owned(),
+                repo: "hello-world".to_owned(),
+                pr_number: 42,
+                discovery_failure: None,
+            },
+            expected: &[
+                "octocat/hello-world",
+                "PR #42",
+                "git clone https://github.com/octocat/hello-world",
+                "pull/42/head:pr-42",
+                "--repo-path",
+            ],
+            unexpected: &[],
+        }
     }
 
-    #[test]
-    fn error_message_omits_discovery_line_when_no_failure() {
-        let context = TimeTravelContext {
-            host: "github.com".to_owned(),
-            owner: "octocat".to_owned(),
-            repo: "hello-world".to_owned(),
-            pr_number: 1,
-            discovery_failure: None,
-        };
-
-        let msg = build_time_travel_error(&context);
-
-        assert!(
-            !msg.contains("Discovery:"),
-            "should omit discovery line when no failure: {msg}"
-        );
+    fn discovery_failure_reason() -> ErrorExpectation {
+        ErrorExpectation {
+            context: TimeTravelContext {
+                host: "github.com".to_owned(),
+                owner: "octocat".to_owned(),
+                repo: "hello-world".to_owned(),
+                pr_number: 7,
+                discovery_failure: Some("not inside a Git repository".to_owned()),
+            },
+            expected: &["not inside a Git repository", "Discovery:"],
+            unexpected: &[],
+        }
     }
 
-    #[test]
-    fn error_message_includes_mismatch_reason() {
-        let context = TimeTravelContext {
-            host: "github.com".to_owned(),
-            owner: "alice".to_owned(),
-            repo: "project".to_owned(),
-            pr_number: 99,
-            discovery_failure: Some(
-                "local repository origin (bob/other-project) does not match \
-                 the PR repository (alice/project)"
+    fn no_failure_omits_discovery_line() -> ErrorExpectation {
+        ErrorExpectation {
+            context: TimeTravelContext {
+                host: "github.com".to_owned(),
+                owner: "octocat".to_owned(),
+                repo: "hello-world".to_owned(),
+                pr_number: 1,
+                discovery_failure: None,
+            },
+            expected: &[],
+            unexpected: &["Discovery:"],
+        }
+    }
+
+    fn mismatch_reason() -> ErrorExpectation {
+        ErrorExpectation {
+            context: TimeTravelContext {
+                host: "github.com".to_owned(),
+                owner: "alice".to_owned(),
+                repo: "project".to_owned(),
+                pr_number: 99,
+                discovery_failure: Some(
+                    concat!(
+                        "local repository origin (bob/other-project) does not ",
+                        "match the PR repository (alice/project)"
+                    )
                     .to_owned(),
-            ),
-        };
-
-        let msg = build_time_travel_error(&context);
-
-        assert!(
-            msg.contains("bob/other-project"),
-            "should include mismatched repo info: {msg}"
-        );
-        assert!(
-            msg.contains("alice/project"),
-            "should include expected repo info: {msg}"
-        );
+                ),
+            },
+            expected: &["bob/other-project", "alice/project"],
+            unexpected: &[],
+        }
     }
 
-    #[test]
-    fn error_message_uses_enterprise_host_in_clone_url() {
-        let context = TimeTravelContext {
-            host: "ghe.corp.com".to_owned(),
-            owner: "team".to_owned(),
-            repo: "project".to_owned(),
-            pr_number: 5,
-            discovery_failure: None,
-        };
+    fn enterprise_host_in_clone_url() -> ErrorExpectation {
+        ErrorExpectation {
+            context: TimeTravelContext {
+                host: "ghe.corp.com".to_owned(),
+                owner: "team".to_owned(),
+                repo: "project".to_owned(),
+                pr_number: 5,
+                discovery_failure: None,
+            },
+            expected: &["git clone https://ghe.corp.com/team/project"],
+            unexpected: &[],
+        }
+    }
 
-        let msg = build_time_travel_error(&context);
+    #[rstest]
+    #[case::pr_metadata(pr_metadata())]
+    #[case::discovery_failure_reason(discovery_failure_reason())]
+    #[case::no_failure_omits_discovery_line(no_failure_omits_discovery_line())]
+    #[case::mismatch_reason(mismatch_reason())]
+    #[case::enterprise_host_in_clone_url(enterprise_host_in_clone_url())]
+    fn build_time_travel_error_content(#[case] expectation: ErrorExpectation) {
+        let msg = build_time_travel_error(&expectation.context);
 
-        assert!(
-            msg.contains("git clone https://ghe.corp.com/team/project"),
-            "should use enterprise host in clone URL: {msg}"
-        );
+        for needle in expectation.expected {
+            assert!(msg.contains(needle), "should contain {needle:?}: {msg}");
+        }
+        for needle in expectation.unexpected {
+            assert!(
+                !msg.contains(needle),
+                "should not contain {needle:?}: {msg}"
+            );
+        }
     }
 
     #[test]

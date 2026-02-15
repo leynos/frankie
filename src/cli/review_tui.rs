@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use bubbletea_rs::Program;
 
-use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
+use frankie::local::{GitHubOrigin, LocalRepository, create_git_ops, discover_repository};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
     ReviewApp, TimeTravelContext, set_git_ops_context, set_initial_reviews,
@@ -153,14 +153,7 @@ fn discover_repo_for_locator(
     config: &FrankieConfig,
     locator: &PullRequestLocator,
 ) -> Result<(std::path::PathBuf, String), String> {
-    let local_repo = if let Some(ref repo_path) = config.repo_path {
-        discover_repository(Path::new(repo_path))
-            .map_err(|e| format!("--repo-path '{repo_path}': {e}"))?
-    } else if config.no_local_discovery {
-        return Err("local repository discovery is disabled (--no-local-discovery)".to_owned());
-    } else {
-        discover_repository(Path::new(".")).map_err(|e| format!("{e}"))?
-    };
+    let local_repo = select_local_repo(config)?;
 
     // Validate the discovered repository matches the PR's origin
     validate_repo_matches_locator(local_repo.github_origin(), locator)?;
@@ -169,6 +162,24 @@ fn discover_repo_for_locator(
     let head_sha = local_repo.head_sha()?;
 
     Ok((local_repo.workdir().to_path_buf(), head_sha))
+}
+
+/// Selects a local repository based on CLI configuration.
+///
+/// Prefers `--repo-path` when provided, rejects discovery when
+/// `--no-local-discovery` is set, and falls back to auto-discovery
+/// from the current directory.
+fn select_local_repo(config: &FrankieConfig) -> Result<LocalRepository, String> {
+    if let Some(ref repo_path) = config.repo_path {
+        return discover_repository(Path::new(repo_path))
+            .map_err(|e| format!("--repo-path '{repo_path}': {e}"));
+    }
+
+    if config.no_local_discovery {
+        return Err("local repository discovery is disabled (--no-local-discovery)".to_owned());
+    }
+
+    discover_repository(Path::new(".")).map_err(|e| format!("{e}"))
 }
 
 /// Validates that a discovered repository's origin matches the PR's
@@ -317,21 +328,25 @@ mod tests {
         #[case] origin_owner: &str,
         #[case] origin_repo: &str,
         #[case] should_succeed: bool,
-    ) {
-        let locator = PullRequestLocator::parse(locator_url).expect("valid URL should parse");
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let locator = PullRequestLocator::parse(locator_url)?;
         let origin = GitHubOrigin::GitHubCom {
             owner: origin_owner.to_owned(),
             repository: origin_repo.to_owned(),
         };
 
         let result = validate_repo_matches_locator(&origin, &locator);
-        assert_eq!(result.is_ok(), should_succeed, "{result:?}");
+        if result.is_ok() != should_succeed {
+            return Err(format!("expected is_ok={should_succeed}, got {result:?}").into());
+        }
+
+        Ok(())
     }
 
     #[test]
-    fn validate_repo_rejects_mismatched_enterprise_host() {
-        let locator = PullRequestLocator::parse("https://ghe.corp.com/octocat/hello-world/pull/1")
-            .expect("valid URL should parse");
+    fn validate_repo_rejects_mismatched_enterprise_host() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let locator = PullRequestLocator::parse("https://ghe.corp.com/octocat/hello-world/pull/1")?;
 
         let origin = GitHubOrigin::Enterprise {
             host: "ghe.other.com".to_owned(),
@@ -341,16 +356,16 @@ mod tests {
         };
 
         let result = validate_repo_matches_locator(&origin, &locator);
-        assert!(result.is_err(), "mismatched enterprise host should fail");
+        let err = result
+            .err()
+            .ok_or("expected Err for mismatched enterprise host")?;
+        if !err.contains("ghe.other.com") {
+            return Err(format!("error should mention local host: {err}").into());
+        }
+        if !err.contains("ghe.corp.com") {
+            return Err(format!("error should mention PR host: {err}").into());
+        }
 
-        let err = result.expect_err("already asserted Err");
-        assert!(
-            err.contains("ghe.other.com"),
-            "error should mention local host: {err}",
-        );
-        assert!(
-            err.contains("ghe.corp.com"),
-            "error should mention PR host: {err}",
-        );
+        Ok(())
     }
 }
