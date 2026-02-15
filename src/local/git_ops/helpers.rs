@@ -1,11 +1,23 @@
 //! Helper functions for Git operations, particularly diff analysis.
 
+use std::cell::Cell;
 use std::path::Path;
 
 use git2::{DiffOptions, Oid, Repository};
 
 use crate::local::commit::LineMappingVerification;
 use crate::local::error::GitOperationError;
+
+/// Where a target line falls relative to a hunk's old-file range.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LinePosition {
+    /// The target line is past (after) the hunk's old range.
+    Past,
+    /// The target line falls inside the hunk's old range.
+    Inside,
+    /// The target line is before the hunk's old range.
+    Before,
+}
 
 /// Represents a range of lines in a diff hunk.
 ///
@@ -36,39 +48,139 @@ impl HunkRange {
         line >= self.start && line < self.end_line()
     }
 
-    /// Checks if a line was deleted in this hunk.
-    ///
-    /// A line is considered deleted if the hunk removed more lines than it added
-    /// and the line falls within the removed section.
-    ///
-    /// # Positional assumption
-    ///
-    /// This method assumes deleted lines are located at the *end* of the hunk
-    /// (starting at `start + new_lines`). In practice, deletions can occur
-    /// anywhere within a hunk—at the beginning, interleaved with additions, or
-    /// scattered throughout. This assumption aligns with the broader heuristic
-    /// limitations documented in [`compute_line_offset_from_hunks`].
-    pub const fn is_line_deleted(self, line: u32) -> bool {
-        if self.old_lines > self.new_lines {
-            let removed_start = self.start + self.new_lines;
-            line >= removed_start
-        } else {
-            false
-        }
-    }
-
     /// Calculates the line offset contribution from this hunk.
     ///
-    /// Returns `new_lines - old_lines` as a signed offset. Values exceeding
-    /// `i32::MAX` are treated as zero, though this is unreachable in practice
-    /// since diff hunks cannot contain billions of lines.
+    /// Returns `new_lines - old_lines` as a signed offset, using saturating
+    /// conversion so extreme values clamp rather than collapsing to zero.
+    /// This is unreachable in practice since diff hunks cannot contain
+    /// billions of lines.
     pub fn offset(self) -> i32 {
-        i32::try_from(self.new_lines).unwrap_or(0) - i32::try_from(self.old_lines).unwrap_or(0)
+        let new = i64::from(self.new_lines);
+        let old = i64::from(self.old_lines);
+        let diff = new - old;
+        i32::try_from(diff).unwrap_or(if diff < 0 { i32::MIN } else { i32::MAX })
     }
 
     /// Returns the end line number (exclusive) of the old range.
     pub const fn end_line(self) -> u32 {
         self.start + self.old_lines
+    }
+
+    /// Classifies where `line` falls relative to this hunk's old-file range.
+    const fn classify_line(self, line: u32) -> LinePosition {
+        if line >= self.end_line() {
+            LinePosition::Past
+        } else if self.contains_line(line) {
+            LinePosition::Inside
+        } else {
+            LinePosition::Before
+        }
+    }
+}
+
+/// Calculates line-number offset from an old line to a mapped new line.
+///
+/// Uses saturating conversion so extreme values outside `i32` bounds clamp
+/// to `i32::MIN` / `i32::MAX` rather than collapsing to zero, preserving
+/// the direction of the shift.
+fn calculate_line_offset(old_line: u32, new_line: u32) -> i32 {
+    let diff = i64::from(new_line) - i64::from(old_line);
+    i32::try_from(diff).unwrap_or(if diff < 0 { i32::MIN } else { i32::MAX })
+}
+
+/// Mutable state for computing a target line offset across diff hunks.
+///
+/// The `target_line` threaded through methods is **1-based** and refers to
+/// the **old (pre-image) side** of the diff, matching git2's convention for
+/// `DiffLine::old_lineno`.
+struct LineOffsetState {
+    line_offset: Cell<i32>,
+    line_deleted: Cell<bool>,
+    target_resolved: Cell<bool>,
+    target_in_current_hunk: Cell<bool>,
+}
+
+impl LineOffsetState {
+    /// Creates fresh line-offset computation state.
+    const fn new() -> Self {
+        Self {
+            line_offset: Cell::new(0),
+            line_deleted: Cell::new(false),
+            target_resolved: Cell::new(false),
+            target_in_current_hunk: Cell::new(false),
+        }
+    }
+
+    /// Processes one diff hunk to update search boundaries and aggregate offset.
+    fn process_hunk(&self, hunk: &git2::DiffHunk<'_>, target_line: u32) -> bool {
+        if self.target_resolved.get() {
+            return true;
+        }
+
+        if self.target_in_current_hunk.get() {
+            // If we advanced to another hunk without seeing the target old
+            // line in the previous one, treat it as removed.
+            self.line_deleted.set(true);
+            self.target_resolved.set(true);
+            self.target_in_current_hunk.set(false);
+            return true;
+        }
+
+        let range = HunkRange::from_hunk(hunk);
+
+        match range.classify_line(target_line) {
+            LinePosition::Past => {
+                self.line_offset
+                    .set(self.line_offset.get().saturating_add(range.offset()));
+                self.target_in_current_hunk.set(false);
+            }
+            LinePosition::Inside => {
+                self.target_in_current_hunk.set(true);
+            }
+            LinePosition::Before => {
+                self.target_resolved.set(true);
+                self.target_in_current_hunk.set(false);
+            }
+        }
+
+        true
+    }
+
+    /// Processes one diff line to resolve the target line inside the active hunk.
+    fn process_line(&self, line: &git2::DiffLine<'_>, target_line: u32) -> bool {
+        if self.target_resolved.get() || !self.target_in_current_hunk.get() {
+            return true;
+        }
+
+        let Some(old_line) = line.old_lineno() else {
+            return true;
+        };
+
+        if old_line != target_line {
+            return true;
+        }
+
+        self.line_deleted.set(line.origin() == '-');
+        if let Some(new_line) = line.new_lineno() {
+            self.line_offset
+                .set(calculate_line_offset(target_line, new_line));
+        }
+
+        self.target_resolved.set(true);
+        self.target_in_current_hunk.set(false);
+        true
+    }
+
+    /// Finalises state after diff traversal completes.
+    fn finalize(&self) {
+        if self.target_in_current_hunk.get() && !self.target_resolved.get() {
+            self.line_deleted.set(true);
+        }
+    }
+
+    /// Returns the final `(line_offset, line_deleted)` tuple.
+    const fn result(&self) -> (i32, bool) {
+        (self.line_offset.get(), self.line_deleted.get())
     }
 }
 
@@ -137,68 +249,40 @@ pub(super) fn has_no_changes(diff: &git2::Diff<'_>) -> bool {
     diff.deltas().next().is_none()
 }
 
-/// Computes the line offset by processing diff hunks.
+/// Computes the line offset by processing diff hunks and diff lines.
 ///
-/// # Heuristic Approach
+/// `target_line` is **1-based** and refers to a line number on the **old
+/// (pre-image) side** of the diff. The function determines where that line
+/// ends up on the new (post-image) side, returning the signed offset and a
+/// flag indicating whether the line was deleted.
 ///
-/// This function uses **hunk-level aggregate counts** rather than examining
-/// individual `DiffLine` entries. For each hunk, it computes:
+/// The algorithm uses hunk headers for coarse positioning and then resolves
+/// target lines *inside* hunks by inspecting individual `DiffLine` entries.
+/// This captures intra-hunk insertions and deletions that affect the target
+/// line's mapped position.
 ///
-/// ```text
-/// offset = new_lines - old_lines
-/// ```
-///
-/// This approach is a reasonable approximation for most cases but may be
-/// imprecise for complex hunks containing interleaved additions and deletions.
-/// For example, a hunk that adds 3 lines and removes 2 lines contributes +1
-/// to the offset, regardless of where within the hunk those changes occur.
-///
-/// # Limitations
-///
-/// - Cannot detect whether a specific line was modified (changed in place)
-/// - Treats all lines within a hunk uniformly based on aggregate counts
-/// - May report incorrect offsets if a target line falls within a hunk where
-///   the exact position matters (e.g., some lines added above and some below)
-///
-/// For more precise line tracking, an alternative implementation could iterate
-/// through `diff.foreach(..., Some(&mut line_cb), ...)` to examine each
-/// `DiffLine` individually, but this comes at increased complexity.
+/// A target line that appears as a deletion (`-`) is reported as deleted.
+/// A target line that appears as context (` `) maps exactly to its reported
+/// `new_lineno` in the hunk.
 pub(super) fn compute_line_offset_from_hunks(
     diff: &git2::Diff<'_>,
     target_line: u32,
 ) -> Result<(i32, bool), GitOperationError> {
-    let mut line_offset: i32 = 0;
-    let mut line_deleted = false;
-    let mut passed_line = false;
+    let state = LineOffsetState::new();
 
     diff.foreach(
         &mut |_, _| true,
         None,
-        Some(&mut |_delta, hunk| {
-            let range = HunkRange::from_hunk(&hunk);
-
-            if passed_line {
-                return true;
-            }
-
-            if range.contains_line(target_line) {
-                line_deleted = range.is_line_deleted(target_line);
-                passed_line = true;
-            } else if target_line >= range.end_line() {
-                line_offset += range.offset();
-            } else {
-                passed_line = true;
-            }
-
-            true
-        }),
-        None,
+        Some(&mut |_delta, hunk| state.process_hunk(&hunk, target_line)),
+        Some(&mut |_delta, _hunk, line| state.process_line(&line, target_line)),
     )
     .map_err(|e| GitOperationError::DiffComputationFailed {
         message: e.message().to_owned(),
     })?;
 
-    Ok((line_offset, line_deleted))
+    state.finalize();
+
+    Ok(state.result())
 }
 
 /// Creates the appropriate line mapping result from offset and deletion state.
