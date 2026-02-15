@@ -16,14 +16,23 @@ const TURN_START_REQUEST_ID: u64 = 3;
 
 /// Outcome of an app-server protocol exchange.
 pub(super) enum AppServerCompletion {
+    /// The turn completed successfully.
     Succeeded,
-    Failed(String),
+    /// The turn failed or was interrupted.
+    Failed {
+        /// Human-readable failure description.
+        message: String,
+        /// Whether the failure was an interruption or cancellation
+        /// (as opposed to a hard error).
+        interrupted: bool,
+    },
 }
 
 /// Tracks the state of an active app-server JSON-RPC session.
 pub(super) struct AppServerSession {
     prompt: String,
     thread_started: bool,
+    thread_id: Option<String>,
 }
 
 impl AppServerSession {
@@ -31,7 +40,13 @@ impl AppServerSession {
         Self {
             prompt,
             thread_started: false,
+            thread_id: None,
         }
+    }
+
+    /// Returns the thread ID captured from the `thread/start` response.
+    pub(super) fn thread_id(&self) -> Option<&str> {
+        self.thread_id.as_deref()
     }
 
     /// Processes a single JSON-RPC message from the app-server.
@@ -53,11 +68,14 @@ impl AppServerSession {
                 .and_then(Value::as_str)
                 .filter(|id| !id.is_empty())
             else {
-                return Ok(Some(AppServerCompletion::Failed(
-                    "app-server thread/start response did not include thread id".to_owned(),
-                )));
+                return Ok(Some(AppServerCompletion::Failed {
+                    message: "app-server thread/start response did not include thread id"
+                        .to_owned(),
+                    interrupted: false,
+                }));
             };
 
+            self.thread_id = Some(thread_id.to_owned());
             write_message(stdin, &turn_start_request(thread_id, self.prompt.as_str()))?;
             self.thread_started = true;
         }
@@ -117,9 +135,10 @@ fn check_error_responses(message: &Value) -> Option<AppServerCompletion> {
 
     for &(id, label) in ERROR_CHECKS {
         if let Some(error) = response_error_for_id(message, id) {
-            return Some(AppServerCompletion::Failed(format!(
-                "app-server {label} failed: {error}"
-            )));
+            return Some(AppServerCompletion::Failed {
+                message: format!("app-server {label} failed: {error}"),
+                interrupted: false,
+            });
         }
     }
 
@@ -139,12 +158,18 @@ fn check_turn_completion(message: &Value) -> Option<AppServerCompletion> {
 
     let completion = match status {
         "completed" => AppServerCompletion::Succeeded,
-        "failed" | "interrupted" | "cancelled" => {
-            AppServerCompletion::Failed(turn_failure_message(message, status))
-        }
-        _ => AppServerCompletion::Failed(format!(
-            "codex turn completed with unexpected status: {status}"
-        )),
+        "interrupted" | "cancelled" => AppServerCompletion::Failed {
+            message: turn_failure_message(message, status),
+            interrupted: true,
+        },
+        "failed" => AppServerCompletion::Failed {
+            message: turn_failure_message(message, status),
+            interrupted: false,
+        },
+        _ => AppServerCompletion::Failed {
+            message: format!("codex turn completed with unexpected status: {status}"),
+            interrupted: false,
+        },
     };
 
     Some(completion)
@@ -170,6 +195,33 @@ fn start_protocol(stdin: &mut ChildStdin) -> Result<(), RunError> {
     write_message(stdin, &initialized_notification())?;
     write_message(stdin, &thread_start_request())?;
     Ok(())
+}
+
+fn resume_protocol(stdin: &mut ChildStdin, thread_id: &str) -> Result<(), RunError> {
+    write_message(stdin, &initialize_request())?;
+    write_message(stdin, &initialized_notification())?;
+    write_message(stdin, &thread_resume_request(thread_id))?;
+    Ok(())
+}
+
+/// Attempts to start a resumed app-server session if stdin is available.
+///
+/// Sends `initialize`, `initialized`, then `thread/resume` (instead of
+/// `thread/start`) to reconnect to a prior server-side thread.
+pub(super) fn maybe_start_resume_session(
+    maybe_stdin: Option<&mut ChildStdin>,
+    prompt: &str,
+    thread_id: &str,
+) -> Option<AppServerSession> {
+    let mut session = AppServerSession::new(prompt.to_owned());
+    session.thread_id = Some(thread_id.to_owned());
+    if let Some(stdin_writer) = maybe_stdin
+        && resume_protocol(stdin_writer, thread_id).is_ok()
+    {
+        return Some(session);
+    }
+
+    None
 }
 
 fn write_message(stdin: &mut ChildStdin, message: &Value) -> Result<(), RunError> {
@@ -210,6 +262,14 @@ fn thread_start_request() -> Value {
         "id": THREAD_START_REQUEST_ID,
         "method": "thread/start",
         "params": {}
+    })
+}
+
+fn thread_resume_request(thread_id: &str) -> Value {
+    json!({
+        "id": THREAD_START_REQUEST_ID,
+        "method": "thread/resume",
+        "params": { "threadId": thread_id }
     })
 }
 

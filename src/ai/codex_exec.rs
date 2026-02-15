@@ -10,7 +10,8 @@ use chrono::Utc;
 
 use crate::github::IntakeError;
 
-use super::codex_process::run_codex;
+use super::codex_process::{ResumeParams, run_codex, run_codex_resume};
+use super::session::SessionState;
 use super::transcript::{TranscriptMetadata, default_transcript_base_dir, transcript_path};
 
 /// Context used to build Codex execution requests.
@@ -91,6 +92,46 @@ impl CodexExecutionRequest {
 
     pub(crate) const fn comments_jsonl(&self) -> &str {
         self.comments_jsonl.as_str()
+    }
+}
+
+/// Request payload for resuming an interrupted Codex session.
+#[derive(Debug, Clone)]
+pub struct CodexResumeRequest {
+    /// The interrupted session to resume (includes thread ID and
+    /// transcript path).
+    session: SessionState,
+    /// Current comments (may have changed since the interrupted run).
+    new_comments_jsonl: String,
+    /// Pull request URL for prompt context.
+    pr_url: Option<String>,
+}
+
+impl CodexResumeRequest {
+    /// Creates a resume request from an interrupted session.
+    #[must_use]
+    pub const fn new(
+        session: SessionState,
+        new_comments_jsonl: String,
+        pr_url: Option<String>,
+    ) -> Self {
+        Self {
+            session,
+            new_comments_jsonl,
+            pr_url,
+        }
+    }
+
+    pub(crate) const fn session(&self) -> &SessionState {
+        &self.session
+    }
+
+    pub(crate) fn pr_url(&self) -> Option<&str> {
+        self.pr_url.as_deref()
+    }
+
+    pub(crate) const fn new_comments_jsonl(&self) -> &str {
+        self.new_comments_jsonl.as_str()
     }
 }
 
@@ -188,6 +229,20 @@ pub trait CodexExecutionService: Send + Sync + std::fmt::Debug {
     /// Returns [`IntakeError`] when the request is invalid or cannot be
     /// prepared for execution.
     fn start(&self, request: CodexExecutionRequest) -> Result<CodexExecutionHandle, IntakeError>;
+
+    /// Resumes an interrupted Codex session and returns a polling handle.
+    ///
+    /// The default implementation returns a configuration error; backends
+    /// that support resumption override this method.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntakeError`] when the session cannot be resumed.
+    fn resume(&self, _request: CodexResumeRequest) -> Result<CodexExecutionHandle, IntakeError> {
+        Err(IntakeError::Configuration {
+            message: "resume is not supported by this service".to_owned(),
+        })
+    }
 }
 
 /// Real `codex app-server` implementation backed by local process execution.
@@ -246,6 +301,48 @@ impl CodexExecutionService for SystemCodexExecutionService {
             transcript_path,
         ))
     }
+
+    fn resume(&self, request: CodexResumeRequest) -> Result<CodexExecutionHandle, IntakeError> {
+        let session = request.session.clone();
+        let thread_id = session
+            .thread_id
+            .clone()
+            .ok_or_else(|| IntakeError::Configuration {
+                message: "cannot resume session without a thread ID".to_owned(),
+            })?;
+
+        let prompt = build_resume_prompt(&request);
+
+        Ok(run_codex_resume(ResumeParams {
+            command_path: self.command_path.clone(),
+            prompt,
+            thread_id,
+            transcript_path: session.transcript_path.clone(),
+            session_state: session,
+        }))
+    }
+}
+
+/// Builds a prompt for a resumed Codex session.
+fn build_resume_prompt(request: &CodexResumeRequest) -> String {
+    use std::fmt::Write as _;
+
+    let session = request.session();
+    let mut prompt = format!(
+        concat!(
+            "Resume resolving review comments for pull request {}/{} #{}.",
+            "\nPrevious session was interrupted; continue where you left off.",
+            "\nUpdated review comments (JSONL):\n"
+        ),
+        session.owner, session.repository, session.pr_number,
+    );
+
+    if let Some(pr_url) = request.pr_url() {
+        let _infallible = writeln!(prompt, "Pull request URL: {pr_url}");
+    }
+
+    prompt.push_str(request.new_comments_jsonl());
+    prompt
 }
 
 #[cfg(test)]

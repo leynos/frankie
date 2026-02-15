@@ -7,8 +7,10 @@ use std::any::Any;
 
 use bubbletea_rs::Cmd;
 
+use crate::ai::transcript::default_transcript_base_dir;
 use crate::ai::{
     CodexExecutionContext, CodexExecutionOutcome, CodexExecutionRequest, CodexExecutionUpdate,
+    CodexResumeRequest, SessionState, find_interrupted_session,
 };
 use crate::export::{ExportedComment, sort_comments, write_jsonl};
 use crate::github::IntakeError;
@@ -31,6 +33,12 @@ impl ReviewApp {
                 self.apply_codex_outcome(outcome.clone());
                 None
             }
+            AppMsg::ResumePromptShown(session) => {
+                self.resume_prompt = Some(*session.clone());
+                None
+            }
+            AppMsg::ResumeAccepted => self.handle_resume_accepted(),
+            AppMsg::ResumeDeclined => self.handle_resume_declined(),
             _ => None,
         }
     }
@@ -41,6 +49,30 @@ impl ReviewApp {
             return Some(self.arm_codex_poll_timer());
         }
 
+        if let Some(session) = Self::check_for_interrupted_session() {
+            self.resume_prompt = Some(session);
+            return None;
+        }
+
+        self.start_fresh_codex_execution()
+    }
+
+    /// Checks for an interrupted session matching the current PR context.
+    fn check_for_interrupted_session() -> Option<SessionState> {
+        let locator = crate::tui::get_refresh_locator()?;
+        let base_dir = default_transcript_base_dir().ok()?;
+        find_interrupted_session(
+            base_dir.as_path(),
+            locator.owner().as_str(),
+            locator.repository().as_str(),
+            locator.number().get(),
+        )
+        .ok()
+        .flatten()
+    }
+
+    /// Starts a fresh Codex execution (no resume prompt).
+    fn start_fresh_codex_execution(&mut self) -> Option<Cmd> {
         let request = match self.build_codex_request() {
             Ok(request) => request,
             Err(error) => {
@@ -61,6 +93,52 @@ impl ReviewApp {
                 None
             }
         }
+    }
+
+    /// Handles the user accepting the resume prompt.
+    fn handle_resume_accepted(&mut self) -> Option<Cmd> {
+        let session = self.resume_prompt.take()?;
+
+        let comments_jsonl = match self.build_filtered_comments_jsonl() {
+            Ok(jsonl) => jsonl,
+            Err(error) => {
+                self.error = Some(format!("Resume failed: {error}"));
+                return None;
+            }
+        };
+
+        let pr_url = Self::build_pr_url();
+        let request = CodexResumeRequest::new(session, comments_jsonl, pr_url);
+
+        match self.codex_service.resume(request) {
+            Ok(handle) => {
+                self.codex_handle = Some(handle);
+                self.codex_status = Some("resuming interrupted Codex session".to_owned());
+                self.error = None;
+                Some(self.arm_codex_poll_timer())
+            }
+            Err(error) => {
+                self.error = Some(format!("Codex resume failed: {error}"));
+                None
+            }
+        }
+    }
+
+    /// Handles the user declining the resume prompt; starts a fresh run.
+    fn handle_resume_declined(&mut self) -> Option<Cmd> {
+        self.resume_prompt = None;
+        self.start_fresh_codex_execution()
+    }
+
+    /// Builds the PR URL from the current refresh context.
+    fn build_pr_url() -> Option<String> {
+        let locator = crate::tui::get_refresh_locator()?;
+        Some(format!(
+            "https://github.com/{}/{}/pull/{}",
+            locator.owner().as_str(),
+            locator.repository().as_str(),
+            locator.number().get()
+        ))
     }
 
     fn handle_codex_poll_tick(&mut self) -> Option<Cmd> {
@@ -136,14 +214,11 @@ impl ReviewApp {
             locator.number().get(),
         );
 
-        let pr_url = Some(format!(
-            "https://github.com/{}/{}/pull/{}",
-            locator.owner().as_str(),
-            locator.repository().as_str(),
-            locator.number().get()
-        ));
-
-        Ok(CodexExecutionRequest::new(context, comments_jsonl, pr_url))
+        Ok(CodexExecutionRequest::new(
+            context,
+            comments_jsonl,
+            Self::build_pr_url(),
+        ))
     }
 
     fn build_filtered_comments_jsonl(&self) -> Result<String, IntakeError> {

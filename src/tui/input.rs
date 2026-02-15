@@ -15,6 +15,8 @@ pub enum InputContext {
     DiffContext,
     /// Time-travel navigation view.
     TimeTravel,
+    /// Session resume prompt (y/n/Esc).
+    ResumePrompt,
 }
 
 /// Maps a key event to an application message.
@@ -55,6 +57,12 @@ pub fn map_key_to_message_with_context(
             KeyCode::Esc => return Some(AppMsg::HideDiffContext),
             KeyCode::Char('q') => return Some(AppMsg::Quit),
             _ => {}
+        },
+        InputContext::ResumePrompt => match key.key {
+            KeyCode::Char('y') => return Some(AppMsg::ResumeAccepted),
+            KeyCode::Char('n') | KeyCode::Esc => return Some(AppMsg::ResumeDeclined),
+            KeyCode::Char('q') => return Some(AppMsg::Quit),
+            _ => return None,
         },
         InputContext::ReviewList => {
             if key.key == KeyCode::Char('x') {
@@ -135,6 +143,22 @@ mod tests {
         Some(InputContext::ReviewList),
         Some(AppMsg::CursorDown)
     )]
+    #[case::resume_prompt_y_accepted(
+        KeyCode::Char('y'),
+        Some(InputContext::ResumePrompt),
+        Some(AppMsg::ResumeAccepted)
+    )]
+    #[case::resume_prompt_n_declined(
+        KeyCode::Char('n'),
+        Some(InputContext::ResumePrompt),
+        Some(AppMsg::ResumeDeclined)
+    )]
+    #[case::resume_prompt_esc_declined(
+        KeyCode::Esc,
+        Some(InputContext::ResumePrompt),
+        Some(AppMsg::ResumeDeclined)
+    )]
+    #[case::resume_prompt_j_unmapped(KeyCode::Char('j'), Some(InputContext::ResumePrompt), None)]
     #[case::default_context_j_down(KeyCode::Char('j'), None, Some(AppMsg::CursorDown))]
     fn key_mapping(
         #[case] key: KeyCode,

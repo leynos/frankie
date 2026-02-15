@@ -12,18 +12,18 @@ plan-governance document applies.
 ## Purpose / big picture
 
 When a Codex run is interrupted (process crash, network failure, user
-cancellation, or the `turn/completed` notification carries status
-`interrupted` or `cancelled`), the transcript and any accumulated approvals
-are currently lost. The user must restart from scratch, re-entering the same
-comments and losing prior context.
+cancellation, or the `turn/completed` notification carries status `interrupted`
+or `cancelled`), the transcript and any accumulated approvals are currently
+lost. The user must restart from scratch, re-entering the same comments and
+losing prior context.
 
-After this change, a user who presses `x` in the review TUI will be offered
-the option to resume the most recent interrupted run for the same pull
-request. Resuming reconnects to the prior Codex thread using the native
-`thread/resume` JSON-RPC method, which preserves the server-side
-conversation history including all prior approvals. The transcript file is
-appended to rather than overwritten. If no interrupted session exists,
-pressing `x` behaves exactly as before, starting a fresh run.
+After this change, a user who presses `x` in the review TUI will be offered the
+option to resume the most recent interrupted run for the same pull request.
+Resuming reconnects to the prior Codex thread using the native `thread/resume`
+JSON-RPC method, which preserves the server-side conversation history including
+all prior approvals. The transcript file is appended to rather than
+overwritten. If no interrupted session exists, pressing `x` behaves exactly as
+before, starting a fresh run.
 
 Success is observable when:
 
@@ -41,8 +41,7 @@ Success is observable when:
 ## Constraints
 
 - Preserve the existing `CodexExecutionService` trait boundary: TUI code in
-  `src/tui/` must not reach into process management in
-  `src/ai/codex_process/`.
+  `src/tui/` must not reach into process management in `src/ai/codex_process/`.
 - Reuse existing transcript infrastructure (`TranscriptWriter`,
   `TranscriptMetadata`, `transcript_path()`) rather than duplicating
   persistence logic.
@@ -75,8 +74,8 @@ Success is observable when:
   1,500 net new lines, stop and escalate.
 - Interface: if the public `CodexExecutionService` trait signature must
   change in a breaking way (i.e. existing callers cannot compile without
-  modification), stop and escalate. Additive changes (new methods with
-  default implementations, new types) are acceptable.
+  modification), stop and escalate. Additive changes (new methods with default
+  implementations, new types) are acceptable.
 - Dependencies: if any new external dependency is required beyond what is
   already declared in `Cargo.toml`, stop and escalate.
 - Iterations: if tests still fail after three fix cycles on any stage, stop
@@ -85,56 +84,54 @@ Success is observable when:
 ## Risks
 
 - Risk: the Codex `app-server` may reject `thread/resume` for threads whose
-  prior turn was interrupted, or may require the thread to still be live on
-  the server. Severity: high. Likelihood: low. Mitigation: the
-  `thread/resume` protocol is documented as the native mechanism for
-  resuming prior sessions by thread ID. If the server rejects the resume
-  request, fall back to a fresh start with a clear error message rather than
-  silently failing. The sidecar file records the thread ID, so the fallback
-  path is always available.
+  prior turn was interrupted, or may require the thread to still be live on the
+  server. Severity: high. Likelihood: low. Mitigation: the `thread/resume`
+  protocol is documented as the native mechanism for resuming prior sessions by
+  thread ID. If the server rejects the resume request, fall back to a fresh
+  start with a clear error message rather than silently failing. The sidecar
+  file records the thread ID, so the fallback path is always available.
 
 - Risk: transcript file locking — multiple concurrent Codex runs for the
   same PR could create conflicting session state files. Severity: medium.
   Likelihood: low. Mitigation: the existing guard (`is_codex_running()`)
   prevents concurrent runs in the same TUI session. Session state files use
-  unique timestamps. Document that cross-session concurrency is not
-  supported.
+  unique timestamps. Document that cross-session concurrency is not supported.
 
 - Risk: interrupted session detection relies on filesystem state that may
-  be stale or corrupted. Severity: low. Likelihood: low. Mitigation:
-  validate session state file integrity on read; discard invalid or
-  unparseable session files silently and treat as "no interrupted session".
+  be stale or corrupted. Severity: low. Likelihood: low. Mitigation: validate
+  session state file integrity on read; discard invalid or unparseable session
+  files silently and treat as "no interrupted session".
 
 ## Progress
 
-- [ ] Drafted self-contained ExecPlan with constraints, tolerances, staged
+- [x] Drafted self-contained ExecPlan with constraints, tolerances, staged
       implementation, and validation approach.
-- [ ] Stage A: session state model and persistence layer in `src/ai/`.
-- [ ] Stage B: session lifecycle hooks (sidecar creation and status
+- [x] Stage A: session state model and persistence layer in `src/ai/`.
+- [x] Stage B: session lifecycle hooks (sidecar creation and status
       updates in the execution pipeline).
-- [ ] Stage C: session discovery (find most recent interrupted session for
+- [x] Stage C: session discovery (find most recent interrupted session for
       a PR).
-- [ ] Stage D: resume execution path (`thread/resume` protocol support,
+- [x] Stage D: resume execution path (`thread/resume` protocol support,
       transcript append, `CodexResumeRequest`).
-- [ ] Stage E: TUI integration — resume prompt on `x` key when interrupted
+- [x] Stage E: TUI integration — resume prompt on `x` key when interrupted
       session exists.
-- [ ] Stage F: unit tests for session state persistence, discovery, and
+- [x] Stage F: unit tests for session state persistence, discovery, and
       resumption.
-- [ ] Stage G: behavioural tests (BDD) for end-to-end resume and
+- [x] Stage G: behavioural tests (BDD) for end-to-end resume and
       fresh-start flows.
-- [ ] Stage H: documentation updates (`frankie-design.md`,
+- [x] Stage H: documentation updates (`frankie-design.md`,
       `users-guide.md`, `roadmap.md`).
-- [ ] Stage I: quality gates pass (`make check-fmt`, `make lint`,
+- [x] Stage I: quality gates pass (`make check-fmt`, `make lint`,
       `make test`).
 
 ## Surprises & discoveries
 
 - Discovery: Codex `app-server` natively supports session resumption via
-  the `thread/resume` JSON-RPC method. Clients store the `thread.id` from
-  the initial `thread/start` response and pass it to `thread/resume` in a
-  new process to reconnect. This eliminates the need for prompt-based
-  context replay and preserves server-side approvals automatically.
-  Reference: `https://developers.openai.com/codex/app-server/`.
+  the `thread/resume` JSON-RPC method. Clients store the `thread.id` from the
+  initial `thread/start` response and pass it to `thread/resume` in a new
+  process to reconnect. This eliminates the need for prompt-based context
+  replay and preserves server-side approvals automatically. Reference:
+  `https://developers.openai.com/codex/app-server/`.
 
 ## Decision log
 
@@ -143,39 +140,38 @@ Success is observable when:
   Rationale: transcripts are already written to the filesystem under
   `${XDG_STATE_HOME}/frankie/codex-transcripts/`. A sidecar
   `<transcript-name>.session.json` keeps session metadata co-located with
-  transcript data, avoids schema migration complexity, and is inspectable
-  by users. The existing `cap_std` filesystem primitives can create, read,
-  and update sidecar files with no new dependencies. Date/Author:
-  2026-02-15 / plan author.
+  transcript data, avoids schema migration complexity, and is inspectable by
+  users. The existing `cap_std` filesystem primitives can create, read, and
+  update sidecar files with no new dependencies. Date/Author: 2026-02-15 / plan
+  author.
 
 - Decision: use the native `thread/resume` JSON-RPC method for session
-  resumption rather than prompt-based context injection. Rationale: the
-  Codex `app-server` protocol exposes `thread/resume` which reconnects to a
-  prior thread by ID, preserving the full server-side conversation history
-  including approvals. This is simpler, more robust, and avoids prompt-size
-  limitations. The sidecar file stores the `thread_id` from the original
-  `thread/start` response. On resume, Frankie spawns a new
-  `codex app-server` process, sends `initialize`/`initialized`, then sends
-  `thread/resume` (instead of `thread/start`) with the stored thread ID,
-  followed by a new `turn/start` with updated comments. Date/Author:
-  2026-02-15 / plan author. SUPERSEDES: prior decision to use prompt-based
-  context injection; that approach was designed before the `thread/resume`
-  protocol was known to exist.
+  resumption rather than prompt-based context injection. Rationale: the Codex
+  `app-server` protocol exposes `thread/resume` which reconnects to a prior
+  thread by ID, preserving the full server-side conversation history including
+  approvals. This is simpler, more robust, and avoids prompt-size limitations.
+  The sidecar file stores the `thread_id` from the original `thread/start`
+  response. On resume, Frankie spawns a new `codex app-server` process, sends
+  `initialize`/`initialized`, then sends `thread/resume` (instead of
+  `thread/start`) with the stored thread ID, followed by a new `turn/start`
+  with updated comments. Date/Author: 2026-02-15 / plan author. SUPERSEDES:
+  prior decision to use prompt-based context injection; that approach was
+  designed before the `thread/resume` protocol was known to exist.
 
 - Decision: detect "interrupted" status from both process-level signals
   (non-zero exit, channel disconnect) and protocol-level signals
   (`turn/completed` with status `interrupted`, `cancelled`, or `failed`).
-  Rationale: the existing `app_server.rs` already classifies these statuses
-  in `check_turn_completion()`. The session state writer hooks into the
-  existing outcome pipeline, recording the terminal status. Date/Author:
-  2026-02-15 / plan author.
+  Rationale: the existing `app_server.rs` already classifies these statuses in
+  `check_turn_completion()`. The session state writer hooks into the existing
+  outcome pipeline, recording the terminal status. Date/Author: 2026-02-15 /
+  plan author.
 
 - Decision: the TUI resume prompt is synchronous and non-modal — it
   appears as a status bar question with `y/n` key bindings, avoiding a new
-  modal overlay. Rationale: consistency with existing TUI patterns (status
-  bar is already used for Codex progress and errors). Adding a modal
-  dialog would require new view mode plumbing and is over-engineered for a
-  binary yes/no decision. Date/Author: 2026-02-15 / plan author.
+  modal overlay. Rationale: consistency with existing TUI patterns (status bar
+  is already used for Codex progress and errors). Adding a modal dialog would
+  require new view mode plumbing and is over-engineered for a binary yes/no
+  decision. Date/Author: 2026-02-15 / plan author.
 
 ## Outcomes & retrospective
 
@@ -185,8 +181,8 @@ Success is observable when:
 
 ### Codebase layout
 
-The Codex execution integration was implemented in ExecPlan 3-1-1 and lives
-in these files:
+The Codex execution integration was implemented in ExecPlan 3-1-1 and lives in
+these files:
 
 **AI module** (`src/ai/`):
 
@@ -201,8 +197,8 @@ in these files:
 - `src/ai/transcript.rs` — `TranscriptMetadata`, `TranscriptWriter`,
   `transcript_path()`, and `resolve_transcript_base_dir()`. 316 lines.
 - `src/ai/codex_process/mod.rs` — process lifecycle: `run_codex()` spawns
-  a background thread, `execute_codex()` orchestrates spawn → stream →
-  outcome. 380 lines.
+  a background thread, `execute_codex()` orchestrates spawn → stream → outcome.
+  380 lines.
 - `src/ai/codex_process/stream.rs` — `stream_progress()` loop and
   `parse_progress_event()`. 127 lines.
 - `src/ai/codex_process/app_server.rs` — JSON-RPC session state machine
@@ -240,10 +236,10 @@ in these files:
 3. `SystemCodexExecutionService::start()` resolves the transcript path,
    then calls `run_codex()` which spawns a background thread.
 4. The background thread creates a `TranscriptWriter`, spawns
-   `codex app-server`, writes JSON-RPC initialisation messages to stdin,
-   and enters `stream_progress()` which reads stdout lines, writes each to
-   the transcript, sends `CodexExecutionUpdate::Progress` to the channel,
-   and delegates JSON-RPC responses to `AppServerSession`.
+   `codex app-server`, writes JSON-RPC initialisation messages to stdin, and
+   enters `stream_progress()` which reads stdout lines, writes each to the
+   transcript, sends `CodexExecutionUpdate::Progress` to the channel, and
+   delegates JSON-RPC responses to `AppServerSession`.
 5. When `turn/completed` arrives or the process exits, a
    `CodexExecutionUpdate::Finished` is sent through the channel.
 6. The TUI polls the handle on `CodexPollTick` messages and drains
@@ -251,8 +247,8 @@ in these files:
 
 ### Codex `app-server` resumption protocol
 
-The Codex `app-server` supports native session resumption via
-`thread/resume`. The protocol for a resumed session is:
+The Codex `app-server` supports native session resumption via `thread/resume`.
+The protocol for a resumed session is:
 
 1. Spawn a new `codex app-server` process.
 2. Send `initialize` (ID=1) and `initialized` (notification) — same as a
@@ -271,9 +267,9 @@ The Codex `app-server` supports native session resumption via
    session.
 6. Stream progress and handle `turn/completed` — same as a fresh session.
 
-The server preserves the full conversation history (including prior
-approvals) for the thread, so the resumed turn has access to all prior
-context without client-side replay.
+The server preserves the full conversation history (including prior approvals)
+for the thread, so the resumed turn has access to all prior context without
+client-side replay.
 
 ### Transcript storage
 
@@ -292,13 +288,12 @@ All errors flow through `IntakeError` (defined in `src/github/error.rs`), a
 - **Session**: a single Codex execution run, identified by its transcript
   file path and associated metadata.
 - **Thread ID**: the Codex server-side identifier returned by
-  `thread/start` (e.g. `"thr_123"`), used to reconnect via
-  `thread/resume`.
+  `thread/start` (e.g. `"thr_123"`), used to reconnect via `thread/resume`.
 - **Interrupted session**: a session whose outcome was `Interrupted` or
   `Cancelled` (as opposed to `Completed` or `Failed`).
 - **Sidecar file**: a `.session.json` file stored alongside a transcript
-  `.jsonl` file, containing session metadata (status, thread ID, PR
-  context, timestamp).
+  `.jsonl` file, containing session metadata (status, thread ID, PR context,
+  timestamp).
 - **Resume**: spawning a new `codex app-server` process and sending
   `thread/resume` with the stored thread ID to reconnect to the prior
   server-side conversation.
@@ -315,17 +310,16 @@ Create `src/ai/session.rs` (new file, module-level doc comment required):
 1. Define `SessionStatus` enum: `Running`, `Completed`, `Interrupted`,
    `Failed`, `Cancelled`.
 2. Define `SessionState` struct: `status: SessionStatus`,
-   `transcript_path: Utf8PathBuf`, `thread_id: Option<String>` (populated
-   once `thread/start` response arrives), `owner: String`,
-   `repository: String`, `pr_number: u64`,
-   `started_at: DateTime<Utc>`,
+   `transcript_path: Utf8PathBuf`, `thread_id: Option<String>` (populated once
+   `thread/start` response arrives), `owner: String`, `repository: String`,
+   `pr_number: u64`, `started_at: DateTime<Utc>`,
    `finished_at: Option<DateTime<Utc>>`.
 3. Derive `Serialize`, `Deserialize` for both types using `serde`.
 4. Implement `SessionState::sidecar_path(&self) -> Utf8PathBuf` — replaces
    the transcript file's `.jsonl` extension with `.session.json`.
 5. Implement `SessionState::write_sidecar(&self) -> Result<(),
-   IntakeError>` — writes the JSON sidecar file using `cap_std` filesystem
-   primitives.
+   IntakeError>` — writes the JSON sidecar file using `cap_std
+   ` filesystem primitives.
 6. Implement `SessionState::read_sidecar(path: &Utf8Path) -> Result<Self,
    IntakeError>` — reads and deserialises a sidecar file.
 7. Add `serde` and `serde_json` to the import list (both are already in
@@ -339,9 +333,9 @@ Validation: `make check-fmt && make lint` pass. Unit tests in Stage F.
 
 ### Stage B: Session lifecycle hooks
 
-Wire session state creation and updates into the existing execution
-pipeline so that every Codex run produces a sidecar file recording its
-terminal status and thread ID.
+Wire session state creation and updates into the existing execution pipeline so
+that every Codex run produces a sidecar file recording its terminal status and
+thread ID.
 
 In `src/ai/codex_process/app_server.rs`:
 
@@ -351,9 +345,9 @@ In `src/ai/codex_process/app_server.rs`:
 2. Update `check_turn_completion()` to set `interrupted: true` when the
    `turn/completed` status is `"interrupted"` or `"cancelled"`.
 3. Expose the thread ID from the `thread/start` response. Currently
-   `AppServerSession::handle_message()` extracts the thread ID but only
-   uses it to send `turn/start`. Store it as a field on `AppServerSession`
-   and expose it via a `thread_id(&self) -> Option<&str>` accessor.
+   `AppServerSession::handle_message()` extracts the thread ID but only uses it
+   to send `turn/start`. Store it as a field on `AppServerSession` and expose
+   it via a `thread_id(&self) -> Option<&str>` accessor.
 
 In `src/ai/codex_process/stream.rs`:
 
@@ -380,17 +374,16 @@ Map existing outcome types to session statuses:
 - All other `AppServerCompletion::Failed` → `SessionStatus::Failed`
 - Channel disconnect → `SessionStatus::Interrupted`
 
-Implement a helper `fn update_session_status(state, status)
--> Result<(), IntakeError>` that updates the status, sets `finished_at`,
-and writes the sidecar.
+Implement a helper
+`fn update_session_status(state, status) -> Result<(), IntakeError>` that
+updates the status, sets `finished_at`, and writes the sidecar.
 
-Validation: `make check-fmt && make lint` pass. No new tests yet
-(Stage F).
+Validation: `make check-fmt && make lint` pass. No new tests yet (Stage F).
 
 ### Stage C: Session discovery
 
-Implement the ability to find the most recent interrupted session for a
-given PR.
+Implement the ability to find the most recent interrupted session for a given
+PR.
 
 In `src/ai/session.rs`:
 
@@ -411,8 +404,8 @@ Validation: unit tests in Stage F.
 
 ### Stage D: Resume execution path
 
-Extend `CodexExecutionService` and the process layer to support
-resumption via `thread/resume`.
+Extend `CodexExecutionService` and the process layer to support resumption via
+`thread/resume`.
 
 In `src/ai/codex_exec.rs`:
 
@@ -449,8 +442,8 @@ In `src/ai/transcript.rs`:
 In `src/ai/codex_process/app_server.rs`:
 
 1. Add a `resume_protocol()` function (analogous to `start_protocol()`)
-   that sends `initialize`, `initialized`, then `thread/resume` (instead
-   of `thread/start`):
+   that sends `initialize`, `initialized`, then `thread/resume` (instead of
+   `thread/start`):
 
        fn thread_resume_request(thread_id: &str) -> Value {
            json!({
@@ -483,8 +476,8 @@ In `src/ai/codex_process/mod.rs`:
      `run_codex()`.
 
 To avoid duplicating the full `execute_codex()` body, factor the shared
-lifecycle into a common helper (e.g. `execute_codex_inner()`) that accepts
-the transcript writer and session-start function as parameters.
+lifecycle into a common helper (e.g. `execute_codex_inner()`) that accepts the
+transcript writer and session-start function as parameters.
 
 Validation: `make check-fmt && make lint` pass.
 
@@ -503,8 +496,8 @@ In `src/tui/messages.rs`:
 In `src/tui/input.rs`:
 
 1. When in the `ResumePrompt` input context (new variant of
-   `InputContext`), map `y` → `ResumeAccepted`, `n` → `ResumeDeclined`,
-   `Esc` → `ResumeDeclined`.
+   `InputContext`), map `y` → `ResumeAccepted`, `n` → `ResumeDeclined`, `Esc` →
+   `ResumeDeclined`.
 
 In `src/tui/app/mod.rs`:
 
@@ -537,8 +530,7 @@ In `src/tui/app/codex_handlers.rs`:
 In `src/tui/app/rendering.rs`:
 
 1. When `resume_prompt` is `Some`, render the resume prompt text in the
-   status bar area: "Interrupted session from \<timestamp\>. Resume?
-   [y/n]".
+   status bar area: "Interrupted session from \<timestamp\>. Resume? [y/n]".
 
 Validation: `make check-fmt && make lint` pass.
 
@@ -626,8 +618,8 @@ Create `tests/features/codex_session_resume.feature`:
         Then the session state file exists
         And the session state file shows status interrupted
 
-Create `tests/codex_session_resume_bdd.rs` with step definitions and
-scenario bindings following the pattern in `tests/codex_exec_bdd.rs`.
+Create `tests/codex_session_resume_bdd.rs` with step definitions and scenario
+bindings following the pattern in `tests/codex_exec_bdd.rs`.
 
 Extend the stub infrastructure in `tests/codex_exec_bdd/state.rs`:
 
@@ -669,8 +661,8 @@ Run all quality gates from repository root:
     make lint 2>&1 | tee /tmp/execplan-3-1-2-lint.log
     make test 2>&1 | tee /tmp/execplan-3-1-2-test.log
 
-Expected: each command exits 0 with no lint warnings promoted to errors
-and no failing tests.
+Expected: each command exits 0 with no lint warnings promoted to errors and no
+failing tests.
 
 ## Concrete steps
 
@@ -698,8 +690,8 @@ All commands are run from the repository root (`/home/user/project`).
 3. Pass thread ID through `StreamProgressContext` or
    `StreamCompletion`.
 4. Update `execute_codex()` in `src/ai/codex_process/mod.rs` to create
-   and update `SessionState` (including thread ID) at process start and
-   on each terminal outcome.
+   and update `SessionState` (including thread ID) at process start and on each
+   terminal outcome.
 5. Run:
 
        set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-b-fmt.log
@@ -755,8 +747,7 @@ All commands are run from the repository root (`/home/user/project`).
 ### Commands: Stage F — unit tests
 
 1. Add tests to `src/ai/session.rs`, `src/ai/transcript.rs`,
-   `src/ai/codex_exec_tests.rs`, and
-   `src/tui/app/codex_handlers_tests.rs`.
+   `src/ai/codex_exec_tests.rs`, and `src/tui/app/codex_handlers_tests.rs`.
 2. Run:
 
        set -o pipefail; make test 2>&1 | tee /tmp/stage-f-test.log
@@ -852,8 +843,8 @@ Expected results:
   repeatedly without side effects.
 - Tests use `TempDir` fixtures that clean up automatically.
 - If any stage fails partway through, the sidecar file for the failed run
-  records the failure status, and the next invocation treats it correctly
-  (not resumable unless status is `Interrupted` with a valid thread ID).
+  records the failure status, and the next invocation treats it correctly (not
+  resumable unless status is `Interrupted` with a valid thread ID).
 - If `thread/resume` fails on the server (e.g. thread expired), the error
   is surfaced to the TUI and the user can start a fresh session.
 
@@ -1006,18 +997,18 @@ Documentation:
 - `docs/roadmap.md` — mark item done.
 
 No new external dependencies are required. All persistence uses `serde`,
-`serde_json`, `cap_std`, `camino`, and `chrono` which are already declared
-in `Cargo.toml`.
+`serde_json`, `cap_std`, `camino`, and `chrono` which are already declared in
+`Cargo.toml`.
 
 ## Revision note
 
-Revised to use native `thread/resume` JSON-RPC protocol for session
-resumption instead of prompt-based context injection. The Codex
-`app-server` documentation confirms that `thread/resume` reconnects to a
-prior thread by ID, preserving server-side conversation history including
-approvals. This eliminates the need for `read_transcript_tail()`,
-`max_replay_bytes`, and prompt-based context replay. The `SessionState`
-struct now stores `thread_id` instead of `approvals`. The
-`CodexResumeRequest` is simplified (no `max_replay_bytes`). The app-server
-module gains `resume_protocol()` and `maybe_start_resume_session()`
-alongside the existing `start_protocol()` and `maybe_start_session()`.
+Revised to use native `thread/resume` JSON-RPC protocol for session resumption
+instead of prompt-based context injection. The Codex `app-server` documentation
+confirms that `thread/resume` reconnects to a prior thread by ID, preserving
+server-side conversation history including approvals. This eliminates the need
+for `read_transcript_tail()`, `max_replay_bytes`, and prompt-based context
+replay. The `SessionState` struct now stores `thread_id` instead of
+`approvals`. The `CodexResumeRequest` is simplified (no `max_replay_bytes`).
+The app-server module gains `resume_protocol()` and
+`maybe_start_resume_session()` alongside the existing `start_protocol()` and
+`maybe_start_session()`.

@@ -29,6 +29,8 @@ pub(super) struct StreamProgressContext<'a> {
     pub(super) prompt: &'a str,
     pub(super) transcript: &'a mut TranscriptWriter,
     pub(super) sender: &'a Sender<CodexExecutionUpdate>,
+    /// Thread ID captured from the app-server session after streaming.
+    pub(super) thread_id: Option<String>,
 }
 
 /// Reads lines from Codex stdout, writing them to the transcript and
@@ -42,6 +44,31 @@ pub(super) fn stream_progress(
     context: &mut StreamProgressContext<'_>,
 ) -> Result<StreamCompletion, RunError> {
     let mut session = app_server::maybe_start_session(stdin.as_mut(), context.prompt);
+    let completion = read_stream_lines(stdout, &mut stdin, context, &mut session)?;
+    capture_thread_id(context, session.as_ref());
+    Ok(completion)
+}
+
+/// Streams stdout from a resumed session (uses `thread/resume` protocol).
+pub(super) fn stream_resume_progress(
+    stdout: ChildStdout,
+    mut stdin: Option<ChildStdin>,
+    context: &mut StreamProgressContext<'_>,
+    thread_id: &str,
+) -> Result<StreamCompletion, RunError> {
+    let mut session =
+        app_server::maybe_start_resume_session(stdin.as_mut(), context.prompt, thread_id);
+    let completion = read_stream_lines(stdout, &mut stdin, context, &mut session)?;
+    capture_thread_id(context, session.as_ref());
+    Ok(completion)
+}
+
+fn read_stream_lines(
+    stdout: ChildStdout,
+    stdin: &mut Option<ChildStdin>,
+    context: &mut StreamProgressContext<'_>,
+    session: &mut Option<app_server::AppServerSession>,
+) -> Result<StreamCompletion, RunError> {
     let reader = BufReader::new(stdout);
     let mut lines = reader.lines();
 
@@ -58,8 +85,6 @@ pub(super) fn stream_progress(
             .send(CodexExecutionUpdate::Progress(parse_progress_event(&line)))
             .is_err()
         {
-            // Receiver dropped; drain remaining stdout to prevent pipe
-            // fill that could block the child and hang wait().
             drain_remaining_lines(lines);
             return Ok(StreamCompletion::ProcessExit);
         }
@@ -72,6 +97,15 @@ pub(super) fn stream_progress(
     }
 
     Ok(StreamCompletion::ProcessExit)
+}
+
+fn capture_thread_id(
+    context: &mut StreamProgressContext<'_>,
+    session: Option<&app_server::AppServerSession>,
+) {
+    if let Some(sess) = session {
+        context.thread_id = sess.thread_id().map(ToOwned::to_owned);
+    }
 }
 
 /// Consumes remaining stdout lines so the child process does not block

@@ -20,7 +20,9 @@ use std::sync::Arc;
 
 use bubbletea_rs::Cmd;
 
-use crate::ai::{CodexExecutionHandle, CodexExecutionService, SystemCodexExecutionService};
+use crate::ai::{
+    CodexExecutionHandle, CodexExecutionService, SessionState, SystemCodexExecutionService,
+};
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
 
@@ -95,6 +97,8 @@ pub struct ReviewApp {
     codex_poll_interval: std::time::Duration,
     /// Tracks whether startup initialization has been handled.
     has_initialized: bool,
+    /// Interrupted session awaiting user confirmation to resume.
+    resume_prompt: Option<SessionState>,
 }
 
 /// Tracks which view is currently active in the TUI.
@@ -153,6 +157,7 @@ impl ReviewApp {
             codex_status: None,
             codex_poll_interval: std::time::Duration::from_millis(150),
             has_initialized: false,
+            resume_prompt: None,
         };
         app.set_visible_list_height();
         app

@@ -8,7 +8,7 @@ use rstest::{fixture, rstest};
 
 use crate::ai::{
     CodexExecutionHandle, CodexExecutionOutcome, CodexExecutionRequest, CodexExecutionService,
-    CodexExecutionUpdate, CodexProgressEvent,
+    CodexExecutionUpdate, CodexProgressEvent, CodexResumeRequest, SessionState, SessionStatus,
 };
 use crate::github::models::test_support::minimal_review;
 use crate::github::{IntakeError, PersonalAccessToken, PullRequestLocator};
@@ -53,8 +53,8 @@ impl StubCodexService {
     }
 }
 
-impl CodexExecutionService for StubCodexService {
-    fn start(&self, _request: CodexExecutionRequest) -> Result<CodexExecutionHandle, IntakeError> {
+impl StubCodexService {
+    fn dispatch_behaviour(&self) -> Result<CodexExecutionHandle, IntakeError> {
         let mut behaviour = self.behaviour.lock().map_err(|error| IntakeError::Api {
             message: format!("failed to lock stub behaviour: {error}"),
         })?;
@@ -70,6 +70,16 @@ impl CodexExecutionService for StubCodexService {
                 Ok(CodexExecutionHandle::new(receiver))
             }
         }
+    }
+}
+
+impl CodexExecutionService for StubCodexService {
+    fn start(&self, _request: CodexExecutionRequest) -> Result<CodexExecutionHandle, IntakeError> {
+        self.dispatch_behaviour()
+    }
+
+    fn resume(&self, _request: CodexResumeRequest) -> Result<CodexExecutionHandle, IntakeError> {
+        self.dispatch_behaviour()
     }
 }
 
@@ -219,6 +229,115 @@ async fn codex_poll_timer_emits_poll_tick_message() -> Result<(), Box<dyn std::e
     let app_msg = msg.downcast_ref::<AppMsg>();
     if !matches!(app_msg, Some(AppMsg::CodexPollTick)) {
         return Err(format!("expected CodexPollTick, got {app_msg:?}").into());
+    }
+
+    Ok(())
+}
+
+fn sample_interrupted_session() -> SessionState {
+    SessionState {
+        status: SessionStatus::Interrupted,
+        transcript_path: Utf8PathBuf::from("/tmp/frankie-interrupted.jsonl"),
+        thread_id: Some("thr_test123".to_owned()),
+        owner: "owner".to_owned(),
+        repository: "repo".to_owned(),
+        pr_number: 42,
+        started_at: chrono::Utc::now(),
+        finished_at: Some(chrono::Utc::now()),
+    }
+}
+
+#[rstest]
+fn resume_prompt_shown_sets_resume_prompt_state(
+    refresh_context: Result<(), IntakeError>,
+    sample_reviews: Vec<crate::github::models::ReviewComment>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    refresh_context?;
+
+    let service = std::sync::Arc::new(StubCodexService::with_updates(Vec::new()));
+    let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
+
+    let session = sample_interrupted_session();
+    app.handle_message(&AppMsg::ResumePromptShown(Box::new(session)));
+
+    let rendered = app.view();
+    if !rendered.contains("Resume?") {
+        return Err(format!("expected 'Resume?' in view, got: {rendered}").into());
+    }
+
+    Ok(())
+}
+
+#[rstest]
+fn resume_accepted_starts_resumed_execution(
+    refresh_context: Result<(), IntakeError>,
+    sample_reviews: Vec<crate::github::models::ReviewComment>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    refresh_context?;
+
+    let transcript_path = Utf8PathBuf::from("/tmp/frankie-resumed.jsonl");
+    let updates = vec![CodexExecutionUpdate::Finished(
+        CodexExecutionOutcome::Succeeded {
+            transcript_path: transcript_path.clone(),
+        },
+    )];
+
+    let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
+    let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
+
+    // Set the resume prompt first.
+    let session = sample_interrupted_session();
+    app.handle_message(&AppMsg::ResumePromptShown(Box::new(session)));
+    app.handle_message(&AppMsg::ResumeAccepted);
+
+    if !app.is_codex_running() {
+        // Handle may have already drained; poll to consume the finish event.
+        app.handle_message(&AppMsg::CodexPollTick);
+    }
+
+    let rendered = app.view();
+    if rendered.contains("Resume?") {
+        return Err("resume prompt should be cleared after acceptance".into());
+    }
+
+    Ok(())
+}
+
+#[rstest]
+fn resume_declined_starts_fresh_execution(
+    refresh_context: Result<(), IntakeError>,
+    sample_reviews: Vec<crate::github::models::ReviewComment>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    refresh_context?;
+
+    let transcript_path = Utf8PathBuf::from("/tmp/frankie-fresh.jsonl");
+    let updates = vec![CodexExecutionUpdate::Finished(
+        CodexExecutionOutcome::Succeeded {
+            transcript_path: transcript_path.clone(),
+        },
+    )];
+
+    let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
+    let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
+
+    // Set the resume prompt, then decline.
+    let session = sample_interrupted_session();
+    app.handle_message(&AppMsg::ResumePromptShown(Box::new(session)));
+    app.handle_message(&AppMsg::ResumeDeclined);
+
+    let rendered = app.view();
+    if rendered.contains("Resume?") {
+        return Err("resume prompt should be cleared after decline".into());
+    }
+
+    // The fresh execution should have been started.
+    app.handle_message(&AppMsg::CodexPollTick);
+    let rendered_after = app.view();
+    if !rendered_after.contains("Codex execution completed") {
+        return Err(format!(
+            "expected 'Codex execution completed' after decline, got: {rendered_after}"
+        )
+        .into());
     }
 
     Ok(())

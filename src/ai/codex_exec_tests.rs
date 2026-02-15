@@ -354,3 +354,28 @@ fn stderr_from_failing_process_appears_in_failure_message(
 
     Ok(())
 }
+
+#[rstest]
+fn resume_request_rejects_missing_thread_id() {
+    use crate::ai::session::{SessionState, SessionStatus};
+    use chrono::Utc;
+
+    let session = SessionState {
+        status: SessionStatus::Interrupted,
+        transcript_path: Utf8PathBuf::from("/tmp/transcript.jsonl"),
+        thread_id: None,
+        owner: "owner".to_owned(),
+        repository: "repo".to_owned(),
+        pr_number: 42,
+        started_at: Utc::now(),
+        finished_at: None,
+    };
+
+    let request = CodexResumeRequest::new(session, "{}".to_owned(), None);
+    let service = SystemCodexExecutionService::new();
+
+    let error = service
+        .resume(request)
+        .expect_err("missing thread_id should fail");
+    assert!(matches!(error, IntakeError::Configuration { .. }));
+}
