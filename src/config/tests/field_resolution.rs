@@ -129,3 +129,35 @@ fn set_pr_identifier_populates_accessor() {
         "pr_identifier should return the value set via set_pr_identifier"
     );
 }
+
+#[rstest]
+fn default_repo_path_is_none() {
+    let config = FrankieConfig::default();
+
+    assert_eq!(
+        config.repo_path, None,
+        "default config should have no repo_path"
+    );
+}
+
+#[rstest]
+fn repo_path_can_be_set() {
+    let config = FrankieConfig {
+        repo_path: Some("/path/to/repo".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.repo_path.as_deref(),
+        Some("/path/to/repo"),
+        "repo_path should return the configured value"
+    );
+}
+
+#[rstest]
+fn value_flags_includes_repo_path() {
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--repo-path"),
+        "VALUE_FLAGS should include --repo-path"
+    );
+}

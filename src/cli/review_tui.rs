@@ -9,10 +9,11 @@ use std::sync::Arc;
 
 use bubbletea_rs::Program;
 
+use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
-    ReviewApp, set_initial_reviews, set_initial_terminal_size, set_refresh_context,
-    set_telemetry_sink,
+    ReviewApp, TimeTravelContext, set_git_ops_context, set_initial_reviews,
+    set_initial_terminal_size, set_refresh_context, set_telemetry_sink, set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -21,19 +22,14 @@ use frankie::{
 
 /// Runs the TUI mode for reviewing PR comments.
 ///
-/// When a positional PR identifier is present, the locator is resolved via
-/// [`PullRequestLocator::from_identifier`], using local git discovery for
-/// bare PR numbers. Otherwise the existing `--pr-url` + `parse` flow is
-/// used for backwards compatibility.
+/// Resolves the PR locator, fetches reviews from GitHub, wires up
+/// time-travel when a local repository is available, and launches the
+/// interactive TUI.
 ///
 /// # Errors
 ///
-/// Returns an error if:
-/// - The PR URL or identifier is missing or invalid
-/// - Local git discovery fails (bare PR number outside a repository)
-/// - The token is missing or invalid
-/// - The GitHub API call fails
-/// - The TUI fails to initialise
+/// Returns an error if locator resolution, token validation, the GitHub
+/// API call, or TUI initialisation fails.
 pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     let locator = resolve_locator(config)?;
     let token = PersonalAccessToken::new(config.resolve_token()?)?;
@@ -42,8 +38,6 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     let gateway = OctocrabReviewCommentGateway::new(&token, locator.api_base().as_str())?;
     let reviews = gateway.list_review_comments(&locator).await?;
 
-    // Store reviews in global state for Model::init() to retrieve.
-    // Returns false if already set (e.g. re-running TUI in same process).
     let review_count = reviews.len();
     if !set_initial_reviews(reviews) {
         return Err(IntakeError::Api {
@@ -55,16 +49,18 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
         });
     }
 
-    // Store refresh context for the refresh feature.
-    // Returns false if already set; this is non-fatal since refresh will
-    // simply use the existing context (which may reference a different PR).
+    // Non-fatal: TUI launches without time-travel on failure.
+    let discovery_failure = try_setup_git_ops(config, &locator);
+    let _ = set_time_travel_context(TimeTravelContext {
+        host: locator.host().to_owned(),
+        owner: locator.owner().as_str().to_owned(),
+        repo: locator.repository().as_str().to_owned(),
+        pr_number: locator.number().get(),
+        discovery_failure,
+    });
+
     let _ = set_refresh_context(locator, token);
-
-    // Configure telemetry for sync latency metrics.
-    // Returns false if already set; this is non-fatal.
     let _ = set_telemetry_sink(Arc::new(StderrJsonlTelemetrySink));
-
-    // Run the TUI program
     run_tui().await.map_err(|error| IntakeError::Api {
         message: format!("TUI error: {error}"),
     })?;
@@ -72,11 +68,8 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     Ok(())
 }
 
-/// Resolves a [`PullRequestLocator`] from the configuration.
-///
-/// Prefers the positional `pr_identifier` when available, falling back to
-/// `--pr-url`. For bare PR numbers the local git repository is discovered
-/// to obtain the owner and repository name.
+/// Resolves a [`PullRequestLocator`] from the configuration, preferring
+/// the positional `pr_identifier` and falling back to `--pr-url`.
 fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeError> {
     if let Some(identifier) = config.pr_identifier() {
         return resolve_from_identifier(identifier, config.no_local_discovery);
@@ -88,14 +81,9 @@ fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeE
 
 /// Resolves a locator from a positional PR identifier (URL or bare number).
 ///
-/// URL identifiers are forwarded directly to [`PullRequestLocator::parse`]
-/// without local git discovery, avoiding unnecessary
-/// `frankie::discover_repository` calls.
-///
-/// For bare PR numbers, local git discovery provides the owner/repo
-/// context needed to construct a full URL. When `no_local_discovery` is
-/// `true`, a bare number is rejected with a [`IntakeError::Configuration`]
-/// error instructing the user to supply a full PR URL.
+/// URL identifiers bypass local discovery. Bare PR numbers require
+/// discovery for owner/repo context; when `no_local_discovery` is `true`
+/// a bare number is rejected with a configuration error.
 fn resolve_from_identifier(
     identifier: &str,
     no_local_discovery: bool,
@@ -127,6 +115,116 @@ fn resolve_from_identifier(
     })?;
 
     PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
+}
+
+/// Attempts to set up Git operations for time-travel navigation.
+///
+/// Tries to discover or open a local repository matching the PR, then
+/// creates git ops and stores them in global state for `Model::init()`.
+///
+/// Returns `None` on success, or a failure reason string when discovery
+/// fails. Failures are non-fatal: the TUI launches without time-travel.
+fn try_setup_git_ops(config: &FrankieConfig, locator: &PullRequestLocator) -> Option<String> {
+    let result = discover_repo_for_locator(config, locator);
+
+    match result {
+        Ok((repo_path, head_sha)) => match create_git_ops(&repo_path) {
+            Ok(git_ops) => {
+                let _ = set_git_ops_context(git_ops, head_sha);
+                None
+            }
+            Err(e) => Some(format!(
+                "failed to open repository at {}: {e}",
+                repo_path.display()
+            )),
+        },
+        Err(reason) => Some(reason),
+    }
+}
+
+/// Discovers a local repository matching the PR's origin.
+///
+/// Uses `--repo-path` if configured, otherwise auto-discovers from the
+/// current directory. Validates that the discovered repository's origin
+/// matches the PR's owner and repository.
+///
+/// Returns the repository path and HEAD SHA on success.
+fn discover_repo_for_locator(
+    config: &FrankieConfig,
+    locator: &PullRequestLocator,
+) -> Result<(std::path::PathBuf, String), String> {
+    let discovery_path = choose_repo_discovery_path(config)?;
+    let local_repo = discover_repository(&discovery_path).map_err(|e| {
+        if config.repo_path.is_some() {
+            format!("--repo-path '{}': {e}", discovery_path.display())
+        } else {
+            format!("{e}")
+        }
+    })?;
+
+    // Validate the discovered repository matches the PR's origin
+    validate_repo_matches_locator(local_repo.github_origin(), locator)?;
+
+    // Get HEAD SHA for line mapping verification
+    let head_sha = local_repo.head_sha()?;
+
+    Ok((local_repo.workdir().to_path_buf(), head_sha))
+}
+
+/// Chooses the path to use for local repository discovery.
+///
+/// Returns the explicit `--repo-path` when provided, rejects discovery
+/// when `--no-local-discovery` is set, and falls back to the current
+/// directory.
+fn choose_repo_discovery_path(config: &FrankieConfig) -> Result<std::path::PathBuf, String> {
+    if let Some(ref repo_path) = config.repo_path {
+        return Ok(std::path::PathBuf::from(repo_path));
+    }
+
+    if config.no_local_discovery {
+        return Err("local repository discovery is disabled (--no-local-discovery)".to_owned());
+    }
+
+    Ok(std::path::PathBuf::from("."))
+}
+
+/// Validates that a discovered repository's origin matches the PR's
+/// host, owner, and repository.
+fn validate_repo_matches_locator(
+    origin: &GitHubOrigin,
+    locator: &PullRequestLocator,
+) -> Result<(), String> {
+    let expected_host = locator.host();
+    let expected_owner = locator.owner().as_str();
+    let expected_repo = locator.repository().as_str();
+
+    if !origin.host().eq_ignore_ascii_case(expected_host) {
+        return Err(format!(
+            concat!(
+                "local repository host ({found_host}) does not match the PR ",
+                "host ({expected_host})"
+            ),
+            found_host = origin.host(),
+            expected_host = expected_host,
+        ));
+    }
+
+    if !origin.owner().eq_ignore_ascii_case(expected_owner)
+        || !origin.repository().eq_ignore_ascii_case(expected_repo)
+    {
+        return Err(format!(
+            concat!(
+                "local repository origin ({found_owner}/{found_repo}) does not ",
+                "match the PR repository ({expected_owner}/{expected_repo})"
+            ),
+            found_owner = origin.owner(),
+            found_repo = origin.repository(),
+            expected_owner = expected_owner,
+            expected_repo = expected_repo,
+        ));
+    }
+
+    Ok(())
 }
 
 /// Runs the bubbletea-rs program with the `ReviewApp` model.
@@ -204,5 +302,76 @@ mod tests {
         // The call may fail due to OnceLock if already set by another test,
         // but we verify the wiring pattern compiles and the sink is usable.
         let _ = set_telemetry_sink(sink);
+    }
+
+    #[rstest::rstest]
+    #[case::matching_repo(
+        "https://github.com/octocat/hello-world/pull/42",
+        "octocat",
+        "hello-world",
+        true
+    )]
+    #[case::case_insensitive_matching(
+        "https://github.com/OctoCat/Hello-World/pull/1",
+        "octocat",
+        "hello-world",
+        true
+    )]
+    #[case::mismatched_repo(
+        "https://github.com/octocat/hello-world/pull/1",
+        "octocat",
+        "other-repo",
+        false
+    )]
+    #[case::mismatched_owner(
+        "https://github.com/alice/hello-world/pull/1",
+        "bob",
+        "hello-world",
+        false
+    )]
+    fn validate_repo_matches_locator_cases(
+        #[case] locator_url: &str,
+        #[case] origin_owner: &str,
+        #[case] origin_repo: &str,
+        #[case] should_succeed: bool,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let locator = PullRequestLocator::parse(locator_url)?;
+        let origin = GitHubOrigin::GitHubCom {
+            owner: origin_owner.to_owned(),
+            repository: origin_repo.to_owned(),
+        };
+
+        let result = validate_repo_matches_locator(&origin, &locator);
+        if result.is_ok() != should_succeed {
+            return Err(format!("expected is_ok={should_succeed}, got {result:?}").into());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn validate_repo_rejects_mismatched_enterprise_host() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let locator = PullRequestLocator::parse("https://ghe.corp.com/octocat/hello-world/pull/1")?;
+
+        let origin = GitHubOrigin::Enterprise {
+            host: "ghe.other.com".to_owned(),
+            port: None,
+            owner: "octocat".to_owned(),
+            repository: "hello-world".to_owned(),
+        };
+
+        let result = validate_repo_matches_locator(&origin, &locator);
+        let err = result
+            .err()
+            .ok_or("expected Err for mismatched enterprise host")?;
+        if !err.contains("ghe.other.com") {
+            return Err(format!("error should mention local host: {err}").into());
+        }
+        if !err.contains("ghe.corp.com") {
+            return Err(format!("error should mention PR host: {err}").into());
+        }
+
+        Ok(())
     }
 }

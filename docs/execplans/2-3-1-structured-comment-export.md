@@ -381,14 +381,13 @@ Consider using a constant here instead of a magic number.
     -    token.len() > 0
     +    token.len() > 8
      }
-
 ```
 
 Example JSONL output (illustrative):
 
 ```jsonl
-{"id":456,"author":"alice","file_path":"src/auth.rs","line_number":42,"body":"Consider using a constant here.","diff_hunk":"@@ -40,3 +40,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T10:30:00Z"}
-{"id":457,"author":"bob","file_path":"src/auth.rs","line_number":50,"body":"Add error handling.","diff_hunk":"@@ -48,3 +48,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T11:00:00Z"}
+{"id":456,"author":"alice","file_path":"src/auth.rs","body":"Use a constant.","commit_sha":"abc123"}
+{"id":457,"author":"bob","file_path":"src/auth.rs","body":"Add error handling.","commit_sha":"abc123"}
 ```
 
 ## Interfaces and dependencies
@@ -423,10 +422,12 @@ Example commands:
 frankie --pr-url https://github.com/owner/repo/pull/123 --export markdown
 
 # Export to file in JSONL format
-frankie --pr-url https://github.com/owner/repo/pull/123 --export jsonl --output comments.jsonl
+frankie --pr-url https://github.com/owner/repo/pull/123 \
+  --export jsonl --output comments.jsonl
 
 # Using environment variable for token
-FRANKIE_TOKEN=ghp_xxx frankie -u https://github.com/owner/repo/pull/123 -e markdown
+FRANKIE_TOKEN=ghp_xxx frankie \
+  -u https://github.com/owner/repo/pull/123 -e markdown
 ```
 
 ## Revision note

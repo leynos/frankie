@@ -1,42 +1,19 @@
 //! Terminal User Interface for review listing and filtering.
 //!
-//! This module provides an interactive TUI for navigating and filtering
-//! pull request review comments using the bubbletea-rs framework.
+//! Provides an interactive TUI for navigating and filtering pull request
+//! review comments using the bubbletea-rs Model-View-Update (MVU) pattern.
 //!
-//! # Architecture
-//!
-//! The TUI follows the Model-View-Update (MVU) pattern:
-//!
-//! - **Model**: Application state in [`app::ReviewApp`]
-//! - **View**: Rendering logic in each component's `view()` method
-//! - **Update**: Message-driven state transitions in `update()`
-//!
-//! # Modules
-//!
-//! - [`app`]: Main application model and entry point
-//! - [`messages`]: Message types for the update loop
-//! - [`state`]: Filter and cursor state management
-//! - [`components`]: Reusable UI components
-//! - [`input`]: Key-to-message mapping for input handling
-//!
-//! # Initial Data Loading
-//!
-//! Because bubbletea-rs's `Model` trait requires `init()` to be a static
-//! function, we use a module-level storage pattern for initial data. Call
-//! [`set_initial_reviews`] before starting the program, and `ReviewApp::init()`
-//! will automatically retrieve the data.
-//!
-//! # Refresh Functionality
-//!
-//! Similarly, [`set_refresh_context`] must be called to enable the refresh
-//! feature. This stores the necessary context (locator, token) for fetching
-//! fresh review data from the GitHub API.
+//! Because bubbletea-rs requires `Model::init()` to be static, this module
+//! uses `OnceLock`-based storage for initial data, refresh context, git
+//! operations, time-travel context, and telemetry. Call the corresponding
+//! `set_*` functions before starting the program.
 
 use std::sync::{Arc, OnceLock};
 
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
+use crate::local::GitOperations;
 use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 
 pub mod app;
@@ -75,10 +52,46 @@ static TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
 /// avoiding repeated `Arc::new` allocations.
 static DEFAULT_TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
 
+/// Global storage for Git operations context.
+///
+/// This is set before the TUI program starts when a valid local repository
+/// is discovered or configured. Enables time-travel navigation in the TUI.
+static GIT_OPS_CONTEXT: OnceLock<GitOpsContext> = OnceLock::new();
+
+/// Global storage for time-travel context (PR info and discovery status).
+///
+/// Always set before TUI startup; provides context for error messages when
+/// time-travel is attempted without a valid local repository.
+static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
+
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
     locator: PullRequestLocator,
     token: PersonalAccessToken,
+}
+
+/// Git operations context for time-travel navigation.
+struct GitOpsContext {
+    git_ops: Arc<dyn GitOperations>,
+    head_sha: String,
+}
+
+/// Context describing the PR and any discovery failure for error messages.
+///
+/// Stored alongside git ops to provide contextual error messages when
+/// time-travel is attempted without a valid local repository.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TimeTravelContext {
+    /// PR host (e.g. "github.com" or "ghe.corp.com").
+    pub host: String,
+    /// PR owner (e.g. "octocat").
+    pub owner: String,
+    /// PR repository name (e.g. "hello-world").
+    pub repo: String,
+    /// PR number.
+    pub pr_number: u64,
+    /// Reason discovery failed, if applicable.
+    pub discovery_failure: Option<String>,
 }
 
 /// Sets the initial reviews for the TUI application.
@@ -150,6 +163,56 @@ pub fn set_telemetry_sink(sink: Arc<dyn TelemetrySink>) -> bool {
     TELEMETRY_SINK.set(sink).is_ok()
 }
 
+/// Sets the Git operations context for time-travel navigation.
+///
+/// This must be called before starting the bubbletea-rs program. When a
+/// valid local repository is available, this enables time-travel features.
+///
+/// # Arguments
+///
+/// * `git_ops` - The Git operations implementation.
+/// * `head_sha` - The HEAD commit SHA for line mapping verification.
+///
+/// # Returns
+///
+/// `true` if the context was set, `false` if it was already set.
+pub fn set_git_ops_context(git_ops: Arc<dyn GitOperations>, head_sha: String) -> bool {
+    GIT_OPS_CONTEXT
+        .set(GitOpsContext { git_ops, head_sha })
+        .is_ok()
+}
+
+/// Sets the time-travel context (PR info and discovery status).
+///
+/// This must be called before starting the bubbletea-rs program. It stores
+/// PR metadata used to generate contextual error messages when time-travel
+/// is unavailable.
+///
+/// # Returns
+///
+/// `true` if the context was set, `false` if it was already set.
+pub fn set_time_travel_context(context: TimeTravelContext) -> bool {
+    TIME_TRAVEL_CONTEXT.set(context).is_ok()
+}
+
+/// Gets the Git operations context, if configured.
+///
+/// Called internally by `ReviewApp::init()`. Returns the stored git ops
+/// and HEAD SHA, or `None` if no local repository was configured.
+pub(crate) fn get_git_ops_context() -> Option<(Arc<dyn GitOperations>, String)> {
+    GIT_OPS_CONTEXT
+        .get()
+        .map(|ctx| (Arc::clone(&ctx.git_ops), ctx.head_sha.clone()))
+}
+
+/// Gets the time-travel context, if configured.
+///
+/// Called internally by the time-travel error handler to generate
+/// contextual error messages.
+pub(crate) fn get_time_travel_context() -> Option<TimeTravelContext> {
+    TIME_TRAVEL_CONTEXT.get().cloned()
+}
+
 /// Gets the telemetry sink, returning a no-op sink if not configured.
 ///
 /// Uses a static fallback sink to avoid allocating a new `Arc` on each call
@@ -214,19 +277,62 @@ pub(crate) async fn fetch_reviews() -> Result<Vec<ReviewComment>, IntakeError> {
 }
 
 #[cfg(test)]
+#[expect(
+    clippy::ref_option_ref,
+    reason = "Generated by mockall macro for Option<&T> parameters"
+)]
 mod tests {
     use std::sync::Arc;
 
+    use mockall::mock;
+
+    use crate::local::{
+        CommitSha, CommitSnapshot, GitOperationError, GitOperations, LineMappingRequest,
+        LineMappingVerification, RepoFilePath,
+    };
     use crate::telemetry::test_support::RecordingTelemetrySink;
     use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 
     use super::*;
 
+    mock! {
+        pub GitOps {}
+
+        impl std::fmt::Debug for GitOps {
+            fn fmt<'a>(&self, f: &mut std::fmt::Formatter<'a>) -> std::fmt::Result;
+        }
+
+        impl GitOperations for GitOps {
+            fn get_commit_snapshot<'a>(
+                &self,
+                sha: &'a CommitSha,
+                file_path: Option<&'a RepoFilePath>,
+            ) -> Result<CommitSnapshot, GitOperationError>;
+
+            fn get_file_at_commit<'a>(
+                &self,
+                sha: &'a CommitSha,
+                file_path: &'a RepoFilePath,
+            ) -> Result<String, GitOperationError>;
+
+            fn verify_line_mapping<'a>(
+                &self,
+                request: &'a LineMappingRequest,
+            ) -> Result<LineMappingVerification, GitOperationError>;
+
+            fn get_parent_commits<'a>(
+                &self,
+                sha: &'a CommitSha,
+                limit: usize,
+            ) -> Result<Vec<CommitSha>, GitOperationError>;
+
+            fn commit_exists<'a>(&self, sha: &'a CommitSha) -> bool;
+        }
+    }
+
     #[test]
     fn get_telemetry_sink_returns_usable_sink() {
-        // get_telemetry_sink returns a sink that implements TelemetrySink.
-        // Due to OnceLock, we can't control whether it's Noop or a previously-set sink,
-        // but we verify the returned sink is usable without panicking.
+        // OnceLock may return Noop or a previously-set sink; verify no panic.
         let sink = get_telemetry_sink();
         sink.record(TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 100,
@@ -237,24 +343,17 @@ mod tests {
 
     #[test]
     fn noop_telemetry_sink_can_record_without_panic() {
-        // Verify NoopTelemetrySink (the default fallback) handles events correctly
         let sink = NoopTelemetrySink;
         sink.record(TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 42,
             comment_count: 3,
             incremental: false,
         });
-        // Test passes if no panic occurs
     }
 
     #[test]
     fn recording_sink_captures_sync_latency_event() {
-        // Test that a RecordingTelemetrySink captures the exact event structure
-        // that record_sync_telemetry would produce. This verifies the event
-        // construction is correct, independent of OnceLock state.
         let sink = RecordingTelemetrySink::default();
-
-        // Record directly to the sink (bypassing OnceLock)
         sink.record(TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 150,
             comment_count: 10,
@@ -283,16 +382,10 @@ mod tests {
 
     #[test]
     fn set_telemetry_sink_wires_sink_for_record_sync_telemetry() {
-        // This test verifies the wiring works when our sink is first to set.
-        // Due to OnceLock, if another test ran first, our sink won't be used,
-        // but the function should still not panic.
+        // OnceLock: only verify events if our sink was first to be set.
         let sink = Arc::new(RecordingTelemetrySink::default());
         let was_set = set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
-
-        // Call the public API
         record_sync_telemetry(200, 15, true);
-
-        // Only verify events if we were first to set the sink
         if was_set {
             let events = sink.events();
             assert_eq!(events.len(), 1);
@@ -306,6 +399,71 @@ mod tests {
                 }
             ));
         }
-        // If not set, test still passes - we verified no panic occurs
+    }
+
+    /// Creates a `MockGitOps` with default expectations that return
+    /// deterministic errors, so accidental calls produce predictable
+    /// results instead of panicking.
+    fn default_mock_git_ops() -> MockGitOps {
+        let mut mock = MockGitOps::new();
+        mock.expect_get_commit_snapshot().returning(|_, _| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_get_file_at_commit().returning(|_, _| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_verify_line_mapping().returning(|_| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_get_parent_commits().returning(|_, _| {
+            Err(GitOperationError::RepositoryNotAvailable {
+                message: "stub".to_owned(),
+            })
+        });
+        mock.expect_commit_exists().returning(|_| false);
+        mock
+    }
+
+    #[test]
+    fn set_git_ops_context_wires_ops_for_get() {
+        let ops: Arc<dyn GitOperations> = Arc::new(default_mock_git_ops());
+        let was_set = set_git_ops_context(ops, "abc123".to_owned());
+
+        let retrieved = get_git_ops_context();
+        assert!(retrieved.is_some(), "context should always be available");
+
+        if was_set {
+            let (_, head_sha) = retrieved.expect("already asserted Some");
+            assert_eq!(head_sha, "abc123");
+        }
+    }
+
+    #[test]
+    fn set_time_travel_context_wires_context_for_get() {
+        let ctx = TimeTravelContext {
+            host: "github.com".to_owned(),
+            owner: "octocat".to_owned(),
+            repo: "hello-world".to_owned(),
+            pr_number: 42,
+            discovery_failure: Some("no repo found".to_owned()),
+        };
+        let was_set = set_time_travel_context(ctx);
+
+        let retrieved = get_time_travel_context();
+        assert!(retrieved.is_some(), "context should always be available");
+
+        if was_set {
+            let stored = retrieved.expect("already asserted Some");
+            assert_eq!(stored.owner, "octocat");
+            assert_eq!(stored.repo, "hello-world");
+            assert_eq!(stored.pr_number, 42);
+            assert_eq!(stored.discovery_failure.as_deref(), Some("no repo found"));
+        }
     }
 }
