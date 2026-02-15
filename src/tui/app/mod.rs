@@ -314,7 +314,7 @@ impl ReviewApp {
     /// updating viewport/selection state in navigation handlers.
     fn set_cursor(&mut self, position: usize) {
         self.filter_state.cursor_position = position;
-        self.ensure_cursor_visible();
+        self.adjust_scroll_to_cursor();
         self.update_selected_id();
     }
 
@@ -335,12 +335,16 @@ impl ReviewApp {
     }
 
     /// Adjusts scroll offset so the selected cursor remains visible.
-    const fn adjust_scroll_to_cursor(&mut self) {
+    #[expect(
+        clippy::missing_const_for_fn,
+        reason = "runtime-only helper; const adds no value"
+    )]
+    fn adjust_scroll_to_cursor(&mut self) {
         let cursor = self.filter_state.cursor_position;
         let visible_height = self.review_list.visible_height();
 
+        // If nothing is visible, keep the scroll offset unchanged.
         if visible_height == 0 {
-            self.filter_state.scroll_offset = cursor;
             return;
         }
 
