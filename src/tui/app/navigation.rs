@@ -3,6 +3,7 @@
 //! Each navigation method updates the cursor position and then calls
 //! `update_selected_id()` via the centralised `set_cursor` helper to
 //! ensure selection tracking stays synchronised with cursor position.
+//! Scrolling is then adjusted so the cursor remains in the visible window.
 
 use bubbletea_rs::Cmd;
 
@@ -13,6 +14,7 @@ impl ReviewApp {
     pub(super) fn handle_cursor_up(&mut self) -> Option<Cmd> {
         let new_pos = self.filter_state.cursor_position.saturating_sub(1);
         self.set_cursor(new_pos);
+        self.adjust_scroll_to_cursor();
         None
     }
 
@@ -25,6 +27,7 @@ impl ReviewApp {
             .saturating_add(1)
             .min(max_index);
         self.set_cursor(new_pos);
+        self.adjust_scroll_to_cursor();
         None
     }
 
@@ -33,6 +36,7 @@ impl ReviewApp {
         let page_size = self.review_list.visible_height();
         let new_pos = self.filter_state.cursor_position.saturating_sub(page_size);
         self.set_cursor(new_pos);
+        self.adjust_scroll_to_cursor();
         None
     }
 
@@ -46,6 +50,7 @@ impl ReviewApp {
             .saturating_add(page_size)
             .min(max_index);
         self.set_cursor(new_pos);
+        self.adjust_scroll_to_cursor();
         None
     }
 

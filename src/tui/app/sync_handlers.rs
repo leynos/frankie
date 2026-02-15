@@ -55,6 +55,7 @@ impl ReviewApp {
             }
         }
 
+        self.adjust_scroll_to_cursor();
         // Update selected_comment_id to match new cursor position
         self.update_selected_id();
 

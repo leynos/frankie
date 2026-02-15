@@ -53,6 +53,12 @@ pub use app::ReviewApp;
 /// This is set before the TUI program starts and read by `ReviewApp::init()`.
 static INITIAL_REVIEWS: OnceLock<Vec<ReviewComment>> = OnceLock::new();
 
+/// Global storage for initial terminal dimensions.
+///
+/// This is set before the TUI program starts and read by `ReviewApp::new()`
+/// so the first frame uses the actual terminal size.
+static INITIAL_TERMINAL_SIZE: OnceLock<(u16, u16)> = OnceLock::new();
+
 /// Global storage for refresh context (locator and token).
 ///
 /// This is set before the TUI program starts to enable refresh functionality.
@@ -89,6 +95,23 @@ struct RefreshContext {
 /// `true` if the reviews were set, `false` if they were already set.
 pub fn set_initial_reviews(reviews: Vec<ReviewComment>) -> bool {
     INITIAL_REVIEWS.set(reviews).is_ok()
+}
+
+/// Sets the initial terminal dimensions for the TUI application.
+///
+/// This should be called before starting the bubbletea-rs program so the
+/// initial render can use the actual terminal size instead of fallbacks.
+///
+/// # Arguments
+///
+/// * `width` - Terminal width in columns.
+/// * `height` - Terminal height in rows.
+///
+/// # Returns
+///
+/// `true` if the dimensions were set, `false` if they were already set.
+pub fn set_initial_terminal_size(width: u16, height: u16) -> bool {
+    INITIAL_TERMINAL_SIZE.set((width, height)).is_ok()
 }
 
 /// Sets the refresh context for the TUI application.
@@ -158,6 +181,14 @@ pub(crate) fn record_sync_telemetry(latency_ms: u64, comment_count: usize, incre
 /// operation, not a destructive take.
 pub(crate) fn get_initial_reviews() -> Vec<ReviewComment> {
     INITIAL_REVIEWS.get().cloned().unwrap_or_default()
+}
+
+/// Gets the initial terminal dimensions from storage.
+///
+/// Called internally by `ReviewApp::new()`. Returns the stored dimensions or
+/// fallback dimensions if none were set.
+pub(crate) fn get_initial_terminal_size() -> (u16, u16) {
+    INITIAL_TERMINAL_SIZE.get().copied().unwrap_or((80, 24))
 }
 
 /// Returns the configured pull request locator for refresh-dependent features.

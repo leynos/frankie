@@ -35,6 +35,12 @@ fn reviews_without_hunks() -> Vec<ReviewComment> {
     }]
 }
 
+fn many_reviews(count: u64) -> Vec<ReviewComment> {
+    (1..=count)
+        .map(|id| minimal_review(id, &format!("Comment {id}"), "alice"))
+        .collect()
+}
+
 #[rstest]
 fn new_app_has_all_reviews(sample_reviews: Vec<ReviewComment>) {
     let app = ReviewApp::new(sample_reviews);
@@ -73,6 +79,101 @@ fn filter_changes_preserve_valid_cursor(sample_reviews: Vec<ReviewComment>) {
     )));
     assert_eq!(app.filtered_count(), 1);
     assert_eq!(app.cursor_position(), 0); // Clamped to valid range
+}
+
+#[test]
+fn with_dimensions_applies_explicit_terminal_size() {
+    let app = ReviewApp::with_dimensions(Vec::new(), 120, 40);
+
+    assert_eq!(app.width, 120);
+    assert_eq!(app.height, 40);
+    // 40 - CHROME_HEIGHT(4) - DETAIL_HEIGHT(8) = 28
+    assert_eq!(app.review_list.visible_height(), 28);
+}
+
+#[test]
+fn resize_updates_visible_list_height_with_shared_layout_rules() {
+    let mut app = ReviewApp::empty();
+
+    app.handle_message(&AppMsg::WindowResized {
+        width: 120,
+        height: 16,
+    });
+
+    assert_eq!(app.review_list.visible_height(), 4);
+}
+
+#[rstest]
+#[case::zero_height(0, 1)]
+#[case::below_chrome(10, 1)]
+#[case::at_chrome_plus_detail(12, 1)]
+#[case::one_row_above_threshold(13, 1)]
+#[case::normal_terminal(24, 12)]
+fn short_terminal_clamps_list_height_to_minimum(#[case] height: u16, #[case] expected: usize) {
+    let app = ReviewApp::with_dimensions(Vec::new(), 80, height);
+    assert!(
+        app.review_list.visible_height() >= 1,
+        "visible_height must never be zero (was {} for height {height})",
+        app.review_list.visible_height()
+    );
+    assert_eq!(app.review_list.visible_height(), expected);
+}
+
+#[test]
+fn cursor_navigation_adjusts_scroll_to_keep_selection_visible() {
+    let mut app = ReviewApp::new(many_reviews(10));
+    app.handle_message(&AppMsg::WindowResized {
+        width: 120,
+        height: 16,
+    });
+
+    for _ in 0..5 {
+        app.handle_message(&AppMsg::CursorDown);
+    }
+
+    assert_eq!(app.cursor_position(), 5);
+    assert_eq!(app.filter_state.scroll_offset, 2);
+
+    for _ in 0..4 {
+        app.handle_message(&AppMsg::CursorUp);
+    }
+
+    assert_eq!(app.cursor_position(), 1);
+    assert_eq!(app.filter_state.scroll_offset, 1);
+}
+
+#[rstest]
+fn filter_changes_adjust_scroll_offset_after_cursor_clamp(sample_reviews: Vec<ReviewComment>) {
+    let mut app = ReviewApp::new(sample_reviews);
+    app.handle_message(&AppMsg::WindowResized {
+        width: 120,
+        height: 13,
+    });
+    app.handle_message(&AppMsg::CursorDown);
+    assert_eq!(app.filter_state.scroll_offset, 1);
+
+    app.handle_message(&AppMsg::SetFilter(ReviewFilter::ByFile(
+        "src/main.rs".to_owned(),
+    )));
+
+    assert_eq!(app.filtered_count(), 1);
+    assert_eq!(app.cursor_position(), 0);
+    assert_eq!(app.filter_state.scroll_offset, 0);
+}
+
+#[test]
+fn short_terminal_still_renders_list_items() {
+    let reviews = vec![minimal_review(1, "Visible comment", "alice")];
+    let mut app = ReviewApp::with_dimensions(reviews, 80, 8);
+    app.handle_message(&AppMsg::WindowResized {
+        width: 80,
+        height: 8,
+    });
+    let output = app.view();
+    assert!(
+        output.contains("alice"),
+        "list should render at least one item in a short terminal"
+    );
 }
 
 #[rstest]
