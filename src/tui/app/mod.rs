@@ -335,11 +335,7 @@ impl ReviewApp {
     }
 
     /// Adjusts scroll offset so the selected cursor remains visible.
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "runtime-only helper; const adds no value"
-    )]
-    fn adjust_scroll_to_cursor(&mut self) {
+    const fn adjust_scroll_to_cursor(&mut self) {
         let cursor = self.filter_state.cursor_position;
         let visible_height = self.review_list.visible_height();
 

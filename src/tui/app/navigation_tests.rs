@@ -7,9 +7,10 @@ use crate::github::models::test_support::create_reviews;
 
 #[fixture]
 fn setup_app(#[default(10)] review_count: usize, #[default(3)] visible_height: usize) -> ReviewApp {
-    let mut app = ReviewApp::new(create_reviews(review_count));
-    app.review_list.set_visible_height(visible_height);
-    app
+    let terminal_height =
+        u16::try_from(visible_height + super::CHROME_HEIGHT + super::DETAIL_HEIGHT)
+            .expect("test terminal height fits in u16");
+    ReviewApp::with_dimensions(create_reviews(review_count), 80, terminal_height)
 }
 
 fn assert_state(app: &ReviewApp, expected_cursor: usize, expected_scroll: usize) {
