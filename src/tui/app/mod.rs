@@ -311,9 +311,10 @@ impl ReviewApp {
     /// Sets the cursor position and updates the selected comment ID.
     ///
     /// This helper centralises the common pattern of moving the cursor and
-    /// updating the tracked selection in navigation handlers.
+    /// updating viewport/selection state in navigation handlers.
     fn set_cursor(&mut self, position: usize) {
         self.filter_state.cursor_position = position;
+        self.adjust_scroll_to_cursor();
         self.update_selected_id();
     }
 
@@ -338,8 +339,8 @@ impl ReviewApp {
         let cursor = self.filter_state.cursor_position;
         let visible_height = self.review_list.visible_height();
 
+        // If nothing is visible, keep the scroll offset unchanged.
         if visible_height == 0 {
-            self.filter_state.scroll_offset = cursor;
             return;
         }
 
@@ -491,3 +492,7 @@ mod init_tests;
 #[cfg(test)]
 #[path = "help_overlay_input_tests.rs"]
 mod help_overlay_input_tests;
+
+#[cfg(test)]
+#[path = "navigation_tests.rs"]
+mod navigation_tests;
