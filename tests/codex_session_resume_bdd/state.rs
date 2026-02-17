@@ -44,6 +44,27 @@ impl StubResumeCodexService {
             plan: Mutex::new(Some(plan)),
         }
     }
+
+    /// Consumes the next plan and spawns timed updates.
+    fn execute_plan(&self) -> Result<CodexExecutionHandle, IntakeError> {
+        let mut plans = self.plan.lock().map_err(|error| IntakeError::Api {
+            message: format!("failed to lock stub plan: {error}"),
+        })?;
+
+        let Some(next_plan) = plans.take() else {
+            return Err(IntakeError::Api {
+                message: "stub plan was already consumed".to_owned(),
+            });
+        };
+
+        match next_plan {
+            StubResumePlan::FreshUpdates(timed_updates)
+            | StubResumePlan::ResumeUpdates(timed_updates) => {
+                let receiver = spawn_timed_updates(timed_updates);
+                Ok(CodexExecutionHandle::new(receiver))
+            }
+        }
+    }
 }
 
 fn sleep_for_delay(delay_ms: u64) {
@@ -108,43 +129,11 @@ fn spawn_delayed_sender(
 
 impl CodexExecutionService for StubResumeCodexService {
     fn start(&self, _request: CodexExecutionRequest) -> Result<CodexExecutionHandle, IntakeError> {
-        let mut plans = self.plan.lock().map_err(|error| IntakeError::Api {
-            message: format!("failed to lock stub plan: {error}"),
-        })?;
-
-        let Some(next_plan) = plans.take() else {
-            return Err(IntakeError::Api {
-                message: "stub plan was already consumed".to_owned(),
-            });
-        };
-
-        match next_plan {
-            StubResumePlan::FreshUpdates(timed_updates)
-            | StubResumePlan::ResumeUpdates(timed_updates) => {
-                let receiver = spawn_timed_updates(timed_updates);
-                Ok(CodexExecutionHandle::new(receiver))
-            }
-        }
+        self.execute_plan()
     }
 
     fn resume(&self, _request: CodexResumeRequest) -> Result<CodexExecutionHandle, IntakeError> {
-        let mut plans = self.plan.lock().map_err(|error| IntakeError::Api {
-            message: format!("failed to lock stub plan: {error}"),
-        })?;
-
-        let Some(next_plan) = plans.take() else {
-            return Err(IntakeError::Api {
-                message: "stub plan was already consumed".to_owned(),
-            });
-        };
-
-        match next_plan {
-            StubResumePlan::ResumeUpdates(timed_updates)
-            | StubResumePlan::FreshUpdates(timed_updates) => {
-                let receiver = spawn_timed_updates(timed_updates);
-                Ok(CodexExecutionHandle::new(receiver))
-            }
-        }
+        self.execute_plan()
     }
 }
 

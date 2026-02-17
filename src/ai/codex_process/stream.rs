@@ -43,10 +43,8 @@ pub(super) fn stream_progress(
     mut stdin: Option<ChildStdin>,
     context: &mut StreamProgressContext<'_>,
 ) -> Result<StreamCompletion, RunError> {
-    let mut session = app_server::maybe_start_session(stdin.as_mut(), context.prompt);
-    let completion = read_stream_lines(stdout, &mut stdin, context, &mut session)?;
-    capture_thread_id(context, session.as_ref());
-    Ok(completion)
+    let session = app_server::maybe_start_session(stdin.as_mut(), context.prompt);
+    stream_with_session(stdout, stdin, context, session)
 }
 
 /// Streams stdout from a resumed session (uses `thread/resume` protocol).
@@ -56,8 +54,17 @@ pub(super) fn stream_resume_progress(
     context: &mut StreamProgressContext<'_>,
     thread_id: &str,
 ) -> Result<StreamCompletion, RunError> {
-    let mut session =
-        app_server::maybe_start_resume_session(stdin.as_mut(), context.prompt, thread_id);
+    let session = app_server::maybe_start_resume_session(stdin.as_mut(), context.prompt, thread_id);
+    stream_with_session(stdout, stdin, context, session)
+}
+
+/// Common streaming workflow shared by fresh and resumed sessions.
+fn stream_with_session(
+    stdout: ChildStdout,
+    mut stdin: Option<ChildStdin>,
+    context: &mut StreamProgressContext<'_>,
+    mut session: Option<app_server::AppServerSession>,
+) -> Result<StreamCompletion, RunError> {
     let completion = read_stream_lines(stdout, &mut stdin, context, &mut session)?;
     capture_thread_id(context, session.as_ref());
     Ok(completion)

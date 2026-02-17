@@ -66,50 +66,48 @@ fn given_successful_run(
     Ok(())
 }
 
-#[when("Codex execution is started from the review TUI")]
-fn when_start_codex(codex_state: &ResumeScenarioState) -> Result<(), Box<dyn std::error::Error>> {
+/// Helper to send a message to the app under test.
+fn send_message(
+    codex_state: &ResumeScenarioState,
+    msg: &AppMsg,
+) -> Result<(), Box<dyn std::error::Error>> {
     codex_state
         .app
         .with_mut(|app| {
-            app.handle_message(&AppMsg::StartCodexExecution);
+            app.handle_message(msg);
         })
         .ok_or("app must be initialised")?;
     Ok(())
 }
 
-#[when("the user accepts the resume prompt")]
-fn when_accept_resume(codex_state: &ResumeScenarioState) -> Result<(), Box<dyn std::error::Error>> {
+/// Helper to get the rendered view from the app.
+fn get_view(codex_state: &ResumeScenarioState) -> Result<String, Box<dyn std::error::Error>> {
     codex_state
         .app
-        .with_mut(|app| {
-            app.handle_message(&AppMsg::ResumeAccepted);
-        })
-        .ok_or("app must be initialised")?;
-    Ok(())
+        .with_ref(frankie::tui::app::ReviewApp::view)
+        .ok_or_else(|| "app must be initialised".into())
+}
+
+#[when("Codex execution is started from the review TUI")]
+fn when_start_codex(codex_state: &ResumeScenarioState) -> Result<(), Box<dyn std::error::Error>> {
+    send_message(codex_state, &AppMsg::StartCodexExecution)
+}
+
+#[when("the user accepts the resume prompt")]
+fn when_accept_resume(codex_state: &ResumeScenarioState) -> Result<(), Box<dyn std::error::Error>> {
+    send_message(codex_state, &AppMsg::ResumeAccepted)
 }
 
 #[when("the user declines the resume prompt")]
 fn when_decline_resume(
     codex_state: &ResumeScenarioState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    codex_state
-        .app
-        .with_mut(|app| {
-            app.handle_message(&AppMsg::ResumeDeclined);
-        })
-        .ok_or("app must be initialised")?;
-    Ok(())
+    send_message(codex_state, &AppMsg::ResumeDeclined)
 }
 
 #[when("the Codex poll tick is processed")]
 fn when_poll_tick(codex_state: &ResumeScenarioState) -> Result<(), Box<dyn std::error::Error>> {
-    codex_state
-        .app
-        .with_mut(|app| {
-            app.handle_message(&AppMsg::CodexPollTick);
-        })
-        .ok_or("app must be initialised")?;
-    Ok(())
+    send_message(codex_state, &AppMsg::CodexPollTick)
 }
 
 #[when("I wait {millis:u64} milliseconds")]
@@ -121,14 +119,10 @@ fn when_wait_ms(millis: u64) {
 fn then_resume_prompt_shown(
     codex_state: &ResumeScenarioState,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rendered = codex_state
-        .app
-        .with_ref(frankie::tui::app::ReviewApp::view)
-        .ok_or("app must be initialised")?;
+    let rendered = get_view(codex_state)?;
     if !rendered.contains("Resume?") {
         return Err(format!("expected 'Resume?' in view, got:\n{rendered}").into());
     }
-
     Ok(())
 }
 
@@ -137,15 +131,11 @@ fn then_status_contains(
     codex_state: &ResumeScenarioState,
     text: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let rendered = codex_state
-        .app
-        .with_ref(frankie::tui::app::ReviewApp::view)
-        .ok_or("app must be initialised")?;
+    let rendered = get_view(codex_state)?;
     let expected = text.trim_matches('"');
     if !rendered.contains(expected) {
         return Err(format!("expected status text '{expected}', got:\n{rendered}").into());
     }
-
     Ok(())
 }
 

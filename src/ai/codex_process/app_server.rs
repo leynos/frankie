@@ -84,6 +84,23 @@ impl AppServerSession {
     }
 }
 
+/// Helper to start a session with a given protocol if stdin is available.
+fn try_start_with_protocol<F>(
+    maybe_stdin: Option<&mut ChildStdin>,
+    session: AppServerSession,
+    protocol: F,
+) -> Option<AppServerSession>
+where
+    F: FnOnce(&mut ChildStdin) -> Result<(), RunError>,
+{
+    if let Some(stdin_writer) = maybe_stdin
+        && protocol(stdin_writer).is_ok()
+    {
+        return Some(session);
+    }
+    None
+}
+
 /// Attempts to start an app-server session if stdin is available.
 ///
 /// Returns `None` when stdin is unavailable or the handshake fails.
@@ -92,13 +109,7 @@ pub(super) fn maybe_start_session(
     prompt: &str,
 ) -> Option<AppServerSession> {
     let session = AppServerSession::new(prompt.to_owned());
-    if let Some(stdin_writer) = maybe_stdin
-        && start_protocol(stdin_writer).is_ok()
-    {
-        return Some(session);
-    }
-
-    None
+    try_start_with_protocol(maybe_stdin, session, start_protocol)
 }
 
 /// Dispatches a single line to an active app-server session.
@@ -215,13 +226,9 @@ pub(super) fn maybe_start_resume_session(
 ) -> Option<AppServerSession> {
     let mut session = AppServerSession::new(prompt.to_owned());
     session.thread_id = Some(thread_id.to_owned());
-    if let Some(stdin_writer) = maybe_stdin
-        && resume_protocol(stdin_writer, thread_id).is_ok()
-    {
-        return Some(session);
-    }
-
-    None
+    try_start_with_protocol(maybe_stdin, session, |stdin| {
+        resume_protocol(stdin, thread_id)
+    })
 }
 
 fn write_message(stdin: &mut ChildStdin, message: &Value) -> Result<(), RunError> {

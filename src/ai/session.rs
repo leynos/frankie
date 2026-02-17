@@ -90,6 +90,12 @@ impl SessionState {
         })
     }
 
+    /// Returns `true` if this session belongs to the specified PR.
+    #[must_use]
+    pub fn matches_pr(&self, owner: &str, repository: &str, pr_number: u64) -> bool {
+        self.owner == owner && self.repository == repository && self.pr_number == pr_number
+    }
+
     /// Reads a session state from a JSON sidecar file.
     ///
     /// # Errors
@@ -155,10 +161,7 @@ pub fn find_interrupted_session(
             continue;
         };
 
-        if session.owner != owner
-            || session.repository != repository
-            || session.pr_number != pr_number
-        {
+        if !session.matches_pr(owner, repository, pr_number) {
             continue;
         }
 
@@ -304,22 +307,28 @@ mod tests {
         Ok(())
     }
 
-    #[rstest]
-    fn find_interrupted_session_ignores_completed() -> TestResult {
+    fn assert_session_ignored(name: &str, modifier: impl FnOnce(&mut SessionState)) -> TestResult {
         let temp_dir = TempDir::new()?;
         let base = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
             .map_err(|_| "temp directory path must be UTF-8")?;
 
-        let mut completed = sample_session(base.join("completed-run.jsonl"));
-        completed.status = SessionStatus::Completed;
-        completed.write_sidecar()?;
+        let mut session = sample_session(base.join(name));
+        modifier(&mut session);
+        session.write_sidecar()?;
 
         let found = find_interrupted_session(&base, "owner", "repo", 42)?;
         if found.is_some() {
-            return Err("completed sessions should not match".into());
+            return Err(format!("session '{name}' should not match").into());
         }
 
         Ok(())
+    }
+
+    #[rstest]
+    fn find_interrupted_session_ignores_completed() -> TestResult {
+        assert_session_ignored("completed-run.jsonl", |session| {
+            session.status = SessionStatus::Completed;
+        })
     }
 
     #[rstest]
@@ -338,19 +347,8 @@ mod tests {
 
     #[rstest]
     fn find_interrupted_session_ignores_sessions_without_thread_id() -> TestResult {
-        let temp_dir = TempDir::new()?;
-        let base = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
-            .map_err(|_| "temp directory path must be UTF-8")?;
-
-        let mut no_thread = sample_session(base.join("no-thread.jsonl"));
-        no_thread.thread_id = None;
-        no_thread.write_sidecar()?;
-
-        let found = find_interrupted_session(&base, "owner", "repo", 42)?;
-        if found.is_some() {
-            return Err("sessions without thread_id should not match".into());
-        }
-
-        Ok(())
+        assert_session_ignored("no-thread.jsonl", |session| {
+            session.thread_id = None;
+        })
     }
 }
