@@ -1288,6 +1288,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "unicode-width",
  "url",
  "wiremock",
 ]

@@ -63,13 +63,28 @@ are simulated directly in tests.
 
 ## Recommended Layering: MVU Snapshots First, PTY Tests Second
 
-The sweet spot for bubbletea-rs testing is usually **MVU snapshots**: drive the model with a sequence of messages, then snapshot `view()`. The framework deliberately makes this cheap: `Msg` is just `Box<dyn Any + Send>`, so tests can inject events without going anywhere near a real terminal.[^3] This gives you fast, deterministic tests that run well in CI.
+The sweet spot for bubbletea-rs testing is usually **MVU snapshots**: drive the
+model with a sequence of messages, then snapshot `view()`. The framework
+deliberately makes this cheap: `Msg` is just `Box<dyn Any + Send>`, so tests
+can inject events without going anywhere near a real terminal.[^3] This gives
+you fast, deterministic tests that run well in CI.
 
-When your `update` returns commands (`Cmd` futures), you can keep things deterministic in two ways. You can inject the “command result” message directly (treat commands as an implementation detail), or you can execute the command under a mocked dependency layer and feed any produced message back into `update`. The latter gives you higher confidence without going full black-box.
+When your `update` returns commands (`Cmd` futures), you can keep things
+deterministic in two ways. You can inject the “command result” message directly
+(treat commands as an implementation detail), or you can execute the command
+under a mocked dependency layer and feed any produced message back into
+`update`. The latter gives you higher confidence without going full black-box.
 
-Finally, reserve a small number of **PTY-backed smoke tests** for the bits MVU tests cannot cover: raw mode, alternate screen transitions, key-encoding quirks, resize negotiation, and the very practical question of “does the compiled binary behave like a proper terminal program”. `ratatui_testlib` runs your real process inside a pseudo-terminal and lets you snapshot the emulated screen contents for visual regression testing.[^5]
+Finally, reserve a small number of **PTY-backed smoke tests** for the bits MVU
+tests cannot cover: raw mode, alternate screen transitions, key-encoding
+quirks, resize negotiation, and the very practical question of “does the
+compiled binary behave like a proper terminal program”. `ratatui_testlib` runs
+your real process inside a pseudo-terminal and lets you snapshot the emulated
+screen contents for visual regression testing.[^5]
 
-Bubbletea-rs also ships a `DummyTerminal`, which is handy if you want to run the framework’s `Program` loop headlessly (for example, to exercise the built-in command scheduling) without touching a real terminal.[^4]
+Bubbletea-rs also ships a `DummyTerminal`, which is handy if you want to run
+the framework’s `Program` loop headlessly (for example, to exercise the
+built-in command scheduling) without touching a real terminal.[^4]
 
 ## Setting Up Insta for Bubbletea Snapshot Tests
 
@@ -131,6 +146,12 @@ reliable tests, simulate a known size (e.g. 80×24). In a Bubbletea app, this
 typically means sending a `WindowSizeMsg` to the update function before
 capturing the view. An example of this appears below. Using a consistent size
 ensures reproducible results across different environments.
+
+Also ensure row truncation and padding in the app use terminal **display
+width** rather than scalar count. Snapshot outputs that include emoji (for
+example, status markers such as `🧹` or `⚠️`) can autowrap unexpectedly if
+width logic assumes one scalar equals one terminal column. That can introduce
+apparent blank rows or line drift in PTY snapshots.
 
 > **Note:** If tests are in an async context (for example, using
 > `#[tokio::test]` because the update requires a runtime), enable the
@@ -320,12 +341,19 @@ fn send_text(model: &mut MyAppModel, text: &str) {
 }
 ```
 
-In a test,
-`send_text(&mut model, "hello"); model.update(Box::new(KeyMsg { key: KeyCode::Enter, modifiers: crossterm::event::KeyModifiers::NONE }));`
-would simulate typing “hello” and pressing Enter. Snapshot the output to verify
-that the input was handled (for example, the new item “hello” appears in a
-list). Remember to simulate special keys like Enter or Tab as needed by the UI
-flow.
+In a test, this sequence would simulate typing “hello” and pressing Enter:
+
+```rust
+send_text(&mut model, "hello");
+model.update(Box::new(KeyMsg {
+    key: KeyCode::Enter,
+    modifiers: crossterm::event::KeyModifiers::NONE,
+}));
+```
+
+Snapshot the output to verify that the input was handled (for example, the new
+item “hello” appears in a list). Remember to simulate special keys like Enter
+or Tab as needed by the UI flow.
 
 By combining sequences of inputs, test code can script any user journey and the
 resulting screen. If intermediate screens also matter, take snapshots at
@@ -347,19 +375,26 @@ with its resulting message, or refactor the logic so that the view reflects
 only the model state and not immediate async results. In many cases, the
 returned `Cmd` can be ignored in tests. But if pressing a key triggers a `Cmd`
 that after 1 second sends a `TickMsg` which changes the UI, that tick can be
-simulated by directly calling `update(Box::new(TickMsg))` in the test (instead of waiting
-one second). This provides fine-grained control to advance the app state in a
-deterministic way. The goal is to avoid real-time delays in tests – simulate
-the passage of time or the completion of async tasks by injecting the
+simulated by directly calling `update(Box::new(TickMsg))` in the test (instead
+of waiting one second). This provides fine-grained control to advance the app
+state in a deterministic way. The goal is to avoid real-time delays in tests –
+simulate the passage of time or the completion of async tasks by injecting the
 corresponding message.
 
 ## Injecting Mocks and Testing Commands Deterministically
 
-Snapshot tests fall over when your model reaches out to the world (clock, RNG, filesystem, network). The easiest fix is architectural: make “the world” an explicit dependency, and keep `view()` a pure function of model state.
+Snapshot tests fall over when your model reaches out to the world (clock, RNG,
+filesystem, network). The easiest fix is architectural: make “the world” an
+explicit dependency, and keep `view()` a pure function of model state.
 
-In bubbletea-rs, commands are just boxed futures (`Cmd`) that yield an optional `Msg`.[^6] That gives you a clean seam for mocking: construct your model with fake dependencies, trigger an update that returns a command, `await` it in the test, and feed any resulting message back into `update`.
+In bubbletea-rs, commands are just boxed futures (`Cmd`) that yield an optional
+`Msg`.[^6] That gives you a clean seam for mocking: construct your model with
+fake dependencies, trigger an update that returns a command, `await` it in the
+test, and feed any resulting message back into `update`.
 
-A practical pattern is “ports and adapters”: define tiny traits for side-effect boundaries and inject them into the model via a constructor used by tests (while `Model::init()` can keep using production defaults).
+A practical pattern is “ports and adapters”: define tiny traits for side-effect
+boundaries and inject them into the model via a constructor used by tests
+(while `Model::init()` can keep using production defaults).
 
 ```rust
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -454,9 +489,16 @@ async fn refresh_renders_loaded_items() {
 }
 ```
 
-This looks like a lot of code in a guide, but the pay-off is huge: once you extract the “ports”, you can write MVU snapshots that cover real flows (including async commands) without touching the network, wall clock, or filesystem.
+This looks like a lot of code in a guide, but the pay-off is huge: once you
+extract the “ports”, you can write MVU snapshots that cover real flows
+(including async commands) without touching the network, wall clock, or
+filesystem.
 
-For **fully black-box PTY tests**, you can’t inject Rust trait objects directly, so give your app a configuration seam instead: flags/env like `--data-dir`, `--api-base-url`, `NO_COLOR=1`, `MYAPP_TEST_SEED=…`, or a `--clock=fixed` switch that disables live timestamps. That way the process-level test harness can still run deterministically.
+For **fully black-box PTY tests**, you can’t inject Rust trait objects
+directly, so give your app a configuration seam instead: flags/env like
+`--data-dir`, `--api-base-url`, `NO_COLOR=1`, `MYAPP_TEST_SEED=…`, or a
+`--clock=fixed` switch that disables live timestamps. That way the
+process-level test harness can still run deterministically.
 
 ## Structuring Tests with Rstest and BDD Scenarios
 
@@ -620,11 +662,17 @@ deterministic and independent.
 
 ## PTY-Based Black-Box Snapshot Testing with `ratatui_testlib`
 
-MVU snapshots give you precision and speed, but they intentionally skip the terminal. When you need confidence in *terminal behaviour* (TTY detection, raw mode, alternate screen, resize negotiation, escape-sequence correctness), add a thin layer of PTY-backed integration tests.
+MVU snapshots give you precision and speed, but they intentionally skip the
+terminal. When you need confidence in *terminal behaviour* (TTY detection, raw
+mode, alternate screen, resize negotiation, escape-sequence correctness), add a
+thin layer of PTY-backed integration tests.
 
-`ratatui_testlib` provides a pseudo-terminal (PTY) plus a VT-style terminal emulator and an ergonomic harness API. It works even if your app is not built with Ratatui; the PTY/escape-sequence problem is framework-agnostic.[^5]
+`ratatui_testlib` provides a pseudo-terminal (PTY) plus a VT-style terminal
+emulator and an ergonomic harness API. It works even if your app is not built
+with Ratatui; the PTY/escape-sequence problem is framework-agnostic.[^5]
 
-A good pattern is: keep most tests as MVU snapshots, then write a handful of PTY tests as “smoke tests” for critical flows.
+A good pattern is: keep most tests as MVU snapshots, then write a handful of
+PTY tests as “smoke tests” for critical flows.
 
 ```rust
 use ratatui_testlib::{CommandBuilder, KeyCode, Modifiers, Result, TuiTestHarness};
@@ -659,10 +707,15 @@ fn quit_flow_smoke_test() -> Result<()> {
 
 A few practical tips that make these tests much less flaky:
 
-- Fix the terminal size (the harness does this) and avoid relying on the developer’s real terminal dimensions.
-- Prefer `wait_for_text(...)` / `wait_for(...)` over sleeps; let the harness poll until the UI reaches the expected state.
-- Keep live clocks, spinners, and progress animations behind a test-mode switch (env/flag), or snapshot at a well-defined tick count.
-- Use configuration seams for black-box mocking: point the binary at a temp data dir, a local stub server, or a “fixture file” so the test controls external state.
+- Fix the terminal size (the harness does this) and avoid relying on the
+  developer’s real terminal dimensions.
+- Prefer `wait_for_text(...)` / `wait_for(...)` over sleeps; let the harness
+  poll until the UI reaches the expected state.
+- Keep live clocks, spinners, and progress animations behind a test-mode switch
+  (env/flag), or snapshot at a well-defined tick count.
+- Use configuration seams for black-box mocking: point the binary at a temp
+  data dir, a local stub server, or a “fixture file” so the test controls
+  external state.
 
 If you need modifier keys (Ctrl+C etc.), `send_key_with_modifiers` exists:
 
@@ -670,7 +723,8 @@ If you need modifier keys (Ctrl+C etc.), `send_key_with_modifiers` exists:
 harness.send_key_with_modifiers(KeyCode::Char('c'), Modifiers::CTRL)?;
 ```
 
-That lets you test the *real* key encoding and handling path, which MVU tests deliberately bypass.
+That lets you test the *real* key encoding and handling path, which MVU tests
+deliberately bypass.
 
 ## Using Insta Effectively (Redactions, Filters, Snapshot Organization)
 
@@ -941,11 +995,13 @@ for how the TUI is supposed to react to input.
       <https://ratatui.rs/recipes/testing/snapshots/#:~:text=snapshots%2Fdemo2__tests__render_app>
        and
       <https://ratatui.rs/recipes/testing/snapshots/#:~:text=,Traceroute%20%20Weather>
-[^3]: bubbletea-rs defines `Msg` as `Box<dyn Any + Send>` (messages must be boxed):
+[^3]: bubbletea-rs defines `Msg` as `Box<dyn Any + Send>` (messages must be
+      boxed):
       <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.html>
 [^4]: bubbletea-rs `DummyTerminal` (headless terminal implementation for tests):
       <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/terminal/struct.DummyTerminal.html>
-[^5]: ratatui-testlib overview and `TuiTestHarness` API (PTY-based integration testing with insta support):
+[^5]: ratatui-testlib overview and `TuiTestHarness` API (PTY-based integration
+      testing with insta support):
       <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/>
        and
       <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/struct.TuiTestHarness.html>
@@ -955,7 +1011,8 @@ for how the TUI is supposed to react to input.
 **Sources:**
 
 - bubbletea-rs documentation (Model/Msg/Cmd and DummyTerminal)
-- ratatui-testlib documentation (TuiTestHarness and PTY-based integration testing)
+- ratatui-testlib documentation (TuiTestHarness and PTY-based integration
+  testing)
 - Ratatui snapshot testing recipe (buffer-based snapshot testing with insta)
 - Charm’s Bubble Tea teatest (Go) golden-file testing inspiration
 - Insta documentation (filters/redactions and snapshot review workflow)

@@ -1,6 +1,6 @@
 ---
 source: tests/interactive_tui_resize_snapshots.rs
-expression: frame_small
+expression: frame
 ---
 Frankie - Review Comments                                                       
 Filter: All (18/18)                                                             

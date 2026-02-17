@@ -6,6 +6,7 @@
 use std::any::Any;
 
 use bubbletea_rs::{Cmd, Model};
+use unicode_width::UnicodeWidthChar;
 
 use super::ReviewApp;
 use crate::tui::app::ViewMode;
@@ -64,15 +65,15 @@ impl Model for ReviewApp {
     fn view(&self) -> String {
         // If help is shown, render overlay instead
         if self.show_help {
-            return self.render_help_overlay();
+            return self.normalise_viewport(&self.render_help_overlay());
         }
 
         // Handle special view modes with early returns
         if self.view_mode == ViewMode::DiffContext {
-            return self.render_diff_context_view();
+            return self.normalise_viewport(&self.render_diff_context_view());
         }
         if self.view_mode == ViewMode::TimeTravel {
-            return self.render_time_travel_view();
+            return self.normalise_viewport(&self.render_time_travel_view());
         }
 
         // Render main ReviewList view
@@ -83,6 +84,7 @@ impl Model for ReviewApp {
         output.push('\n');
 
         let list_height = self.calculate_list_height();
+        let terminal_width = (self.width as usize).max(1);
 
         let list_ctx = ReviewListViewContext {
             reviews: &self.reviews,
@@ -90,6 +92,7 @@ impl Model for ReviewApp {
             cursor_position: self.filter_state.cursor_position,
             scroll_offset: self.filter_state.scroll_offset,
             visible_height: list_height,
+            max_width: terminal_width,
         };
         let list_view = self.review_list.view(&list_ctx);
         output.push_str(&list_view);
@@ -98,15 +101,13 @@ impl Model for ReviewApp {
         let detail_height = self.calculate_detail_height();
         let detail_ctx = CommentDetailViewContext {
             selected_comment: self.selected_comment(),
-            max_width: 80.min(self.width as usize),
+            max_width: terminal_width,
             max_height: detail_height,
         };
         output.push_str(&self.comment_detail.view(&detail_ctx));
-
-        output.push('\n');
         output.push_str(&self.render_status_bar());
 
-        output
+        self.normalise_viewport(&output)
     }
 }
 
@@ -119,4 +120,148 @@ impl ReviewApp {
             ViewMode::TimeTravel => InputContext::TimeTravel,
         }
     }
+
+    /// Normalises the rendered frame to terminal dimensions.
+    ///
+    /// The output stream from components can leave stale trailing cells behind
+    /// when rows are shorter than previous frames, especially after resize.
+    /// We clamp rows to one column less than terminal width to avoid autowrap
+    /// behaviour, while still padding with spaces to clear stale trailing
+    /// cells after resize.
+    fn normalise_viewport(&self, output: &str) -> String {
+        let width = self.width.max(1) as usize;
+        let safe_width = width.saturating_sub(1).max(1);
+        let height = self.height.max(1) as usize;
+
+        let mut lines: Vec<String> = output
+            .lines()
+            .map(|line| pad_or_truncate_line(line, safe_width))
+            .collect();
+        lines.truncate(height);
+
+        let missing = height.saturating_sub(lines.len());
+        let blank = " ".repeat(safe_width);
+        lines.extend(std::iter::repeat_with(|| blank.clone()).take(missing));
+
+        let mut normalised = lines.join("\n");
+        normalised.push('\n');
+        normalised
+    }
+}
+
+fn pad_or_truncate_line(line: &str, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+
+    if line.contains('\x1b') {
+        return truncate_ansi_line(line, width);
+    }
+
+    pad_or_truncate_plain_line(line, width)
+}
+
+fn pad_or_truncate_plain_line(line: &str, width: usize) -> String {
+    let mut output = String::new();
+    let mut visible_width = 0usize;
+
+    for ch in line.chars() {
+        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if char_width == 0 {
+            output.push(ch);
+            continue;
+        }
+
+        if visible_width.saturating_add(char_width) > width {
+            break;
+        }
+
+        output.push(ch);
+        visible_width = visible_width.saturating_add(char_width);
+    }
+
+    if visible_width < width {
+        output.push_str(&" ".repeat(width - visible_width));
+    }
+
+    output
+}
+
+fn truncate_ansi_line(line: &str, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+
+    let mut output = String::new();
+    let mut visible_chars = 0usize;
+    let mut escape_state = AnsiEscapeState::default();
+
+    for ch in line.chars() {
+        if escape_state.in_escape {
+            push_escape_char(ch, &mut output, &mut escape_state);
+            continue;
+        }
+
+        if ch == '\x1b' {
+            start_escape_sequence(ch, &mut output, &mut escape_state);
+            continue;
+        }
+
+        if append_visible_char(ch, width, &mut visible_chars, &mut output) {
+            break;
+        }
+    }
+
+    if visible_chars < width {
+        output.push_str(&" ".repeat(width - visible_chars));
+    }
+
+    if escape_state.had_ansi && !escape_state.ended_with_reset {
+        output.push_str("\x1b[0m");
+    }
+
+    output
+}
+
+#[derive(Default)]
+struct AnsiEscapeState {
+    in_escape: bool,
+    had_ansi: bool,
+    ended_with_reset: bool,
+}
+
+fn push_escape_char(ch: char, output: &mut String, state: &mut AnsiEscapeState) {
+    output.push(ch);
+    state.ended_with_reset = ch == 'm';
+    if ch.is_ascii_alphabetic() {
+        state.in_escape = false;
+    }
+}
+
+fn start_escape_sequence(ch: char, output: &mut String, state: &mut AnsiEscapeState) {
+    state.in_escape = true;
+    state.had_ansi = true;
+    output.push(ch);
+    state.ended_with_reset = false;
+}
+
+fn append_visible_char(
+    ch: char,
+    width: usize,
+    visible_chars: &mut usize,
+    output: &mut String,
+) -> bool {
+    let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+    if char_width == 0 {
+        output.push(ch);
+        return false;
+    }
+
+    if visible_chars.saturating_add(char_width) > width {
+        return true;
+    }
+
+    output.push(ch);
+    *visible_chars = visible_chars.saturating_add(char_width);
+    false
 }

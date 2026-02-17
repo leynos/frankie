@@ -24,6 +24,10 @@ pub struct ReviewListViewContext<'a> {
     pub scroll_offset: usize,
     /// Maximum visible height in lines (for layout calculations).
     pub visible_height: usize,
+    /// Maximum visible width in characters for row rendering.
+    ///
+    /// Rows longer than this width are truncated.
+    pub max_width: usize,
 }
 
 /// Component for displaying a list of review comments.
@@ -97,7 +101,7 @@ impl ReviewListComponent {
             };
             let is_selected = display_index == ctx.cursor_position;
             let prefix = if is_selected { ">" } else { " " };
-            let line = Self::format_review_line(review, prefix);
+            let line = Self::format_review_line(review, prefix, ctx.max_width);
             output.push_str(&line);
             output.push('\n');
         }
@@ -106,7 +110,7 @@ impl ReviewListComponent {
     }
 
     /// Formats a single review line for display.
-    fn format_review_line(review: &ReviewComment, prefix: &str) -> String {
+    fn format_review_line(review: &ReviewComment, prefix: &str, max_width: usize) -> String {
         let author = review.author.as_deref().unwrap_or("unknown");
         let file = review.file_path.as_deref().unwrap_or("(no file)");
         let line_num = review
@@ -119,7 +123,8 @@ impl ReviewListComponent {
             .map(|b| truncate_body(b, 50))
             .unwrap_or_default();
 
-        format!("{prefix} [{author}] {file}{line_num}: {body_preview}")
+        let line = format!("{prefix} [{author}] {file}{line_num}: {body_preview}");
+        truncate_to_width(&line, max_width)
     }
 }
 
@@ -128,14 +133,42 @@ fn truncate_body(body: &str, max_len: usize) -> String {
     // Take first line only and truncate
     let first_line = body.lines().next().unwrap_or("");
     let trimmed = first_line.trim();
+    let char_count = trimmed.chars().count();
 
-    if trimmed.len() <= max_len {
+    if char_count <= max_len {
         trimmed.to_owned()
-    } else if let Some(truncated) = trimmed.get(..max_len.saturating_sub(3)) {
-        format!("{truncated}...")
+    } else if max_len <= 3 {
+        ".".repeat(max_len)
     } else {
-        trimmed.to_owned()
+        let truncated = trimmed
+            .chars()
+            .take(max_len.saturating_sub(3))
+            .collect::<String>();
+        format!("{truncated}...")
     }
+}
+
+/// Truncates a row to a fixed width, preserving the caller's overflow budget.
+fn truncate_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    let char_count = text.chars().count();
+    if char_count <= max_width {
+        return text.to_owned();
+    }
+
+    if max_width <= 3 {
+        return ".".repeat(max_width);
+    }
+
+    let mut truncated = text
+        .chars()
+        .take(max_width.saturating_sub(3))
+        .collect::<String>();
+    truncated.push_str("...");
+    truncated
 }
 
 #[cfg(test)]
@@ -217,6 +250,7 @@ mod tests {
             cursor_position: 0,
             scroll_offset: 0,
             visible_height: 10,
+            max_width: 80,
         };
         let output = component.view(&ctx);
         assert!(output.contains("No review comments"));
@@ -233,6 +267,7 @@ mod tests {
             cursor_position: 1,
             scroll_offset: 0,
             visible_height: 10,
+            max_width: 80,
         };
         let output = component.view(&ctx);
 
@@ -244,12 +279,49 @@ mod tests {
 
     #[rstest]
     fn format_review_line_includes_all_fields(sample_review: ReviewComment) {
-        let line = ReviewListComponent::format_review_line(&sample_review, " ");
+        let line = ReviewListComponent::format_review_line(&sample_review, " ", 80);
 
         assert!(line.contains("[alice]"));
         assert!(line.contains("src/main.rs"));
         assert!(line.contains(":42"));
         assert!(line.contains("Consider refactoring"));
+    }
+
+    #[test]
+    fn format_review_line_is_truncated_to_max_width() {
+        let comment = ReviewComment {
+            author: Some("averylongreviewername".to_owned()),
+            body: Some("A long body that should not exceed the rendered row width".to_owned()),
+            file_path: Some("a/very/long/path/that/will/exceed/the/width.rs".to_owned()),
+            line_number: Some(123),
+            id: 1,
+            ..Default::default()
+        };
+
+        let line = ReviewListComponent::format_review_line(&comment, ">", 20);
+        assert!(
+            line.chars().count() <= 20,
+            "list rows should be clamped to width"
+        );
+    }
+
+    #[rstest]
+    fn view_rows_respect_max_width(sample_review: ReviewComment) {
+        let reviews = vec![sample_review];
+        let filtered_indices = vec![0];
+        let component = ReviewListComponent::new();
+        let ctx = ReviewListViewContext {
+            reviews: &reviews,
+            filtered_indices: &filtered_indices,
+            cursor_position: 0,
+            scroll_offset: 0,
+            visible_height: 10,
+            max_width: 16,
+        };
+        let output = component.view(&ctx);
+        let first_row = output.lines().next().unwrap_or("");
+
+        assert_eq!(first_row.chars().count(), 16);
     }
 
     #[test]

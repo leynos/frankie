@@ -2,6 +2,7 @@
 
 use bubbletea_rs::Model;
 use rstest::{fixture, rstest};
+use unicode_width::UnicodeWidthStr;
 
 use super::*;
 use crate::github::models::test_support::minimal_review;
@@ -102,7 +103,7 @@ fn resize_updates_visible_list_height_with_shared_layout_rules() {
         height: 16,
     });
 
-    assert_eq!(app.review_list.visible_height(), 11);
+    assert_eq!(app.review_list.visible_height(), 10);
 }
 
 #[rstest]
@@ -177,6 +178,28 @@ fn short_terminal_still_renders_list_items() {
         output.contains("alice"),
         "list should render at least one item in a short terminal"
     );
+}
+
+#[test]
+fn view_clamps_rows_to_safe_display_width_with_emoji_content() {
+    let review = ReviewComment {
+        file_path: Some("src/tui/app/codex_handlers.unknown_ext_xyz".to_owned()),
+        line_number: Some(123),
+        body: Some("_🧹 Nitpick_ | _🔵 Trivial_".to_owned()),
+        diff_hunk: None,
+        ..minimal_review(1, "placeholder", "coderabbitai[bot]")
+    };
+
+    let app = ReviewApp::with_dimensions(vec![review], 80, 24);
+    let output = app.view();
+    let max_display_width = 79usize;
+
+    for line in output.lines() {
+        assert!(
+            UnicodeWidthStr::width(line) <= max_display_width,
+            "line exceeds safe display width: '{line}'"
+        );
+    }
 }
 
 #[rstest]

@@ -17,7 +17,11 @@ fn fixture_comments() -> Vec<ReviewComment> {
             let line_number = u32::try_from(id).unwrap_or(u32::MAX);
             let line = 10_u32.saturating_add(u32::try_from(id).unwrap_or_default().saturating_mul(3));
             let author = format!("reviewer-{id}");
-            let file_path = format!("src/{id:02}.rs");
+            let mut file_suffix = id + 1;
+            while file_suffix > 5 {
+                file_suffix -= 5;
+            }
+            let file_path = format!("src/component_{file_suffix:02}.rs");
             let body = format!("Fixture review {id}: adjust layout and confirm visibility");
             let diff_hunk = format!(
                 "@@ -{line},1 +{line},3 @@\n+pub fn review_{id}() {{\n+    println!(\"review {id}\");\n+}}"
@@ -83,11 +87,9 @@ async fn main() {
 
     let run_future = program.run();
     let result = match auto_exit_duration_ms() {
-        Some(duration_ms) => {
-            tokio::time::timeout(Duration::from_millis(duration_ms), run_future)
-                .await
-                .unwrap_or_else(|_| Ok(ReviewApp::empty()))
-        }
+        Some(duration_ms) => tokio::time::timeout(Duration::from_millis(duration_ms), run_future)
+            .await
+            .unwrap_or_else(|_| Ok(ReviewApp::empty())),
         None => run_future.await,
     };
 

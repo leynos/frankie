@@ -1,6 +1,6 @@
 ---
 source: tests/interactive_tui_resize_snapshots.rs
-expression: frame_small
+expression: frame
 ---
 Frankie - Review Comments                                                       
 Filter: All (18/18)                                                             
@@ -24,5 +24,12 @@ Filter: All (18/18)
   [reviewer-17] src/component_03.rs:17: Fixture review 17: adjust layout and .. 
   [reviewer-18] src/component_04.rs:18: Fixture review 18: adjust layout and .. 
 ─────────────────────────────────────────────────────────────────────────────── 
-...                                                                             
+[reviewer-1] src/component_02.rs:1                                              
+Fixture review 1: adjust layout and confirm visibility                          
+                                                                                
+@@ -13,1 +13,3 @@                                                               
++pub fn review_1() {                                                            
++    println!("review 1");                                                      
++}                                                                              
+                                                                                
 j/k:move  f:filter  c:context  t:travel  x:codex  r:refresh  ?:help  q:quit
