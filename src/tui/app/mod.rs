@@ -321,7 +321,7 @@ impl ReviewApp {
     /// Returns the number of rows available for the UI chrome and comments.
     ///
     /// Body rows available to the list and detail sections.
-    fn visible_body_height(&self) -> usize {
+    const fn visible_body_height(&self) -> usize {
         (self.height as usize).saturating_sub(CHROME_HEIGHT)
     }
 
@@ -347,19 +347,17 @@ impl ReviewApp {
         };
 
         let natural_list_height = self.filtered_count().max(MIN_LIST_HEIGHT);
-        natural_list_height
-            .min(list_max)
-            .max(MIN_LIST_HEIGHT)
+        natural_list_height.min(list_max).max(MIN_LIST_HEIGHT)
     }
 
     /// Calculates the number of rows available for the detail pane.
-    fn calculate_detail_height(&self) -> usize {
+    const fn calculate_detail_height(&self) -> usize {
         let body_height = self.visible_body_height();
         body_height.saturating_sub(self.review_list.visible_height())
     }
 
     /// Adjusts scroll offset so the selected cursor remains visible.
-    fn adjust_scroll_to_cursor(&mut self) {
+    const fn adjust_scroll_to_cursor(&mut self) {
         let cursor = self.filter_state.cursor_position;
         let visible_height = self.review_list.visible_height();
 

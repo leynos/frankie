@@ -10,12 +10,12 @@
 
 use std::sync::{Arc, OnceLock};
 
-use crossterm::terminal;
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
 use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
+use crossterm::terminal;
 
 pub mod app;
 pub mod components;

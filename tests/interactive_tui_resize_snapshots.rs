@@ -6,8 +6,8 @@ use std::thread;
 use std::time::Duration;
 
 use ratatui_testlib::{
-    events::{KeyCode, KeyEvent},
     CommandBuilder, Result, ScreenState, TestTerminal,
+    events::{KeyCode, KeyEvent},
 };
 use rstest::rstest;
 
@@ -28,7 +28,7 @@ impl TuiFixture {
         let state = ScreenState::new(width, height);
 
         command.env("NO_COLOR", "1");
-        command.args(&["--auto-exit-ms", "4500"]);
+        command.args(["--auto-exit-ms", "4500"]);
         terminal.spawn(command)?;
 
         Ok(Self { terminal, state })
@@ -70,26 +70,22 @@ impl TuiFixture {
 
         for _ in 0..CAPTURE_ATTEMPTS {
             thread::sleep(Duration::from_millis(20));
-            match self
+
+            let read_result = self
                 .terminal
-                .read_timeout(&mut bytes, Duration::from_millis(FRAME_READ_TIMEOUT_MS))
-            {
-                Ok(0) => {
-                    if got_data {
-                        break;
-                    }
+                .read_timeout(&mut bytes, Duration::from_millis(FRAME_READ_TIMEOUT_MS));
 
-                    continue;
-                }
-                Ok(length) => {
-                    self.state.feed(&bytes[..length]);
-                    got_data = true;
-                    if length == bytes.len() {
-                        continue;
-                    }
-
+            match read_result {
+                Ok(length) if (0 < length && length < bytes.len()) => {
+                    self.state.feed(bytes.get(0..length).unwrap_or_default());
                     break;
                 }
+                Ok(length) if length > 0 => {
+                    self.state.feed(bytes.get(0..length).unwrap_or_default());
+                    got_data = true;
+                }
+                Ok(0) if got_data => break,
+                Ok(_) => {}
                 Err(ratatui_testlib::TermTestError::Timeout { .. }) => {
                     break;
                 }
@@ -126,13 +122,15 @@ fn fixture_binary_path() -> String {
         }
     }
 
-    if let Some(root) = workspace_root {
-        root.join("target/debug/tui_resize_snapshot_fixture")
-            .to_string_lossy()
-            .into_owned()
-    } else {
-        String::from("target/debug/tui_resize_snapshot_fixture")
-    }
+    workspace_root
+        .map_or_else(
+            || String::from("target/debug/tui_resize_snapshot_fixture"),
+            |root| {
+                root.join("target/debug/tui_resize_snapshot_fixture")
+                    .to_string_lossy()
+                    .into_owned()
+            },
+        )
 }
 
 fn resolve_binary_path(candidate: PathBuf, workspace_root: Option<&PathBuf>) -> Option<String> {
@@ -154,63 +152,72 @@ fn spawn_tui_fixture(width: u16, height: u16) -> Result<TuiFixture> {
     TuiFixture::new(width, height)
 }
 
+fn assert_visible_frame(
+    frame: &str,
+    expected_rows: usize,
+    test_name: &str,
+) {
+    let row_count = frame.lines().count();
+    assert!(
+        frame.contains("Frankie - Review Comments"),
+        "{test_name} missing app header"
+    );
+    assert!(
+        frame.contains("Filter:"),
+        "{test_name} missing filter bar"
+    );
+    assert!(
+        row_count >= 3,
+        "{test_name} must contain visible content"
+    );
+    assert_eq!(
+        row_count,
+        expected_rows,
+        "{test_name} expected {expected_rows} rows"
+    );
+}
+
 #[rstest]
 #[case::startup_small(80, 24)]
 #[case::startup_large(80, 40)]
-fn startup_snapshot_reflects_configured_size(#[case] width: u16, #[case] height: u16) -> Result<()> {
-    let mut fixture = spawn_tui_fixture(width, height)?;
+fn startup_snapshot_reflects_configured_size(
+    #[case] width: u16,
+    #[case] height: u16,
+) {
+    let mut fixture = spawn_tui_fixture(width, height).expect("fixture should start");
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
-    let frame = fixture.capture_frame(true)?;
+    let frame = fixture.capture_frame(true).expect("capture startup frame");
 
-    assert!(
-        frame.contains("Frankie - Review Comments"),
-        "startup frame should include the app header"
-    );
-    assert!(frame.contains("Filter:"), "startup frame should include the filter bar");
-    assert!(
-        frame.lines().count() >= 3,
-        "startup frame should contain visible content"
-    );
-    assert_eq!(
-        frame.lines().count(),
-        height as usize,
-        "terminal height must be reflected in rendered rows"
-    );
+    assert_visible_frame(&frame, height as usize, "startup snapshot");
 
     // Ensure snapshots are captured for both small and large terminal heights.
     insta::assert_snapshot!(frame);
-
-    Ok(())
 }
 
 #[test]
-fn resize_sequence_captures_small_and_large_layouts() -> Result<()> {
-    let mut fixture = spawn_tui_fixture(80, 24)?;
+fn resize_sequence_captures_small_and_large_layouts() {
+    let mut fixture = spawn_tui_fixture(80, 24).expect("fixture should start");
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
 
-    let frame_small = fixture.capture_frame(true)?;
+    let frame_small = fixture
+        .capture_frame(true)
+        .expect("capture initial layout frame");
 
-    fixture.resize(80, 14)?;
-    let frame_shrunk = fixture.capture_frame(false)?;
+    fixture.resize(80, 14).expect("resize to 14 rows");
+    let frame_shrunk = fixture
+        .capture_frame(false)
+        .expect("capture shrunk layout frame");
 
-    fixture.resize(80, 36)?;
-    let frame_expanded = fixture.capture_frame(false)?;
+    fixture.resize(80, 36).expect("resize to 36 rows");
+    let frame_expanded = fixture
+        .capture_frame(false)
+        .expect("capture expanded layout frame");
 
-    // Verify the expected state transitions are rendered and captured.
-    assert!(frame_small.contains("Frankie - Review Comments"));
-    assert!(frame_shrunk.contains("Frankie - Review Comments"));
-    assert!(frame_expanded.contains("Frankie - Review Comments"));
-    assert_eq!(frame_small.lines().count(), 24, "small frame should use 24 rows");
-    assert_eq!(frame_shrunk.lines().count(), 14, "shrunk frame should use 14 rows");
-    assert_eq!(
-        frame_expanded.lines().count(),
-        36,
-        "expanded frame should use 36 rows"
-    );
+    assert_visible_frame(&frame_small, 24, "small resize frame");
+    assert_visible_frame(&frame_shrunk, 14, "shrunk resize frame");
+    assert_visible_frame(&frame_expanded, 36, "expanded resize frame");
 
     insta::assert_snapshot!("resize_start", frame_small);
     insta::assert_snapshot!("resize_shrunk", frame_shrunk);
     insta::assert_snapshot!("resize_enlarged", frame_expanded);
-
-    Ok(())
 }
