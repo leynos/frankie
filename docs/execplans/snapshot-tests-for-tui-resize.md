@@ -2,9 +2,9 @@
 
 ## Status
 
-IN PROGRESS.
+COMPLETED.
 
-End-to-end PTY snapshot coverage is implemented and now passes for the targeted
+End-to-end PTY snapshot coverage is implemented and passes for the targeted
 `interactive_tui_resize_snapshots` integration suite. The harness was adjusted to
 work within `ratatui_testlib` writer constraints while still validating both
 startup and dynamic resize behaviour.
@@ -55,7 +55,7 @@ startup and dynamic resize behaviour.
 - [x] Implement PTY/integration snapshot coverage for startup and resize using bounded read windows to avoid blocking.
 - [x] Add snapshot fixtures and assertions in `tests/interactive_tui_resize_snapshots.rs` (3 snapshots + resize transition captures).
 - [x] Validate the issue with dedicated PTY + `insta` integration tests.
-- [ ] Run required gates for the touched area (or capture why they are deferred).
+- [ ] Run workspace-wide required gates for the touched area, or capture explicit approval to defer.
 
 ## Decision log
 - Use existing `WindowSizeMsg` message path, not a new event channel, to preserve app architecture.
