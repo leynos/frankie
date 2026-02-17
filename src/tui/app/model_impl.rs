@@ -7,7 +7,7 @@ use std::any::Any;
 
 use bubbletea_rs::{Cmd, Model};
 
-use super::{DETAIL_HEIGHT, ReviewApp};
+use super::ReviewApp;
 use crate::tui::app::ViewMode;
 use crate::tui::components::{CommentDetailViewContext, ReviewListViewContext};
 use crate::tui::input::{InputContext, map_key_to_message_with_context};
@@ -95,10 +95,11 @@ impl Model for ReviewApp {
         output.push_str(&list_view);
 
         // Render comment detail pane
+        let detail_height = self.calculate_detail_height();
         let detail_ctx = CommentDetailViewContext {
             selected_comment: self.selected_comment(),
             max_width: 80.min(self.width as usize),
-            max_height: DETAIL_HEIGHT,
+            max_height: detail_height,
         };
         output.push_str(&self.comment_detail.view(&detail_ctx));
 

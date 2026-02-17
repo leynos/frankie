@@ -42,8 +42,8 @@ use routing::MessageRouting;
 
 /// Layout rows reserved for header, filter bar, separator newline, and status bar.
 const CHROME_HEIGHT: usize = 4;
-/// Minimum rows reserved for the comment detail pane.
-const DETAIL_HEIGHT: usize = 8;
+/// Minimum rows reserved for the comment detail pane to keep detail area visible.
+const MIN_DETAIL_HEIGHT: usize = 1;
 /// Minimum rows for the review list, ensuring at least one row is visible
 /// even when the terminal height is very small.
 const MIN_LIST_HEIGHT: usize = 1;
@@ -154,8 +154,7 @@ impl ReviewApp {
             codex_poll_interval: std::time::Duration::from_millis(150),
             has_initialized: false,
         };
-        app.review_list
-            .set_visible_height(app.calculate_list_height());
+        app.set_visible_list_height();
         app
     }
 
@@ -228,6 +227,7 @@ impl ReviewApp {
             })
             .map(|(i, _)| i)
             .collect();
+        self.set_visible_list_height();
     }
 
     /// Returns the current cursor position.
@@ -318,24 +318,48 @@ impl ReviewApp {
         self.update_selected_id();
     }
 
+    /// Returns the number of rows available for the UI chrome and comments.
+    ///
+    /// Body rows available to the list and detail sections.
+    fn visible_body_height(&self) -> usize {
+        (self.height as usize).saturating_sub(CHROME_HEIGHT)
+    }
+
+    /// Updates the visible row count for the review list and stores it in the
+    /// component.
+    fn set_visible_list_height(&mut self) {
+        let list_height = self.calculate_list_height();
+        self.review_list.set_visible_height(list_height);
+    }
+
     /// Calculates the number of rows available for the review list.
     ///
-    /// Layout: `max(height - chrome - detail, MIN_LIST_HEIGHT)`.
-    /// The lower bound ensures at least one row is visible even in very
-    /// short terminals.
-    const fn calculate_list_height(&self) -> usize {
-        let raw = (self.height as usize)
-            .saturating_sub(CHROME_HEIGHT)
-            .saturating_sub(DETAIL_HEIGHT);
-        if raw < MIN_LIST_HEIGHT {
-            MIN_LIST_HEIGHT
+    /// The detail pane uses the remaining body rows once the list is bounded.
+    /// This ensures both list and detail grow with the terminal and avoids a
+    /// fixed list/detail ratio.
+    fn calculate_list_height(&self) -> usize {
+        let body_height = self.visible_body_height();
+
+        let list_max = if body_height > MIN_DETAIL_HEIGHT {
+            body_height.saturating_sub(MIN_DETAIL_HEIGHT)
         } else {
-            raw
-        }
+            0
+        };
+
+        let natural_list_height = self.filtered_count().max(MIN_LIST_HEIGHT);
+        natural_list_height
+            .min(list_max)
+            .max(MIN_LIST_HEIGHT)
+    }
+
+    /// Calculates the number of rows available for the detail pane.
+    fn calculate_detail_height(&self) -> usize {
+        let body_height = self.visible_body_height();
+        body_height.saturating_sub(self.review_list.visible_height())
     }
 
     /// Adjusts scroll offset so the selected cursor remains visible.
-    const fn adjust_scroll_to_cursor(&mut self) {
+    fn adjust_scroll_to_cursor(&mut self) {
         let cursor = self.filter_state.cursor_position;
         let visible_height = self.review_list.visible_height();
 
@@ -469,8 +493,7 @@ impl ReviewApp {
     fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
         self.width = width;
         self.height = height;
-        let list_height = self.calculate_list_height();
-        self.review_list.set_visible_height(list_height);
+        self.set_visible_list_height();
         self.adjust_scroll_to_cursor();
         if self.view_mode == ViewMode::DiffContext
             && self.diff_context_state.cached_width() != width as usize

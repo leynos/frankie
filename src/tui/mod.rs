@@ -10,6 +10,7 @@
 
 use std::sync::{Arc, OnceLock};
 
+use crossterm::terminal;
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
@@ -251,7 +252,19 @@ pub(crate) fn get_initial_reviews() -> Vec<ReviewComment> {
 /// Called internally by `ReviewApp::new()`. Returns the stored dimensions or
 /// fallback dimensions if none were set.
 pub(crate) fn get_initial_terminal_size() -> (u16, u16) {
-    INITIAL_TERMINAL_SIZE.get().copied().unwrap_or((80, 24))
+    const DEFAULT_WIDTH: u16 = 80;
+    const DEFAULT_HEIGHT: u16 = 24;
+
+    INITIAL_TERMINAL_SIZE
+        .get()
+        .copied()
+        .filter(|(width, height)| *width > 0 && *height > 0)
+        .or_else(|| {
+            terminal::size()
+                .ok()
+                .filter(|(width, height)| *width > 0 && *height > 0)
+        })
+        .unwrap_or((DEFAULT_WIDTH, DEFAULT_HEIGHT))
 }
 
 /// Returns the configured pull request locator for refresh-dependent features.

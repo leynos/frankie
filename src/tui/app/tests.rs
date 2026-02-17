@@ -83,40 +83,43 @@ fn filter_changes_preserve_valid_cursor(sample_reviews: Vec<ReviewComment>) {
 
 #[test]
 fn with_dimensions_applies_explicit_terminal_size() {
-    let app = ReviewApp::with_dimensions(Vec::new(), 120, 40);
+    let app = ReviewApp::with_dimensions(many_reviews(3), 120, 40);
+    let body_height = 40usize.saturating_sub(4);
+    let detail_height = body_height.saturating_sub(app.review_list.visible_height());
 
     assert_eq!(app.width, 120);
     assert_eq!(app.height, 40);
-    // 40 - CHROME_HEIGHT(4) - DETAIL_HEIGHT(8) = 28
-    assert_eq!(app.review_list.visible_height(), 28);
+    assert_eq!(app.review_list.visible_height(), 3);
+    assert_eq!(detail_height, body_height.saturating_sub(3));
 }
 
 #[test]
 fn resize_updates_visible_list_height_with_shared_layout_rules() {
-    let mut app = ReviewApp::empty();
+    let mut app = ReviewApp::with_dimensions(many_reviews(20), 120, 8);
 
     app.handle_message(&AppMsg::WindowResized {
         width: 120,
         height: 16,
     });
 
-    assert_eq!(app.review_list.visible_height(), 4);
+    assert_eq!(app.review_list.visible_height(), 11);
 }
 
 #[rstest]
-#[case::zero_height(0, 1)]
-#[case::below_chrome(10, 1)]
-#[case::at_chrome_plus_detail(12, 1)]
-#[case::one_row_above_threshold(13, 1)]
-#[case::normal_terminal(24, 12)]
-fn short_terminal_clamps_list_height_to_minimum(#[case] height: u16, #[case] expected: usize) {
+#[case::zero_height(0)]
+#[case::below_chrome(10)]
+#[case::at_chrome_plus_detail(12)]
+#[case::one_row_above_threshold(13)]
+#[case::normal_terminal(24)]
+#[case::large_terminal(80)]
+fn short_terminal_clamps_list_height_to_minimum(#[case] height: u16) {
     let app = ReviewApp::with_dimensions(Vec::new(), 80, height);
     assert!(
         app.review_list.visible_height() >= 1,
         "visible_height must never be zero (was {} for height {height})",
         app.review_list.visible_height()
     );
-    assert_eq!(app.review_list.visible_height(), expected);
+    assert_eq!(app.review_list.visible_height(), 1);
 }
 
 #[test]
@@ -132,14 +135,14 @@ fn cursor_navigation_adjusts_scroll_to_keep_selection_visible() {
     }
 
     assert_eq!(app.cursor_position(), 5);
-    assert_eq!(app.filter_state.scroll_offset, 2);
+    assert_eq!(app.filter_state.scroll_offset, 0);
 
     for _ in 0..4 {
         app.handle_message(&AppMsg::CursorUp);
     }
 
     assert_eq!(app.cursor_position(), 1);
-    assert_eq!(app.filter_state.scroll_offset, 1);
+    assert_eq!(app.filter_state.scroll_offset, 0);
 }
 
 #[rstest]
@@ -150,7 +153,7 @@ fn filter_changes_adjust_scroll_offset_after_cursor_clamp(sample_reviews: Vec<Re
         height: 13,
     });
     app.handle_message(&AppMsg::CursorDown);
-    assert_eq!(app.filter_state.scroll_offset, 1);
+    assert_eq!(app.filter_state.scroll_offset, 0);
 
     app.handle_message(&AppMsg::SetFilter(ReviewFilter::ByFile(
         "src/main.rs".to_owned(),

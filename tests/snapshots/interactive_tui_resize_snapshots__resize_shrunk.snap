@@ -1,0 +1,18 @@
+---
+source: tests/interactive_tui_resize_snapshots.rs
+expression: frame_shrunk
+---
+Frankie - Review Comments                                                       
+Filter: All (18/18)                                                             
+                                                                                
+  [reviewer-1] src/component_02.rs:1: Fixture review 1: adjust layout and confi.
+> [reviewer-2] src/component_03.rs:2: Fixture review 2: adjust layout and confi.
+  [reviewer-3] src/component_04.rs:3: Fixture review 3: adjust layout and confi.
+  [reviewer-4] src/component_05.rs:4: Fixture review 4: adjust layout and confi.
+  [reviewer-5] src/component_01.rs:5: Fixture review 5: adjust layout and confi.
+  [reviewer-6] src/component_02.rs:6: Fixture review 6: adjust layout and confi.
+  [reviewer-7] src/component_03.rs:7: Fixture review 7: adjust layout and confi.
+  [reviewer-8] src/component_04.rs:8: Fixture review 8: adjust layout and confi.
+  [reviewer-9] src/component_05.rs:9: Fixture review 9: adjust layout and confi.
+  [reviewer-10] src/component_01.rs:10: Fixture review 10: adjust layout and co.
+j/k:move  f:filter  c:context  t:travel  x:codex  r:refresh  ?:help  q:quit─────
