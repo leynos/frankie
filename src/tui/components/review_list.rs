@@ -25,7 +25,7 @@ pub struct ReviewListViewContext<'a> {
     pub scroll_offset: usize,
     /// Maximum visible height in lines (for layout calculations).
     pub visible_height: usize,
-    /// Maximum visible width in characters for row rendering.
+    /// Maximum visible width in display columns for row rendering.
     ///
     /// Rows longer than this width are truncated.
     pub max_width: usize,

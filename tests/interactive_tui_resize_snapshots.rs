@@ -194,15 +194,7 @@ fn startup_snapshot_reflects_configured_size(
 
     assert_visible_frame(&frame, height as usize, "startup snapshot");
 
-    // Ensure snapshots are captured for both small and large terminal heights.
-    match snapshot_name {
-        "startup_snapshot_reflects_configured_size_small" => {
-            insta::assert_snapshot!("startup_snapshot_reflects_configured_size_small", frame);
-        }
-        _ => {
-            insta::assert_snapshot!("startup_snapshot_reflects_configured_size_large", frame);
-        }
-    }
+    insta::assert_snapshot!(snapshot_name, frame);
 
     Ok(())
 }

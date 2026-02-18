@@ -84,7 +84,7 @@ impl Model for ReviewApp {
         output.push('\n');
 
         let list_height = self.calculate_list_height();
-        let terminal_width = (self.width as usize).max(1);
+        let safe_terminal_width = (self.width as usize).saturating_sub(1).max(1);
 
         let list_ctx = ReviewListViewContext {
             reviews: &self.reviews,
@@ -92,7 +92,7 @@ impl Model for ReviewApp {
             cursor_position: self.filter_state.cursor_position,
             scroll_offset: self.filter_state.scroll_offset,
             visible_height: list_height,
-            max_width: terminal_width,
+            max_width: safe_terminal_width,
         };
         let list_view = self.review_list.view(&list_ctx);
         output.push_str(&list_view);
@@ -102,7 +102,7 @@ impl Model for ReviewApp {
         if detail_height > 0 {
             let detail_ctx = CommentDetailViewContext {
                 selected_comment: self.selected_comment(),
-                max_width: terminal_width,
+                max_width: safe_terminal_width,
                 max_height: detail_height,
             };
             output.push_str(&self.comment_detail.view(&detail_ctx));
@@ -123,7 +123,7 @@ impl ReviewApp {
         }
     }
 
-    /// Normalises the rendered frame to terminal dimensions.
+    /// Normalizes the rendered frame to terminal dimensions.
     ///
     /// The output stream from components can leave stale trailing cells behind
     /// when rows are shorter than previous frames, especially after resize.

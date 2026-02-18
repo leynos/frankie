@@ -58,7 +58,7 @@ startup and dynamic resize behaviour.
 - The detail component currently has explicit height assumptions and may
   require refactoring into a dynamic cap.
 - Existing resize message handling may already work but only for model-level
-  tests, not full PTY integration.
+  tests, but not full PTY integration.
 - Aggressive refactor of layout maths can introduce index drift in list
   selection and scroll calculations.
 - Snapshot maintenance can become noisy across terminals if normalization is
@@ -89,11 +89,11 @@ startup and dynamic resize behaviour.
 - Keep fixed chrome row heights where meaningful, but compute variable panel
   heights from terminal bounds rather than fixed maxima.
 - Add explicit snapshot-driven tests for resize transitions because this is
-  terminal-dependent behavior.
+  terminal-dependent behaviour.
 
 ## Plan
 
-1. Verify size source-of-truth and startup behavior
+1. Verify size source-of-truth and startup behaviour
    - In `src/cli/review_tui.rs`, confirm terminal dimensions are queried before
      UI creation.
    - Ensure failures in size detection fall back to a safe deterministic
