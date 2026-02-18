@@ -1,6 +1,6 @@
-# Snapshot Testing Bubbletea Terminal UIs with Insta
+# Snapshot testing Bubbletea terminal UIs with Insta
 
-## Introduction to Snapshot Testing TUIs
+## Introduction to snapshot testing TUIs
 
 Snapshot testing is a powerful technique to catch unintended UI changes by
 comparing the current output of a program to a stored reference (the
@@ -30,7 +30,7 @@ updated when those changes are accepted. As a result, snapshot tests are most
 useful when the UI layout is relatively stable or when large refactors are in
 progress and output stability matters.
 
-## Test Strategy: Model vs. End-to-End
+## Test strategy: model vs. end-to-end
 
 Multiple levels exist at which a Bubbletea TUI can be tested. In increasing
 order of scope: (1) drive only the update logic (simulate messages and inspect
@@ -61,7 +61,7 @@ guide focuses on the **synchronous model update and view rendering**, assuming
 that any asynchronous commands are either disabled or their resulting messages
 are simulated directly in tests.
 
-## Recommended Layering: MVU Snapshots First, PTY Tests Second
+## Recommended layering: MVU snapshots first, PTY tests second
 
 The sweet spot for bubbletea-rs testing is usually **MVU snapshots**: drive the
 model with a sequence of messages, then snapshot `view()`. The framework
@@ -86,7 +86,7 @@ Bubbletea-rs also ships a `DummyTerminal`, which is handy when running the
 framework’s `Program` loop headlessly (for example, to exercise the built-in
 command scheduling) without touching a real terminal.[^4]
 
-## Setting Up Insta for Bubbletea Snapshot Tests
+## Setting up Insta for Bubbletea snapshot tests
 
 First, add `insta` to the development dependencies, and install the companion
 CLI tool for reviewing snapshots:
@@ -97,7 +97,7 @@ insta = { version = "1", features = ["filters"] }
 rstest = "0.26"
 rstest-bdd = "0.1.0-alpha4"
 
-# Optional: PTY-backed black-box tests (runs your real binary in a pseudo-terminal)
+# Optional: PTY-backed black-box tests (runs the real binary in a pseudo-terminal)
 ratatui-testlib = { version = "0.1", features = ["snapshot-insta"] }
 ```
 
@@ -163,7 +163,7 @@ apparent blank rows or line drift in PTY snapshots.
 > would have been awaited are returned as objects and can be ignored or
 > executed manually if needed).
 
-## Capturing Bubbletea TUI Output
+## Capturing Bubbletea TUI output
 
 In bubbletea-rs, a model’s `view()` method returns a `String` representing the
 entire screen contents (including newlines and any ANSI styling). This makes
@@ -262,7 +262,7 @@ similarly: it feeds the program events and then supports golden-file
 comparisons of the full output. In the Rust context here, insta plays the same
 role – capturing the **entire TUI screen** for verification.
 
-## Simulating User Inputs (Key Presses)
+## Simulating user inputs (key presses)
 
 A snapshot test becomes much more powerful when sequences of user input are
 simulated to drive the UI into various states. In bubbletea-rs, user
@@ -381,15 +381,15 @@ state in a deterministic way. The goal is to avoid real-time delays in tests –
 simulate the passage of time or the completion of async tasks by injecting the
 corresponding message.
 
-## Injecting Mocks and Testing Commands Deterministically
+## Injecting mocks and testing commands deterministically
 
-Snapshot tests fall over when your model reaches out to the world (clock, RNG,
+Snapshot tests fall over when a model reaches out to the world (clock, RNG,
 filesystem, network). The easiest fix is architectural: make “the world” an
 explicit dependency, and keep `view()` a pure function of model state.
 
 In bubbletea-rs, commands are just boxed futures (`Cmd`) that yield an optional
-`Msg`.[^6] That gives you a clean seam for mocking: construct your model with
-fake dependencies, trigger an update that returns a command, `await` it in the
+`Msg`.[^6] That provides a clean seam for mocking: construct a model with fake
+dependencies, trigger an update that returns a command, `await` it in the
 test, and feed any resulting message back into `update`.
 
 A practical pattern is “ports and adapters”: define tiny traits for side-effect
@@ -489,18 +489,17 @@ async fn refresh_renders_loaded_items() {
 }
 ```
 
-This looks like a lot of code in a guide, but the pay-off is huge: once you
-extract the “ports”, you can write MVU snapshots that cover real flows
-(including async commands) without touching the network, wall clock, or
-filesystem.
+This looks like a lot of code in a guide, but the pay-off is huge: once the
+“ports” are extracted, MVU snapshots can cover real flows (including async
+commands) without touching the network, wall clock, or filesystem.
 
-For **fully black-box PTY tests**, you can’t inject Rust trait objects
-directly, so give your app a configuration seam instead: flags/env like
+For **fully black-box PTY tests**, Rust trait objects cannot be injected
+directly, so the app should expose a configuration seam instead: flags/env like
 `--data-dir`, `--api-base-url`, `NO_COLOR=1`, `MYAPP_TEST_SEED=…`, or a
 `--clock=fixed` switch that disables live timestamps. That way the
 process-level test harness can still run deterministically.
 
-## Structuring Tests with Rstest and BDD Scenarios
+## Structuring tests with rstest and BDD scenarios
 
 Using **rstest** fixtures and **rstest-bdd** can greatly improve the clarity
 and reusability of test code. Rstest allows parameterized tests and reusable
@@ -648,8 +647,8 @@ be overridden in the macro if needed).
 
 The advantage of using rstest-bdd is clarity: anyone reading the test can see
 the narrative of the user interaction. It also encourages reusing fixtures (the
-`model` in this case) and separating the action from the verification. We
-could, for instance, have multiple scenarios reuse the same `when` step for
+`model` in this case) and separating the action from the verification. Multiple
+scenarios can, for instance, reuse the same `when` step for
 pressing "q" if they start from different states.
 
 **Isolation:** Each scenario gets its own fresh fixture instances, so one
@@ -660,15 +659,15 @@ manage setup/teardown if needed. For example, if a TUI writes to a file or uses
 a global config, reset or stub those in a fixture. Snapshot tests should be
 deterministic and independent.
 
-## PTY-Based Black-Box Snapshot Testing with `ratatui_testlib`
+## PTY-based black-box snapshot testing with `ratatui_testlib`
 
-MVU snapshots give you precision and speed, but they intentionally skip the
-terminal. When you need confidence in *terminal behaviour* (TTY detection, raw
+MVU snapshots give precision and speed, but they intentionally skip the
+terminal. When confidence is needed in *terminal behaviour* (TTY detection, raw
 mode, alternate screen, resize negotiation, escape-sequence correctness), add a
 thin layer of PTY-backed integration tests.
 
 `ratatui_testlib` provides a pseudo-terminal (PTY) plus a VT-style terminal
-emulator and an ergonomic harness API. It works even if your app is not built
+emulator and an ergonomic harness API. It works even if the app is not built
 with Ratatui; the PTY/escape-sequence problem is framework-agnostic.[^5]
 
 A good pattern is: keep most tests as MVU snapshots, then write a handful of
@@ -686,7 +685,7 @@ fn quit_flow_smoke_test() -> Result<()> {
     // In an integration test (tests/...), Cargo exposes the built binary via env!().
     let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_my_app"));
     cmd.env("NO_COLOR", "1");          // keep snapshots readable
-    cmd.env("MYAPP_TEST_SEED", "1");   // your own determinism hook (recommended)
+    cmd.env("MYAPP_TEST_SEED", "1");   // project determinism hook (recommended)
     harness.spawn(cmd)?;
 
     harness.wait_for_text("Main Menu")?;
@@ -717,16 +716,16 @@ A few practical tips that make these tests much less flaky:
   data dir, a local stub server, or a “fixture file” so the test controls
   external state.
 
-If you need modifier keys (Ctrl+C etc.), `send_key_with_modifiers` exists:
+For modifier keys (Ctrl+C etc.), `send_key_with_modifiers` exists:
 
 ```rust
 harness.send_key_with_modifiers(KeyCode::Char('c'), Modifiers::CTRL)?;
 ```
 
-That lets you test the *real* key encoding and handling path, which MVU tests
+This tests the *real* key encoding and handling path, which MVU tests
 deliberately bypass.
 
-## Using Insta Effectively (Redactions, Filters, Snapshot Organization)
+## Using Insta effectively (redactions, filters, snapshot organization)
 
 With insta, beyond the basics of `assert_snapshot!`, several features help when
 testing TUIs:
@@ -829,7 +828,7 @@ tests for critical logic (like “pressing X increases the counter by 1” as a
 unit test on the model state) and reserve snapshot tests for verifying the
 *presentation* of that state.
 
-## Handling Non-Deterministic Elements and Warnings
+## Handling non-deterministic elements and warnings
 
 Snapshot testing Bubbletea UIs does come with some challenges, but they can be
 managed:
@@ -914,7 +913,7 @@ the drawn output is important – layout, text content, etc., especially in
 combination with multiple inputs where writing individual assertions would be
 laborious.
 
-## Running the Tests and Interpreting Results
+## Running the tests and interpreting results
 
 Once snapshot tests have been written, run them with `cargo test`. The first
 run (or whenever new tests are added) will create initial `.snap` files. The
