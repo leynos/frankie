@@ -88,26 +88,26 @@ impl TuiFixture {
 fn fixture_binary_path() -> String {
     let workspace_root = env::var("CARGO_MANIFEST_DIR").ok().map(PathBuf::from);
 
-    if let Some(explicit_path) = env::var_os("CARGO_BIN_EXE_tui_resize_snapshot_fixture") {
-        let explicit = PathBuf::from(explicit_path);
-        if let Some(resolved) = resolve_binary_path(explicit, workspace_root.as_ref()) {
-            return resolved;
-        }
+    if let Some(resolved) = env::var_os("CARGO_BIN_EXE_tui_resize_snapshot_fixture")
+        .and_then(|path| resolve_binary_path(PathBuf::from(path), workspace_root.as_ref()))
+    {
+        return resolved;
     }
 
     let candidates = [
-        PathBuf::from("target/debug/tui_resize_snapshot_fixture"),
-        PathBuf::from("target/release/tui_resize_snapshot_fixture"),
-        PathBuf::from("target/debug/deps/tui_resize_snapshot_fixture"),
-        PathBuf::from("target/release/deps/tui_resize_snapshot_fixture"),
-        PathBuf::from("../target/debug/tui_resize_snapshot_fixture"),
-        PathBuf::from("../target/release/tui_resize_snapshot_fixture"),
+        "target/debug/tui_resize_snapshot_fixture",
+        "target/release/tui_resize_snapshot_fixture",
+        "target/debug/deps/tui_resize_snapshot_fixture",
+        "target/release/deps/tui_resize_snapshot_fixture",
+        "../target/debug/tui_resize_snapshot_fixture",
+        "../target/release/tui_resize_snapshot_fixture",
     ];
 
-    for candidate in candidates {
-        if let Some(resolved) = resolve_binary_path(candidate, workspace_root.as_ref()) {
-            return resolved;
-        }
+    if let Some(resolved) = candidates
+        .iter()
+        .find_map(|&path| resolve_binary_path(PathBuf::from(path), workspace_root.as_ref()))
+    {
+        return resolved;
     }
 
     workspace_root.map_or_else(
