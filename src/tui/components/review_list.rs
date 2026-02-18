@@ -4,6 +4,7 @@
 //! highlighting and displays relevant metadata for each comment.
 
 use crate::github::models::ReviewComment;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// Defensive fallback for visible height when layout has not yet been applied.
 const FALLBACK_VISIBLE_HEIGHT: usize = 5;
@@ -133,17 +134,24 @@ fn truncate_body(body: &str, max_len: usize) -> String {
     // Take first line only and truncate
     let first_line = body.lines().next().unwrap_or("");
     let trimmed = first_line.trim();
-    let char_count = trimmed.chars().count();
+    let display_width = trimmed.width();
 
-    if char_count <= max_len {
+    if display_width <= max_len {
         trimmed.to_owned()
     } else if max_len <= 3 {
         ".".repeat(max_len)
     } else {
-        let truncated = trimmed
-            .chars()
-            .take(max_len.saturating_sub(3))
-            .collect::<String>();
+        let target_width = max_len.saturating_sub(3);
+        let mut truncated = String::new();
+        let mut current_width = 0;
+        for ch in trimmed.chars() {
+            let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+            if current_width + char_width > target_width {
+                break;
+            }
+            truncated.push(ch);
+            current_width += char_width;
+        }
         format!("{truncated}...")
     }
 }
@@ -174,6 +182,7 @@ fn truncate_to_width(text: &str, max_width: usize) -> String {
 #[cfg(test)]
 mod tests {
     use rstest::{fixture, rstest};
+    use unicode_width::UnicodeWidthStr;
 
     use super::*;
 
@@ -344,5 +353,12 @@ mod tests {
         let multiline = "First line\nSecond line\nThird line";
         let result = truncate_body(multiline, 50);
         assert_eq!(result, "First line");
+    }
+
+    #[test]
+    fn truncate_body_uses_display_width_for_wide_characters() {
+        let result = truncate_body("你好世界和平", 7);
+        assert_eq!(result, "你好...");
+        assert_eq!(result.width(), 7);
     }
 }
