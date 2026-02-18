@@ -4,7 +4,7 @@
 //! highlighting and displays relevant metadata for each comment.
 
 use crate::github::models::ReviewComment;
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use crate::tui::components::text_truncate::truncate_to_display_width_with_ellipsis;
 
 /// Defensive fallback for visible height when layout has not yet been applied.
 const FALLBACK_VISIBLE_HEIGHT: usize = 5;
@@ -134,69 +134,12 @@ fn truncate_body(body: &str, max_len: usize) -> String {
     // Take first line only and truncate
     let first_line = body.lines().next().unwrap_or("");
     let trimmed = first_line.trim();
-    truncate_with_ellipsis_to_width(trimmed, max_len)
-}
-
-enum TruncationDecision {
-    Empty,
-    Unchanged,
-    DotFallback,
-    Ellipsis,
-}
-
-const fn is_zero_width(max_width: usize) -> bool {
-    max_width == 0
-}
-
-fn fits_display_width(text: &str, max_width: usize) -> bool {
-    text.width() <= max_width
-}
-
-const fn should_use_dot_fallback(max_width: usize) -> bool {
-    max_width <= 3
-}
-
-fn truncation_decision(text: &str, max_width: usize) -> TruncationDecision {
-    if is_zero_width(max_width) {
-        TruncationDecision::Empty
-    } else if fits_display_width(text, max_width) {
-        TruncationDecision::Unchanged
-    } else if should_use_dot_fallback(max_width) {
-        TruncationDecision::DotFallback
-    } else {
-        TruncationDecision::Ellipsis
-    }
-}
-
-/// Truncates text to the provided display width and appends an ellipsis.
-fn truncate_with_ellipsis_to_width(text: &str, max_width: usize) -> String {
-    match truncation_decision(text, max_width) {
-        TruncationDecision::Empty => String::new(),
-        TruncationDecision::Unchanged => text.to_owned(),
-        TruncationDecision::DotFallback => {
-            // Keep fallback dots deterministic for very small width budgets.
-            ".".repeat(max_width)
-        }
-        TruncationDecision::Ellipsis => {
-            let target_width = max_width.saturating_sub(3);
-            let mut truncated = String::new();
-            let mut current_width = 0;
-            for ch in text.chars() {
-                let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-                if current_width + char_width > target_width {
-                    break;
-                }
-                truncated.push(ch);
-                current_width += char_width;
-            }
-            format!("{truncated}...")
-        }
-    }
+    truncate_to_display_width_with_ellipsis(trimmed, max_len)
 }
 
 /// Truncates a row to a fixed width, preserving the caller's overflow budget.
 fn truncate_to_width(text: &str, max_width: usize) -> String {
-    truncate_with_ellipsis_to_width(text, max_width)
+    truncate_to_display_width_with_ellipsis(text, max_width)
 }
 
 #[cfg(test)]

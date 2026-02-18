@@ -156,20 +156,6 @@ fn normalise_lines_to_height(mut lines: Vec<String>, height: usize, width: usize
     normalised
 }
 
-#[derive(Default)]
-struct AnsiEscapeState {
-    in_escape: bool,
-    had_ansi: bool,
-    ended_with_reset: bool,
-    escape_buffer: String,
-}
-
-struct TruncationBuffers<'a> {
-    output: &'a mut String,
-    visible_chars: &'a mut usize,
-    escape_state: &'a mut AnsiEscapeState,
-}
-
 fn pad_or_truncate_line(line: &str, width: usize) -> String {
     truncate_ansi_line(line, width)
 }
@@ -181,57 +167,48 @@ fn truncate_ansi_line(line: &str, width: usize) -> String {
 
     let mut output = String::new();
     let mut visible_chars = 0usize;
-    let mut escape_state = AnsiEscapeState::default();
-    let mut buffers = TruncationBuffers {
-        output: &mut output,
-        visible_chars: &mut visible_chars,
-        escape_state: &mut escape_state,
-    };
+    let mut in_escape = false;
+    let mut had_ansi = false;
+    let mut ended_with_reset = false;
+    let mut escape_buffer = String::new();
 
-    process_characters_until_width(line, width, &mut buffers);
-    add_padding(&mut output, visible_chars, width);
-    add_ansi_reset_if_needed(&mut output, &escape_state);
-
-    output
-}
-
-fn process_characters_until_width(line: &str, width: usize, buffers: &mut TruncationBuffers<'_>) {
     for ch in line.chars() {
-        if buffers.escape_state.in_escape {
-            buffers.output.push(ch);
-            buffers.escape_state.escape_buffer.push(ch);
+        if in_escape {
+            output.push(ch);
+            escape_buffer.push(ch);
             if ch.is_ascii_alphabetic() {
-                buffers.escape_state.in_escape = false;
-                update_reset_tracking(
-                    &buffers.escape_state.escape_buffer,
-                    &mut buffers.escape_state.ended_with_reset,
-                );
+                in_escape = false;
+                update_reset_tracking(&escape_buffer, &mut ended_with_reset);
             }
             continue;
         }
 
         if ch == '\x1b' {
-            buffers.escape_state.in_escape = true;
-            buffers.escape_state.had_ansi = true;
-            buffers.output.push(ch);
-            buffers.escape_state.escape_buffer.clear();
-            buffers.escape_state.escape_buffer.push(ch);
+            in_escape = true;
+            had_ansi = true;
+            output.push(ch);
+            escape_buffer.clear();
+            escape_buffer.push(ch);
             continue;
         }
 
         let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
         if char_width == 0 {
-            buffers.output.push(ch);
+            output.push(ch);
             continue;
         }
 
-        if buffers.visible_chars.saturating_add(char_width) > width {
+        if visible_chars.saturating_add(char_width) > width {
             break;
         }
 
-        buffers.output.push(ch);
-        *buffers.visible_chars = buffers.visible_chars.saturating_add(char_width);
+        output.push(ch);
+        visible_chars = visible_chars.saturating_add(char_width);
     }
+    add_padding(&mut output, visible_chars, width);
+    add_ansi_reset_if_needed(&mut output, had_ansi, ended_with_reset);
+
+    output
 }
 
 fn add_padding(output: &mut String, visible_chars: usize, width: usize) {
@@ -240,8 +217,8 @@ fn add_padding(output: &mut String, visible_chars: usize, width: usize) {
     }
 }
 
-fn add_ansi_reset_if_needed(output: &mut String, escape_state: &AnsiEscapeState) {
-    if escape_state.had_ansi && !escape_state.ended_with_reset {
+fn add_ansi_reset_if_needed(output: &mut String, had_ansi: bool, ended_with_reset: bool) {
+    if had_ansi && !ended_with_reset {
         // Add a defensive reset when styles may still be active.
         output.push_str("\x1b[0m");
     }

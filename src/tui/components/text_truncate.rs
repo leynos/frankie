@@ -3,6 +3,8 @@
 //! The helpers in this module trim rendered strings to a maximum number of
 //! lines while preserving a clear "cut-off" indicator.
 
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+
 /// Truncates output to a maximum number of lines.
 ///
 /// When `max_height` is non-zero and the output exceeds that number of lines,
@@ -73,6 +75,62 @@ pub(crate) fn find_nth_newline_position(s: &str, n: usize) -> Option<usize> {
 
 const ANSI_RESET: &str = "\x1b[0m";
 
+enum WidthTruncationDecision {
+    Empty,
+    Unchanged,
+    DotFallback,
+    Ellipsis,
+}
+
+const fn is_zero_width(max_width: usize) -> bool {
+    max_width == 0
+}
+
+fn fits_display_width(text: &str, max_width: usize) -> bool {
+    text.width() <= max_width
+}
+
+const fn should_use_dot_fallback(max_width: usize) -> bool {
+    max_width <= 3
+}
+
+fn width_truncation_decision(text: &str, max_width: usize) -> WidthTruncationDecision {
+    if is_zero_width(max_width) {
+        WidthTruncationDecision::Empty
+    } else if fits_display_width(text, max_width) {
+        WidthTruncationDecision::Unchanged
+    } else if should_use_dot_fallback(max_width) {
+        WidthTruncationDecision::DotFallback
+    } else {
+        WidthTruncationDecision::Ellipsis
+    }
+}
+
+/// Truncates text to the provided display width and appends an ellipsis.
+///
+/// This helper measures width in terminal columns, not Unicode scalar count.
+pub(crate) fn truncate_to_display_width_with_ellipsis(text: &str, max_width: usize) -> String {
+    match width_truncation_decision(text, max_width) {
+        WidthTruncationDecision::Empty => String::new(),
+        WidthTruncationDecision::Unchanged => text.to_owned(),
+        WidthTruncationDecision::DotFallback => ".".repeat(max_width),
+        WidthTruncationDecision::Ellipsis => {
+            let target_width = max_width.saturating_sub(3);
+            let mut truncated = String::new();
+            let mut current_width = 0;
+            for ch in text.chars() {
+                let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+                if current_width + char_width > target_width {
+                    break;
+                }
+                truncated.push(ch);
+                current_width += char_width;
+            }
+            format!("{truncated}...")
+        }
+    }
+}
+
 fn contains_ansi_escape(text: &str) -> bool {
     text.contains("\x1b[")
 }
@@ -107,5 +165,28 @@ mod tests {
         let mut output = "\u{1b}[31mred\nline2\nline3\n".to_owned();
         truncate_to_height(&mut output, 2);
         assert_eq!(output, "\u{1b}[31mred\n\u{1b}[0m...\n");
+    }
+
+    #[test]
+    fn truncate_to_display_width_with_ellipsis_keeps_short_text() {
+        assert_eq!(
+            truncate_to_display_width_with_ellipsis("hello", 10),
+            "hello"
+        );
+    }
+
+    #[test]
+    fn truncate_to_display_width_with_ellipsis_handles_small_widths() {
+        assert_eq!(truncate_to_display_width_with_ellipsis("abcdef", 0), "");
+        assert_eq!(truncate_to_display_width_with_ellipsis("abcdef", 2), "..");
+        assert_eq!(truncate_to_display_width_with_ellipsis("abcdef", 3), "...");
+    }
+
+    #[test]
+    fn truncate_to_display_width_with_ellipsis_respects_wide_characters() {
+        assert_eq!(
+            truncate_to_display_width_with_ellipsis("你好世界", 5),
+            "你..."
+        );
     }
 }
