@@ -161,12 +161,16 @@ fn pad_or_truncate_line(line: &str, width: usize) -> String {
     let mut visible = 0usize;
     let mut in_escape = false;
     let mut had_ansi = false;
+    let mut ended_with_reset = false;
+    let mut escape_buffer = String::new();
 
     for ch in line.chars() {
         if in_escape {
             output.push(ch);
+            escape_buffer.push(ch);
             if ch.is_ascii_alphabetic() {
                 in_escape = false;
+                update_reset_tracking(&escape_buffer, &mut ended_with_reset);
             }
             continue;
         }
@@ -175,6 +179,8 @@ fn pad_or_truncate_line(line: &str, width: usize) -> String {
             in_escape = true;
             had_ansi = true;
             output.push(ch);
+            escape_buffer.clear();
+            escape_buffer.push(ch);
             continue;
         }
 
@@ -196,17 +202,36 @@ fn pad_or_truncate_line(line: &str, width: usize) -> String {
         output.push_str(&" ".repeat(width - visible));
     }
 
-    if had_ansi {
-        // Always reset when ANSI was seen to avoid style leakage between lines.
+    if had_ansi && !ended_with_reset {
+        // Add a defensive reset when styles may still be active.
         output.push_str("\x1b[0m");
     }
 
     output
 }
 
+fn update_reset_tracking(escape_sequence: &str, ended_with_reset: &mut bool) {
+    if let Some(is_reset_sequence) = sgr_sequence_resets_styles(escape_sequence) {
+        *ended_with_reset = is_reset_sequence;
+    }
+}
+
+fn sgr_sequence_resets_styles(escape_sequence: &str) -> Option<bool> {
+    let params = escape_sequence.strip_prefix("\x1b[")?.strip_suffix('m')?;
+    if params.is_empty() {
+        return Some(true);
+    }
+
+    Some(
+        params
+            .split(';')
+            .all(|param| param.is_empty() || param == "0"),
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{normalise_lines_to_height, pad_or_truncate_line};
+    use super::{normalise_lines_to_height, pad_or_truncate_line, sgr_sequence_resets_styles};
 
     #[test]
     fn pad_or_truncate_line_resets_ansi_without_explicit_reset() {
@@ -217,9 +242,35 @@ mod tests {
     }
 
     #[test]
+    fn pad_or_truncate_line_avoids_duplicate_reset_when_line_is_already_reset() {
+        let line = "\u{1b}[31mred\u{1b}[0m";
+        let result = pad_or_truncate_line(line, 3);
+
+        assert_eq!(result, line);
+    }
+
+    #[test]
+    fn pad_or_truncate_line_adds_reset_after_non_reset_sgr_with_zero_prefix() {
+        let line = "\u{1b}[0;31mred";
+        let result = pad_or_truncate_line(line, 3);
+
+        assert_eq!(result, "\u{1b}[0;31mred\u{1b}[0m");
+    }
+
+    #[test]
     fn pad_or_truncate_line_handles_wide_characters() {
         let result = pad_or_truncate_line("你好世界", 5);
         assert_eq!(result, "你好 ");
+    }
+
+    #[test]
+    fn sgr_sequence_resets_styles_only_for_true_reset_sequences() {
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[m"), Some(true));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[0m"), Some(true));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[0;0m"), Some(true));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[31m"), Some(false));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[0;31m"), Some(false));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[K"), None);
     }
 
     #[test]
