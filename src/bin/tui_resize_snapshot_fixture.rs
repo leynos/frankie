@@ -13,15 +13,12 @@ use std::process;
 use std::time::Duration;
 
 fn fixture_comments() -> Vec<ReviewComment> {
-    (1..=18)
+    (1_u64..=18)
         .map(|id| {
             let line_number = u32::try_from(id).unwrap_or(u32::MAX);
             let line = 10_u32.saturating_add(u32::try_from(id).unwrap_or_default().saturating_mul(3));
             let author = format!("reviewer-{id}");
-            let mut file_suffix = id + 1;
-            while file_suffix > 5 {
-                file_suffix -= 5;
-            }
+            let file_suffix = id.rem_euclid(5) + 1;
             let file_path = format!("src/component_{file_suffix:02}.rs");
             let body = format!("Fixture review {id}: adjust layout and confirm visibility");
             let diff_hunk = format!(

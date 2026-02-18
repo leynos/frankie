@@ -61,7 +61,7 @@ startup and dynamic resize behaviour.
   tests, not full PTY integration.
 - Aggressive refactor of layout maths can introduce index drift in list
   selection and scroll calculations.
-- Snapshot maintenance can become noisy across terminals if normalisation is
+- Snapshot maintenance can become noisy across terminals if normalization is
   incomplete.
 
 ## Progress log
@@ -143,7 +143,7 @@ startup and dynamic resize behaviour.
 6. Dependency and build config updates
    - If not already present, add `ratatui-testlib` and `insta` as
      dev-dependencies in `Cargo.toml`.
-   - Keep versions as normalised workspace dependency style and match lockfile
+   - Keep versions as normalized workspace dependency style and match lockfile
      on commit.
 
 7. Validation and completion

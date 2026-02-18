@@ -113,7 +113,7 @@ fn resize_updates_visible_list_height_with_shared_layout_rules() {
 #[case::one_row_above_threshold(13)]
 #[case::normal_terminal(24)]
 #[case::large_terminal(80)]
-fn short_terminal_clamps_list_height_to_minimum(#[case] height: u16) {
+fn empty_review_list_enforces_minimum_list_height(#[case] height: u16) {
     let app = ReviewApp::with_dimensions(Vec::new(), 80, height);
     assert!(
         app.review_list.visible_height() >= 1,
