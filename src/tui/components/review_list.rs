@@ -74,7 +74,11 @@ impl ReviewListComponent {
     #[must_use]
     pub fn view(&self, ctx: &ReviewListViewContext<'_>) -> String {
         if ctx.filtered_indices.is_empty() {
-            return "  No review comments match the current filter.\n".to_owned();
+            let empty_message = truncate_to_width(
+                "  No review comments match the current filter.",
+                ctx.max_width,
+            );
+            return format!("{empty_message}\n");
         }
 
         let mut output = String::new();
