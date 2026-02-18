@@ -56,15 +56,15 @@ fn parse_auto_exit_duration_ms_from_args() -> Option<u64> {
     let mut args = env::args().skip(1);
 
     while let Some(arg) = args.next() {
-        if let Some(value) = arg.strip_prefix("--auto-exit-ms=")
-            && let Ok(duration) = value.parse::<u64>()
+        if let Some(duration) = arg
+            .strip_prefix("--auto-exit-ms=")
+            .and_then(|value| value.parse::<u64>().ok())
         {
             return Some(duration);
         }
 
         if arg == "--auto-exit-ms"
-            && let Some(value) = args.next()
-            && let Ok(duration) = value.parse::<u64>()
+            && let Some(duration) = args.next().and_then(|value| value.parse::<u64>().ok())
         {
             return Some(duration);
         }

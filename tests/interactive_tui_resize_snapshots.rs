@@ -6,7 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use ratatui_testlib::{CommandBuilder, Result, ScreenState, TestTerminal};
-use rstest::rstest;
+use rstest::{fixture, rstest};
 
 const CAPTURE_ATTEMPTS: usize = 2;
 const FRAME_SETTLE_DELAY_MS: u64 = 40;
@@ -135,7 +135,8 @@ fn resolve_binary_path(candidate: PathBuf, workspace_root: Option<&PathBuf>) -> 
     }
 }
 
-fn spawn_tui_fixture(width: u16, height: u16) -> Result<TuiFixture> {
+#[fixture]
+fn tui_fixture(#[default(80)] width: u16, #[default(24)] height: u16) -> Result<TuiFixture> {
     TuiFixture::new(width, height)
 }
 
@@ -180,16 +181,16 @@ fn assert_review_rows_are_contiguous(frame: &str, test_name: &str) {
 }
 
 #[rstest]
-#[case::startup_small("startup_snapshot_reflects_configured_size_small", 80, 24)]
-#[case::startup_large("startup_snapshot_reflects_configured_size_large", 80, 40)]
+#[case::startup_small("startup_snapshot_reflects_configured_size_small", 24)]
+#[case::startup_large("startup_snapshot_reflects_configured_size_large", 40)]
 fn startup_snapshot_reflects_configured_size(
     #[case] snapshot_name: &str,
-    #[case] width: u16,
     #[case] height: u16,
-) {
-    let mut fixture = spawn_tui_fixture(width, height).expect("fixture should start");
+    #[with(80, height)] tui_fixture: Result<TuiFixture>,
+) -> Result<()> {
+    let mut fixture = tui_fixture?;
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
-    let frame = fixture.capture_frame(true).expect("capture startup frame");
+    let frame = fixture.capture_frame(true)?;
 
     assert_visible_frame(&frame, height as usize, "startup snapshot");
 
@@ -202,27 +203,23 @@ fn startup_snapshot_reflects_configured_size(
             insta::assert_snapshot!("startup_snapshot_reflects_configured_size_large", frame);
         }
     }
+
+    Ok(())
 }
 
 #[test]
-fn resize_sequence_captures_small_and_large_layouts() {
-    let mut small_fixture = spawn_tui_fixture(80, 24).expect("fixture should start");
+fn resize_sequence_captures_small_and_large_layouts() -> Result<()> {
+    let mut small_fixture = tui_fixture(80, 24)?;
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
-    let frame_small = small_fixture
-        .capture_frame(true)
-        .expect("capture initial layout frame");
+    let frame_small = small_fixture.capture_frame(true)?;
 
-    let mut shrunk_fixture = spawn_tui_fixture(80, 14).expect("fixture should start");
+    let mut shrunk_fixture = tui_fixture(80, 14)?;
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
-    let frame_shrunk = shrunk_fixture
-        .capture_frame(true)
-        .expect("capture shrunk layout frame");
+    let frame_shrunk = shrunk_fixture.capture_frame(true)?;
 
-    let mut expanded_fixture = spawn_tui_fixture(80, 36).expect("fixture should start");
+    let mut expanded_fixture = tui_fixture(80, 36)?;
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
-    let frame_expanded = expanded_fixture
-        .capture_frame(true)
-        .expect("capture expanded layout frame");
+    let frame_expanded = expanded_fixture.capture_frame(true)?;
 
     assert_visible_frame(&frame_small, 24, "small resize frame");
     assert_visible_frame(&frame_shrunk, 14, "shrunk resize frame");
@@ -231,21 +228,19 @@ fn resize_sequence_captures_small_and_large_layouts() {
     insta::assert_snapshot!("resize_start", frame_small);
     insta::assert_snapshot!("resize_shrunk", frame_shrunk);
     insta::assert_snapshot!("resize_enlarged", frame_expanded);
+
+    Ok(())
 }
 
 #[test]
-fn horizontal_resize_keeps_review_rows_contiguous() {
-    let mut shrink_fixture = spawn_tui_fixture(72, 24).expect("fixture should start");
+fn horizontal_resize_keeps_review_rows_contiguous() -> Result<()> {
+    let mut shrink_fixture = tui_fixture(72, 24)?;
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
-    let frame_narrow = shrink_fixture
-        .capture_frame(true)
-        .expect("capture narrow layout frame");
+    let frame_narrow = shrink_fixture.capture_frame(true)?;
 
-    let mut expand_fixture = spawn_tui_fixture(110, 24).expect("fixture should start");
+    let mut expand_fixture = tui_fixture(110, 24)?;
     thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
-    let frame_wide_again = expand_fixture
-        .capture_frame(true)
-        .expect("capture widened layout frame");
+    let frame_wide_again = expand_fixture.capture_frame(true)?;
 
     assert_visible_frame(&frame_narrow, 24, "horizontal resize narrow frame");
     assert_visible_frame(&frame_wide_again, 24, "horizontal resize widened frame");
@@ -254,4 +249,6 @@ fn horizontal_resize_keeps_review_rows_contiguous() {
 
     insta::assert_snapshot!("resize_horizontal_shrunk", frame_narrow);
     insta::assert_snapshot!("resize_horizontal_expanded", frame_wide_again);
+
+    Ok(())
 }

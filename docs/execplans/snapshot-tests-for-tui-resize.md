@@ -1,4 +1,4 @@
-# Exec Plan: Fix TUI terminal sizing and resize responsiveness for Issue #37
+# Exec plan: fix TUI terminal sizing and resize responsiveness for issue #37
 
 ## Status
 
@@ -15,7 +15,7 @@ startup and dynamic resize behaviour.
   startup.
 - Expand list and detail rendering to use the full available height.
 - Recalculate layout dynamically on terminal resize.
-- Validate behavior using ratatui-testlib with Insta snapshot tests.
+- Validate behaviour using ratatui-testlib with Insta snapshot tests.
 
 ## Core context
 
