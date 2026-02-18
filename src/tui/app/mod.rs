@@ -9,6 +9,7 @@
 //! - `codex_handlers`: Codex execution trigger and stream polling
 //! - `diff_context_handlers`: Full-screen diff context view management
 //! - `filter_handlers`: Review filter application and cycling
+//! - `lifecycle_handlers`: Startup, quit, help toggle, and resize handling
 //! - `model_impl`: `bubbletea_rs::Model` trait implementation
 //! - `navigation`: Cursor and page navigation handlers
 //! - `rendering`: View rendering methods for terminal output
@@ -33,6 +34,7 @@ use super::state::{DiffContextState, FilterState, ReviewFilter, TimeTravelState}
 mod codex_handlers;
 mod diff_context_handlers;
 mod filter_handlers;
+mod lifecycle_handlers;
 mod model_impl;
 mod navigation;
 mod rendering;
@@ -386,20 +388,6 @@ impl ReviewApp {
         }
     }
 
-    /// Dispatches time-travel messages to their handlers.
-    fn handle_time_travel_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        match msg {
-            AppMsg::EnterTimeTravel => self.handle_enter_time_travel(),
-            AppMsg::ExitTimeTravel => self.handle_exit_time_travel(),
-            AppMsg::TimeTravelLoaded(state) => self.handle_time_travel_loaded(state.clone()),
-            AppMsg::TimeTravelFailed(error) => self.handle_time_travel_failed(error),
-            AppMsg::NextCommit => self.handle_next_commit(),
-            AppMsg::PreviousCommit => self.handle_previous_commit(),
-            AppMsg::CommitNavigated(state) => self.handle_commit_navigated(state.clone()),
-            _ => None,
-        }
-    }
-
     /// Handles a message and updates state accordingly.
     ///
     /// This method is the core update function that processes all application
@@ -411,99 +399,6 @@ impl ReviewApp {
             return result;
         }
         self.dispatch_by_message_category(msg)
-    }
-
-    /// Dispatches navigation messages to their handlers.
-    fn handle_navigation_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        match msg {
-            AppMsg::CursorUp => self.handle_cursor_up(),
-            AppMsg::CursorDown => self.handle_cursor_down(),
-            AppMsg::PageUp => self.handle_page_up(),
-            AppMsg::PageDown => self.handle_page_down(),
-            AppMsg::Home => self.handle_home(),
-            AppMsg::End => self.handle_end(),
-            _ => {
-                // Unreachable: caller filters to navigation messages.
-                None
-            }
-        }
-    }
-
-    /// Dispatches filter messages to their handlers.
-    fn handle_filter_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        match msg {
-            AppMsg::SetFilter(filter) => self.handle_set_filter(filter),
-            AppMsg::ClearFilter => self.handle_clear_filter(),
-            AppMsg::CycleFilter => self.handle_cycle_filter(),
-            _ => {
-                // Unreachable: caller filters to filter messages.
-                None
-            }
-        }
-    }
-
-    /// Dispatches data loading and sync messages to their handlers.
-    fn handle_data_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        match msg {
-            AppMsg::RefreshRequested => self.handle_refresh_requested(),
-            AppMsg::RefreshComplete(new_reviews) => self.handle_refresh_complete(new_reviews),
-            AppMsg::RefreshFailed(error_msg) => self.handle_refresh_failed(error_msg),
-            AppMsg::SyncTick => self.handle_sync_tick(),
-            AppMsg::SyncComplete {
-                reviews,
-                latency_ms,
-            } => self.handle_sync_complete(reviews, *latency_ms),
-            _ => {
-                // Unreachable: caller filters to data messages.
-                None
-            }
-        }
-    }
-
-    /// Dispatches lifecycle and window messages to their handlers.
-    fn handle_lifecycle_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        match msg {
-            AppMsg::Initialized => self.handle_initialized(),
-            AppMsg::Quit => Some(bubbletea_rs::quit()),
-            AppMsg::ToggleHelp => {
-                self.show_help = !self.show_help;
-                None
-            }
-            AppMsg::WindowResized { width, height } => self.handle_resize(*width, *height),
-            _ => {
-                // Unreachable: caller filters to lifecycle messages.
-                None
-            }
-        }
-    }
-
-    // Window event handlers
-
-    /// Handles the synthetic startup message.
-    ///
-    /// `Initialized` is intended as a one-shot event emitted during startup.
-    /// Subsequent `Initialized` messages are ignored to avoid re-arming the
-    /// sync timer unintentionally.
-    fn handle_initialized(&mut self) -> Option<Cmd> {
-        if self.has_initialized {
-            return None;
-        }
-
-        self.has_initialized = true;
-        Some(Self::arm_sync_timer())
-    }
-
-    fn handle_resize(&mut self, width: u16, height: u16) -> Option<Cmd> {
-        self.width = width;
-        self.height = height;
-        self.set_visible_list_height();
-        self.adjust_scroll_to_cursor();
-        if self.view_mode == ViewMode::DiffContext
-            && self.diff_context_state.cached_width() != width as usize
-        {
-            self.rebuild_diff_context_state();
-        }
-        None
     }
 }
 

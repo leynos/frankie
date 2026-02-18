@@ -6,9 +6,23 @@
 use bubbletea_rs::Cmd;
 
 use super::ReviewApp;
+use crate::tui::messages::AppMsg;
 use crate::tui::state::ReviewFilter;
 
 impl ReviewApp {
+    /// Dispatches filter messages to their handlers.
+    pub(super) fn handle_filter_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
+            AppMsg::SetFilter(filter) => self.handle_set_filter(filter),
+            AppMsg::ClearFilter => self.handle_clear_filter(),
+            AppMsg::CycleFilter => self.handle_cycle_filter(),
+            _ => {
+                // Unreachable: caller filters to filter messages.
+                None
+            }
+        }
+    }
+
     /// Handles a `SetFilter` message by applying the given filter.
     pub(super) fn handle_set_filter(&mut self, filter: &ReviewFilter) -> Option<Cmd> {
         self.filter_state.active_filter = filter.clone();

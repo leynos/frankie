@@ -1,9 +1,10 @@
 //! Tests for Codex TUI handlers.
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Arc;
 
 use bubbletea_rs::Model;
 use camino::Utf8PathBuf;
+use mockall::mock;
 use rstest::{fixture, rstest};
 
 use crate::ai::{
@@ -16,71 +17,32 @@ use crate::tui::messages::AppMsg;
 
 use super::ReviewApp;
 
-#[derive(Debug)]
-struct StubCodexService {
-    behaviour: Mutex<Vec<StubBehaviour>>,
-}
+mock! {
+    pub CodexService {}
 
-#[derive(Debug)]
-enum StubBehaviour {
-    StartError(IntakeError),
-    Updates(Vec<CodexExecutionUpdate>),
-}
-
-impl StubCodexService {
-    fn with_updates(updates: Vec<CodexExecutionUpdate>) -> Self {
-        Self {
-            behaviour: Mutex::new(vec![StubBehaviour::Updates(updates)]),
-        }
+    impl std::fmt::Debug for CodexService {
+        fn fmt<'a>(&self, formatter: &mut std::fmt::Formatter<'a>) -> std::fmt::Result;
     }
 
-    fn with_start_error(error: IntakeError) -> Self {
-        Self {
-            behaviour: Mutex::new(vec![StubBehaviour::StartError(error)]),
-        }
-    }
-
-    fn next_behaviour(
-        lock: &mut MutexGuard<'_, Vec<StubBehaviour>>,
-    ) -> Result<StubBehaviour, IntakeError> {
-        if lock.is_empty() {
-            return Err(IntakeError::Api {
-                message: "stub behaviour queue is empty".to_owned(),
-            });
-        }
-
-        Ok(lock.remove(0))
+    impl CodexExecutionService for CodexService {
+        fn start(
+            &self,
+            request: CodexExecutionRequest,
+        ) -> Result<CodexExecutionHandle, IntakeError>;
+        fn resume(
+            &self,
+            request: CodexResumeRequest,
+        ) -> Result<CodexExecutionHandle, IntakeError>;
     }
 }
 
-impl StubCodexService {
-    fn dispatch_behaviour(&self) -> Result<CodexExecutionHandle, IntakeError> {
-        let mut behaviour = self.behaviour.lock().map_err(|error| IntakeError::Api {
-            message: format!("failed to lock stub behaviour: {error}"),
-        })?;
-
-        match Self::next_behaviour(&mut behaviour)? {
-            StubBehaviour::StartError(error) => Err(error),
-            StubBehaviour::Updates(updates) => {
-                let (sender, receiver) = std::sync::mpsc::channel();
-                for update in updates {
-                    drop(sender.send(update));
-                }
-                drop(sender);
-                Ok(CodexExecutionHandle::new(receiver))
-            }
-        }
+fn execution_handle_from_updates(updates: Vec<CodexExecutionUpdate>) -> CodexExecutionHandle {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    for update in updates {
+        drop(sender.send(update));
     }
-}
-
-impl CodexExecutionService for StubCodexService {
-    fn start(&self, _request: CodexExecutionRequest) -> Result<CodexExecutionHandle, IntakeError> {
-        self.dispatch_behaviour()
-    }
-
-    fn resume(&self, _request: CodexResumeRequest) -> Result<CodexExecutionHandle, IntakeError> {
-        self.dispatch_behaviour()
-    }
+    drop(sender);
+    CodexExecutionHandle::new(receiver)
 }
 
 #[fixture]
@@ -109,7 +71,9 @@ fn start_codex_execution_requires_filtered_comments(
 ) -> Result<(), Box<dyn std::error::Error>> {
     refresh_context?;
 
-    let service = std::sync::Arc::new(StubCodexService::with_updates(Vec::new()));
+    let mut service_mock = MockCodexService::new();
+    service_mock.expect_start().times(0);
+    let service = Arc::new(service_mock);
     let mut app = ReviewApp::empty().with_codex_service(service);
 
     app.handle_message(&AppMsg::StartCodexExecution);
@@ -139,7 +103,12 @@ fn codex_progress_and_success_are_reflected_in_state(
         }),
     ];
 
-    let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
+    let mut service_mock = MockCodexService::new();
+    service_mock
+        .expect_start()
+        .times(1)
+        .return_once(move |_| Ok(execution_handle_from_updates(updates)));
+    let service = Arc::new(service_mock);
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     app.handle_message(&AppMsg::StartCodexExecution);
@@ -176,7 +145,12 @@ fn non_zero_exit_sets_tui_error_message(
         },
     )];
 
-    let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
+    let mut service_mock = MockCodexService::new();
+    service_mock
+        .expect_start()
+        .times(1)
+        .return_once(move |_| Ok(execution_handle_from_updates(updates)));
+    let service = Arc::new(service_mock);
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     app.handle_message(&AppMsg::StartCodexExecution);
@@ -200,9 +174,13 @@ fn start_failure_is_surfaced_as_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
     refresh_context?;
 
-    let service = std::sync::Arc::new(StubCodexService::with_start_error(IntakeError::Api {
-        message: "codex not found".to_owned(),
-    }));
+    let mut service_mock = MockCodexService::new();
+    service_mock.expect_start().times(1).return_once(|_| {
+        Err(IntakeError::Api {
+            message: "codex not found".to_owned(),
+        })
+    });
+    let service = Arc::new(service_mock);
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     app.handle_message(&AppMsg::StartCodexExecution);
@@ -254,7 +232,7 @@ fn resume_prompt_shown_sets_resume_prompt_state(
 ) -> Result<(), Box<dyn std::error::Error>> {
     refresh_context?;
 
-    let service = std::sync::Arc::new(StubCodexService::with_updates(Vec::new()));
+    let service = Arc::new(MockCodexService::new());
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     let session = sample_interrupted_session();
@@ -282,7 +260,13 @@ fn resume_accepted_starts_resumed_execution(
         },
     )];
 
-    let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
+    let mut service_mock = MockCodexService::new();
+    service_mock.expect_start().times(0);
+    service_mock
+        .expect_resume()
+        .times(1)
+        .return_once(move |_| Ok(execution_handle_from_updates(updates)));
+    let service = Arc::new(service_mock);
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     // Set the resume prompt first.
@@ -317,7 +301,13 @@ fn resume_declined_starts_fresh_execution(
         },
     )];
 
-    let service = std::sync::Arc::new(StubCodexService::with_updates(updates));
+    let mut service_mock = MockCodexService::new();
+    service_mock.expect_resume().times(0);
+    service_mock
+        .expect_start()
+        .times(1)
+        .return_once(move |_| Ok(execution_handle_from_updates(updates)));
+    let service = Arc::new(service_mock);
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     // Set the resume prompt, then decline.
