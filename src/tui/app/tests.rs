@@ -181,6 +181,33 @@ fn short_terminal_still_renders_list_items() {
 }
 
 #[test]
+fn tiny_terminal_skips_detail_pane_and_keeps_status_bar_visible() {
+    let review = ReviewComment {
+        file_path: Some("src/main.rs".to_owned()),
+        line_number: Some(10),
+        diff_hunk: Some("@@ -1 +1 @@\n+fn tiny() {}".to_owned()),
+        ..minimal_review(1, "Visible comment", "alice")
+    };
+    let mut app = ReviewApp::with_dimensions(vec![review], 80, 5);
+    app.handle_message(&AppMsg::WindowResized {
+        width: 80,
+        height: 5,
+    });
+
+    let output = app.view();
+
+    assert_eq!(output.lines().count(), 5);
+    assert!(
+        output.contains("q:quit"),
+        "status bar should remain visible in a tiny terminal"
+    );
+    assert!(
+        !output.contains('─'),
+        "detail pane should be skipped when no detail rows are available"
+    );
+}
+
+#[test]
 fn view_clamps_rows_to_safe_display_width_with_emoji_content() {
     let review = ReviewComment {
         file_path: Some("src/tui/app/codex_handlers.unknown_ext_xyz".to_owned()),

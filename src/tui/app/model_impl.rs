@@ -99,12 +99,14 @@ impl Model for ReviewApp {
 
         // Render comment detail pane
         let detail_height = self.calculate_detail_height();
-        let detail_ctx = CommentDetailViewContext {
-            selected_comment: self.selected_comment(),
-            max_width: terminal_width,
-            max_height: detail_height,
-        };
-        output.push_str(&self.comment_detail.view(&detail_ctx));
+        if detail_height > 0 {
+            let detail_ctx = CommentDetailViewContext {
+                selected_comment: self.selected_comment(),
+                max_width: terminal_width,
+                max_height: detail_height,
+            };
+            output.push_str(&self.comment_detail.view(&detail_ctx));
+        }
         output.push_str(&self.render_status_bar());
 
         self.normalise_viewport(&output)
