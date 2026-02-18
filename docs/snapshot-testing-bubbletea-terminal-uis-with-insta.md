@@ -66,25 +66,25 @@ are simulated directly in tests.
 The sweet spot for bubbletea-rs testing is usually **MVU snapshots**: drive the
 model with a sequence of messages, then snapshot `view()`. The framework
 deliberately makes this cheap: `Msg` is just `Box<dyn Any + Send>`, so tests
-can inject events without going anywhere near a real terminal.[^3] This gives
-you fast, deterministic tests that run well in CI.
+can inject events without going anywhere near a real terminal.[^3] This yields
+fast, deterministic tests that run well in CI.
 
-When your `update` returns commands (`Cmd` futures), you can keep things
-deterministic in two ways. You can inject the “command result” message directly
-(treat commands as an implementation detail), or you can execute the command
-under a mocked dependency layer and feed any produced message back into
-`update`. The latter gives you higher confidence without going full black-box.
+When `update` returns commands (`Cmd` futures), determinism can be preserved in
+two ways. Tests can inject the “command result” message directly (treat
+commands as an implementation detail), or the command can be executed under a
+mocked dependency layer and feed any produced message back into `update`. The
+latter provides higher confidence without going full black-box.
 
-Finally, reserve a small number of **PTY-backed smoke tests** for the bits MVU
-tests cannot cover: raw mode, alternate screen transitions, key-encoding
-quirks, resize negotiation, and the very practical question of “does the
-compiled binary behave like a proper terminal program”. `ratatui_testlib` runs
-your real process inside a pseudo-terminal and lets you snapshot the emulated
-screen contents for visual regression testing.[^5]
+Finally, reserve a small number of **pseudo-terminal (PTY)-backed smoke tests**
+for the bits MVU tests cannot cover: raw mode, alternate screen transitions,
+key-encoding quirks, resize negotiation, and the very practical question of
+“does the compiled binary behave like a proper terminal program”.
+`ratatui_testlib` runs the real process inside a pseudo-terminal and captures
+the emulated screen contents for visual regression testing.[^5]
 
-Bubbletea-rs also ships a `DummyTerminal`, which is handy if you want to run
-the framework’s `Program` loop headlessly (for example, to exercise the
-built-in command scheduling) without touching a real terminal.[^4]
+Bubbletea-rs also ships a `DummyTerminal`, which is handy when running the
+framework’s `Program` loop headlessly (for example, to exercise the built-in
+command scheduling) without touching a real terminal.[^4]
 
 ## Setting Up Insta for Bubbletea Snapshot Tests
 
@@ -592,11 +592,11 @@ fn app_at_main_screen(model: MyAppModel) -> MyAppModel {
     model
 }
 
-#[when("the user presses "q"")]
+#[when("the user presses \"q\"")]
 fn user_presses_q(model: &mut MyAppModel) {
     model.update(Box::new(KeyMsg {
         key: KeyCode::Char('q'),
-        modifiers: crossterm::event::KeyModifiers::NONE,
+        modifiers: KeyModifiers::NONE,
     }));
 }
 
@@ -606,7 +606,7 @@ fn quit_dialog_shown(model: &MyAppModel) {
     assert!(output.contains("Quit?"), "Dialog text not found in output");
 }
 
-#[then("the dialog asks "Quit? (y/N)"")]
+#[then("the dialog asks \"Quit? (y/N)\"")]
 fn quit_dialog_correct(model: &MyAppModel) {
     insta::assert_snapshot!(model.view());
 }

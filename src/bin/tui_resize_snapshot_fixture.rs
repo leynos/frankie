@@ -8,6 +8,7 @@ use crossterm::terminal;
 use frankie::github::models::ReviewComment;
 use frankie::tui::{ReviewApp, set_initial_reviews, set_initial_terminal_size};
 use std::env;
+use std::future::Future;
 use std::process;
 use std::time::Duration;
 
@@ -75,6 +76,28 @@ fn parse_auto_exit_duration_ms_from_args() -> Option<u64> {
     None
 }
 
+#[derive(Debug, PartialEq, Eq)]
+enum FixtureRunFailure {
+    TimedOut { duration_ms: u64 },
+}
+
+async fn await_with_optional_timeout<F, T>(
+    run_future: F,
+    duration_ms: Option<u64>,
+) -> std::result::Result<T, FixtureRunFailure>
+where
+    F: Future<Output = T>,
+{
+    match duration_ms {
+        Some(timeout_ms) => tokio::time::timeout(Duration::from_millis(timeout_ms), run_future)
+            .await
+            .map_err(|_| FixtureRunFailure::TimedOut {
+                duration_ms: timeout_ms,
+            }),
+        None => Ok(run_future.await),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let _ = set_initial_reviews(fixture_comments());
@@ -86,14 +109,37 @@ async fn main() {
     };
 
     let run_future = program.run();
-    let result = match auto_exit_duration_ms() {
-        Some(duration_ms) => tokio::time::timeout(Duration::from_millis(duration_ms), run_future)
-            .await
-            .unwrap_or_else(|_| Ok(ReviewApp::empty())),
-        None => run_future.await,
+    let run_result = match await_with_optional_timeout(run_future, auto_exit_duration_ms()).await {
+        Ok(result) => result,
+        Err(FixtureRunFailure::TimedOut { .. }) => process::exit(1),
     };
 
-    if result.is_err() {
+    if run_result.is_err() {
         process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::future::{pending, ready};
+
+    use super::{FixtureRunFailure, await_with_optional_timeout};
+
+    #[tokio::test]
+    async fn await_with_optional_timeout_returns_output_without_timeout() {
+        let result = await_with_optional_timeout(ready(42_u8), None).await;
+        assert_eq!(result, Ok(42));
+    }
+
+    #[tokio::test]
+    async fn await_with_optional_timeout_returns_output_within_timeout() {
+        let result = await_with_optional_timeout(ready(7_u8), Some(50)).await;
+        assert_eq!(result, Ok(7));
+    }
+
+    #[tokio::test]
+    async fn await_with_optional_timeout_errors_when_future_hangs() {
+        let result = await_with_optional_timeout(pending::<u8>(), Some(1)).await;
+        assert_eq!(result, Err(FixtureRunFailure::TimedOut { duration_ms: 1 }));
     }
 }

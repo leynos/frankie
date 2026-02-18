@@ -76,8 +76,11 @@ startup and dynamic resize behaviour.
       `tests/interactive_tui_resize_snapshots.rs` (3 snapshots + resize
       transition captures).
 - [x] Validate the issue with dedicated PTY + `insta` integration tests.
-- [ ] Run workspace-wide required gates for the touched area, or capture
+- [x] Run workspace-wide required gates for the touched area, or capture
       explicit approval to defer.
+- [x] Address post-merge review feedback covering ANSI-safe truncation,
+      timeout failure semantics in the PTY fixture, and documentation fixes for
+      quote escaping and style guidance.
 
 ## Decision log
 
@@ -184,3 +187,6 @@ startup and dynamic resize behaviour.
 
 - Updated after test execution to record successful PTY snapshot validation and
   to capture the `ratatui_testlib` one-write constraint in the fixture strategy.
+- Updated after review remediation to record consolidation of line truncation
+  helpers, timeout-failure hardening in `tui_resize_snapshot_fixture`, and a
+  fresh full-gate pass.

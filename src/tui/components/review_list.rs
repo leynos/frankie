@@ -134,17 +134,23 @@ fn truncate_body(body: &str, max_len: usize) -> String {
     // Take first line only and truncate
     let first_line = body.lines().next().unwrap_or("");
     let trimmed = first_line.trim();
-    let display_width = trimmed.width();
+    truncate_with_ellipsis_to_width(trimmed, max_len)
+}
 
-    if display_width <= max_len {
-        trimmed.to_owned()
-    } else if max_len <= 3 {
-        ".".repeat(max_len)
+/// Truncates text to the provided display width and appends an ellipsis.
+fn truncate_with_ellipsis_to_width(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        String::new()
+    } else if text.width() <= max_width {
+        text.to_owned()
+    } else if max_width <= 3 {
+        // Keep fallback dots deterministic for very small width budgets.
+        ".".repeat(max_width)
     } else {
-        let target_width = max_len.saturating_sub(3);
+        let target_width = max_width.saturating_sub(3);
         let mut truncated = String::new();
         let mut current_width = 0;
-        for ch in trimmed.chars() {
+        for ch in text.chars() {
             let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
             if current_width + char_width > target_width {
                 break;
@@ -158,25 +164,7 @@ fn truncate_body(body: &str, max_len: usize) -> String {
 
 /// Truncates a row to a fixed width, preserving the caller's overflow budget.
 fn truncate_to_width(text: &str, max_width: usize) -> String {
-    if max_width == 0 {
-        return String::new();
-    }
-
-    let char_count = text.chars().count();
-    if char_count <= max_width {
-        return text.to_owned();
-    }
-
-    if max_width <= 3 {
-        return ".".repeat(max_width);
-    }
-
-    let mut truncated = text
-        .chars()
-        .take(max_width.saturating_sub(3))
-        .collect::<String>();
-    truncated.push_str("...");
-    truncated
+    truncate_with_ellipsis_to_width(text, max_width)
 }
 
 #[cfg(test)]
@@ -308,10 +296,7 @@ mod tests {
         };
 
         let line = ReviewListComponent::format_review_line(&comment, ">", 20);
-        assert!(
-            line.chars().count() <= 20,
-            "list rows should be clamped to width"
-        );
+        assert!(line.width() <= 20, "list rows should be clamped to width");
     }
 
     #[rstest]
@@ -330,14 +315,14 @@ mod tests {
         let output = component.view(&ctx);
         let first_row = output.lines().next().unwrap_or("");
 
-        assert_eq!(first_row.chars().count(), 16);
+        assert_eq!(first_row.width(), 16);
     }
 
     #[test]
     fn truncate_body_shortens_long_text() {
         let long_text = "This is a very long comment that should be truncated";
         let truncated = truncate_body(long_text, 20);
-        assert_eq!(truncated.len(), 20);
+        assert_eq!(truncated.width(), 20);
         assert!(truncated.ends_with("..."));
     }
 
@@ -358,6 +343,13 @@ mod tests {
     #[test]
     fn truncate_body_uses_display_width_for_wide_characters() {
         let result = truncate_body("你好世界和平", 7);
+        assert_eq!(result, "你好...");
+        assert_eq!(result.width(), 7);
+    }
+
+    #[test]
+    fn truncate_to_width_uses_display_width_for_wide_characters() {
+        let result = truncate_to_width("你好世界和平", 7);
         assert_eq!(result, "你好...");
         assert_eq!(result.width(), 7);
     }

@@ -133,135 +133,103 @@ impl ReviewApp {
         let safe_width = width.saturating_sub(1).max(1);
         let height = self.height.max(1) as usize;
 
-        let mut lines: Vec<String> = output
+        let lines: Vec<String> = output
             .lines()
             .map(|line| pad_or_truncate_line(line, safe_width))
             .collect();
-        lines.truncate(height);
 
-        let missing = height.saturating_sub(lines.len());
-        let blank = " ".repeat(safe_width);
-        lines.extend(std::iter::repeat_with(|| blank.clone()).take(missing));
-
-        let mut normalised = lines.join("\n");
-        normalised.push('\n');
-        normalised
+        normalise_lines_to_height(lines, height, safe_width)
     }
+}
+
+fn normalise_lines_to_height(mut lines: Vec<String>, height: usize, width: usize) -> String {
+    lines.truncate(height);
+
+    let missing = height.saturating_sub(lines.len());
+    let blank = " ".repeat(width);
+    lines.extend(std::iter::repeat_with(|| blank.clone()).take(missing));
+
+    let mut normalised = lines.join("\n");
+    normalised.push('\n');
+    normalised
 }
 
 fn pad_or_truncate_line(line: &str, width: usize) -> String {
-    if width == 0 {
-        return String::new();
-    }
-
-    if line.contains('\x1b') {
-        return truncate_ansi_line(line, width);
-    }
-
-    pad_or_truncate_plain_line(line, width)
-}
-
-fn pad_or_truncate_plain_line(line: &str, width: usize) -> String {
     let mut output = String::new();
-    let mut visible_width = 0usize;
+    let mut visible = 0usize;
+    let mut in_escape = false;
+    let mut had_ansi = false;
 
     for ch in line.chars() {
+        if in_escape {
+            output.push(ch);
+            if ch.is_ascii_alphabetic() {
+                in_escape = false;
+            }
+            continue;
+        }
+
+        if ch == '\x1b' {
+            in_escape = true;
+            had_ansi = true;
+            output.push(ch);
+            continue;
+        }
+
         let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
         if char_width == 0 {
             output.push(ch);
             continue;
         }
 
-        if visible_width.saturating_add(char_width) > width {
+        if visible.saturating_add(char_width) > width {
             break;
         }
 
         output.push(ch);
-        visible_width = visible_width.saturating_add(char_width);
+        visible = visible.saturating_add(char_width);
     }
 
-    if visible_width < width {
-        output.push_str(&" ".repeat(width - visible_width));
+    if visible < width {
+        output.push_str(&" ".repeat(width - visible));
     }
 
-    output
-}
-
-fn truncate_ansi_line(line: &str, width: usize) -> String {
-    if width == 0 {
-        return String::new();
-    }
-
-    let mut output = String::new();
-    let mut visible_chars = 0usize;
-    let mut escape_state = AnsiEscapeState::default();
-
-    for ch in line.chars() {
-        if escape_state.in_escape {
-            push_escape_char(ch, &mut output, &mut escape_state);
-            continue;
-        }
-
-        if ch == '\x1b' {
-            start_escape_sequence(ch, &mut output, &mut escape_state);
-            continue;
-        }
-
-        if append_visible_char(ch, width, &mut visible_chars, &mut output) {
-            break;
-        }
-    }
-
-    if visible_chars < width {
-        output.push_str(&" ".repeat(width - visible_chars));
-    }
-
-    if escape_state.had_ansi && !escape_state.ended_with_reset {
+    if had_ansi {
+        // Always reset when ANSI was seen to avoid style leakage between lines.
         output.push_str("\x1b[0m");
     }
 
     output
 }
 
-#[derive(Default)]
-struct AnsiEscapeState {
-    in_escape: bool,
-    had_ansi: bool,
-    ended_with_reset: bool,
-}
+#[cfg(test)]
+mod tests {
+    use super::{normalise_lines_to_height, pad_or_truncate_line};
 
-fn push_escape_char(ch: char, output: &mut String, state: &mut AnsiEscapeState) {
-    output.push(ch);
-    state.ended_with_reset = ch == 'm';
-    if ch.is_ascii_alphabetic() {
-        state.in_escape = false;
-    }
-}
+    #[test]
+    fn pad_or_truncate_line_resets_ansi_without_explicit_reset() {
+        let line = "\u{1b}[31mred";
+        let result = pad_or_truncate_line(line, 3);
 
-fn start_escape_sequence(ch: char, output: &mut String, state: &mut AnsiEscapeState) {
-    state.in_escape = true;
-    state.had_ansi = true;
-    output.push(ch);
-    state.ended_with_reset = false;
-}
-
-fn append_visible_char(
-    ch: char,
-    width: usize,
-    visible_chars: &mut usize,
-    output: &mut String,
-) -> bool {
-    let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
-    if char_width == 0 {
-        output.push(ch);
-        return false;
+        assert_eq!(result, "\u{1b}[31mred\u{1b}[0m");
     }
 
-    if visible_chars.saturating_add(char_width) > width {
-        return true;
+    #[test]
+    fn pad_or_truncate_line_handles_wide_characters() {
+        let result = pad_or_truncate_line("你好世界", 5);
+        assert_eq!(result, "你好 ");
     }
 
-    output.push(ch);
-    *visible_chars = visible_chars.saturating_add(char_width);
-    false
+    #[test]
+    fn normalise_lines_to_height_pads_missing_rows() {
+        let result = normalise_lines_to_height(vec!["abcd".to_owned()], 3, 4);
+        assert_eq!(result, "abcd\n    \n    \n");
+    }
+
+    #[test]
+    fn normalise_lines_to_height_truncates_extra_rows() {
+        let lines = vec!["1111".to_owned(), "2222".to_owned(), "3333".to_owned()];
+        let result = normalise_lines_to_height(lines, 2, 4);
+        assert_eq!(result, "1111\n2222\n");
+    }
 }
