@@ -57,7 +57,7 @@ startup and dynamic resize behaviour.
 
 - The detail component currently has explicit height assumptions and may
   require refactoring into a dynamic cap.
-- Existing resize message handling may already work but only for model-level
+- Existing resize message handling may already work, but only for model-level
   tests, but not full PTY integration.
 - Aggressive refactor of layout maths can introduce index drift in list
   selection and scroll calculations.
@@ -109,7 +109,7 @@ startup and dynamic resize behaviour.
    - In `src/tui/components/comment_detail.rs`:
      - Replace rigid detail height cap usage with parameterized or derived max
        height.
-     - Keep content truncation behavior where required for safety.
+     - Keep content truncation behaviour where required for safety.
    - Keep `handle_resize` as the single code path for updating viewport
      dimensions.
 
@@ -133,7 +133,7 @@ startup and dynamic resize behaviour.
    - Capture frames using bounded `TestTerminal` read attempts with synthetic
      redraw probes.
    - Add `insta` snapshot fixtures for:
-     - startup at small height (for minimum clamp behavior),
+     - startup at small height (for minimum clamp behaviour),
      - startup at large height (no cap),
      - resize sequence small → large → small.
    - Use `rstest` fixtures to generate parameterized size cases and avoid
@@ -168,7 +168,7 @@ startup and dynamic resize behaviour.
 
 - Decision: update `get_initial_terminal_size` to query
   `crossterm::terminal::size()` when explicit initial dimensions are not
-  available so startup can still react to the real terminal in non-CLI
+  available, so startup can still react to the real terminal in non-CLI
   entrypoints (e.g., tests and dedicated fixtures).
 
 ## Acceptance criteria

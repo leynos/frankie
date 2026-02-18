@@ -11,7 +11,7 @@ use rstest::{fixture, rstest};
 const CAPTURE_ATTEMPTS: usize = 2;
 const FRAME_SETTLE_DELAY_MS: u64 = 40;
 const FRAME_READ_TIMEOUT_MS: u64 = 250;
-const STARTUP_STABILISE_DELAY_MS: u64 = 120;
+const STARTUP_STABILIZE_DELAY_MS: u64 = 120;
 
 struct TuiFixture {
     terminal: TestTerminal,
@@ -189,7 +189,7 @@ fn startup_snapshot_reflects_configured_size(
     #[with(80, height)] tui_fixture: Result<TuiFixture>,
 ) -> Result<()> {
     let mut fixture = tui_fixture?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
+    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
     let frame = fixture.capture_frame(true)?;
 
     assert_visible_frame(&frame, height as usize, "startup snapshot");
@@ -200,17 +200,17 @@ fn startup_snapshot_reflects_configured_size(
 }
 
 #[test]
-fn resize_sequence_captures_small_and_large_layouts() -> Result<()> {
+fn startup_at_various_viewport_sizes_produces_expected_layouts() -> Result<()> {
     let mut small_fixture = tui_fixture(80, 24)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
+    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
     let frame_small = small_fixture.capture_frame(true)?;
 
     let mut shrunk_fixture = tui_fixture(80, 14)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
+    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
     let frame_shrunk = shrunk_fixture.capture_frame(true)?;
 
     let mut expanded_fixture = tui_fixture(80, 36)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
+    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
     let frame_expanded = expanded_fixture.capture_frame(true)?;
 
     assert_visible_frame(&frame_small, 24, "small resize frame");
@@ -227,11 +227,11 @@ fn resize_sequence_captures_small_and_large_layouts() -> Result<()> {
 #[test]
 fn horizontal_resize_keeps_review_rows_contiguous() -> Result<()> {
     let mut shrink_fixture = tui_fixture(72, 24)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
+    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
     let frame_narrow = shrink_fixture.capture_frame(true)?;
 
     let mut expand_fixture = tui_fixture(110, 24)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILISE_DELAY_MS));
+    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
     let frame_wide_again = expand_fixture.capture_frame(true)?;
 
     assert_visible_frame(&frame_narrow, 24, "horizontal resize narrow frame");
