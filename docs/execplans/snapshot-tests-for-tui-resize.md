@@ -117,7 +117,7 @@ still validating both startup and dynamic resize behaviour.
    - In `src/tui/app/mod.rs`, validate `set_cursor_visible_rows` and list
      scroll bounds after `handle_resize`.
    - Add/update unit tests asserting cursor and top indices remain valid at
-     very small and large heights.
+     minimum and large heights.
    - Explicitly test edge sizes and one-step larger/smaller transitions.
 
 4. Wire runtime resize handling confidence
@@ -156,7 +156,7 @@ still validating both startup and dynamic resize behaviour.
      make test | tee /tmp/test-frankie-${branch_name}.out
      ```
 
-   - include docs checks only if markdown changes are made.
+   - Include docs checks only if markdown changes are made.
    - Capture and inspect any snapshot diffs before commit.
    - Record test evidence and remaining risk in the final handoff.
 
