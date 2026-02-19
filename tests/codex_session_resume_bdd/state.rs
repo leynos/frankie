@@ -16,6 +16,11 @@ use frankie::tui::app::ReviewApp;
 
 type TimedUpdates = Vec<(u64, CodexExecutionUpdate)>;
 
+const SAMPLE_FILE_PATH: &str = "src/main.rs";
+const SAMPLE_LINE_NUMBER: u32 = 12;
+const SAMPLE_COMMENT_BODY: &str = "Fix this branch";
+const SAMPLE_REVIEWER: &str = "alice";
+
 /// Shared scenario state for Codex session resumption behaviour tests.
 #[derive(ScenarioState, Default)]
 pub(crate) struct ResumeScenarioState {
@@ -197,10 +202,10 @@ fn ensure_refresh_context() -> Result<(), IntakeError> {
 
 fn sample_reviews() -> Vec<frankie::github::models::ReviewComment> {
     vec![frankie::github::models::ReviewComment {
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: Some(12),
-        body: Some("Fix this branch".to_owned()),
-        ..minimal_review(1, "Fix this branch", "alice")
+        file_path: Some(SAMPLE_FILE_PATH.to_owned()),
+        line_number: Some(SAMPLE_LINE_NUMBER),
+        body: Some(SAMPLE_COMMENT_BODY.to_owned()),
+        ..minimal_review(1, SAMPLE_COMMENT_BODY, SAMPLE_REVIEWER)
     }]
 }
 

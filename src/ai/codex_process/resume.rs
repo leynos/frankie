@@ -71,9 +71,13 @@ fn prepare_session_for_resume(
     transcript_path: &Utf8PathBuf,
     sender: &Sender<CodexExecutionUpdate>,
 ) -> bool {
+    let previous_status = session_state.status.clone();
+    let previous_finished_at = session_state.finished_at;
     session_state.status = SessionStatus::Running;
     session_state.finished_at = None;
     if let Err(error) = session_state.write_sidecar() {
+        session_state.status = previous_status;
+        session_state.finished_at = previous_finished_at;
         send_failure_with_details(
             sender,
             format!("failed to persist resumed session state: {error}"),
