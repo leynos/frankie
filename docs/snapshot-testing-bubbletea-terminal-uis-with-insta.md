@@ -1,6 +1,6 @@
-# Snapshot Testing Bubbletea Terminal UIs with Insta
+# Snapshot testing Bubbletea terminal UIs with Insta
 
-## Introduction to Snapshot Testing TUIs
+## Introduction to snapshot testing TUIs
 
 Snapshot testing is a powerful technique to catch unintended UI changes by
 comparing the current output of a program to a stored reference (the
@@ -30,7 +30,7 @@ updated when those changes are accepted. As a result, snapshot tests are most
 useful when the UI layout is relatively stable or when large refactors are in
 progress and output stability matters.
 
-## Test Strategy: Model vs. End-to-End
+## Test strategy: model vs. end-to-end
 
 Multiple levels exist at which a Bubbletea TUI can be tested. In increasing
 order of scope: (1) drive only the update logic (simulate messages and inspect
@@ -61,16 +61,44 @@ guide focuses on the **synchronous model update and view rendering**, assuming
 that any asynchronous commands are either disabled or their resulting messages
 are simulated directly in tests.
 
-## Setting Up Insta for Bubbletea Snapshot Tests
+## Recommended layering: MVU snapshots first, PTY tests second
+
+The sweet spot for bubbletea-rs testing is usually **MVU snapshots**: drive the
+model with a sequence of messages, then snapshot `view()`. The framework
+deliberately makes this cheap: `Msg` is just `Box<dyn Any + Send>`, so tests
+can inject events without going anywhere near a real terminal.[^3] This yields
+fast, deterministic tests that run well in CI.
+
+When `update` returns commands (`Cmd` futures), determinism can be preserved in
+two ways. Tests can inject the “command result” message directly (treat
+commands as an implementation detail), or the command can be executed under a
+mocked dependency layer and feed any produced message back into `update`. The
+latter provides higher confidence without going full black-box.
+
+Finally, reserve a small number of **pseudo-terminal (PTY)-backed smoke tests**
+for the bits MVU tests cannot cover: raw mode, alternate screen transitions,
+key-encoding quirks, resize negotiation, and the very practical question of
+“does the compiled binary behave like a proper terminal program”.
+`ratatui_testlib` runs the real process inside a pseudo-terminal and captures
+the emulated screen contents for visual regression testing.[^5]
+
+Bubbletea-rs also ships a `DummyTerminal`, which is handy when running the
+framework’s `Program` loop headlessly (for example, to exercise the built-in
+command scheduling) without touching a real terminal.[^4]
+
+## Setting up Insta for Bubbletea snapshot tests
 
 First, add `insta` to the development dependencies, and install the companion
 CLI tool for reviewing snapshots:
 
 ```toml
 [dev-dependencies]
-insta = { version = "1.31.0", features = ["filters"] }
+insta = { version = "1", features = ["filters"] }
 rstest = "0.26"
 rstest-bdd = "0.1.0-alpha4"
+
+# Optional: PTY-backed black-box tests (runs the real binary in a pseudo-terminal)
+ratatui-testlib = { version = "0.1", features = ["snapshot-insta"] }
 ```
 
 ```bash
@@ -95,7 +123,7 @@ filter to delete ANSI escape sequences:
 use insta::Settings;
 
 let mut settings = Settings::new();
-settings.add_filter(r"\x1B\\[[0-9;]*[A-Za-z]", ""); // regex to match ANSI codes
+settings.add_filter(r"\x1B\[[0-9;]*[A-Za-z]", ""); // regex to match ANSI codes
 settings.bind(|| {
     insta::assert_snapshot!(cleaned_output);
 });
@@ -119,6 +147,12 @@ typically means sending a `WindowSizeMsg` to the update function before
 capturing the view. An example of this appears below. Using a consistent size
 ensures reproducible results across different environments.
 
+Also ensure row truncation and padding in the app use terminal **display
+width** rather than scalar count. Snapshot outputs that include emoji (for
+example, status markers such as `🧹` or `⚠️`) can autowrap unexpectedly if
+width logic assumes one scalar equals one terminal column. That can introduce
+apparent blank rows or line drift in PTY snapshots.
+
 > **Note:** If tests are in an async context (for example, using
 > `#[tokio::test]` because the update requires a runtime), enable the
 > appropriate feature in rstest-bdd (such as `rstest-bdd-macros/tokio`). This
@@ -129,21 +163,25 @@ ensures reproducible results across different environments.
 > would have been awaited are returned as objects and can be ignored or
 > executed manually if needed).
 
-## Capturing Bubbletea TUI Output
+## Capturing Bubbletea TUI output
 
 In bubbletea-rs, a model’s `view()` method returns a `String` representing the
 entire screen contents (including newlines and any ANSI styling). This makes
 capturing output straightforward: calling `model.view()` directly in a test to
-get the draw output**. The key is to ensure the model is in the desired state
+get the draw output. The key is to ensure the model is in the desired state
 first. A typical snapshot test will look like:
 
 ```rust
+use bubbletea_rs::{Model, WindowSizeMsg};
+
 #[test]
 fn main_menu_initial_render() {
-    let mut model = MyAppModel::new(); // Construct the model (initial state)
-    model.update(WindowSizeMsg { width: 80, height: 24 }); // Simulate a terminal size of 80x24
-    let output = model.view();
-    insta::assert_snapshot!(output);
+    let (mut model, _cmd) = MyAppModel::init();
+
+    // Simulate a terminal size of 80×24 (bubbletea-rs expects messages boxed as `Msg`)
+    model.update(Box::new(WindowSizeMsg { width: 80, height: 24 }));
+
+    insta::assert_snapshot!(model.view());
 }
 ```
 
@@ -188,7 +226,7 @@ The steps are:
 
 **Tip:** If the model’s view output contains non-deterministic elements (for
 example, a timestamp, a random number, or an ID that changes each run), those
-elements must be **stabilised** for the snapshot to be useful. Several
+elements must be **stabilized** for the snapshot to be useful. Several
 approaches help achieve this:
 
 - **Redactions/Filters:** Insta allows regex filters over the final string to
@@ -224,29 +262,31 @@ similarly: it feeds the program events and then supports golden-file
 comparisons of the full output. In the Rust context here, insta plays the same
 role – capturing the **entire TUI screen** for verification.
 
-## Simulating User Inputs (Key Presses)
+## Simulating user inputs (key presses)
 
 A snapshot test becomes much more powerful when sequences of user input are
 simulated to drive the UI into various states. In bubbletea-rs, user
 interactions (keypresses, mouse events, etc.) are delivered to the `update`
 method as message types. Specifically, keystrokes arrive as `KeyMsg` messages
-(which contain a `crossterm::event::KeyEvent` with a KeyCode and modifiers). To
+(which carry a `crossterm::event::KeyCode` plus any active `KeyModifiers`). To
 simulate a key press in a test, create a `KeyMsg` and call
-`model.update(Msg::from(KeyMsg))`.
+`model.update(Box::new(KeyMsg { ... }))`.
 
 **Example:** Suppose pressing **“q”** in an app triggers a quit confirmation
 dialog. In a test, the following applies:
 
 ```rust
-use bubbletea_rs::event::KeyMsg;
+use bubbletea_rs::{KeyMsg, WindowSizeMsg};
 use crossterm::event::{KeyCode, KeyModifiers};
 
-// ... inside test ...
-model.update(WindowSizeMsg { width: 80, height: 24 }); // initial size
-model.update(KeyMsg::new(KeyCode::Char('q'), KeyModifiers::NONE));
-// (Assuming KeyMsg::new or similar constructor exists; otherwise construct the struct)
-let output = model.view();
-insta::assert_snapshot!(output);
+// ... inside a test (assume `model` already exists) ...
+model.update(Box::new(WindowSizeMsg { width: 80, height: 24 })); // initial size
+model.update(Box::new(KeyMsg {
+    key: KeyCode::Char('q'),
+    modifiers: KeyModifiers::NONE,
+}));
+
+insta::assert_snapshot!(model.view());
 ```
 
 After the `KeyMsg` update, the model should have transitioned to the “quit
@@ -259,19 +299,21 @@ For instance, consider testing a simple flow: open a menu, navigate, and select
 an item. Arrow key presses and the Enter key can be simulated:
 
 ```rust
-model.update(KeyMsg::from(KeyCode::Down)); // move selection down
-model.update(KeyMsg::from(KeyCode::Down)); // move down again
-model.update(KeyMsg::from(KeyCode::Enter)); // activate selection
-let output = model.view();
-assert_snapshot!(output);
+use bubbletea_rs::KeyMsg;
+use crossterm::event::{KeyCode, KeyModifiers};
+
+model.update(Box::new(KeyMsg { key: KeyCode::Down, modifiers: KeyModifiers::NONE }));
+model.update(Box::new(KeyMsg { key: KeyCode::Down, modifiers: KeyModifiers::NONE }));
+model.update(Box::new(KeyMsg { key: KeyCode::Enter, modifiers: KeyModifiers::NONE }));
+
+insta::assert_snapshot!(model.view());
 ```
 
 Each call to `update` feeds one input to the model, just as if the user pressed
 a key. Use the correct `KeyCode` variants from `crossterm::event::KeyCode` for
 special keys (e.g. `KeyCode::Up`, `KeyCode::Esc`, `KeyCode::Backspace`, etc.).
 For keys with modifiers (Ctrl+C, etc.), include the `KeyModifiers`.
-Bubbletea-rs might provide ergonomic constructors for common keys (for example,
-a `KeyMsg::ctrl_c()` helper), but constructing them manually is
+Bubbletea-rs keeps `KeyMsg` as a plain struct, so constructing key events is
 straightforward. After simulating the sequence, call `view()` to get the final
 screen.
 
@@ -294,17 +336,24 @@ A small helper can reduce repetition, such as:
 fn send_text(model: &mut MyAppModel, text: &str) {
     for ch in text.chars() {
         let kc = KeyCode::Char(ch);
-        model.update(KeyMsg::new(kc, KeyModifiers::NONE));
+        model.update(Box::new(KeyMsg { key: kc, modifiers: crossterm::event::KeyModifiers::NONE }));
     }
 }
 ```
 
-In a test,
-`send_text(&mut model, "hello"); model.update(KeyMsg::from(KeyCode::Enter));`
-would simulate typing “hello” and pressing Enter. Snapshot the output to verify
-that the input was handled (for example, the new item “hello” appears in a
-list). Remember to simulate special keys like Enter or Tab as needed by the UI
-flow.
+In a test, this sequence would simulate typing “hello” and pressing Enter:
+
+```rust
+send_text(&mut model, "hello");
+model.update(Box::new(KeyMsg {
+    key: KeyCode::Enter,
+    modifiers: crossterm::event::KeyModifiers::NONE,
+}));
+```
+
+Snapshot the output to verify that the input was handled (for example, the new
+item “hello” appears in a list). Remember to simulate special keys like Enter
+or Tab as needed by the UI flow.
 
 By combining sequences of inputs, test code can script any user journey and the
 resulting screen. If intermediate screens also matter, take snapshots at
@@ -326,13 +375,131 @@ with its resulting message, or refactor the logic so that the view reflects
 only the model state and not immediate async results. In many cases, the
 returned `Cmd` can be ignored in tests. But if pressing a key triggers a `Cmd`
 that after 1 second sends a `TickMsg` which changes the UI, that tick can be
-simulated by directly calling `update(TickMsg)` in the test (instead of waiting
-one second). This provides fine-grained control to advance the app state in a
-deterministic way. The goal is to avoid real-time delays in tests – simulate
-the passage of time or the completion of async tasks by injecting the
+simulated by directly calling `update(Box::new(TickMsg))` in the test (instead
+of waiting one second). This provides fine-grained control to advance the app
+state in a deterministic way. The goal is to avoid real-time delays in tests –
+simulate the passage of time or the completion of async tasks by injecting the
 corresponding message.
 
-## Structuring Tests with Rstest and BDD Scenarios
+## Injecting mocks and testing commands deterministically
+
+Snapshot tests fall over when a model reaches out to the world (clock, RNG,
+filesystem, network). The easiest fix is architectural: make “the world” an
+explicit dependency, and keep `view()` a pure function of model state.
+
+In bubbletea-rs, commands are just boxed futures (`Cmd`) that yield an optional
+`Msg`.[^6] That provides a clean seam for mocking: construct a model with fake
+dependencies, trigger an update that returns a command, `await` it in the
+test, and feed any resulting message back into `update`.
+
+A practical pattern is “ports and adapters”: define tiny traits for side-effect
+boundaries and inject them into the model via a constructor used by tests
+(while `Model::init()` can keep using production defaults).
+
+```rust
+use std::{future::Future, pin::Pin, sync::Arc};
+
+use bubbletea_rs::{Cmd, KeyMsg, Model, Msg, WindowSizeMsg};
+use crossterm::event::{KeyCode, KeyModifiers};
+
+#[derive(Clone, Debug)]
+struct ItemsLoaded(Vec<String>);
+
+trait ItemRepo: Send + Sync {
+    fn list(&self) -> Pin<Box<dyn Future<Output = Vec<String>> + Send>>;
+}
+
+fn fetch_items(repo: Arc<dyn ItemRepo>) -> Cmd {
+    Box::pin(async move {
+        let items = repo.list().await;
+        Some(Box::new(ItemsLoaded(items)) as Msg)
+    })
+}
+
+struct MyAppModel {
+    repo: Arc<dyn ItemRepo>,
+    items: Vec<String>,
+}
+
+impl MyAppModel {
+    // Test-friendly constructor: inject mocks here.
+    fn new(repo: Arc<dyn ItemRepo>) -> Self {
+        Self { repo, items: vec![] }
+    }
+}
+
+impl Model for MyAppModel {
+    fn init() -> (Self, Option<Cmd>) {
+        // Production default wiring (real repo, real clock, etc.)
+        // Tests can bypass this and call `MyAppModel::new(...)`.
+        (Self::new(Arc::new(/* RealRepo */ unimplemented!())), None)
+    }
+
+    fn update(&mut self, msg: Msg) -> Option<Cmd> {
+        if let Some(key) = msg.downcast_ref::<KeyMsg>() {
+            if key.key == KeyCode::Char('r') {
+                return Some(fetch_items(self.repo.clone()));
+            }
+        }
+        if let Some(ItemsLoaded(items)) = msg.downcast_ref::<ItemsLoaded>() {
+            self.items = items.clone();
+        }
+        None
+    }
+
+    fn view(&self) -> String {
+        format!("Items:\n{}", self.items.join("\n"))
+    }
+}
+
+struct FakeRepo {
+    items: Vec<String>,
+}
+
+impl ItemRepo for FakeRepo {
+    fn list(&self) -> Pin<Box<dyn Future<Output = Vec<String>> + Send>> {
+        let items = self.items.clone();
+        Box::pin(async move { items })
+    }
+}
+
+#[tokio::test]
+async fn refresh_renders_loaded_items() {
+    let repo = Arc::new(FakeRepo {
+        items: vec!["alpha".into(), "beta".into()],
+    });
+
+    let mut model = MyAppModel::new(repo);
+    model.update(Box::new(WindowSizeMsg { width: 80, height: 24 }));
+
+    // Trigger refresh (returns a command)
+    let cmd = model.update(Box::new(KeyMsg {
+        key: KeyCode::Char('r'),
+        modifiers: KeyModifiers::NONE,
+    }));
+
+    // Execute the command deterministically and feed its message back in
+    if let Some(cmd) = cmd {
+        if let Some(msg) = cmd.await {
+            model.update(msg);
+        }
+    }
+
+    insta::assert_snapshot!(model.view());
+}
+```
+
+This looks like a lot of code in a guide, but the pay-off is huge: once the
+“ports” are extracted, MVU snapshots can cover real flows (including async
+commands) without touching the network, wall clock, or filesystem.
+
+For **fully black-box PTY tests**, Rust trait objects cannot be injected
+directly, so the app should expose a configuration seam instead: flags/env like
+`--data-dir`, `--api-base-url`, `NO_COLOR=1`, `MYAPP_TEST_SEED=…`, or a
+`--clock=fixed` switch that disables live timestamps. That way the
+process-level test harness can still run deterministically.
+
+## Structuring tests with rstest and BDD scenarios
 
 Using **rstest** fixtures and **rstest-bdd** can greatly improve the clarity
 and reusability of test code. Rstest allows parameterized tests and reusable
@@ -345,14 +512,15 @@ size. For example:
 
 ```rust
 use rstest::fixture;
-use bubbletea_rs::event::KeyMsg;
-use crossterm::event::KeyCode;
+use bubbletea_rs::{Model, WindowSizeMsg};
 
 #[fixture]
 fn model() -> MyAppModel {
-    let mut model = MyAppModel::new();
-    // Assume the model handles a WindowSizeMsg; simulate 80x24 terminal
-    model.update(bubbletea_rs::WindowSizeMsg { width: 80, height: 24 });
+    let (mut model, _cmd) = MyAppModel::init();
+
+    // Simulate an 80×24 terminal (avoid coupling snapshots to the developer’s terminal size)
+    model.update(Box::new(WindowSizeMsg { width: 80, height: 24 }));
+
     model
 }
 ```
@@ -370,8 +538,8 @@ the same action as arrow keys (a Vim-style keybinding), write:
 #[rstest]
 #[case(KeyCode::Left, "left_arrow_output")]
 #[case(KeyCode::Char('h'), "left_h_output")]
-fn left_keybinds(model: MyAppModel, #[case] key: KeyCode, #[case] snapshot_name: &str) {
-    model.update(KeyMsg::from(key));
+fn left_keybinds(mut model: MyAppModel, #[case] key: KeyCode, #[case] snapshot_name: &str) {
+    model.update(Box::new(KeyMsg { key, modifiers: crossterm::event::KeyModifiers::NONE }));
     let output = model.view();
     insta::assert_snapshot!(snapshot_name, output);
 }
@@ -404,42 +572,47 @@ Feature: Quitting the app
 These steps can be implemented in Rust:
 
 ```rust
+use rstest::fixture;
 use rstest_bdd::{given, when, then, scenario};
-use bubbletea_rs::event::KeyMsg;
+
+use bubbletea_rs::{KeyMsg, Model, WindowSizeMsg};
 use crossterm::event::{KeyCode, KeyModifiers};
 
 #[fixture]
 fn model() -> MyAppModel {
-    let mut m = MyAppModel::new();
-    m.update(bubbletea_rs::WindowSizeMsg { width: 80, height: 24 });
+    let (mut m, _cmd) = MyAppModel::init();
+    m.update(Box::new(WindowSizeMsg { width: 80, height: 24 }));
     m
 }
 
 #[given("the app is at the main screen")]
-fn app_at_main_screen(mut model: MyAppModel) -> MyAppModel {
-    // The fixture already provided an initialized model at main menu
-    // If needed, navigation to the main screen could occur here. In this case, it's already there.
+fn app_at_main_screen(model: MyAppModel) -> MyAppModel {
+    // The fixture already provides an initialized model at the main screen.
     model
 }
 
 #[when("the user presses \"q\"")]
 fn user_presses_q(model: &mut MyAppModel) {
-    model.update(KeyMsg::new(KeyCode::Char('q'), KeyModifiers::NONE));
+    model.update(Box::new(KeyMsg {
+        key: KeyCode::Char('q'),
+        modifiers: KeyModifiers::NONE,
+    }));
 }
 
 #[then("a quit confirmation dialog is shown")]
 fn quit_dialog_shown(model: &MyAppModel) {
     let output = model.view();
-    // Check that the output contains the expected dialog text
-    // (We can do a snapshot or a simpler contains check for a specific substring)
     assert!(output.contains("Quit?"), "Dialog text not found in output");
 }
 
 #[then("the dialog asks \"Quit? (y/N)\"")]
 fn quit_dialog_correct(model: &MyAppModel) {
-    let output = model.view();
-    // Using snapshot to verify the entire dialog screen (ensuring formatting is correct)
-    insta::assert_snapshot!(output);
+    insta::assert_snapshot!(model.view());
+}
+
+#[scenario(path = "tests/features/quit.feature", name = "User quits from main screen")]
+fn quit_feature(model: MyAppModel) {
+    // The scenario macro runs the bound steps; the body can stay empty.
 }
 ```
 
@@ -474,8 +647,8 @@ be overridden in the macro if needed).
 
 The advantage of using rstest-bdd is clarity: anyone reading the test can see
 the narrative of the user interaction. It also encourages reusing fixtures (the
-`model` in this case) and separating the action from the verification. We
-could, for instance, have multiple scenarios reuse the same `when` step for
+`model` in this case) and separating the action from the verification. Multiple
+scenarios can, for instance, reuse the same `when` step for
 pressing "q" if they start from different states.
 
 **Isolation:** Each scenario gets its own fresh fixture instances, so one
@@ -486,7 +659,73 @@ manage setup/teardown if needed. For example, if a TUI writes to a file or uses
 a global config, reset or stub those in a fixture. Snapshot tests should be
 deterministic and independent.
 
-## Using Insta Effectively (Redactions, Filters, Snapshot Organization)
+## PTY-based black-box snapshot testing with `ratatui_testlib`
+
+MVU snapshots give precision and speed, but they intentionally skip the
+terminal. When confidence is needed in *terminal behaviour* (TTY detection, raw
+mode, alternate screen, resize negotiation, escape-sequence correctness), add a
+thin layer of PTY-backed integration tests.
+
+`ratatui_testlib` provides a pseudo-terminal (PTY) plus a VT-style terminal
+emulator and an ergonomic harness API. It works even if the app is not built
+with Ratatui; the PTY/escape-sequence problem is framework-agnostic.[^5]
+
+A good pattern is: keep most tests as MVU snapshots, then write a handful of
+PTY tests as “smoke tests” for critical flows.
+
+```rust
+use ratatui_testlib::{CommandBuilder, KeyCode, Modifiers, Result, TuiTestHarness};
+
+#[test]
+fn quit_flow_smoke_test() -> Result<()> {
+    let mut harness = TuiTestHarness::builder()
+        .with_size(80, 24)
+        .build()?;
+
+    // In an integration test (tests/...), Cargo exposes the built binary via env!().
+    let mut cmd = CommandBuilder::new(env!("CARGO_BIN_EXE_my_app"));
+    cmd.env("NO_COLOR", "1");          // keep snapshots readable
+    cmd.env("MYAPP_TEST_SEED", "1");   // project determinism hook (recommended)
+    harness.spawn(cmd)?;
+
+    harness.wait_for_text("Main Menu")?;
+    insta::assert_snapshot!("main_menu", harness.screen_contents());
+
+    // Press "q" to open quit dialog
+    harness.send_key(KeyCode::Char('q'))?;
+    harness.wait_for_text("Quit?")?;
+    insta::assert_snapshot!("quit_dialog", harness.screen_contents());
+
+    // Press Enter (or "y", etc.) to exit
+    harness.send_key(KeyCode::Enter)?;
+    harness.wait_exit()?;
+
+    Ok(())
+}
+```
+
+A few practical tips that make these tests much less flaky:
+
+- Fix the terminal size (the harness does this) and avoid relying on the
+  developer’s real terminal dimensions.
+- Prefer `wait_for_text(...)` / `wait_for(...)` over sleeps; let the harness
+  poll until the UI reaches the expected state.
+- Keep live clocks, spinners, and progress animations behind a test-mode switch
+  (env/flag), or snapshot at a well-defined tick count.
+- Use configuration seams for black-box mocking: point the binary at a temp
+  data dir, a local stub server, or a “fixture file” so the test controls
+  external state.
+
+For modifier keys (Ctrl+C etc.), `send_key_with_modifiers` exists:
+
+```rust
+harness.send_key_with_modifiers(KeyCode::Char('c'), Modifiers::CTRL)?;
+```
+
+This tests the *real* key encoding and handling path, which MVU tests
+deliberately bypass.
+
+## Using Insta effectively (redactions, filters, snapshot organization)
 
 With insta, beyond the basics of `assert_snapshot!`, several features help when
 testing TUIs:
@@ -589,7 +828,7 @@ tests for critical logic (like “pressing X increases the counter by 1” as a
 unit test on the model state) and reserve snapshot tests for verifying the
 *presentation* of that state.
 
-## Handling Non-Deterministic Elements and Warnings
+## Handling non-deterministic elements and warnings
 
 Snapshot testing Bubbletea UIs does come with some challenges, but they can be
 managed:
@@ -641,7 +880,7 @@ managed:
   the test. Using standard UTF-8 characters and ANSI escapes is usually fine
   across OSes when a consistent C locale is used. If CI and local environments
   differ (say, line-ending differences or locale issues that change unicode
-  icons), normalisation may be needed (for instance, always output `\n` as line
+  icons), normalization may be needed (for instance, always output `\n` as line
   separator, and open files in text mode accordingly). This is generally not a
   problem, but it is worth remembering if a snapshot passes locally but fails
   on CI because of an encoding issue.
@@ -674,7 +913,7 @@ the drawn output is important – layout, text content, etc., especially in
 combination with multiple inputs where writing individual assertions would be
 laborious.
 
-## Running the Tests and Interpreting Results
+## Running the tests and interpreting results
 
 Once snapshot tests have been written, run them with `cargo test`. The first
 run (or whenever new tests are added) will create initial `.snap` files. The
@@ -755,13 +994,24 @@ for how the TUI is supposed to react to input.
       <https://ratatui.rs/recipes/testing/snapshots/#:~:text=snapshots%2Fdemo2__tests__render_app>
        and
       <https://ratatui.rs/recipes/testing/snapshots/#:~:text=,Traceroute%20%20Weather>
+[^3]: bubbletea-rs defines `Msg` as `Box<dyn Any + Send>` (messages must be
+      boxed):
+      <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.html>
+[^4]: bubbletea-rs `DummyTerminal` (headless terminal implementation for tests):
+      <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/terminal/struct.DummyTerminal.html>
+[^5]: ratatui-testlib overview and `TuiTestHarness` API (PTY-based integration
+      testing with insta support):
+      <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/>
+       and
+      <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/struct.TuiTestHarness.html>
+[^6]: bubbletea-rs defines `Cmd` as a boxed future returning `Option<Msg>`:
+      <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/type.Cmd.html>
 
 **Sources:**
 
-- Bubbletea TUI testing approaches and snapshot philosophy
-
-- Ratatui snapshot testing recipe (using a fixed 80×20 terminal and insta)
-
-- Charm’s Bubble Tea teatest (Go) using golden files for full output comparison
-
-- Insta crate documentation on filters and snapshot review
+- bubbletea-rs documentation (Model/Msg/Cmd and DummyTerminal)
+- ratatui-testlib documentation (TuiTestHarness and PTY-based integration
+  testing)
+- Ratatui snapshot testing recipe (buffer-based snapshot testing with insta)
+- Charm’s Bubble Tea teatest (Go) golden-file testing inspiration
+- Insta documentation (filters/redactions and snapshot review workflow)

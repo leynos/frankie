@@ -6,8 +6,9 @@
 use std::any::Any;
 
 use bubbletea_rs::{Cmd, Model};
+use unicode_width::UnicodeWidthChar;
 
-use super::{DETAIL_HEIGHT, ReviewApp};
+use super::ReviewApp;
 use crate::tui::app::ViewMode;
 use crate::tui::components::{CommentDetailViewContext, ReviewListViewContext};
 use crate::tui::input::{InputContext, map_key_to_message_with_context};
@@ -64,15 +65,15 @@ impl Model for ReviewApp {
     fn view(&self) -> String {
         // If help is shown, render overlay instead
         if self.show_help {
-            return self.render_help_overlay();
+            return self.normalise_viewport(&self.render_help_overlay());
         }
 
         // Handle special view modes with early returns
         if self.view_mode == ViewMode::DiffContext {
-            return self.render_diff_context_view();
+            return self.normalise_viewport(&self.render_diff_context_view());
         }
         if self.view_mode == ViewMode::TimeTravel {
-            return self.render_time_travel_view();
+            return self.normalise_viewport(&self.render_time_travel_view());
         }
 
         // Render main ReviewList view
@@ -83,6 +84,7 @@ impl Model for ReviewApp {
         output.push('\n');
 
         let list_height = self.calculate_list_height();
+        let safe_terminal_width = (self.width as usize).saturating_sub(1).max(1);
 
         let list_ctx = ReviewListViewContext {
             reviews: &self.reviews,
@@ -90,22 +92,24 @@ impl Model for ReviewApp {
             cursor_position: self.filter_state.cursor_position,
             scroll_offset: self.filter_state.scroll_offset,
             visible_height: list_height,
+            max_width: safe_terminal_width,
         };
         let list_view = self.review_list.view(&list_ctx);
         output.push_str(&list_view);
 
         // Render comment detail pane
-        let detail_ctx = CommentDetailViewContext {
-            selected_comment: self.selected_comment(),
-            max_width: 80.min(self.width as usize),
-            max_height: DETAIL_HEIGHT,
-        };
-        output.push_str(&self.comment_detail.view(&detail_ctx));
-
-        output.push('\n');
+        let detail_height = self.calculate_detail_height();
+        if detail_height > 0 {
+            let detail_ctx = CommentDetailViewContext {
+                selected_comment: self.selected_comment(),
+                max_width: safe_terminal_width,
+                max_height: detail_height,
+            };
+            output.push_str(&self.comment_detail.view(&detail_ctx));
+        }
         output.push_str(&self.render_status_bar());
 
-        output
+        self.normalise_viewport(&output)
     }
 }
 
@@ -117,5 +121,182 @@ impl ReviewApp {
             ViewMode::DiffContext => InputContext::DiffContext,
             ViewMode::TimeTravel => InputContext::TimeTravel,
         }
+    }
+
+    /// Normalizes the rendered frame to terminal dimensions.
+    ///
+    /// The output stream from components can leave stale trailing cells behind
+    /// when rows are shorter than previous frames, especially after resize.
+    /// We clamp rows to one column less than terminal width to avoid autowrap
+    /// behaviour, while still padding with spaces to clear stale trailing
+    /// cells after resize.
+    fn normalise_viewport(&self, output: &str) -> String {
+        let width = self.width.max(1) as usize;
+        let safe_width = width.saturating_sub(1).max(1);
+        let height = self.height.max(1) as usize;
+
+        let lines: Vec<String> = output
+            .lines()
+            .map(|line| pad_or_truncate_line(line, safe_width))
+            .collect();
+
+        normalise_lines_to_height(lines, height, safe_width)
+    }
+}
+
+fn normalise_lines_to_height(mut lines: Vec<String>, height: usize, width: usize) -> String {
+    lines.truncate(height);
+
+    let missing = height.saturating_sub(lines.len());
+    let blank = " ".repeat(width);
+    lines.extend(std::iter::repeat_with(|| blank.clone()).take(missing));
+
+    let mut normalised = lines.join("\n");
+    normalised.push('\n');
+    normalised
+}
+
+fn pad_or_truncate_line(line: &str, width: usize) -> String {
+    truncate_ansi_line(line, width)
+}
+
+fn truncate_ansi_line(line: &str, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+
+    let mut output = String::new();
+    let mut visible_chars = 0usize;
+    let mut in_escape = false;
+    let mut had_ansi = false;
+    let mut ended_with_reset = false;
+    let mut escape_buffer = String::new();
+
+    for ch in line.chars() {
+        if in_escape {
+            output.push(ch);
+            escape_buffer.push(ch);
+            if ch.is_ascii_alphabetic() {
+                in_escape = false;
+                update_reset_tracking(&escape_buffer, &mut ended_with_reset);
+            }
+            continue;
+        }
+
+        if ch == '\x1b' {
+            in_escape = true;
+            had_ansi = true;
+            output.push(ch);
+            escape_buffer.clear();
+            escape_buffer.push(ch);
+            continue;
+        }
+
+        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if char_width == 0 {
+            output.push(ch);
+            continue;
+        }
+
+        if visible_chars.saturating_add(char_width) > width {
+            break;
+        }
+
+        output.push(ch);
+        visible_chars = visible_chars.saturating_add(char_width);
+    }
+    add_padding(&mut output, visible_chars, width);
+    add_ansi_reset_if_needed(&mut output, had_ansi, ended_with_reset);
+
+    output
+}
+
+fn add_padding(output: &mut String, visible_chars: usize, width: usize) {
+    if visible_chars < width {
+        output.push_str(&" ".repeat(width - visible_chars));
+    }
+}
+
+fn add_ansi_reset_if_needed(output: &mut String, had_ansi: bool, ended_with_reset: bool) {
+    if had_ansi && !ended_with_reset {
+        // Add a defensive reset when styles may still be active.
+        output.push_str("\x1b[0m");
+    }
+}
+
+fn update_reset_tracking(escape_sequence: &str, ended_with_reset: &mut bool) {
+    if let Some(is_reset_sequence) = sgr_sequence_resets_styles(escape_sequence) {
+        *ended_with_reset = is_reset_sequence;
+    }
+}
+
+fn sgr_sequence_resets_styles(escape_sequence: &str) -> Option<bool> {
+    let params = escape_sequence.strip_prefix("\x1b[")?.strip_suffix('m')?;
+    if params.is_empty() {
+        return Some(true);
+    }
+
+    Some(
+        params
+            .split(';')
+            .all(|param| param.is_empty() || param == "0"),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{normalise_lines_to_height, pad_or_truncate_line, sgr_sequence_resets_styles};
+
+    #[test]
+    fn pad_or_truncate_line_resets_ansi_without_explicit_reset() {
+        let line = "\u{1b}[31mred";
+        let result = pad_or_truncate_line(line, 3);
+
+        assert_eq!(result, "\u{1b}[31mred\u{1b}[0m");
+    }
+
+    #[test]
+    fn pad_or_truncate_line_avoids_duplicate_reset_when_line_is_already_reset() {
+        let line = "\u{1b}[31mred\u{1b}[0m";
+        let result = pad_or_truncate_line(line, 3);
+
+        assert_eq!(result, line);
+    }
+
+    #[test]
+    fn pad_or_truncate_line_adds_reset_after_non_reset_sgr_with_zero_prefix() {
+        let line = "\u{1b}[0;31mred";
+        let result = pad_or_truncate_line(line, 3);
+
+        assert_eq!(result, "\u{1b}[0;31mred\u{1b}[0m");
+    }
+
+    #[test]
+    fn pad_or_truncate_line_handles_wide_characters() {
+        let result = pad_or_truncate_line("你好世界", 5);
+        assert_eq!(result, "你好 ");
+    }
+
+    #[test]
+    fn sgr_sequence_resets_styles_only_for_true_reset_sequences() {
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[m"), Some(true));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[0m"), Some(true));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[0;0m"), Some(true));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[31m"), Some(false));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[0;31m"), Some(false));
+        assert_eq!(sgr_sequence_resets_styles("\u{1b}[K"), None);
+    }
+
+    #[test]
+    fn normalise_lines_to_height_pads_missing_rows() {
+        let result = normalise_lines_to_height(vec!["abcd".to_owned()], 3, 4);
+        assert_eq!(result, "abcd\n    \n    \n");
+    }
+
+    #[test]
+    fn normalise_lines_to_height_truncates_extra_rows() {
+        let lines = vec!["1111".to_owned(), "2222".to_owned(), "3333".to_owned()];
+        let result = normalise_lines_to_height(lines, 2, 4);
+        assert_eq!(result, "1111\n2222\n");
     }
 }

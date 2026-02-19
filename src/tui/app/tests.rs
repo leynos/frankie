@@ -2,6 +2,7 @@
 
 use bubbletea_rs::Model;
 use rstest::{fixture, rstest};
+use unicode_width::UnicodeWidthStr;
 
 use super::*;
 use crate::github::models::test_support::minimal_review;
@@ -83,40 +84,43 @@ fn filter_changes_preserve_valid_cursor(sample_reviews: Vec<ReviewComment>) {
 
 #[test]
 fn with_dimensions_applies_explicit_terminal_size() {
-    let app = ReviewApp::with_dimensions(Vec::new(), 120, 40);
+    let app = ReviewApp::with_dimensions(many_reviews(3), 120, 40);
+    let body_height = 40usize.saturating_sub(4);
+    let detail_height = body_height.saturating_sub(app.review_list.visible_height());
 
     assert_eq!(app.width, 120);
     assert_eq!(app.height, 40);
-    // 40 - CHROME_HEIGHT(4) - DETAIL_HEIGHT(8) = 28
-    assert_eq!(app.review_list.visible_height(), 28);
+    assert_eq!(app.review_list.visible_height(), 3);
+    assert_eq!(detail_height, body_height.saturating_sub(3));
 }
 
 #[test]
 fn resize_updates_visible_list_height_with_shared_layout_rules() {
-    let mut app = ReviewApp::empty();
+    let mut app = ReviewApp::with_dimensions(many_reviews(20), 120, 8);
 
     app.handle_message(&AppMsg::WindowResized {
         width: 120,
         height: 16,
     });
 
-    assert_eq!(app.review_list.visible_height(), 4);
+    assert_eq!(app.review_list.visible_height(), 10);
 }
 
 #[rstest]
-#[case::zero_height(0, 1)]
-#[case::below_chrome(10, 1)]
-#[case::at_chrome_plus_detail(12, 1)]
-#[case::one_row_above_threshold(13, 1)]
-#[case::normal_terminal(24, 12)]
-fn short_terminal_clamps_list_height_to_minimum(#[case] height: u16, #[case] expected: usize) {
+#[case::zero_height(0)]
+#[case::below_chrome(10)]
+#[case::at_chrome_plus_detail(12)]
+#[case::one_row_above_threshold(13)]
+#[case::normal_terminal(24)]
+#[case::large_terminal(80)]
+fn empty_review_list_enforces_minimum_list_height(#[case] height: u16) {
     let app = ReviewApp::with_dimensions(Vec::new(), 80, height);
     assert!(
         app.review_list.visible_height() >= 1,
         "visible_height must never be zero (was {} for height {height})",
         app.review_list.visible_height()
     );
-    assert_eq!(app.review_list.visible_height(), expected);
+    assert_eq!(app.review_list.visible_height(), 1);
 }
 
 #[test]
@@ -132,14 +136,14 @@ fn cursor_navigation_adjusts_scroll_to_keep_selection_visible() {
     }
 
     assert_eq!(app.cursor_position(), 5);
-    assert_eq!(app.filter_state.scroll_offset, 2);
+    assert_eq!(app.filter_state.scroll_offset, 0);
 
     for _ in 0..4 {
         app.handle_message(&AppMsg::CursorUp);
     }
 
     assert_eq!(app.cursor_position(), 1);
-    assert_eq!(app.filter_state.scroll_offset, 1);
+    assert_eq!(app.filter_state.scroll_offset, 0);
 }
 
 #[rstest]
@@ -150,7 +154,7 @@ fn filter_changes_adjust_scroll_offset_after_cursor_clamp(sample_reviews: Vec<Re
         height: 13,
     });
     app.handle_message(&AppMsg::CursorDown);
-    assert_eq!(app.filter_state.scroll_offset, 1);
+    assert_eq!(app.filter_state.scroll_offset, 0);
 
     app.handle_message(&AppMsg::SetFilter(ReviewFilter::ByFile(
         "src/main.rs".to_owned(),
@@ -174,6 +178,55 @@ fn short_terminal_still_renders_list_items() {
         output.contains("alice"),
         "list should render at least one item in a short terminal"
     );
+}
+
+#[test]
+fn tiny_terminal_skips_detail_pane_and_keeps_status_bar_visible() {
+    let review = ReviewComment {
+        file_path: Some("src/main.rs".to_owned()),
+        line_number: Some(10),
+        diff_hunk: Some("@@ -1 +1 @@\n+fn tiny() {}".to_owned()),
+        ..minimal_review(1, "Visible comment", "alice")
+    };
+    let mut app = ReviewApp::with_dimensions(vec![review], 80, 5);
+    app.handle_message(&AppMsg::WindowResized {
+        width: 80,
+        height: 5,
+    });
+
+    let output = app.view();
+
+    assert_eq!(output.lines().count(), 5);
+    assert!(
+        output.contains("q:quit"),
+        "status bar should remain visible in a tiny terminal"
+    );
+    assert!(
+        !output.contains('─'),
+        "detail pane should be skipped when no detail rows are available"
+    );
+}
+
+#[test]
+fn view_clamps_rows_to_safe_display_width_with_emoji_content() {
+    let review = ReviewComment {
+        file_path: Some("src/tui/app/codex_handlers.unknown_ext_xyz".to_owned()),
+        line_number: Some(123),
+        body: Some("_🧹 Nitpick_ | _🔵 Trivial_".to_owned()),
+        diff_hunk: None,
+        ..minimal_review(1, "placeholder", "coderabbitai[bot]")
+    };
+
+    let app = ReviewApp::with_dimensions(vec![review], 80, 24);
+    let output = app.view();
+    let max_display_width = 79usize;
+
+    for line in output.lines() {
+        assert!(
+            UnicodeWidthStr::width(line) <= max_display_width,
+            "line exceeds safe display width: '{line}'"
+        );
+    }
 }
 
 #[rstest]

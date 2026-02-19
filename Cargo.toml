@@ -33,6 +33,7 @@ crossterm = "0.29"
 
 # Syntax highlighting
 syntect = "5.2.0"
+unicode-width = "0.2.2"
 
 # Template engine
 minijinja = "2.14.0"
@@ -41,6 +42,8 @@ minijinja = "2.14.0"
 frankie = { path = ".", features = ["test-support"] }
 env-lock = "0.1.0"
 mockall = "0.12.1"
+insta = { version = "1.46.3", features = ["filters"] }
+ratatui-testlib = { version = "0.1.0", features = ["snapshot-insta"] }
 rstest = "0.22.0"
 rstest-bdd = "0.5.0"
 rstest-bdd-macros = { version = "0.5.0", features = ["compile-time-validation"] }

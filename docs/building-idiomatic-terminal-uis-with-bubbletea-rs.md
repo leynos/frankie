@@ -169,7 +169,9 @@ manage async tasks manually:
   to alternate screen, enable mouse mode, etc., which produce corresponding
   internal messages (e.g. `enter_alt_screen()` produces an `EnterAltScreenMsg`
   that the runtime
-  handles)([6](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/index.html#:~:text=clear_%20screen%20%20Creates%20a,that%20enables%20bracketed%20paste%20mode))([7](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/index.html#:~:text=Enable%20Report%20Focus%20Msg%20,Focus%20Msg)).
+  handles)([6](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/index.html#:~:text=clear_%20screen%20%20Creates%20a,that%20enables%20bracketed%20paste%20mode)
+   )(
+  [7](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/index.html#:~:text=Enable%20Report%20Focus%20Msg%20,Focus%20Msg)).
 
 - **External Process Execution:** `exec_process(program, args, |result| Msg)`
   can run an external command asynchronously (non-blocking) and send a message
@@ -189,7 +191,8 @@ manage async tasks manually:
   without going through the TUI
   view)([6](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/index.html#:~:text=kill%20%20Creates%20a%20command,sequence)),
    and `quit()`/`suspend()`/`kill()` for terminating the program gracefully or
-  abruptly([6](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/index.html#:~:text=interrupt%20%20Creates%20a%20command,quit)).
+  abruptly(
+  [6](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/index.html#:~:text=interrupt%20%20Creates%20a%20command,quit)).
 
 Using these commands keeps the **update function fast and non-blocking**. When
 you need I/O, heavy computation, or waiting, return a command instead of
@@ -231,10 +234,18 @@ components that come with their own `view()` output, which you can embed into
 your overall view. An example from the widgets documentation shows how an `App`
 model includes a text input component and combines its view with other text:
 
+When clamping rows to the terminal width, use **display width** (terminal
+columns), not scalar-counting APIs such as `chars().count()`. Emoji and some
+Unicode grapheme sequences can occupy more than one column. If truncation uses
+scalar count, a row may still visually overflow and trigger terminal autowrap,
+which appears as unexpected blank gaps between rows after horizontal resize.
+`unicode-width` is a practical baseline for column-aware clamping and padding.
+
 > *“
 > `fn view(&self) -> String { format!("Enter text: {}\n{}",` \
 > `self.input.view(), "Press Ctrl+C to quit") }`
-> ”*([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=fn%20view%28%26self%29%20,%7D)).
+> ”*(
+> [8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=fn%20view%28%26self%29%20,%7D)).
 
 Crucially, the view should be **free of side-effects**. Its job is purely to
 transform the model into a string; it shouldn’t modify state or trigger
@@ -247,7 +258,9 @@ redraws. Keep view generation efficient to avoid large string work every frame,
 but know that simple string formatting and styling operations in Rust are quite
 fast, and bubbletea-rs provides gradient and styling utilities to offload some
 of that work to native
-code([2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=%2A%20Memory%20Monitoring%3A%20Built,different%20input%20mechanisms%20and%20testing))([2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=,pub%20use%20memory%3A%3AMemoryHealth)).
+code([2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=%2A%20Memory%20Monitoring%3A%20Built,different%20input%20mechanisms%20and%20testing)
+ )(
+[2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=,pub%20use%20memory%3A%3AMemoryHealth)).
 
 ## Structuring Your Model and Separating Concerns
 
@@ -264,7 +277,8 @@ Bubbles for Rust), a collection of common UI components like text inputs,
 lists, tables, progress bars,
 etc.([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=,Stopwatch)).
  Each component follows the same pattern with `init`, `update`, and `view`
-methods([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=bubbletea,building%20complex%20terminal%20user%20interfaces)),
+methods(
+[8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=bubbletea,building%20complex%20terminal%20user%20interfaces)),
  much like a miniature MVU loop for that component. These components implement
 a `Component` trait (and often the Bubbletea `Model` trait as well) which
 allows them to manage their own state internally. By using them, you can
@@ -332,7 +346,8 @@ a `List` on the left and a detailed `Table` on the right, your model could have
 messages to whichever component is currently focused, or attempt to update both
 (most messages will only concern one component). Bubbletea-widgets includes a
 **focus management system** to assist with keyboard navigation between
-components([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=%C2%A7Focus%20Management)).
+components(
+[8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=%C2%A7Focus%20Management)).
  Each component has `focus()` and `blur()` methods to toggle focus
 state([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=fn%20handle_focus,focused%28%29%29%3B)),
  and only the focused component should respond to certain inputs. For example,
@@ -519,7 +534,8 @@ but there are some best practices to handle input elegantly.
 
 Keyboard events are delivered as `KeyMsg` messages, which contain the key code
 (e.g. character, Enter, Escape, arrow keys, etc.) and modifier keys (Ctrl, Alt,
-Shift)([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=use%20bubbletea_widgets%3A%3Akey%3A%3A,KeyModifiers)).
+Shift)(
+[8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=use%20bubbletea_widgets%3A%3Akey%3A%3A,KeyModifiers)).
  The underlying representation is from Crossterm’s `KeyEvent`, so you have
 access to all keys your terminal can detect. By default, Bubbletea-rs reads
 from stdin asynchronously and translates input into `KeyMsg` events
@@ -562,7 +578,10 @@ user([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=Com
 `KeyMap` from the widgets crate can make it easy to manage these. For example,
 you can define a `Binding` for "ctrl+s" as a Save command and integrate that
 with a help menu component that automatically lists all key bindings and their
-descriptions([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=%2F%2F%20Create%20key%20bindings%20let,Confirm%20selection))([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=impl%20KeyMap%20for%20MyKeyMap%20,Binding%3E%20%7B%20vec%21%5B%26self.confirm%2C%20%26self.save%5D)).
+descriptions(
+[8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=%2F%2F%20Create%20key%20bindings%20let,Confirm%20selection)
+ )(
+[8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=impl%20KeyMap%20for%20MyKeyMap%20,Binding%3E%20%7B%20vec%21%5B%26self.confirm%2C%20%26self.save%5D)).
  This not only enforces consistency (no duplicate or conflicting keys) but also
 helps in documenting controls for the user inside the TUI.
 
@@ -605,7 +624,9 @@ Once mouse support is on, mouse events come in as `MouseMsg` messages. A
 `MouseMsg` contains information like the x/y position (column and row in the
 terminal), the button (left, right, middle), and whether it was a button down,
 up, drag, or scroll
-event([7](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/index.html#:~:text=KeyMsg%20%20A%20message%20indicating,bracketed%20paste))([7](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/index.html#:~:text=Mouse%20Msg%20%20A%20message,formatted%20text%20to%20the%20terminal)).
+event([7](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/index.html#:~:text=KeyMsg%20%20A%20message%20indicating,bracketed%20paste)
+ )(
+[7](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/index.html#:~:text=Mouse%20Msg%20%20A%20message,formatted%20text%20to%20the%20terminal)).
  Handling these in `update` means downcasting to `MouseMsg` and then
 implementing logic based on coordinates. For instance:
 
@@ -815,7 +836,8 @@ Rust’s `Result` types shine here – map them to distinct message variants lik
 Testing a TUI might seem daunting, but the separation of logic (update) and
 presentation (view) makes many parts of it testable in isolation. Bubbletea-rs
 further provides tools like a dummy terminal interface to simulate full runs in
-tests([2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=%C2%A7Testing)).
+tests(
+[2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=%C2%A7Testing)).
 
 ### Unit Testing the Update Logic
 
@@ -1045,19 +1067,33 @@ Armed with these principles and practices, you should be well-equipped to
 create an interactive terminal UI that feels as polished as any GUI – but with
 the simplicity and charm of the command line. Happy hacking with Bubbletea-rs,
 and may your terminal applications be delightful, **correct**, and
-performant([1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=Bubble%20Tea%20,performance%2C%20and%20great%20developer%20experience))([1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=%2A%20Model,batch%20operations%2C%20and%20custom%20async))!
+performant([1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=Bubble%20Tea%20,performance%2C%20and%20great%20developer%20experience)
+ )(
+[1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=%2A%20Model,batch%20operations%2C%20and%20custom%20async))!
 
 **Sources:**
 
 - Bubbletea-rs GitHub README and Documentation – Whit3rabbit
-  (2025)([1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=Bubble%20Tea%20,performance%2C%20and%20great%20developer%20experience))([2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=The%20library%20follows%20the%20Elm,Architecture%20pattern))([3](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.html#:~:text=pub%20type%20Msg%20%3D%20Box,Any%20%2B%20Send))
+  (2025)(
+  [1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=Bubble%20Tea%20,performance%2C%20and%20great%20developer%20experience)
+   )(
+  [2](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/index.html#:~:text=The%20library%20follows%20the%20Elm,Architecture%20pattern)
+   )(
+  [3](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.html#:~:text=pub%20type%20Msg%20%3D%20Box,Any%20%2B%20Send))
 
 - Bubbletea-widgets Documentation – Whit3rabbit
-  (2025)([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=bubbletea,building%20complex%20terminal%20user%20interfaces))([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=fn%20update,return%20Some%28cmd%29%3B))([8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=fn%20view%28%26self%29%20,%7D))
+  (2025)(
+  [8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=bubbletea,building%20complex%20terminal%20user%20interfaces)
+   )(
+  [8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=fn%20update,return%20Some%28cmd%29%3B)
+   )(
+  [8](https://docs.rs/bubbletea-widgets/latest/bubbletea_widgets/#:~:text=fn%20view%28%26self%29%20,%7D))
 
 - Lobsters Discussion on Bubbletea-rs vs Go Bubble Tea
-  (2025)([4](https://lobste.rs/s/rmga0q/bubbletea_rs_rust_implementation#:~:text=Can%20we%20get%20a%20Go,Rust%20a%20lot%20better%2C%20actually))
+  (2025)(
+  [4](https://lobste.rs/s/rmga0q/bubbletea_rs_rust_implementation#:~:text=Can%20we%20get%20a%20Go,Rust%20a%20lot%20better%2C%20actually))
 
 - Dev.to Article “Go vs. Rust for TUI Development” – Dev TNG
-  (2024)([10](https://dev.to/dev-tngsh/go-vs-rust-for-tui-development-a-deep-dive-into-bubbletea-and-ratatui-2b7#:~:text=Core%20Philosophy%20Opinionated%20,module))
+  (2024)(
+  [10](https://dev.to/dev-tngsh/go-vs-rust-for-tui-development-a-deep-dive-into-bubbletea-and-ratatui-2b7#:~:text=Core%20Philosophy%20Opinionated%20,module))
    (for conceptual comparison)

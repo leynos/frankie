@@ -20,7 +20,8 @@ employed for speed and confidence:
   that mimics GitHub’s REST endpoints. Octocrab is configured to point at this
   mock server for the test, so the client code thinks it’s talking to GitHub.
   These tests run in the Rust integration test suite (files under `tests/`
-  directory)([1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32)).
+  directory)(
+  [1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32)).
    They are slower but give confidence that the client’s requests and
   Octocrab’s parsing logic work correctly against real HTTP interactions.
 
@@ -86,7 +87,8 @@ while tests can substitute the mock.
 
 > **Why a trait?** In Rust, using a trait as an abstraction layer enables
 > swapping the real GitHub client for a mock one in unit
-> tests([3](https://medium.com/@cuongleqq/unlock-100-coverage-mock-your-rust-unit-tests-the-right-way-3afbabc5dc5e#:~:text=,integration%20tests%20to%20catch%20surprises)).
+> tests(
+> [3](https://medium.com/@cuongleqq/unlock-100-coverage-mock-your-rust-unit-tests-the-right-way-3afbabc5dc5e#:~:text=,integration%20tests%20to%20catch%20surprises)).
 > This follows the dependency-inversion principle and keeps the code testable.
 
 Ensure the application code depends on `GitHubApi` (e.g. pass a
@@ -228,7 +230,8 @@ This integration test simulates a **“List PR Commits”** API call:
 
 - `Mock::given(...)` with matchers stubs the exact HTTP request path and method
   the client should call, and `respond_with(...)` provides a canned JSON
-  response([4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=%2F%2F%20when%20it%20receives%20a,await)).
+  response(
+  [4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=%2F%2F%20when%20it%20receives%20a,await)).
    In this case, the stubbed endpoint is
   `GET /repos/myorg/myrepo/pulls/42/commits`.
 
@@ -311,7 +314,8 @@ async fn octocrab_client(github_server: MockServer) -> octocrab::Octocrab {
 Each test can accept `octocrab_client` (and `github_server` if needed) as
 arguments, and `rstest` will provide the fixture values. Because fixtures are
 first-class, they can be shared between unit, integration, and BDD tests
-seamlessly([2](https://github.com/leynos/rstest-bdd#:~:text=%60rstest,fixture%20and%20parametrisation%20model)).
+seamlessly(
+[2](https://github.com/leynos/rstest-bdd#:~:text=%60rstest,fixture%20and%20parametrisation%20model)).
 
 - **Behaviour-Driven Scenarios:** The `rstest-bdd` crate allows writing tests in
   a Gherkin-style Given/When/Then format using attributes. Human-readable
@@ -456,22 +460,31 @@ the real world is simulated for accuracy – all within the comfort of
 **Sources:**
 
 - Rust testing conventions for unit vs integration
-  tests([1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L9-L17))([1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32))
+  tests(
+  [1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L9-L17)
+   )(
+  [1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32))
 
 - Using `mockall::automock` to generate mocks for unit
-  tests([3](https://medium.com/@cuongleqq/unlock-100-coverage-mock-your-rust-unit-tests-the-right-way-3afbabc5dc5e#:~:text=,Result%3CTxid%3E%3B))
+  tests(
+  [3](https://medium.com/@cuongleqq/unlock-100-coverage-mock-your-rust-unit-tests-the-right-way-3afbabc5dc5e#:~:text=,Result%3CTxid%3E%3B))
 
 - Guidance on when to use mocks vs real calls in
-  tests([3](https://medium.com/@cuongleqq/unlock-100-coverage-mock-your-rust-unit-tests-the-right-way-3afbabc5dc5e#:~:text=You%20might%20be%20wondering%3A%20Should,the%20pain%2C%20not%20the%20world))
+  tests(
+  [3](https://medium.com/@cuongleqq/unlock-100-coverage-mock-your-rust-unit-tests-the-right-way-3afbabc5dc5e#:~:text=You%20might%20be%20wondering%3A%20Should,the%20pain%2C%20not%20the%20world))
 
 - Example of setting up a Wiremock server and stubbing an
-  endpoint([4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=%2F%2F%20Start%20a%20background%20HTTP,await))
+  endpoint(
+  [4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=%2F%2F%20Start%20a%20background%20HTTP,await))
 
 - Wiremock documentation on test isolation (one server per
-  test)([4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=Each%20instance%20of%20MockServer%20is,assigned%20to%20the%20new%20MockServer))
+  test)(
+  [4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=Each%20instance%20of%20MockServer%20is,assigned%20to%20the%20new%20MockServer))
 
 - Octocrab’s builder allowing custom base URL
-  configuration([5](https://docs.rs/octocrab/latest/octocrab/struct.OctocrabBuilder.html#:~:text=let%20octocrab%20%3D%20octocrab%3A%3AOctocrabBuilder%3A%3Adefault%28%29%20.add_preview%28%22machine,.build))
+  configuration(
+  [5](https://docs.rs/octocrab/latest/octocrab/struct.OctocrabBuilder.html#:~:text=let%20octocrab%20%3D%20octocrab%3A%3AOctocrabBuilder%3A%3Adefault%28%29%20.add_preview%28%22machine,.build))
 
 - rstest-bdd documentation (combining unit and acceptance tests with shared
-  fixtures)([2](https://github.com/leynos/rstest-bdd#:~:text=,fixtures))([2](https://github.com/leynos/rstest-bdd#:~:text=%60rstest,fixture%20and%20parametrisation%20model))
+  fixtures)([2](https://github.com/leynos/rstest-bdd#:~:text=,fixtures))(
+  [2](https://github.com/leynos/rstest-bdd#:~:text=%60rstest,fixture%20and%20parametrisation%20model))

@@ -142,6 +142,9 @@ impl CommentDetailComponent {
             comment.file_path.as_deref(),
             max_width,
         ));
+        if !output.ends_with('\n') {
+            output.push('\n');
+        }
 
         output
     }

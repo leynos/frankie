@@ -4,9 +4,12 @@
 //! highlighting and displays relevant metadata for each comment.
 
 use crate::github::models::ReviewComment;
+use crate::tui::components::text_truncate::truncate_to_display_width_with_ellipsis;
 
 /// Defensive fallback for visible height when layout has not yet been applied.
 const FALLBACK_VISIBLE_HEIGHT: usize = 5;
+/// Maximum display-width budget for the first-line body preview in each row.
+const BODY_PREVIEW_WIDTH: usize = 50;
 
 /// Context for rendering the review list view.
 ///
@@ -24,6 +27,10 @@ pub struct ReviewListViewContext<'a> {
     pub scroll_offset: usize,
     /// Maximum visible height in lines (for layout calculations).
     pub visible_height: usize,
+    /// Maximum visible width in display columns for row rendering.
+    ///
+    /// Rows longer than this width are truncated.
+    pub max_width: usize,
 }
 
 /// Component for displaying a list of review comments.
@@ -69,7 +76,11 @@ impl ReviewListComponent {
     #[must_use]
     pub fn view(&self, ctx: &ReviewListViewContext<'_>) -> String {
         if ctx.filtered_indices.is_empty() {
-            return "  No review comments match the current filter.\n".to_owned();
+            let empty_message = truncate_to_display_width_with_ellipsis(
+                "  No review comments match the current filter.",
+                ctx.max_width,
+            );
+            return format!("{empty_message}\n");
         }
 
         let mut output = String::new();
@@ -97,7 +108,7 @@ impl ReviewListComponent {
             };
             let is_selected = display_index == ctx.cursor_position;
             let prefix = if is_selected { ">" } else { " " };
-            let line = Self::format_review_line(review, prefix);
+            let line = Self::format_review_line(review, prefix, ctx.max_width);
             output.push_str(&line);
             output.push('\n');
         }
@@ -106,7 +117,7 @@ impl ReviewListComponent {
     }
 
     /// Formats a single review line for display.
-    fn format_review_line(review: &ReviewComment, prefix: &str) -> String {
+    fn format_review_line(review: &ReviewComment, prefix: &str, max_width: usize) -> String {
         let author = review.author.as_deref().unwrap_or("unknown");
         let file = review.file_path.as_deref().unwrap_or("(no file)");
         let line_num = review
@@ -115,32 +126,25 @@ impl ReviewListComponent {
 
         let body_preview = review
             .body
-            .as_ref()
-            .map(|b| truncate_body(b, 50))
+            .as_deref()
+            .map(first_trimmed_line)
+            .map(|line| truncate_to_display_width_with_ellipsis(line, BODY_PREVIEW_WIDTH))
             .unwrap_or_default();
 
-        format!("{prefix} [{author}] {file}{line_num}: {body_preview}")
+        let line = format!("{prefix} [{author}] {file}{line_num}: {body_preview}");
+        truncate_to_display_width_with_ellipsis(&line, max_width)
     }
 }
 
-/// Truncates body text to a maximum length, adding ellipsis if needed.
-fn truncate_body(body: &str, max_len: usize) -> String {
-    // Take first line only and truncate
-    let first_line = body.lines().next().unwrap_or("");
-    let trimmed = first_line.trim();
-
-    if trimmed.len() <= max_len {
-        trimmed.to_owned()
-    } else if let Some(truncated) = trimmed.get(..max_len.saturating_sub(3)) {
-        format!("{truncated}...")
-    } else {
-        trimmed.to_owned()
-    }
+/// Returns the first body line with surrounding whitespace removed.
+fn first_trimmed_line(body: &str) -> &str {
+    body.lines().next().unwrap_or("").trim()
 }
 
 #[cfg(test)]
 mod tests {
     use rstest::{fixture, rstest};
+    use unicode_width::UnicodeWidthStr;
 
     use super::*;
 
@@ -217,6 +221,7 @@ mod tests {
             cursor_position: 0,
             scroll_offset: 0,
             visible_height: 10,
+            max_width: 80,
         };
         let output = component.view(&ctx);
         assert!(output.contains("No review comments"));
@@ -233,6 +238,7 @@ mod tests {
             cursor_position: 1,
             scroll_offset: 0,
             visible_height: 10,
+            max_width: 80,
         };
         let output = component.view(&ctx);
 
@@ -244,7 +250,7 @@ mod tests {
 
     #[rstest]
     fn format_review_line_includes_all_fields(sample_review: ReviewComment) {
-        let line = ReviewListComponent::format_review_line(&sample_review, " ");
+        let line = ReviewListComponent::format_review_line(&sample_review, " ", 80);
 
         assert!(line.contains("[alice]"));
         assert!(line.contains("src/main.rs"));
@@ -253,24 +259,52 @@ mod tests {
     }
 
     #[test]
-    fn truncate_body_shortens_long_text() {
-        let long_text = "This is a very long comment that should be truncated";
-        let truncated = truncate_body(long_text, 20);
-        assert_eq!(truncated.len(), 20);
-        assert!(truncated.ends_with("..."));
+    fn format_review_line_is_truncated_to_max_width() {
+        let comment = ReviewComment {
+            author: Some("averylongreviewername".to_owned()),
+            body: Some("A long body that should not exceed the rendered row width".to_owned()),
+            file_path: Some("a/very/long/path/that/will/exceed/the/width.rs".to_owned()),
+            line_number: Some(123),
+            id: 1,
+            ..Default::default()
+        };
+
+        let line = ReviewListComponent::format_review_line(&comment, ">", 20);
+        assert!(line.width() <= 20, "list rows should be clamped to width");
+    }
+
+    #[rstest]
+    fn view_rows_respect_max_width(sample_review: ReviewComment) {
+        let reviews = vec![sample_review];
+        let filtered_indices = vec![0];
+        let component = ReviewListComponent::new();
+        let ctx = ReviewListViewContext {
+            reviews: &reviews,
+            filtered_indices: &filtered_indices,
+            cursor_position: 0,
+            scroll_offset: 0,
+            visible_height: 10,
+            max_width: 16,
+        };
+        let output = component.view(&ctx);
+        let first_row = output.lines().next().unwrap_or("");
+
+        assert_eq!(first_row.width(), 16);
     }
 
     #[test]
-    fn truncate_body_preserves_short_text() {
-        let short_text = "Short";
-        let result = truncate_body(short_text, 20);
-        assert_eq!(result, "Short");
-    }
-
-    #[test]
-    fn truncate_body_takes_first_line_only() {
-        let multiline = "First line\nSecond line\nThird line";
-        let result = truncate_body(multiline, 50);
+    fn first_trimmed_line_takes_first_line_and_trims_whitespace() {
+        let result = first_trimmed_line("  First line  \nSecond line\nThird line");
         assert_eq!(result, "First line");
+    }
+
+    #[rstest]
+    fn format_review_line_truncates_body_preview_with_display_width(sample_review: ReviewComment) {
+        let mut review = sample_review;
+        review.body = Some("你好世界和平".repeat(10));
+
+        let line = ReviewListComponent::format_review_line(&review, " ", 80);
+        assert!(line.width() <= 80);
+        assert!(line.contains("..."));
     }
 }
