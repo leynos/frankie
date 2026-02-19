@@ -1,8 +1,9 @@
 # Enable session resumption for interrupted Codex runs
 
-This ExecPlan is a living document. The sections `Constraints`, `Tolerances`,
-`Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`, and
-`Outcomes & Retrospective` must be kept up to date as work proceeds.
+This execution plan (ExecPlan) is a living document. The sections
+`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
+`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
+proceeds.
 
 Status: DRAFT
 
@@ -17,13 +18,13 @@ or `cancelled`), the transcript and any accumulated approvals are currently
 lost. The user must restart from scratch, re-entering the same comments and
 losing prior context.
 
-After this change, a user who presses `x` in the review TUI will be offered the
-option to resume the most recent interrupted run for the same pull request.
-Resuming reconnects to the prior Codex thread using the native `thread/resume`
-JSON-RPC method, which preserves the server-side conversation history including
-all prior approvals. The transcript file is appended to rather than
-overwritten. If no interrupted session exists, pressing `x` behaves exactly as
-before, starting a fresh run.
+After this change, a user who presses `x` in the review text user interface
+(TUI) will be offered the option to resume the most recent interrupted run for
+the same pull request. Resuming reconnects to the prior Codex thread using the
+native `thread/resume` JSON remote procedure call (JSON-RPC) method, which
+preserves the server-side conversation history including all prior approvals.
+The transcript file is appended to rather than overwritten. If no interrupted
+session exists, pressing `x` behaves exactly as before, starting a fresh run.
 
 Success is observable when:
 
@@ -127,11 +128,11 @@ Success is observable when:
 ## Surprises & discoveries
 
 - Discovery: Codex `app-server` natively supports session resumption via
-  the `thread/resume` JSON-RPC method. Clients store the `thread.id` from the
-  initial `thread/start` response and pass it to `thread/resume` in a new
-  process to reconnect. This eliminates the need for prompt-based context
-  replay and preserves server-side approvals automatically. Reference:
-  `https://developers.openai.com/codex/app-server/`.
+  the `thread/resume` JSON remote procedure call (JSON-RPC) method. Clients
+  store the `thread.id` from the initial `thread/start` response and pass it to
+  `thread/resume` in a new process to reconnect. This eliminates the need for
+  prompt-based context replay and preserves server-side approvals
+  automatically. Reference: `https://developers.openai.com/codex/app-server/`.
 
 ## Decision log
 
@@ -145,18 +146,19 @@ Success is observable when:
   update sidecar files with no new dependencies. Date/Author: 2026-02-15 / plan
   author.
 
-- Decision: use the native `thread/resume` JSON-RPC method for session
-  resumption rather than prompt-based context injection. Rationale: the Codex
-  `app-server` protocol exposes `thread/resume` which reconnects to a prior
-  thread by ID, preserving the full server-side conversation history including
-  approvals. This is simpler, more robust, and avoids prompt-size limitations.
-  The sidecar file stores the `thread_id` from the original `thread/start`
-  response. On resume, Frankie spawns a new `codex app-server` process, sends
-  `initialize`/`initialized`, then sends `thread/resume` (instead of
-  `thread/start`) with the stored thread ID, followed by a new `turn/start`
-  with updated comments. Date/Author: 2026-02-15 / plan author. SUPERSEDES:
-  prior decision to use prompt-based context injection; that approach was
-  designed before the `thread/resume` protocol was known to exist.
+- Decision: use the native `thread/resume` JSON remote procedure call
+  (JSON-RPC) method for session resumption rather than prompt-based context
+  injection. Rationale: the Codex `app-server` protocol exposes `thread/resume`
+  which reconnects to a prior thread by ID, preserving the full server-side
+  conversation history including approvals. This is simpler, more robust, and
+  avoids prompt-size limitations. The sidecar file stores the `thread_id` from
+  the original `thread/start` response. On resume, Frankie spawns a new
+  `codex app-server` process, sends `initialize`/`initialized`, then sends
+  `thread/resume` (instead of `thread/start`) with the stored thread ID,
+  followed by a new `turn/start` with updated comments. Date/Author: 2026-02-15
+  / plan author. SUPERSEDES: prior decision to use prompt-based context
+  injection; that approach was designed before the `thread/resume` protocol was
+  known to exist.
 
 - Decision: detect "interrupted" status from both process-level signals
   (non-zero exit, channel disconnect) and protocol-level signals
@@ -236,7 +238,7 @@ these files:
 3. `SystemCodexExecutionService::start()` resolves the transcript path,
    then calls `run_codex()` which spawns a background thread.
 4. The background thread creates a `TranscriptWriter`, spawns
-   `codex app-server`, writes JSON-RPC initialisation messages to stdin, and
+   `codex app-server`, writes JSON-RPC initialization messages to stdin, and
    enters `stream_progress()` which reads stdout lines, writes each to the
    transcript, sends `CodexExecutionUpdate::Progress` to the channel, and
    delegates JSON-RPC responses to `AppServerSession`.
@@ -321,7 +323,7 @@ Create `src/ai/session.rs` (new file, module-level doc comment required):
    IntakeError>` — writes the JSON sidecar file using `cap_std
    ` filesystem primitives.
 6. Implement `SessionState::read_sidecar(path: &Utf8Path) -> Result<Self,
-   IntakeError>` — reads and deserialises a sidecar file.
+   IntakeError>` — reads and deserializes a sidecar file.
 7. Add `serde` and `serde_json` to the import list (both are already in
    `Cargo.toml`).
 
@@ -587,7 +589,7 @@ Create `tests/features/codex_session_resume.feature`:
         Given an interrupted Codex session exists for the current PR
         When the user presses x to start Codex execution
         And the user accepts the resume prompt
-        And I wait 200 milliseconds
+        And a wait of 200 milliseconds
         And the Codex poll tick is processed
         Then the status bar contains "Codex execution completed"
         And the transcript file contains "session resumed"
@@ -597,7 +599,7 @@ Create `tests/features/codex_session_resume.feature`:
         Given an interrupted Codex session exists for the current PR
         When the user presses x to start Codex execution
         And the user declines the resume prompt
-        And I wait 200 milliseconds
+        And a wait of 200 milliseconds
         And the Codex poll tick is processed
         Then the status bar contains "Codex execution completed"
         And no TUI error is shown
@@ -605,15 +607,15 @@ Create `tests/features/codex_session_resume.feature`:
       Scenario: No resume prompt when no interrupted session exists
         Given no interrupted Codex session exists
         When the user presses x to start Codex execution
-        And I wait 200 milliseconds
+        And a wait of 200 milliseconds
         And the Codex poll tick is processed
         Then the status bar contains "Codex execution completed"
         And no TUI error is shown
 
       Scenario: Interrupted run creates session state file
         Given a Codex run that is interrupted mid-execution
-        When Codex execution is started from the review TUI
-        And I wait 200 milliseconds
+        When Codex execution is started from the review text user interface (TUI)
+        And a wait of 200 milliseconds
         And the Codex poll tick is processed
         Then the session state file exists
         And the session state file shows status interrupted
@@ -810,7 +812,7 @@ Behavioural acceptance checks:
 Test acceptance checks:
 
 - Unit tests use `rstest` and cover:
-  - Session state serialisation roundtrip.
+  - Session state serialization roundtrip.
   - Sidecar read/write including error paths.
   - Interrupted session discovery with multiple candidates.
   - Thread ID capture and persistence.
@@ -852,7 +854,7 @@ Expected results:
 
 Implementation should preserve concise evidence for reviewers:
 
-- A sample `.session.json` sidecar file (contents sanitised).
+- A sample `.session.json` sidecar file (contents sanitized).
 - A transcript file showing the `--- session resumed ---` separator.
 - Test output snippets proving resume prompt logic and `thread/resume`
   protocol handling.

@@ -218,20 +218,20 @@ includes the exit code (when available) and transcript path to aid diagnosis.
 
 #### Session resumption
 
-When you press `x` to start a Codex run, Frankie checks for an interrupted
-session from a previous run against the same pull request. If one is found, the
-status bar shows a prompt:
+When the `x` key is used to start a Codex run, Frankie checks for an
+interrupted session from a previous run against the same pull request. If one
+is found, the status bar shows a prompt:
 
 ```text
 Interrupted session from 2026-02-15 10:00 UTC. Resume? [y/n]
 ```
 
-- Press `y` to resume the interrupted session. Frankie reconnects to the prior
+- Pressing `y` resumes the interrupted session. Frankie reconnects to the prior
   Codex server-side thread using the `thread/resume` JSON-RPC method. This
   preserves any approvals and conversation state from the interrupted run. New
   content is appended to the existing transcript file after a
   `--- session resumed ---` separator.
-- Press `n` or `Esc` to decline and start a fresh Codex run instead.
+- Pressing `n` or `Esc` declines the prompt and starts a fresh Codex run.
 
 Session state is stored in JSON sidecar files alongside each transcript
 (`<transcript-name>.session.json`). These files record the thread ID, PR

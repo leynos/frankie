@@ -57,6 +57,20 @@ fn given_interrupted_session(
     Ok(())
 }
 
+#[given("an interrupted Codex session with fresh-start fallback is detected")]
+fn given_interrupted_session_with_fresh_fallback(
+    codex_state: &ResumeScenarioState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let plan = fresh_success_plan(120);
+    let mut app = app_with_resume_plan(plan)?;
+
+    let session = sample_interrupted_session();
+    app.handle_message(&AppMsg::ResumePromptShown(Box::new(session)));
+
+    codex_state.app.set(app);
+    Ok(())
+}
+
 #[given("a Codex run that streams progress and completes successfully")]
 fn given_successful_run(
     codex_state: &ResumeScenarioState,
@@ -110,7 +124,7 @@ fn when_poll_tick(codex_state: &ResumeScenarioState) -> Result<(), Box<dyn std::
     send_message(codex_state, &AppMsg::CodexPollTick)
 }
 
-#[when("I wait {millis:u64} milliseconds")]
+#[when("a wait of {millis:u64} milliseconds elapses")]
 fn when_wait_ms(millis: u64) {
     std::thread::sleep(std::time::Duration::from_millis(millis));
 }
@@ -153,6 +167,17 @@ fn then_no_error(codex_state: &ResumeScenarioState) -> Result<(), Box<dyn std::e
         return Err(format!("expected no TUI error, but found: {msg:?}").into());
     }
 
+    Ok(())
+}
+
+#[then("the status bar does not show a resume prompt")]
+fn then_no_resume_prompt_in_status_bar(
+    codex_state: &ResumeScenarioState,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rendered = get_view(codex_state)?;
+    if rendered.contains("Resume?") {
+        return Err(format!("expected no resume prompt in view, got:\n{rendered}").into());
+    }
     Ok(())
 }
 

@@ -32,6 +32,22 @@ pub(crate) enum StubResumePlan {
     ResumeUpdates(TimedUpdates),
 }
 
+/// Invocation kind used to validate start vs resume wiring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InvocationKind {
+    FreshStart,
+    Resume,
+}
+
+impl InvocationKind {
+    const fn as_label(self) -> &'static str {
+        match self {
+            Self::FreshStart => "start",
+            Self::Resume => "resume",
+        }
+    }
+}
+
 /// Fake execution service that supports both start and resume.
 #[derive(Debug)]
 struct StubResumeCodexService {
@@ -46,7 +62,10 @@ impl StubResumeCodexService {
     }
 
     /// Consumes the next plan and spawns timed updates.
-    fn execute_plan(&self) -> Result<CodexExecutionHandle, IntakeError> {
+    fn execute_plan(
+        &self,
+        invocation: InvocationKind,
+    ) -> Result<CodexExecutionHandle, IntakeError> {
         let mut plans = self.plan.lock().map_err(|error| IntakeError::Api {
             message: format!("failed to lock stub plan: {error}"),
         })?;
@@ -58,8 +77,27 @@ impl StubResumeCodexService {
         };
 
         match next_plan {
-            StubResumePlan::FreshUpdates(timed_updates)
-            | StubResumePlan::ResumeUpdates(timed_updates) => {
+            StubResumePlan::FreshUpdates(timed_updates) => {
+                if invocation != InvocationKind::FreshStart {
+                    return Err(IntakeError::Api {
+                        message: format!(
+                            "stub plan expected start(), but {}() was called",
+                            invocation.as_label()
+                        ),
+                    });
+                }
+                let receiver = spawn_timed_updates(timed_updates);
+                Ok(CodexExecutionHandle::new(receiver))
+            }
+            StubResumePlan::ResumeUpdates(timed_updates) => {
+                if invocation != InvocationKind::Resume {
+                    return Err(IntakeError::Api {
+                        message: format!(
+                            "stub plan expected resume(), but {}() was called",
+                            invocation.as_label()
+                        ),
+                    });
+                }
                 let receiver = spawn_timed_updates(timed_updates);
                 Ok(CodexExecutionHandle::new(receiver))
             }
@@ -129,11 +167,11 @@ fn spawn_delayed_sender(
 
 impl CodexExecutionService for StubResumeCodexService {
     fn start(&self, _request: CodexExecutionRequest) -> Result<CodexExecutionHandle, IntakeError> {
-        self.execute_plan()
+        self.execute_plan(InvocationKind::FreshStart)
     }
 
     fn resume(&self, _request: CodexResumeRequest) -> Result<CodexExecutionHandle, IntakeError> {
-        self.execute_plan()
+        self.execute_plan(InvocationKind::Resume)
     }
 }
 

@@ -82,7 +82,7 @@ impl SessionState {
         let dir = open_dir(parent, "sidecar")?;
 
         let json = serde_json::to_string_pretty(self).map_err(|error| IntakeError::Io {
-            message: format!("failed to serialise session state for '{sidecar}': {error}"),
+            message: format!("failed to serialize session state for '{sidecar}': {error}"),
         })?;
 
         dir.write(file_name, json).map_err(|error| IntakeError::Io {

@@ -303,15 +303,14 @@ impl CodexExecutionService for SystemCodexExecutionService {
     }
 
     fn resume(&self, request: CodexResumeRequest) -> Result<CodexExecutionHandle, IntakeError> {
-        let session = request.session.clone();
+        let prompt = build_resume_prompt(&request);
+        let session = request.session;
         let thread_id = session
             .thread_id
             .clone()
             .ok_or_else(|| IntakeError::Configuration {
                 message: "cannot resume session without a thread ID".to_owned(),
             })?;
-
-        let prompt = build_resume_prompt(&request);
 
         Ok(run_codex_resume(ResumeParams {
             command_path: self.command_path.clone(),

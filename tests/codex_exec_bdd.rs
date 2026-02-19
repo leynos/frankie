@@ -155,7 +155,7 @@ fn when_poll_tick(codex_state: &CodexExecState) -> Result<(), Box<dyn std::error
     Ok(())
 }
 
-#[when("I wait {millis:u64} milliseconds")]
+#[when("a wait of {millis:u64} milliseconds elapses")]
 fn when_wait_ms(millis: u64) {
     std::thread::sleep(std::time::Duration::from_millis(millis));
 }

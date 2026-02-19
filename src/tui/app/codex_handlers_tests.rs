@@ -17,6 +17,11 @@ use crate::tui::messages::AppMsg;
 
 use super::ReviewApp;
 
+const SAMPLE_FILE_PATH: &str = "src/main.rs";
+const SAMPLE_LINE_NUMBER: u32 = 12;
+const SAMPLE_COMMENT_BODY: &str = "Fix this branch";
+const SAMPLE_REVIEWER: &str = "alice";
+
 mock! {
     pub CodexService {}
 
@@ -58,10 +63,10 @@ fn refresh_context() -> Result<(), IntakeError> {
 #[fixture]
 fn sample_reviews() -> Vec<crate::github::models::ReviewComment> {
     vec![crate::github::models::ReviewComment {
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: Some(12),
-        body: Some("Fix this branch".to_owned()),
-        ..minimal_review(1, "Fix this branch", "alice")
+        file_path: Some(SAMPLE_FILE_PATH.to_owned()),
+        line_number: Some(SAMPLE_LINE_NUMBER),
+        body: Some(SAMPLE_COMMENT_BODY.to_owned()),
+        ..minimal_review(1, SAMPLE_COMMENT_BODY, SAMPLE_REVIEWER)
     }]
 }
 
@@ -212,7 +217,8 @@ async fn codex_poll_timer_emits_poll_tick_message() -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-fn sample_interrupted_session() -> SessionState {
+#[fixture]
+fn interrupted_session() -> SessionState {
     SessionState {
         status: SessionStatus::Interrupted,
         transcript_path: Utf8PathBuf::from("/tmp/frankie-interrupted.jsonl"),
@@ -229,14 +235,14 @@ fn sample_interrupted_session() -> SessionState {
 fn resume_prompt_shown_sets_resume_prompt_state(
     refresh_context: Result<(), IntakeError>,
     sample_reviews: Vec<crate::github::models::ReviewComment>,
+    interrupted_session: SessionState,
 ) -> Result<(), Box<dyn std::error::Error>> {
     refresh_context?;
 
     let service = Arc::new(MockCodexService::new());
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
-    let session = sample_interrupted_session();
-    app.handle_message(&AppMsg::ResumePromptShown(Box::new(session)));
+    app.handle_message(&AppMsg::ResumePromptShown(Box::new(interrupted_session)));
 
     let rendered = app.view();
     if !rendered.contains("Resume?") {
@@ -250,6 +256,7 @@ fn resume_prompt_shown_sets_resume_prompt_state(
 fn resume_accepted_starts_resumed_execution(
     refresh_context: Result<(), IntakeError>,
     sample_reviews: Vec<crate::github::models::ReviewComment>,
+    interrupted_session: SessionState,
 ) -> Result<(), Box<dyn std::error::Error>> {
     refresh_context?;
 
@@ -270,8 +277,7 @@ fn resume_accepted_starts_resumed_execution(
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     // Set the resume prompt first.
-    let session = sample_interrupted_session();
-    app.handle_message(&AppMsg::ResumePromptShown(Box::new(session)));
+    app.handle_message(&AppMsg::ResumePromptShown(Box::new(interrupted_session)));
     app.handle_message(&AppMsg::ResumeAccepted);
 
     if !app.is_codex_running() {
@@ -291,6 +297,7 @@ fn resume_accepted_starts_resumed_execution(
 fn resume_declined_starts_fresh_execution(
     refresh_context: Result<(), IntakeError>,
     sample_reviews: Vec<crate::github::models::ReviewComment>,
+    interrupted_session: SessionState,
 ) -> Result<(), Box<dyn std::error::Error>> {
     refresh_context?;
 
@@ -311,8 +318,7 @@ fn resume_declined_starts_fresh_execution(
     let mut app = ReviewApp::new(sample_reviews).with_codex_service(service);
 
     // Set the resume prompt, then decline.
-    let session = sample_interrupted_session();
-    app.handle_message(&AppMsg::ResumePromptShown(Box::new(session)));
+    app.handle_message(&AppMsg::ResumePromptShown(Box::new(interrupted_session)));
     app.handle_message(&AppMsg::ResumeDeclined);
 
     let rendered = app.view();

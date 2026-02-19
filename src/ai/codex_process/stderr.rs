@@ -54,9 +54,16 @@ impl StderrCapture {
     /// Appends any captured stderr to `message`, or returns it unchanged
     /// when stderr is empty. Joins the reader thread first to ensure all
     /// output has been collected.
-    pub(super) fn append_to(&mut self, message: String) -> String {
-        if let Some(thread) = self.reader_thread.take() {
-            drop(thread.join());
+    pub(super) fn append_to(&mut self, mut message: String) -> String {
+        if let Some(thread) = self.reader_thread.take()
+            && let Err(payload) = thread.join()
+        {
+            let panic_detail = payload
+                .downcast_ref::<&str>()
+                .map(|text| (*text).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic payload".to_owned());
+            message = format!("{message}\n\nstderr reader thread panicked: {panic_detail}");
         }
 
         let captured = self

@@ -34,7 +34,7 @@ impl ReviewApp {
                 None
             }
             AppMsg::ResumePromptShown(session) => {
-                self.resume_prompt = Some(*session.clone());
+                self.resume_prompt = Some((**session).clone());
                 None
             }
             AppMsg::ResumeAccepted => self.handle_resume_accepted(),
@@ -97,7 +97,7 @@ impl ReviewApp {
 
     /// Handles the user accepting the resume prompt.
     fn handle_resume_accepted(&mut self) -> Option<Cmd> {
-        let session = self.resume_prompt.take()?;
+        let session = self.resume_prompt.clone()?;
 
         let comments_jsonl = match self.build_filtered_comments_jsonl() {
             Ok(jsonl) => jsonl,
@@ -112,6 +112,7 @@ impl ReviewApp {
 
         match self.codex_service.resume(request) {
             Ok(handle) => {
+                self.resume_prompt = None;
                 self.codex_handle = Some(handle);
                 self.codex_status = Some("resuming interrupted Codex session".to_owned());
                 self.error = None;

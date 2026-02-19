@@ -7,15 +7,15 @@
 use std::sync::mpsc::{self, Sender};
 
 use camino::Utf8PathBuf;
-use chrono::Utc;
 
 use crate::ai::codex_exec::{CodexExecutionHandle, CodexExecutionUpdate};
 use crate::ai::session::{SessionState, SessionStatus};
 use crate::ai::transcript::TranscriptWriter;
 
-use super::stream::{self, StreamCompletion, StreamProgressContext};
+use super::stream;
 use super::{
-    ProcessStreams, RunContext, finalize, send_failure, spawn_codex, take_io, update_session_status,
+    RunContext, StreamRunInput, finalize, run_stream_with_context, send_failure_with_details,
+    spawn_codex, take_io, update_session_status,
 };
 
 /// Context for a resumed Codex execution.
@@ -48,33 +48,52 @@ fn execute_resume(mut params: ResumeParams, sender: &Sender<CodexExecutionUpdate
     let mut transcript = match TranscriptWriter::open_append(&params.transcript_path) {
         Ok(writer) => writer,
         Err(error) => {
-            send_failure(
+            send_failure_with_details(
                 sender,
                 format!("failed to open transcript for append: {error}"),
+                None,
+                Some(params.transcript_path.clone()),
             );
             return;
         }
     };
 
     params.session_state.status = SessionStatus::Running;
-    params.session_state.started_at = Utc::now();
     params.session_state.finished_at = None;
-    let _sidecar_result = params.session_state.write_sidecar();
+    if let Err(error) = params.session_state.write_sidecar() {
+        send_failure_with_details(
+            sender,
+            format!("failed to persist resumed session state: {error}"),
+            None,
+            Some(params.transcript_path.clone()),
+        );
+        return;
+    }
 
     let mut child = match spawn_codex(params.command_path.as_str()) {
         Ok(child) => child,
         Err(error) => {
             update_session_status(&mut params.session_state, SessionStatus::Failed);
-            send_failure(sender, error.to_string());
+            send_failure_with_details(
+                sender,
+                error.to_string(),
+                None,
+                Some(params.transcript_path.clone()),
+            );
             return;
         }
     };
 
-    let (streams, stderr_capture) = match take_io(&mut child) {
+    let (stdout, stdin, stderr_capture) = match take_io(&mut child) {
         Ok(io) => io,
         Err(error) => {
             update_session_status(&mut params.session_state, SessionStatus::Failed);
-            send_failure(sender, error.to_string());
+            send_failure_with_details(
+                sender,
+                error.to_string(),
+                None,
+                Some(params.transcript_path.clone()),
+            );
             return;
         }
     };
@@ -85,71 +104,21 @@ fn execute_resume(mut params: ResumeParams, sender: &Sender<CodexExecutionUpdate
         stderr_capture,
     };
 
-    let input = ResumeStreamInput {
-        thread_id: params.thread_id.as_str(),
-        prompt: params.prompt.as_str(),
-    };
-    let completion = run_resume_stream(streams, &input, &mut transcript, &mut run_ctx);
+    let thread_id = params.thread_id.as_str();
+    let completion = run_stream_with_context(
+        StreamRunInput {
+            stdout,
+            stdin,
+            prompt: params.prompt.as_str(),
+        },
+        &mut transcript,
+        &mut run_ctx,
+        |stream_stdout, stream_stdin, context| {
+            stream::stream_resume_progress(stream_stdout, stream_stdin, context, thread_id)
+        },
+    );
 
     if let Some(outcome) = completion {
         finalize(&mut child, outcome, params.transcript_path, &mut run_ctx);
     }
-}
-
-/// Prompt and thread identity for a resume stream.
-struct ResumeStreamInput<'a> {
-    thread_id: &'a str,
-    prompt: &'a str,
-}
-
-/// Runs the resume streaming loop, returning the completion on success.
-fn run_resume_stream(
-    streams: ProcessStreams,
-    input: &ResumeStreamInput<'_>,
-    transcript: &mut TranscriptWriter,
-    run_ctx: &mut RunContext<'_>,
-) -> Option<StreamCompletion> {
-    let result = {
-        let mut ctx = StreamProgressContext {
-            prompt: input.prompt,
-            transcript,
-            sender: run_ctx.sender,
-            thread_id: None,
-        };
-        let result = stream::stream_resume_progress(
-            streams.stdout,
-            streams.stdin,
-            &mut ctx,
-            input.thread_id,
-        );
-        if let Some(tid) = ctx.thread_id.take() {
-            run_ctx.session_state.thread_id = Some(tid);
-        }
-        result
-    };
-
-    let outcome = match result {
-        Ok(completion) => completion,
-        Err(error) => {
-            update_session_status(run_ctx.session_state, SessionStatus::Interrupted);
-            send_failure(
-                run_ctx.sender,
-                run_ctx.stderr_capture.append_to(error.to_string()),
-            );
-            return None;
-        }
-    };
-
-    if let Err(error) = transcript.flush() {
-        update_session_status(run_ctx.session_state, SessionStatus::Failed);
-        send_failure(
-            run_ctx.sender,
-            run_ctx
-                .stderr_capture
-                .append_to(format!("failed to flush transcript: {error}")),
-        );
-        return None;
-    }
-
-    Some(outcome)
 }

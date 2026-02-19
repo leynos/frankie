@@ -44,7 +44,7 @@ pub(super) fn stream_progress(
     context: &mut StreamProgressContext<'_>,
 ) -> Result<StreamCompletion, RunError> {
     let session = app_server::maybe_start_session(stdin.as_mut(), context.prompt);
-    stream_with_session(stdout, stdin, context, session)
+    stream_progress_internal(stdout, stdin, context, session)
 }
 
 /// Streams stdout from a resumed session (uses `thread/resume` protocol).
@@ -55,37 +55,37 @@ pub(super) fn stream_resume_progress(
     thread_id: &str,
 ) -> Result<StreamCompletion, RunError> {
     let session = app_server::maybe_start_resume_session(stdin.as_mut(), context.prompt, thread_id);
-    stream_with_session(stdout, stdin, context, session)
+    stream_progress_internal(stdout, stdin, context, session)
 }
 
 /// Common streaming workflow shared by fresh and resumed sessions.
-fn stream_with_session(
+fn stream_progress_internal(
     stdout: ChildStdout,
     mut stdin: Option<ChildStdin>,
     context: &mut StreamProgressContext<'_>,
     mut session: Option<app_server::AppServerSession>,
 ) -> Result<StreamCompletion, RunError> {
-    let completion = read_stream_lines(stdout, &mut stdin, context, &mut session)?;
-    capture_thread_id(context, session.as_ref());
-    Ok(completion)
-}
-
-fn read_stream_lines(
-    stdout: ChildStdout,
-    stdin: &mut Option<ChildStdin>,
-    context: &mut StreamProgressContext<'_>,
-    session: &mut Option<app_server::AppServerSession>,
-) -> Result<StreamCompletion, RunError> {
     let reader = BufReader::new(stdout);
     let mut lines = reader.lines();
+    let result = loop {
+        let Some(line_result) = lines.next() else {
+            break Ok(StreamCompletion::ProcessExit);
+        };
 
-    while let Some(line_result) = lines.next() {
-        let line = line_result
-            .map_err(|error| RunError::new(format!("failed to read Codex output: {error}")))?;
-        context
+        let line = match line_result
+            .map_err(|error| RunError::new(format!("failed to read Codex output: {error}")))
+        {
+            Ok(line) => line,
+            Err(error) => break Err(error),
+        };
+
+        if let Err(error) = context
             .transcript
             .append_line(&line)
-            .map_err(|error| RunError::new(format!("failed to write transcript: {error}")))?;
+            .map_err(|error| RunError::new(format!("failed to write transcript: {error}")))
+        {
+            break Err(error);
+        }
 
         if context
             .sender
@@ -93,26 +93,21 @@ fn read_stream_lines(
             .is_err()
         {
             drain_remaining_lines(lines);
-            return Ok(StreamCompletion::ProcessExit);
+            break Ok(StreamCompletion::ProcessExit);
         }
 
-        if let Some(completion) =
-            app_server::maybe_handle_message(session.as_mut(), stdin.as_mut(), line.as_str())?
-        {
-            return Ok(StreamCompletion::AppServer(completion));
+        match app_server::maybe_handle_message(session.as_mut(), stdin.as_mut(), line.as_str()) {
+            Ok(Some(completion)) => break Ok(StreamCompletion::AppServer(completion)),
+            Ok(None) => {}
+            Err(error) => break Err(error),
         }
+    };
+
+    if let Some(active_session) = session.as_ref() {
+        context.thread_id = active_session.thread_id().map(ToOwned::to_owned);
     }
 
-    Ok(StreamCompletion::ProcessExit)
-}
-
-fn capture_thread_id(
-    context: &mut StreamProgressContext<'_>,
-    session: Option<&app_server::AppServerSession>,
-) {
-    if let Some(sess) = session {
-        context.thread_id = sess.thread_id().map(ToOwned::to_owned);
-    }
+    result
 }
 
 /// Consumes remaining stdout lines so the child process does not block
