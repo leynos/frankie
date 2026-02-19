@@ -8,6 +8,8 @@ use crate::tui::components::text_truncate::truncate_to_display_width_with_ellips
 
 /// Defensive fallback for visible height when layout has not yet been applied.
 const FALLBACK_VISIBLE_HEIGHT: usize = 5;
+/// Maximum display-width budget for the first-line body preview in each row.
+const BODY_PREVIEW_WIDTH: usize = 50;
 
 /// Context for rendering the review list view.
 ///
@@ -126,7 +128,7 @@ impl ReviewListComponent {
             .body
             .as_deref()
             .map(first_trimmed_line)
-            .map(|line| truncate_to_display_width_with_ellipsis(line, 50))
+            .map(|line| truncate_to_display_width_with_ellipsis(line, BODY_PREVIEW_WIDTH))
             .unwrap_or_default();
 
         let line = format!("{prefix} [{author}] {file}{line_num}: {body_preview}");
