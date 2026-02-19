@@ -382,7 +382,7 @@ fn build_prompt(request: &CodexExecutionRequest) -> String {
     let mut prompt = format!(
         concat!(
             "Resolve review comments for pull request {}/{} #{}.",
-            "\nSummarise key changes and apply fixes where safe.",
+            "\nSummarize key changes and apply fixes where safe.",
             "\nReview comments (JSONL):\n"
         ),
         request.context().owner(),
