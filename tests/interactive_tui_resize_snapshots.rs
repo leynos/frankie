@@ -170,15 +170,7 @@ fn target_roots(workspace_root: Option<&Utf8Path>) -> Vec<Utf8PathBuf> {
     if let Some(target_dir) = env::var("CARGO_TARGET_DIR")
         .ok()
         .map(Utf8PathBuf::from)
-        .map(|path| {
-            if path.is_absolute() {
-                path
-            } else if let Some(root) = workspace_root {
-                root.join(path)
-            } else {
-                path
-            }
-        })
+        .map(|path| resolve_target_dir(path, workspace_root))
     {
         push_candidate(&mut roots, target_dir);
     }
@@ -214,15 +206,7 @@ fn default_fixture_binary_path(workspace_root: Option<&Utf8Path>) -> String {
     if let Some(target_dir) = env::var("CARGO_TARGET_DIR")
         .ok()
         .map(Utf8PathBuf::from)
-        .map(|path| {
-            if path.is_absolute() {
-                path
-            } else if let Some(root) = workspace_root {
-                root.join(path)
-            } else {
-                path
-            }
-        })
+        .map(|path| resolve_target_dir(path, workspace_root))
     {
         return target_dir
             .join("debug")
@@ -239,6 +223,16 @@ fn default_fixture_binary_path(workspace_root: Option<&Utf8Path>) -> String {
                 .into_string()
         },
     )
+}
+
+fn resolve_target_dir(path: Utf8PathBuf, workspace_root: Option<&Utf8Path>) -> Utf8PathBuf {
+    if path.is_absolute() {
+        path
+    } else if let Some(root) = workspace_root {
+        root.join(path)
+    } else {
+        path
+    }
 }
 
 fn push_candidate(candidates: &mut Vec<Utf8PathBuf>, candidate: Utf8PathBuf) {
@@ -316,48 +310,68 @@ fn startup_snapshot_reflects_configured_size(
     Ok(())
 }
 
-#[test]
-fn startup_at_various_viewport_sizes_produces_expected_layouts() -> Result<()> {
-    let mut small_fixture = tui_fixture(80, 24)?;
+#[rstest]
+#[case::resize_start(ViewportSnapshotCase {
+    width: 80,
+    height: 24,
+    expected_rows: 24,
+    test_name: "small resize frame",
+    snapshot_name: "resize_start",
+    require_contiguous_rows: false,
+})]
+#[case::resize_shrunk(ViewportSnapshotCase {
+    width: 80,
+    height: 14,
+    expected_rows: 14,
+    test_name: "shrunk resize frame",
+    snapshot_name: "resize_shrunk",
+    require_contiguous_rows: false,
+})]
+#[case::resize_enlarged(ViewportSnapshotCase {
+    width: 80,
+    height: 36,
+    expected_rows: 36,
+    test_name: "expanded resize frame",
+    snapshot_name: "resize_enlarged",
+    require_contiguous_rows: false,
+})]
+#[case::resize_horizontal_shrunk(ViewportSnapshotCase {
+    width: 72,
+    height: 24,
+    expected_rows: 24,
+    test_name: "horizontal resize narrow frame",
+    snapshot_name: "resize_horizontal_shrunk",
+    require_contiguous_rows: true,
+})]
+#[case::resize_horizontal_expanded(ViewportSnapshotCase {
+    width: 110,
+    height: 24,
+    expected_rows: 24,
+    test_name: "horizontal resize widened frame",
+    snapshot_name: "resize_horizontal_expanded",
+    require_contiguous_rows: true,
+})]
+fn viewport_size_snapshots(#[case] case: ViewportSnapshotCase) -> Result<()> {
+    let mut fixture = tui_fixture(case.width, case.height)?;
     thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
-    let frame_small = small_fixture.capture_frame(true)?;
+    let frame = fixture.capture_frame(true)?;
 
-    let mut shrunk_fixture = tui_fixture(80, 14)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
-    let frame_shrunk = shrunk_fixture.capture_frame(true)?;
+    assert_visible_frame(&frame, case.expected_rows, case.test_name);
+    if case.require_contiguous_rows {
+        assert_review_rows_are_contiguous(&frame, case.test_name);
+    }
 
-    let mut expanded_fixture = tui_fixture(80, 36)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
-    let frame_expanded = expanded_fixture.capture_frame(true)?;
-
-    assert_visible_frame(&frame_small, 24, "small resize frame");
-    assert_visible_frame(&frame_shrunk, 14, "shrunk resize frame");
-    assert_visible_frame(&frame_expanded, 36, "expanded resize frame");
-
-    insta::assert_snapshot!("resize_start", frame_small);
-    insta::assert_snapshot!("resize_shrunk", frame_shrunk);
-    insta::assert_snapshot!("resize_enlarged", frame_expanded);
+    insta::assert_snapshot!(case.snapshot_name, frame);
 
     Ok(())
 }
 
-#[test]
-fn horizontal_resize_keeps_review_rows_contiguous() -> Result<()> {
-    let mut shrink_fixture = tui_fixture(72, 24)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
-    let frame_narrow = shrink_fixture.capture_frame(true)?;
-
-    let mut expand_fixture = tui_fixture(110, 24)?;
-    thread::sleep(Duration::from_millis(STARTUP_STABILIZE_DELAY_MS));
-    let frame_wide_again = expand_fixture.capture_frame(true)?;
-
-    assert_visible_frame(&frame_narrow, 24, "horizontal resize narrow frame");
-    assert_visible_frame(&frame_wide_again, 24, "horizontal resize widened frame");
-    assert_review_rows_are_contiguous(&frame_narrow, "horizontal resize narrow frame");
-    assert_review_rows_are_contiguous(&frame_wide_again, "horizontal resize widened frame");
-
-    insta::assert_snapshot!("resize_horizontal_shrunk", frame_narrow);
-    insta::assert_snapshot!("resize_horizontal_expanded", frame_wide_again);
-
-    Ok(())
+#[derive(Clone, Copy)]
+struct ViewportSnapshotCase {
+    width: u16,
+    height: u16,
+    expected_rows: usize,
+    test_name: &'static str,
+    snapshot_name: &'static str,
+    require_contiguous_rows: bool,
 }
