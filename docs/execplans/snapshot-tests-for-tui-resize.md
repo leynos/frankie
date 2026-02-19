@@ -39,7 +39,7 @@ still validating both startup and dynamic resize behaviour.
 
 - Keep modifications to terminal behaviour and tests narrowly scoped to avoid
   functional churn.
-- Preserve current navigation, filtering and sync semantics.
+- Preserve current navigation, filtering, and sync semantics.
 - Do not introduce breaking layout dependencies for existing snapshot tests
   that do not involve terminal size.
 - Use repository conventions for docs style and test structure.
