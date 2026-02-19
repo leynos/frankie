@@ -12,6 +12,7 @@ const CAPTURE_ATTEMPTS: usize = 2;
 const FRAME_SETTLE_DELAY_MS: u64 = 40;
 const FRAME_READ_TIMEOUT_MS: u64 = 250;
 const STARTUP_STABILIZE_DELAY_MS: u64 = 120;
+const FIXTURE_BINARY_NAME: &str = "tui_resize_snapshot_fixture";
 
 struct TuiFixture {
     terminal: TestTerminal,
@@ -95,29 +96,16 @@ fn fixture_binary_path() -> String {
         return resolved;
     }
 
-    let candidates = [
-        "target/debug/tui_resize_snapshot_fixture",
-        "target/release/tui_resize_snapshot_fixture",
-        "target/debug/deps/tui_resize_snapshot_fixture",
-        "target/release/deps/tui_resize_snapshot_fixture",
-        "../target/debug/tui_resize_snapshot_fixture",
-        "../target/release/tui_resize_snapshot_fixture",
-    ];
+    let candidates = fixture_binary_candidates(workspace_root.as_deref());
 
     if let Some(resolved) = candidates
         .iter()
-        .find_map(|&path| resolve_binary_path(Utf8PathBuf::from(path), workspace_root.as_deref()))
+        .find_map(|path| resolve_binary_path(path.to_path_buf(), workspace_root.as_deref()))
     {
         return resolved;
     }
 
-    workspace_root.map_or_else(
-        || String::from("target/debug/tui_resize_snapshot_fixture"),
-        |root| {
-            root.join("target/debug/tui_resize_snapshot_fixture")
-                .into_string()
-        },
-    )
+    default_fixture_binary_path(workspace_root.as_deref())
 }
 
 fn resolve_binary_path(
@@ -135,6 +123,127 @@ fn resolve_binary_path(
         Some(resolved.into_string())
     } else {
         None
+    }
+}
+
+fn fixture_binary_candidates(workspace_root: Option<&Utf8Path>) -> Vec<Utf8PathBuf> {
+    let mut candidates = Vec::new();
+    for target_root in target_roots(workspace_root) {
+        push_candidate(
+            &mut candidates,
+            target_root.join("debug").join(FIXTURE_BINARY_NAME),
+        );
+        push_candidate(
+            &mut candidates,
+            target_root.join("release").join(FIXTURE_BINARY_NAME),
+        );
+        push_candidate(
+            &mut candidates,
+            target_root
+                .join("debug")
+                .join("deps")
+                .join(FIXTURE_BINARY_NAME),
+        );
+        push_candidate(
+            &mut candidates,
+            target_root
+                .join("release")
+                .join("deps")
+                .join(FIXTURE_BINARY_NAME),
+        );
+    }
+
+    if let Some(debug_dir) = current_exe_debug_dir() {
+        push_candidate(&mut candidates, debug_dir.join(FIXTURE_BINARY_NAME));
+        push_candidate(
+            &mut candidates,
+            debug_dir.join("deps").join(FIXTURE_BINARY_NAME),
+        );
+    }
+
+    candidates
+}
+
+fn target_roots(workspace_root: Option<&Utf8Path>) -> Vec<Utf8PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Some(target_dir) = env::var("CARGO_TARGET_DIR")
+        .ok()
+        .map(Utf8PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else if let Some(root) = workspace_root {
+                root.join(path)
+            } else {
+                path
+            }
+        })
+    {
+        push_candidate(&mut roots, target_dir);
+    }
+
+    if let Some(root) = workspace_root {
+        push_candidate(&mut roots, root.join("target"));
+        if let Some(parent) = root.parent() {
+            push_candidate(&mut roots, parent.join("target"));
+        }
+    }
+
+    if let Some(debug_dir) = current_exe_debug_dir()
+        && let Some(target_root) = debug_dir.parent()
+    {
+        push_candidate(&mut roots, target_root.to_path_buf());
+    }
+
+    roots
+}
+
+fn current_exe_debug_dir() -> Option<Utf8PathBuf> {
+    let current_exe_path = env::current_exe().ok()?;
+    let current_exe_utf8 = Utf8PathBuf::from_path_buf(current_exe_path).ok()?;
+    let parent = current_exe_utf8.parent()?;
+    if parent.file_name() == Some("deps") {
+        parent.parent().map(Utf8Path::to_path_buf)
+    } else {
+        Some(parent.to_path_buf())
+    }
+}
+
+fn default_fixture_binary_path(workspace_root: Option<&Utf8Path>) -> String {
+    if let Some(target_dir) = env::var("CARGO_TARGET_DIR")
+        .ok()
+        .map(Utf8PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else if let Some(root) = workspace_root {
+                root.join(path)
+            } else {
+                path
+            }
+        })
+    {
+        return target_dir
+            .join("debug")
+            .join(FIXTURE_BINARY_NAME)
+            .into_string();
+    }
+
+    workspace_root.map_or_else(
+        || format!("target/debug/{FIXTURE_BINARY_NAME}"),
+        |root| {
+            root.join("target")
+                .join("debug")
+                .join(FIXTURE_BINARY_NAME)
+                .into_string()
+        },
+    )
+}
+
+fn push_candidate(candidates: &mut Vec<Utf8PathBuf>, candidate: Utf8PathBuf) {
+    if !candidates.contains(&candidate) {
+        candidates.push(candidate);
     }
 }
 
