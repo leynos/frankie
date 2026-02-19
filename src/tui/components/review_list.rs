@@ -74,7 +74,7 @@ impl ReviewListComponent {
     #[must_use]
     pub fn view(&self, ctx: &ReviewListViewContext<'_>) -> String {
         if ctx.filtered_indices.is_empty() {
-            let empty_message = truncate_to_width(
+            let empty_message = truncate_to_display_width_with_ellipsis(
                 "  No review comments match the current filter.",
                 ctx.max_width,
             );
@@ -124,26 +124,19 @@ impl ReviewListComponent {
 
         let body_preview = review
             .body
-            .as_ref()
-            .map(|b| truncate_body(b, 50))
+            .as_deref()
+            .map(first_trimmed_line)
+            .map(|line| truncate_to_display_width_with_ellipsis(line, 50))
             .unwrap_or_default();
 
         let line = format!("{prefix} [{author}] {file}{line_num}: {body_preview}");
-        truncate_to_width(&line, max_width)
+        truncate_to_display_width_with_ellipsis(&line, max_width)
     }
 }
 
-/// Truncates body text to a maximum length, adding ellipsis if needed.
-fn truncate_body(body: &str, max_len: usize) -> String {
-    // Take first line only and truncate
-    let first_line = body.lines().next().unwrap_or("");
-    let trimmed = first_line.trim();
-    truncate_to_display_width_with_ellipsis(trimmed, max_len)
-}
-
-/// Truncates a row to a fixed width, preserving the caller's overflow budget.
-fn truncate_to_width(text: &str, max_width: usize) -> String {
-    truncate_to_display_width_with_ellipsis(text, max_width)
+/// Returns the first body line with surrounding whitespace removed.
+fn first_trimmed_line(body: &str) -> &str {
+    body.lines().next().unwrap_or("").trim()
 }
 
 #[cfg(test)]
@@ -298,38 +291,18 @@ mod tests {
     }
 
     #[test]
-    fn truncate_body_shortens_long_text() {
-        let long_text = "This is a very long comment that should be truncated";
-        let truncated = truncate_body(long_text, 20);
-        assert_eq!(truncated.width(), 20);
-        assert!(truncated.ends_with("..."));
-    }
-
-    #[test]
-    fn truncate_body_preserves_short_text() {
-        let short_text = "Short";
-        let result = truncate_body(short_text, 20);
-        assert_eq!(result, "Short");
-    }
-
-    #[test]
-    fn truncate_body_takes_first_line_only() {
-        let multiline = "First line\nSecond line\nThird line";
-        let result = truncate_body(multiline, 50);
+    fn first_trimmed_line_takes_first_line_and_trims_whitespace() {
+        let result = first_trimmed_line("  First line  \nSecond line\nThird line");
         assert_eq!(result, "First line");
     }
 
-    #[test]
-    fn truncate_body_uses_display_width_for_wide_characters() {
-        let result = truncate_body("你好世界和平", 7);
-        assert_eq!(result, "你好...");
-        assert_eq!(result.width(), 7);
-    }
+    #[rstest]
+    fn format_review_line_truncates_body_preview_with_display_width(sample_review: ReviewComment) {
+        let mut review = sample_review;
+        review.body = Some("你好世界和平".repeat(10));
 
-    #[test]
-    fn truncate_to_width_uses_display_width_for_wide_characters() {
-        let result = truncate_to_width("你好世界和平", 7);
-        assert_eq!(result, "你好...");
-        assert_eq!(result.width(), 7);
+        let line = ReviewListComponent::format_review_line(&review, " ", 80);
+        assert!(line.width() <= 80);
+        assert!(line.contains("..."));
     }
 }
