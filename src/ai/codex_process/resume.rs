@@ -44,29 +44,54 @@ pub(crate) fn run_codex_resume(params: ResumeParams) -> CodexExecutionHandle {
     CodexExecutionHandle::new(receiver)
 }
 
-fn execute_resume(mut params: ResumeParams, sender: &Sender<CodexExecutionUpdate>) {
-    let mut transcript = match TranscriptWriter::open_append(&params.transcript_path) {
-        Ok(writer) => writer,
+/// Opens the transcript file in append mode, handling errors by sending
+/// a failure update and returning None.
+fn prepare_transcript_for_resume(
+    transcript_path: &Utf8PathBuf,
+    sender: &Sender<CodexExecutionUpdate>,
+) -> Option<TranscriptWriter> {
+    match TranscriptWriter::open_append(transcript_path) {
+        Ok(writer) => Some(writer),
         Err(error) => {
             send_failure_with_details(
                 sender,
                 format!("failed to open transcript for append: {error}"),
                 None,
-                Some(params.transcript_path.clone()),
+                Some(transcript_path.clone()),
             );
-            return;
+            None
         }
-    };
+    }
+}
 
-    params.session_state.status = SessionStatus::Running;
-    params.session_state.finished_at = None;
-    if let Err(error) = params.session_state.write_sidecar() {
+/// Updates the session state to Running and persists the sidecar,
+/// handling errors by sending a failure update and returning false.
+fn prepare_session_for_resume(
+    session_state: &mut SessionState,
+    transcript_path: &Utf8PathBuf,
+    sender: &Sender<CodexExecutionUpdate>,
+) -> bool {
+    session_state.status = SessionStatus::Running;
+    session_state.finished_at = None;
+    if let Err(error) = session_state.write_sidecar() {
         send_failure_with_details(
             sender,
             format!("failed to persist resumed session state: {error}"),
             None,
-            Some(params.transcript_path.clone()),
+            Some(transcript_path.clone()),
         );
+        return false;
+    }
+    true
+}
+
+fn execute_resume(mut params: ResumeParams, sender: &Sender<CodexExecutionUpdate>) {
+    let Some(mut transcript) = prepare_transcript_for_resume(&params.transcript_path, sender)
+    else {
+        return;
+    };
+
+    if !prepare_session_for_resume(&mut params.session_state, &params.transcript_path, sender) {
         return;
     }
 
