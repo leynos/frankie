@@ -1,10 +1,10 @@
 //! PTY-backed snapshot tests for terminal resize behaviour in the review TUI.
 
 use std::env;
-use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
+use camino::{Utf8Path, Utf8PathBuf};
 use ratatui_testlib::{CommandBuilder, Result, ScreenState, TestTerminal};
 use rstest::{fixture, rstest};
 
@@ -86,10 +86,11 @@ impl TuiFixture {
 }
 
 fn fixture_binary_path() -> String {
-    let workspace_root = env::var("CARGO_MANIFEST_DIR").ok().map(PathBuf::from);
+    let workspace_root = env::var("CARGO_MANIFEST_DIR").ok().map(Utf8PathBuf::from);
 
-    if let Some(resolved) = env::var_os("CARGO_BIN_EXE_tui_resize_snapshot_fixture")
-        .and_then(|path| resolve_binary_path(PathBuf::from(path), workspace_root.as_ref()))
+    if let Some(resolved) = env::var("CARGO_BIN_EXE_tui_resize_snapshot_fixture")
+        .ok()
+        .and_then(|path| resolve_binary_path(Utf8PathBuf::from(path), workspace_root.as_deref()))
     {
         return resolved;
     }
@@ -105,7 +106,7 @@ fn fixture_binary_path() -> String {
 
     if let Some(resolved) = candidates
         .iter()
-        .find_map(|&path| resolve_binary_path(PathBuf::from(path), workspace_root.as_ref()))
+        .find_map(|&path| resolve_binary_path(Utf8PathBuf::from(path), workspace_root.as_deref()))
     {
         return resolved;
     }
@@ -114,13 +115,15 @@ fn fixture_binary_path() -> String {
         || String::from("target/debug/tui_resize_snapshot_fixture"),
         |root| {
             root.join("target/debug/tui_resize_snapshot_fixture")
-                .to_string_lossy()
-                .into_owned()
+                .into_string()
         },
     )
 }
 
-fn resolve_binary_path(candidate: PathBuf, workspace_root: Option<&PathBuf>) -> Option<String> {
+fn resolve_binary_path(
+    candidate: Utf8PathBuf,
+    workspace_root: Option<&Utf8Path>,
+) -> Option<String> {
     let resolved = if candidate.is_absolute() {
         candidate
     } else {
@@ -129,7 +132,7 @@ fn resolve_binary_path(candidate: PathBuf, workspace_root: Option<&PathBuf>) -> 
     };
 
     if resolved.is_file() {
-        resolved.to_str().map(str::to_owned)
+        Some(resolved.into_string())
     } else {
         None
     }
@@ -166,6 +169,11 @@ fn assert_review_rows_are_contiguous(frame: &str, test_name: &str) {
             }
         })
         .collect();
+
+    assert!(
+        !review_rows.is_empty(),
+        "{test_name} expected at least one review row before contiguity checks"
+    );
 
     let has_gap = review_rows.windows(2).any(|pair| {
         if let [first, second] = pair {

@@ -4,10 +4,10 @@
 
 COMPLETED.
 
-End-to-end PTY snapshot coverage is implemented and passes for the targeted
-`interactive_tui_resize_snapshots` integration suite. The harness was adjusted
-to work within `ratatui_testlib` writer constraints while still validating both
-startup and dynamic resize behaviour.
+End-to-end pseudo-terminal (PTY) snapshot coverage is implemented and passes
+for the targeted `interactive_tui_resize_snapshots` integration suite. The
+harness was adjusted to work within `ratatui_testlib` writer constraints while
+still validating both startup and dynamic resize behaviour.
 
 ## Purpose
 
@@ -58,7 +58,7 @@ startup and dynamic resize behaviour.
 - The detail component currently has explicit height assumptions and may
   require refactoring into a dynamic cap.
 - Existing resize message handling may already work, but only for model-level
-  tests, but not full PTY integration.
+  tests, not full PTY integration.
 - Aggressive refactor of layout maths can introduce index drift in list
   selection and scroll calculations.
 - Snapshot maintenance can become noisy across terminals if normalization is
@@ -132,7 +132,7 @@ startup and dynamic resize behaviour.
    - Use `ratatui_testlib` to boot the app in controlled terminal sizes.
    - Capture frames using bounded `TestTerminal` read attempts with synthetic
      redraw probes.
-   - Add `insta` snapshot fixtures for:
+   - Add `insta` snapshot fixtures:
      - startup at small height (for minimum clamp behaviour),
      - startup at large height (no cap),
      - resize sequence small → large → small.
@@ -148,9 +148,14 @@ startup and dynamic resize behaviour.
 
 7. Validation and completion
    - Run quality commands after changes:
-     - `make check-fmt | tee /tmp/check-fmt-frankie-$(git branch --show).out`
-     - `make lint | tee /tmp/lint-frankie-$(git branch --show).out`
-     - `make test | tee /tmp/test-frankie-$(git branch --show).out`
+
+     ```sh
+     branch_name=$(git branch --show)
+     make check-fmt | tee /tmp/check-fmt-frankie-${branch_name}.out
+     make lint | tee /tmp/lint-frankie-${branch_name}.out
+     make test | tee /tmp/test-frankie-${branch_name}.out
+     ```
+
    - include docs checks only if markdown changes are made.
    - Capture and inspect any snapshot diffs before commit.
    - Record test evidence and remaining risk in the final handoff.
