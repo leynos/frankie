@@ -55,6 +55,13 @@ pub(super) enum RunErrorKind {
 }
 
 impl RunError {
+    /// Creates a hard-failure [`RunError`] with the provided message.
+    ///
+    /// Parameters:
+    /// - `message`: failure detail convertible to `String`.
+    ///
+    /// Returns:
+    /// - A [`RunError`] with kind [`RunErrorKind::HardFailure`].
     pub(super) fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -62,6 +69,13 @@ impl RunError {
         }
     }
 
+    /// Creates an interruption [`RunError`] with the provided message.
+    ///
+    /// Parameters:
+    /// - `message`: interruption detail convertible to `String`.
+    ///
+    /// Returns:
+    /// - A [`RunError`] with kind [`RunErrorKind::Interruption`].
     pub(super) fn interruption(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -69,6 +83,7 @@ impl RunError {
         }
     }
 
+    /// Returns `true` when the error kind is [`RunErrorKind::Interruption`].
     pub(super) const fn is_interruption(&self) -> bool {
         matches!(self.kind, RunErrorKind::Interruption)
     }
