@@ -169,7 +169,11 @@ pub fn find_interrupted_session(
             continue;
         }
 
-        if session.thread_id.is_none() {
+        let has_thread_id = session
+            .thread_id
+            .as_deref()
+            .is_some_and(|id| !id.trim().is_empty());
+        if !has_thread_id {
             continue;
         }
 

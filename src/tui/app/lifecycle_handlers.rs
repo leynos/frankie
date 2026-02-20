@@ -1,6 +1,6 @@
 //! Lifecycle and window handlers for the review TUI.
 //!
-//! This module handles startup initialisation, terminal resize events, and
+//! This module handles startup initialization, terminal resize events, and
 //! high-level lifecycle messages such as quit and help toggling.
 
 use bubbletea_rs::Cmd;

@@ -14,7 +14,14 @@ pub(super) fn terminate_child(child: &mut Child) {
 }
 
 fn child_is_running(child: &mut Child) -> bool {
-    child.try_wait().ok().is_some_and(|status| status.is_none())
+    match child.try_wait() {
+        Ok(Some(_)) => false,
+        Ok(None) => true,
+        Err(error) => {
+            tracing::trace!("failed to query Codex child status: {error}");
+            true
+        }
+    }
 }
 
 fn log_if_kill_failed(result: std::io::Result<()>) {

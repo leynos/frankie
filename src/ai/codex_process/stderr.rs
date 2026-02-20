@@ -43,7 +43,7 @@ impl StderrCapture {
             let Ok(mut content) = buffer.lock() else {
                 break;
             };
-            if content.len() + text.len() > STDERR_LIMIT {
+            if content.len() + text.len() + 1 > STDERR_LIMIT {
                 break;
             }
             content.push_str(&text);
