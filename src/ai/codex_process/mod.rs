@@ -179,6 +179,7 @@ fn execute_codex(
     let (stdout, stdin, stderr_capture) = match take_io(&mut child) {
         Ok(io) => io,
         Err(error) => {
+            terminate_child(&mut child);
             update_session_status(&mut session_state, SessionStatus::Failed);
             send_failure_with_details(
                 sender,
