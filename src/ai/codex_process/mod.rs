@@ -126,14 +126,14 @@ fn take_io(
     Ok((stdout, stdin, stderr_capture))
 }
 
-fn execute_codex(
-    command_path: &str,
-    request: &CodexExecutionRequest,
-    transcript_path: Utf8PathBuf,
+/// Creates a new transcript file, handling errors by sending
+/// a failure update and returning None.
+fn prepare_transcript_for_execution(
+    transcript_path: &Utf8PathBuf,
     sender: &Sender<CodexExecutionUpdate>,
-) {
-    let mut transcript = match TranscriptWriter::create(&transcript_path) {
-        Ok(writer) => writer,
+) -> Option<TranscriptWriter> {
+    match TranscriptWriter::create(transcript_path) {
+        Ok(writer) => Some(writer),
         Err(error) => {
             send_failure_with_details(
                 sender,
@@ -141,8 +141,19 @@ fn execute_codex(
                 None,
                 Some(transcript_path.clone()),
             );
-            return;
+            None
         }
+    }
+}
+
+fn execute_codex(
+    command_path: &str,
+    request: &CodexExecutionRequest,
+    transcript_path: Utf8PathBuf,
+    sender: &Sender<CodexExecutionUpdate>,
+) {
+    let Some(mut transcript) = prepare_transcript_for_execution(&transcript_path, sender) else {
+        return;
     };
 
     let mut session_state = build_running_session_state(request, &transcript_path);
