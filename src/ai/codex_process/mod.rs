@@ -199,6 +199,8 @@ fn execute_codex(
 
     if let Some(outcome) = completion {
         finalize(&mut child, outcome, transcript_path, &mut run_ctx);
+    } else {
+        terminate_child(&mut child);
     }
 }
 
