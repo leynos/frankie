@@ -257,6 +257,26 @@ struct StreamRunInput<'a> {
     prompt: &'a str,
 }
 
+/// Captures the thread ID from the streaming context and persists it to the
+/// session sidecar, logging any write errors.
+fn capture_and_persist_thread_id(
+    ctx: &mut StreamProgressContext<'_>,
+    run_ctx: &mut RunContext<'_>,
+) {
+    let Some(tid) = ctx.thread_id.take() else {
+        return;
+    };
+
+    run_ctx.session_state.thread_id = Some(tid);
+    if let Err(error) = run_ctx.session_state.write_sidecar() {
+        let detail = error.to_string();
+        log_sidecar_write_error(
+            run_ctx.session_state.sidecar_path().as_str(),
+            detail.as_str(),
+        );
+    }
+}
+
 fn run_stream_with_context<F>(
     input: StreamRunInput<'_>,
     transcript: &mut TranscriptWriter,
@@ -278,16 +298,7 @@ where
             thread_id: None,
         };
         let result = stream_fn(input.stdout, input.stdin, &mut ctx);
-        if let Some(tid) = ctx.thread_id.take() {
-            run_ctx.session_state.thread_id = Some(tid);
-            if let Err(error) = run_ctx.session_state.write_sidecar() {
-                let detail = error.to_string();
-                log_sidecar_write_error(
-                    run_ctx.session_state.sidecar_path().as_str(),
-                    detail.as_str(),
-                );
-            }
-        }
+        capture_and_persist_thread_id(&mut ctx, run_ctx);
         result
     };
 
