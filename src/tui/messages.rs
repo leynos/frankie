@@ -4,7 +4,7 @@
 //! update function. Messages represent user actions, async command results,
 //! and system events.
 
-use crate::ai::{CodexExecutionOutcome, CodexProgressEvent};
+use crate::ai::{CodexExecutionOutcome, CodexProgressEvent, SessionState};
 use crate::github::error::IntakeError;
 use crate::github::models::ReviewComment;
 
@@ -73,6 +73,14 @@ pub enum AppMsg {
     CodexProgress(CodexProgressEvent),
     /// Codex execution finished with an outcome.
     CodexFinished(CodexExecutionOutcome),
+
+    // Session resumption
+    /// An interrupted session was detected; prompt the user.
+    ResumePromptShown(Box<SessionState>),
+    /// User accepted the resume prompt.
+    ResumeAccepted,
+    /// User declined the resume prompt.
+    ResumeDeclined,
 
     // Data loading
     /// Request a refresh of review data from the API.
@@ -164,6 +172,9 @@ impl AppMsg {
                 | Self::CodexPollTick
                 | Self::CodexProgress(_)
                 | Self::CodexFinished(_)
+                | Self::ResumePromptShown(_)
+                | Self::ResumeAccepted
+                | Self::ResumeDeclined
         )
     }
 

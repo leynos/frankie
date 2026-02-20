@@ -18,6 +18,24 @@ use crate::tui::messages::AppMsg;
 pub(super) const SYNC_INTERVAL: Duration = Duration::from_secs(30);
 
 impl ReviewApp {
+    /// Dispatches data loading and sync messages to their handlers.
+    pub(super) fn handle_data_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
+            AppMsg::RefreshRequested => self.handle_refresh_requested(),
+            AppMsg::RefreshComplete(new_reviews) => self.handle_refresh_complete(new_reviews),
+            AppMsg::RefreshFailed(error_msg) => self.handle_refresh_failed(error_msg),
+            AppMsg::SyncTick => self.handle_sync_tick(),
+            AppMsg::SyncComplete {
+                reviews,
+                latency_ms,
+            } => self.handle_sync_complete(reviews, *latency_ms),
+            _ => {
+                // Unreachable: caller filters to data messages.
+                None
+            }
+        }
+    }
+
     /// Handles a manual refresh request by delegating to sync logic.
     ///
     /// This ensures consistent behaviour between manual refresh and

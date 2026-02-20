@@ -5,9 +5,12 @@
 
 pub mod codex_exec;
 mod codex_process;
+pub mod session;
 pub mod transcript;
 
 pub use codex_exec::{
     CodexExecutionContext, CodexExecutionHandle, CodexExecutionOutcome, CodexExecutionRequest,
-    CodexExecutionService, CodexExecutionUpdate, CodexProgressEvent, SystemCodexExecutionService,
+    CodexExecutionService, CodexExecutionUpdate, CodexProgressEvent, CodexResumeRequest,
+    SystemCodexExecutionService,
 };
+pub use session::{SessionState, SessionStatus, find_interrupted_session};

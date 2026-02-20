@@ -2877,6 +2877,46 @@ state directory.
 - Non-zero Codex exits are no longer silent and are surfaced immediately in the
   interface.
 
+#### Architecture decision record (ADR-003): Session resumption for interrupted Codex runs
+
+**Context**: Codex runs can be interrupted by process crashes, signals, or
+server-side interruptions. Users lose progress and must restart from scratch,
+including re-approval of previously accepted actions.
+
+**Decision**: Persist session state in JSON sidecar files alongside transcripts
+and use the native `thread/resume` JSON-RPC method to reconnect to a prior
+server-side thread when an interrupted session is detected.
+
+**Rationale**:
+
+1. **Sidecar file design**: Each Codex run creates a `.session.json` file
+   alongside its `.jsonl` transcript, recording thread ID, PR context, status,
+   and timestamps. Sidecar files are self-contained and do not require database
+   changes.
+
+2. **Native protocol usage**: The `thread/resume` method is part of the Codex
+   `app-server` JSON-RPC protocol. Using it directly avoids re-implementing
+   conversation state management and preserves server-side approvals.
+
+3. **Thread ID capture**: The thread ID from the `thread/start` response is
+   stored in session state as soon as it is received. This ensures resumption
+   is possible even when the interruption occurs during execution.
+
+4. **Resume prompt UX**: The resume prompt is shown inline in the status bar
+   (`y`/`n`/`Esc`) rather than as a modal dialog. This keeps the interaction
+   lightweight and consistent with the existing TUI key-driven workflow.
+
+**Consequences**:
+
+- Interrupted runs can be resumed with preserved approvals and conversation
+  history.
+- Transcript files accumulate content across sessions, separated by
+  `--- session resumed ---` markers.
+- Session discovery scans sidecar files on disk; no additional database schema
+  is required.
+- The most recent interrupted session per PR is offered for resumption; users
+  can decline to start fresh.
+
 ## 5.4 Cross-cutting Concerns
 
 ### 5.4.1 Monitoring And Observability Approach

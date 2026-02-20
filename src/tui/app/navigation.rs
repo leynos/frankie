@@ -7,8 +7,25 @@
 use bubbletea_rs::Cmd;
 
 use super::ReviewApp;
+use crate::tui::messages::AppMsg;
 
 impl ReviewApp {
+    /// Dispatches navigation messages to their handlers.
+    pub(super) fn handle_navigation_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
+            AppMsg::CursorUp => self.handle_cursor_up(),
+            AppMsg::CursorDown => self.handle_cursor_down(),
+            AppMsg::PageUp => self.handle_page_up(),
+            AppMsg::PageDown => self.handle_page_down(),
+            AppMsg::Home => self.handle_home(),
+            AppMsg::End => self.handle_end(),
+            _ => {
+                // Unreachable: caller filters to navigation messages.
+                None
+            }
+        }
+    }
+
     fn move_cursor_up(&mut self, step: usize) {
         let new_pos = self.filter_state.cursor_position.saturating_sub(step);
         self.set_cursor(new_pos);

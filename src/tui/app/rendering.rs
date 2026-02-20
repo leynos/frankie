@@ -27,6 +27,11 @@ impl ReviewApp {
 
     /// Renders the status bar with help hints.
     pub(super) fn render_status_bar(&self) -> String {
+        if let Some(session) = &self.resume_prompt {
+            let timestamp = session.started_at.format("%Y-%m-%d %H:%M UTC");
+            return format!("Interrupted session from {timestamp}. Resume? [y/n]\n");
+        }
+
         if let Some(error) = &self.error {
             return format!("Error: {error}\n");
         }

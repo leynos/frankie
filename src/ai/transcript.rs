@@ -57,6 +57,48 @@ impl TranscriptWriter {
         })
     }
 
+    /// Opens an existing transcript file for appending.
+    ///
+    /// Writes a `--- session resumed ---` separator to mark the
+    /// resumption boundary, then returns a writer that appends
+    /// subsequent lines after the separator.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntakeError::Io`] when the file cannot be opened.
+    pub fn open_append(path: &Utf8Path) -> Result<Self, IntakeError> {
+        let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+        let file_name = path.file_name().ok_or_else(|| IntakeError::Io {
+            message: format!("invalid transcript path '{path}': no file name"),
+        })?;
+
+        let dir = Dir::open_ambient_dir(parent, ambient_authority()).map_err(|error| {
+            IntakeError::Io {
+                message: format!("failed to open transcript directory '{parent}': {error}"),
+            }
+        })?;
+
+        let mut file = dir
+            .open_with(
+                file_name,
+                cap_std::fs_utf8::OpenOptions::new()
+                    .append(true)
+                    .write(true),
+            )
+            .map_err(|error| IntakeError::Io {
+                message: format!("failed to open transcript for append '{path}': {error}"),
+            })?;
+
+        writeln!(file, "--- session resumed ---").map_err(|error| IntakeError::Io {
+            message: format!("failed to write resume separator to '{path}': {error}"),
+        })?;
+
+        Ok(Self {
+            path: path.to_path_buf(),
+            file,
+        })
+    }
+
     /// Appends one transcript line.
     ///
     /// A trailing newline is always written.
@@ -308,6 +350,43 @@ mod tests {
         let content = dir.read_to_string(file_name)?;
         if content != "line-1\nline-2\n" {
             return Err(format!("expected 'line-1\\nline-2\\n', got {content:?}").into());
+        }
+
+        Ok(())
+    }
+
+    #[rstest]
+    fn transcript_writer_open_append_adds_to_existing_file() -> TestResult {
+        let temp_dir = TempDir::new()?;
+        let base = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
+            .map_err(|_| "temp directory path must be UTF-8")?;
+        let path = base.join("resume-test.jsonl");
+
+        // Create initial transcript.
+        let mut writer = TranscriptWriter::create(&path)?;
+        writer.append_line("original-line")?;
+        writer.flush()?;
+        drop(writer);
+
+        // Reopen in append mode.
+        let mut appender = TranscriptWriter::open_append(&path)?;
+        appender.append_line("resumed-line")?;
+        appender.flush()?;
+        drop(appender);
+
+        let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
+        let dir = Dir::open_ambient_dir(parent, ambient_authority())?;
+        let file_name = path.file_name().ok_or("path has no file name")?;
+        let content = dir.read_to_string(file_name)?;
+
+        if !content.starts_with("original-line\n") {
+            return Err(format!("expected original content preserved, got: {content:?}").into());
+        }
+        if !content.contains("--- session resumed ---") {
+            return Err(format!("expected resume separator, got: {content:?}").into());
+        }
+        if !content.ends_with("resumed-line\n") {
+            return Err(format!("expected appended line at end, got: {content:?}").into());
         }
 
         Ok(())

@@ -116,6 +116,9 @@ impl Model for ReviewApp {
 impl ReviewApp {
     /// Returns the current input context for context-aware key mapping.
     pub(super) const fn input_context(&self) -> InputContext {
+        if self.resume_prompt.is_some() {
+            return InputContext::ResumePrompt;
+        }
         match self.view_mode {
             ViewMode::ReviewList => InputContext::ReviewList,
             ViewMode::DiffContext => InputContext::DiffContext,

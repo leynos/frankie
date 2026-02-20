@@ -1,54 +1,111 @@
 //! Process execution helpers for Codex integration.
-//!
-//! Manages the lifecycle of a `codex app-server` child process:
-//! spawning, stdin/stdout plumbing, stream polling, and graceful
-//! termination.
 
 mod app_server;
+mod finalise;
+mod messaging;
+mod resume;
+mod session;
+mod stderr;
 mod stream;
+mod termination;
 
 use std::fmt::Write as _;
-use std::io::BufRead;
-use std::process::{Child, ChildStderr, Command, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
 
-use camino::{Utf8Path, Utf8PathBuf};
+use camino::Utf8PathBuf;
 
-use crate::ai::codex_exec::{
-    CodexExecutionHandle, CodexExecutionOutcome, CodexExecutionRequest, CodexExecutionUpdate,
-};
+use crate::ai::codex_exec::{CodexExecutionHandle, CodexExecutionRequest, CodexExecutionUpdate};
+use crate::ai::session::{SessionState, SessionStatus};
 
 use super::transcript::TranscriptWriter;
 
-use self::app_server::AppServerCompletion;
+use self::finalise::finalize;
+use self::messaging::send_failure_with_details;
+use self::session::{build_running_session_state, log_sidecar_write_error, update_session_status};
+use self::stderr::StderrCapture;
 use self::stream::{StreamCompletion, StreamProgressContext};
+use self::termination::terminate_child;
+
+pub(crate) use self::resume::{ResumeParams, run_codex_resume};
 
 #[cfg(test)]
 pub(crate) use self::stream::parse_progress_event;
 
-/// Error arising during a Codex child-process run.
+/// Error returned by Codex process execution helpers.
 ///
-/// Wraps a human-readable description of the failure so callers can
-/// forward it through the TUI channel without matching on variants.
+/// Carries a human-readable `message` and a `kind` used to distinguish
+/// interruption flows from hard failures.
 #[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub(super) struct RunError(String);
+#[error("{message}")]
+pub(super) struct RunError {
+    /// Human-readable failure detail surfaced to callers and UI updates.
+    message: String,
+    /// Classification used to drive interruption-aware handling paths.
+    kind: RunErrorKind,
+}
+
+/// Classifies execution failures for control-flow decisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunErrorKind {
+    /// The run was intentionally interrupted and can be surfaced as such.
+    Interruption,
+    /// A non-interruption execution failure.
+    HardFailure,
+}
 
 impl RunError {
+    /// Creates a hard-failure [`RunError`] with the provided message.
+    ///
+    /// Parameters:
+    /// - `message`: failure detail convertible to `String`.
+    ///
+    /// Returns:
+    /// - A [`RunError`] with kind [`RunErrorKind::HardFailure`].
     pub(super) fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+        Self {
+            message: message.into(),
+            kind: RunErrorKind::HardFailure,
+        }
+    }
+
+    /// Creates an interruption [`RunError`] with the provided message.
+    ///
+    /// Parameters:
+    /// - `message`: interruption detail convertible to `String`.
+    ///
+    /// Returns:
+    /// - A [`RunError`] with kind [`RunErrorKind::Interruption`].
+    pub(super) fn interruption(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            kind: RunErrorKind::Interruption,
+        }
+    }
+
+    /// Returns `true` when the error kind is [`RunErrorKind::Interruption`].
+    pub(super) const fn is_interruption(&self) -> bool {
+        matches!(self.kind, RunErrorKind::Interruption)
     }
 }
 
-/// Command name and arguments used to launch the Codex process.
+/// Command-line specification for spawning Codex.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CodexCommandSpec {
+    /// Executable path used to spawn the Codex process.
     pub(crate) program: String,
+    /// Default argument vector passed to the executable.
     pub(crate) args: Vec<String>,
 }
 
-/// Builds the command specification for `codex app-server`.
+/// Builds the command program and default arguments for a Codex run.
+///
+/// Parameters:
+/// - `command_path`: filesystem path (or command name) used as the executable.
+///
+/// Returns:
+/// - A [`CodexCommandSpec`] containing `program = command_path` and the default
+///   `app-server` subcommand argument.
 pub(crate) fn build_command_spec(command_path: &str) -> CodexCommandSpec {
     CodexCommandSpec {
         program: command_path.to_owned(),
@@ -56,8 +113,29 @@ pub(crate) fn build_command_spec(command_path: &str) -> CodexCommandSpec {
     }
 }
 
-/// Spawns a background thread that executes Codex and streams progress
-/// updates through the returned handle.
+struct RunContext<'a> {
+    session_state: &'a mut SessionState,
+    sender: &'a Sender<CodexExecutionUpdate>,
+    stderr_capture: StderrCapture,
+}
+
+/// Starts Codex execution on a background thread and returns a handle.
+///
+/// Parameters:
+/// - `command_path`: executable path used to launch Codex.
+/// - `request`: execution payload consumed by the spawned worker thread.
+/// - `transcript_path`: output path for the run transcript.
+///
+/// Returns:
+/// - A [`CodexExecutionHandle`] backed by a channel receiver for streaming
+///   [`CodexExecutionUpdate`] values from the worker thread.
+///
+/// Behaviour:
+/// - Creates an `mpsc` channel.
+/// - Spawns a thread that runs `execute_codex` and publishes updates via the
+///   channel sender.
+/// - Interruption semantics are preserved through [`RunError::interruption`]
+///   within the execution pipeline.
 pub(crate) fn run_codex(
     command_path: String,
     request: CodexExecutionRequest,
@@ -72,27 +150,8 @@ pub(crate) fn run_codex(
     CodexExecutionHandle::new(receiver)
 }
 
-/// Create the transcript writer, sending failure on error.
-fn create_transcript(
-    transcript_path: &Utf8PathBuf,
-    sender: &Sender<CodexExecutionUpdate>,
-) -> Option<TranscriptWriter> {
-    match TranscriptWriter::create(transcript_path) {
-        Ok(writer) => Some(writer),
-        Err(error) => {
-            send_failure(
-                sender,
-                format!("failed to create transcript: {error}"),
-                None,
-                None,
-            );
-            None
-        }
-    }
-}
-
-/// Spawn the Codex child process with piped stdin, stdout, and stderr.
-fn spawn_codex(command_spec: &CodexCommandSpec) -> Result<Child, RunError> {
+fn spawn_codex(command_path: &str) -> Result<Child, RunError> {
+    let command_spec = build_command_spec(command_path);
     let mut command = Command::new(&command_spec.program);
     command
         .args(&command_spec.args)
@@ -105,31 +164,36 @@ fn spawn_codex(command_spec: &CodexCommandSpec) -> Result<Child, RunError> {
         .map_err(|error| RunError::new(format!("failed to launch Codex: {error}")))
 }
 
-/// Set up I/O streams for the spawned Codex process.
-/// Returns None on failure (failure already sent via sender).
-fn setup_process_io(
-    child: &mut std::process::Child,
-    sender: &Sender<CodexExecutionUpdate>,
-    transcript_path: &Utf8Path,
-) -> Option<(
-    std::process::ChildStdout,
-    Option<std::process::ChildStdin>,
-    StderrCapture,
-)> {
-    let Some(stdout) = child.stdout.take() else {
-        send_failure(
-            sender,
-            "codex stdout stream was unavailable".to_owned(),
-            None,
-            Some(transcript_path.to_path_buf()),
-        );
-        return None;
-    };
-
+fn take_io(
+    child: &mut Child,
+) -> Result<(ChildStdout, Option<ChildStdin>, StderrCapture), RunError> {
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| RunError::new("codex stdout stream was unavailable"))?;
     let stdin = child.stdin.take();
     let stderr_capture = StderrCapture::spawn(child.stderr.take());
+    Ok((stdout, stdin, stderr_capture))
+}
 
-    Some((stdout, stdin, stderr_capture))
+/// Creates a new transcript file, handling errors by sending
+/// a failure update and returning None.
+fn prepare_transcript_for_execution(
+    transcript_path: &Utf8PathBuf,
+    sender: &Sender<CodexExecutionUpdate>,
+) -> Option<TranscriptWriter> {
+    match TranscriptWriter::create(transcript_path) {
+        Ok(writer) => Some(writer),
+        Err(error) => {
+            send_failure_with_details(
+                sender,
+                format!("failed to create transcript: {error}"),
+                None,
+                Some(transcript_path.clone()),
+            );
+            None
+        }
+    }
 }
 
 fn execute_codex(
@@ -138,230 +202,161 @@ fn execute_codex(
     transcript_path: Utf8PathBuf,
     sender: &Sender<CodexExecutionUpdate>,
 ) {
-    let Some(mut transcript) = create_transcript(&transcript_path, sender) else {
+    let Some(mut transcript) = prepare_transcript_for_execution(&transcript_path, sender) else {
         return;
     };
 
-    let prompt = build_prompt(request);
-    let command_spec = build_command_spec(command_path);
+    let mut session_state = build_running_session_state(request, &transcript_path);
+    if let Err(error) = session_state.write_sidecar() {
+        let detail = error.to_string();
+        log_sidecar_write_error(session_state.sidecar_path().as_str(), detail.as_str());
+    }
 
-    let mut child = match spawn_codex(&command_spec) {
+    let mut child = match spawn_codex(command_path) {
         Ok(child) => child,
         Err(error) => {
-            send_failure(
+            update_session_status(&mut session_state, SessionStatus::Failed);
+            send_failure_with_details(
                 sender,
                 error.to_string(),
                 None,
-                Some(transcript.path().to_path_buf()),
+                Some(transcript_path.clone()),
             );
             return;
         }
     };
 
-    let Some((stdout, stdin, mut stderr_capture)) =
-        setup_process_io(&mut child, sender, transcript.path())
-    else {
+    let (stdout, stdin, stderr_capture) = match take_io(&mut child) {
+        Ok(io) => io,
+        Err(error) => {
+            terminate_child(&mut child);
+            update_session_status(&mut session_state, SessionStatus::Failed);
+            send_failure_with_details(
+                sender,
+                error.to_string(),
+                None,
+                Some(transcript_path.clone()),
+            );
+            return;
+        }
+    };
+
+    let mut run_ctx = RunContext {
+        session_state: &mut session_state,
+        sender,
+        stderr_capture,
+    };
+
+    let prompt = build_prompt(request);
+    let completion = run_stream_with_context(
+        StreamRunInput {
+            stdout,
+            stdin,
+            prompt: &prompt,
+        },
+        &mut transcript,
+        &mut run_ctx,
+        stream::stream_progress,
+    );
+
+    if let Some(outcome) = completion {
+        finalize(&mut child, outcome, transcript_path, &mut run_ctx);
+    } else {
+        terminate_child(&mut child);
+    }
+}
+
+struct StreamRunInput<'a> {
+    stdout: ChildStdout,
+    stdin: Option<ChildStdin>,
+    prompt: &'a str,
+}
+
+/// Captures the thread ID from the streaming context and persists it to the
+/// session sidecar, logging any write errors.
+fn capture_and_persist_thread_id(
+    ctx: &mut StreamProgressContext<'_>,
+    run_ctx: &mut RunContext<'_>,
+) {
+    let Some(tid) = ctx.thread_id.take() else {
         return;
     };
 
-    let completion = {
-        let mut stream_context = StreamProgressContext {
-            prompt: prompt.as_str(),
-            transcript: &mut transcript,
-            sender,
+    run_ctx.session_state.thread_id = Some(tid);
+    if let Err(error) = run_ctx.session_state.write_sidecar() {
+        let detail = error.to_string();
+        log_sidecar_write_error(
+            run_ctx.session_state.sidecar_path().as_str(),
+            detail.as_str(),
+        );
+    }
+}
+
+fn run_stream_with_context<F>(
+    input: StreamRunInput<'_>,
+    transcript: &mut TranscriptWriter,
+    run_ctx: &mut RunContext<'_>,
+    stream_fn: F,
+) -> Option<StreamCompletion>
+where
+    F: FnOnce(
+        ChildStdout,
+        Option<ChildStdin>,
+        &mut StreamProgressContext<'_>,
+    ) -> Result<StreamCompletion, RunError>,
+{
+    let result = {
+        let mut ctx = StreamProgressContext {
+            prompt: input.prompt,
+            transcript,
+            sender: run_ctx.sender,
+            thread_id: None,
         };
-        match stream::stream_progress(stdout, stdin, &mut stream_context) {
-            Ok(completion) => completion,
-            Err(error) => {
-                send_failure(
-                    sender,
-                    stderr_capture.append_to(error.to_string()),
-                    None,
-                    Some(transcript.path().to_path_buf()),
-                );
-                return;
-            }
+        let result = stream_fn(input.stdout, input.stdin, &mut ctx);
+        capture_and_persist_thread_id(&mut ctx, run_ctx);
+        result
+    };
+
+    let outcome = match result {
+        Ok(completion) => completion,
+        Err(error) => {
+            let status = if error.is_interruption() {
+                SessionStatus::Interrupted
+            } else {
+                SessionStatus::Failed
+            };
+            update_session_status(run_ctx.session_state, status);
+            send_failure_with_details(
+                run_ctx.sender,
+                run_ctx.stderr_capture.append_to(error.to_string()),
+                None,
+                Some(run_ctx.session_state.transcript_path.clone()),
+            );
+            return None;
         }
     };
 
     if let Err(error) = transcript.flush() {
-        send_failure(
-            sender,
-            stderr_capture.append_to(format!("failed to flush transcript: {error}")),
+        update_session_status(run_ctx.session_state, SessionStatus::Failed);
+        send_failure_with_details(
+            run_ctx.sender,
+            run_ctx
+                .stderr_capture
+                .append_to(format!("failed to flush transcript: {error}")),
             None,
-            Some(transcript.path().to_path_buf()),
+            Some(run_ctx.session_state.transcript_path.clone()),
         );
-        return;
+        return None;
     }
 
-    match completion {
-        StreamCompletion::AppServer(outcome) => {
-            terminate_child(&mut child);
-            handle_app_server_outcome(outcome, sender, transcript_path, &mut stderr_capture);
-        }
-        StreamCompletion::ProcessExit => {
-            complete_with_exit_status(child, sender, transcript_path, &mut stderr_capture);
-        }
-    }
-}
-
-fn handle_app_server_outcome(
-    outcome: AppServerCompletion,
-    sender: &Sender<CodexExecutionUpdate>,
-    transcript_path: Utf8PathBuf,
-    stderr_capture: &mut StderrCapture,
-) {
-    match outcome {
-        AppServerCompletion::Succeeded => {
-            drop(sender.send(CodexExecutionUpdate::Finished(
-                CodexExecutionOutcome::Succeeded { transcript_path },
-            )));
-        }
-        AppServerCompletion::Failed(message) => {
-            send_failure(
-                sender,
-                stderr_capture.append_to(message),
-                None,
-                Some(transcript_path),
-            );
-        }
-    }
-}
-
-fn complete_with_exit_status(
-    mut child: Child,
-    sender: &Sender<CodexExecutionUpdate>,
-    transcript_path: Utf8PathBuf,
-    stderr_capture: &mut StderrCapture,
-) {
-    let status = match child.wait() {
-        Ok(status) => status,
-        Err(error) => {
-            send_failure(
-                sender,
-                stderr_capture.append_to(format!("failed waiting for Codex exit: {error}")),
-                None,
-                Some(transcript_path),
-            );
-            return;
-        }
-    };
-
-    if status.success() {
-        drop(sender.send(CodexExecutionUpdate::Finished(
-            CodexExecutionOutcome::Succeeded { transcript_path },
-        )));
-        return;
-    }
-
-    send_failure(
-        sender,
-        stderr_capture.append_to("codex exited with a non-zero status".to_owned()),
-        status.code(),
-        Some(transcript_path),
-    );
-}
-
-/// Maximum number of bytes to capture from stderr (64 KiB).
-const STDERR_LIMIT: usize = 65_536;
-
-/// Captured stderr output from a child process.
-///
-/// Spawns a background thread that drains the child's stderr stream
-/// into a bounded buffer. The captured text can later be appended to
-/// failure messages via [`StderrCapture::append_to`].
-struct StderrCapture {
-    buffer: Arc<Mutex<String>>,
-    reader_thread: Option<std::thread::JoinHandle<()>>,
-}
-
-impl StderrCapture {
-    /// Starts capturing stderr from the child process.
-    fn spawn(child_stderr: Option<ChildStderr>) -> Self {
-        let buffer = Arc::new(Mutex::new(String::new()));
-        let reader_thread = child_stderr.map(|readable| {
-            let handle = Arc::clone(&buffer);
-            std::thread::spawn(move || Self::drain(readable, &handle))
-        });
-        Self {
-            buffer,
-            reader_thread,
-        }
-    }
-
-    /// Reads lines from stderr into the shared buffer up to the size limit.
-    fn drain(readable: ChildStderr, buffer: &Mutex<String>) {
-        let reader = std::io::BufReader::new(readable);
-        for result in reader.lines() {
-            let Ok(text) = result else { break };
-            let Ok(mut content) = buffer.lock() else {
-                break;
-            };
-            if content.len() + text.len() > STDERR_LIMIT {
-                break;
-            }
-            content.push_str(&text);
-            content.push('\n');
-        }
-    }
-
-    /// Appends any captured stderr to `message`, or returns it unchanged
-    /// when stderr is empty. Joins the reader thread first to ensure all
-    /// output has been collected.
-    fn append_to(&mut self, message: String) -> String {
-        if let Some(thread) = self.reader_thread.take() {
-            drop(thread.join());
-        }
-
-        let captured = self
-            .buffer
-            .lock()
-            .ok()
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| s.clone());
-
-        match captured {
-            Some(text) => format!("{message}\n\nstderr:\n{text}"),
-            None => message,
-        }
-    }
-}
-
-fn log_termination_error(action: &str, error: &std::io::Error) {
-    tracing::trace!("failed to {action} Codex child process: {error}");
-}
-
-fn terminate_child(child: &mut Child) {
-    if let Ok(None) = child.try_wait() {
-        if let Err(error) = child.kill() {
-            log_termination_error("kill", &error);
-        }
-        if let Err(error) = child.wait() {
-            log_termination_error("wait for", &error);
-        }
-    }
-}
-
-fn send_failure(
-    sender: &Sender<CodexExecutionUpdate>,
-    message: String,
-    exit_code: Option<i32>,
-    transcript_path: Option<Utf8PathBuf>,
-) {
-    drop(sender.send(CodexExecutionUpdate::Finished(
-        CodexExecutionOutcome::Failed {
-            message,
-            exit_code,
-            transcript_path,
-        },
-    )));
+    Some(outcome)
 }
 
 fn build_prompt(request: &CodexExecutionRequest) -> String {
     let mut prompt = format!(
         concat!(
             "Resolve review comments for pull request {}/{} #{}.",
-            "\nSummarise key changes and apply fixes where safe.",
+            "\nSummarize key changes and apply fixes where safe.",
             "\nReview comments (JSONL):\n"
         ),
         request.context().owner(),
@@ -370,7 +365,6 @@ fn build_prompt(request: &CodexExecutionRequest) -> String {
     );
 
     if let Some(pr_url) = request.pr_url() {
-        // writeln! on a String is infallible; use write! directly.
         let _infallible = writeln!(prompt, "Pull request URL: {pr_url}");
     }
 

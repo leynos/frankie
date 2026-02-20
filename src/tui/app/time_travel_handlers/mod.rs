@@ -91,6 +91,20 @@ impl ReviewApp {
         self.head_sha.as_ref().map(|s| CommitSha::new(s.clone()))
     }
 
+    /// Dispatches time-travel messages to their handlers.
+    pub(super) fn handle_time_travel_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
+            AppMsg::EnterTimeTravel => self.handle_enter_time_travel(),
+            AppMsg::ExitTimeTravel => self.handle_exit_time_travel(),
+            AppMsg::TimeTravelLoaded(state) => self.handle_time_travel_loaded(state.clone()),
+            AppMsg::TimeTravelFailed(error) => self.handle_time_travel_failed(error),
+            AppMsg::NextCommit => self.handle_next_commit(),
+            AppMsg::PreviousCommit => self.handle_previous_commit(),
+            AppMsg::CommitNavigated(state) => self.handle_commit_navigated(state.clone()),
+            _ => None,
+        }
+    }
+
     /// Handles the `EnterTimeTravel` message.
     ///
     /// Initiates loading of the time-travel state for the currently selected
