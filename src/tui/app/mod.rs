@@ -26,10 +26,11 @@ use crate::ai::{
 };
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
+use crate::tui::ReplyDraftConfig;
 
 use super::components::{CommentDetailComponent, DiffContextComponent, ReviewListComponent};
 use super::messages::AppMsg;
-use super::state::{DiffContextState, FilterState, ReviewFilter, TimeTravelState};
+use super::state::{DiffContextState, FilterState, ReplyDraftState, ReviewFilter, TimeTravelState};
 
 mod codex_handlers;
 mod diff_context_handlers;
@@ -38,6 +39,7 @@ mod lifecycle_handlers;
 mod model_impl;
 mod navigation;
 mod rendering;
+mod reply_draft_handlers;
 mod routing;
 mod sync_handlers;
 mod time_travel_handlers;
@@ -101,6 +103,10 @@ pub struct ReviewApp {
     has_initialized: bool,
     /// Interrupted session awaiting user confirmation to resume.
     resume_prompt: Option<SessionState>,
+    /// Active inline reply draft for the selected comment.
+    reply_draft: Option<ReplyDraftState>,
+    /// Reply-drafting templates and max-length configuration.
+    reply_draft_config: ReplyDraftConfig,
 }
 
 /// Tracks which view is currently active in the TUI.
@@ -160,6 +166,8 @@ impl ReviewApp {
             codex_poll_interval: std::time::Duration::from_millis(150),
             has_initialized: false,
             resume_prompt: None,
+            reply_draft: None,
+            reply_draft_config: super::get_reply_draft_config(),
         };
         app.set_visible_list_height();
         app
@@ -196,10 +204,24 @@ impl ReviewApp {
         self
     }
 
+    /// Sets reply-drafting configuration for this app instance.
+    #[must_use]
+    pub fn with_reply_draft_config(mut self, reply_draft_config: ReplyDraftConfig) -> Self {
+        self.reply_draft_config =
+            ReplyDraftConfig::new(reply_draft_config.max_length, reply_draft_config.templates);
+        self
+    }
+
     /// Returns whether a Codex execution run is currently active.
     #[must_use]
     pub(super) const fn is_codex_running(&self) -> bool {
         self.codex_handle.is_some()
+    }
+
+    /// Returns whether an inline reply draft is active.
+    #[must_use]
+    pub(super) const fn has_reply_draft(&self) -> bool {
+        self.reply_draft.is_some()
     }
 
     /// Returns the currently filtered reviews.

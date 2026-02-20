@@ -17,6 +17,8 @@ pub enum InputContext {
     TimeTravel,
     /// Session resume prompt (y/n/Esc).
     ResumePrompt,
+    /// Inline reply drafting mode.
+    ReplyDraft,
 }
 
 /// Maps a key event to an application message.
@@ -68,7 +70,21 @@ pub fn map_key_to_message_with_context(
             if key.key == KeyCode::Char('x') {
                 return Some(AppMsg::StartCodexExecution);
             }
+            if key.key == KeyCode::Char('a') {
+                return Some(AppMsg::StartReplyDraft);
+            }
         }
+        InputContext::ReplyDraft => match key.key {
+            KeyCode::Enter => return Some(AppMsg::ReplyDraftRequestSend),
+            KeyCode::Backspace => return Some(AppMsg::ReplyDraftBackspace),
+            KeyCode::Esc => return Some(AppMsg::ReplyDraftCancel),
+            KeyCode::Char(character @ '1'..='9') => {
+                let template_index = character as usize - '1' as usize;
+                return Some(AppMsg::ReplyDraftInsertTemplate { template_index });
+            }
+            KeyCode::Char(character) => return Some(AppMsg::ReplyDraftInsertChar(character)),
+            _ => return None,
+        },
     }
 
     // Default/shared mappings
@@ -132,6 +148,11 @@ mod tests {
         Some(InputContext::ReviewList),
         Some(AppMsg::StartCodexExecution)
     )]
+    #[case::review_list_a_start_reply_draft(
+        KeyCode::Char('a'),
+        Some(InputContext::ReviewList),
+        Some(AppMsg::StartReplyDraft)
+    )]
     #[case::time_travel_x_unmapped(KeyCode::Char('x'), Some(InputContext::TimeTravel), None)]
     #[case::diff_context_esc_hide(
         KeyCode::Esc,
@@ -159,6 +180,31 @@ mod tests {
         Some(AppMsg::ResumeDeclined)
     )]
     #[case::resume_prompt_j_unmapped(KeyCode::Char('j'), Some(InputContext::ResumePrompt), None)]
+    #[case::reply_draft_insert_template(
+        KeyCode::Char('2'),
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftInsertTemplate { template_index: 1 })
+    )]
+    #[case::reply_draft_insert_char(
+        KeyCode::Char('q'),
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftInsertChar('q'))
+    )]
+    #[case::reply_draft_backspace(
+        KeyCode::Backspace,
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftBackspace)
+    )]
+    #[case::reply_draft_enter_send(
+        KeyCode::Enter,
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftRequestSend)
+    )]
+    #[case::reply_draft_esc_cancel(
+        KeyCode::Esc,
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftCancel)
+    )]
     #[case::default_context_j_down(KeyCode::Char('j'), None, Some(AppMsg::CursorDown))]
     fn key_mapping(
         #[case] key: KeyCode,
@@ -180,5 +226,16 @@ mod tests {
                 panic!("Some/None mismatch: result={r:?}, expected={e:?}");
             }
         }
+    }
+
+    #[test]
+    fn reply_draft_template_index_maps_digit_to_zero_based_slot() {
+        let result =
+            map_key_to_message_with_context(&key_msg(KeyCode::Char('9')), InputContext::ReplyDraft);
+
+        assert!(matches!(
+            result,
+            Some(AppMsg::ReplyDraftInsertTemplate { template_index: 8 })
+        ));
     }
 }

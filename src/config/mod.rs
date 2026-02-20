@@ -43,6 +43,8 @@ pub enum OperationMode {
 /// - `FRANKIE_REPO` or `--repo`: Repository name
 /// - `FRANKIE_DATABASE_URL` or `--database-url`: Local `SQLite` database path
 /// - `FRANKIE_TEMPLATE` or `--template`: Template file path for custom export
+/// - `FRANKIE_REPLY_MAX_LENGTH` or `--reply-max-length`: Max reply length
+/// - `FRANKIE_REPLY_TEMPLATES` or `--reply-templates`: Reply templates
 ///
 /// # Example
 ///
@@ -207,6 +209,31 @@ pub struct FrankieConfig {
     #[ortho_config()]
     pub repo_path: Option<String>,
 
+    /// Maximum character count allowed for TUI reply drafts.
+    ///
+    /// Reply drafting enforces this limit while typing and during template
+    /// insertion. Character counting is based on Unicode scalar values.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--reply-max-length <COUNT>`
+    /// - Environment: `FRANKIE_REPLY_MAX_LENGTH`
+    /// - Config file: `reply_max_length = 500`
+    #[ortho_config()]
+    pub reply_max_length: usize,
+
+    /// Ordered template list used for keyboard reply insertion in the TUI.
+    ///
+    /// Templates are rendered with `MiniJinja` and can reference review-comment
+    /// variables: `comment_id`, `reviewer`, `file`, `line`, and `body`.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--reply-templates '<json-array>'`
+    /// - Environment: `FRANKIE_REPLY_TEMPLATES`
+    /// - Config file:
+    ///   `reply_templates = ["Thanks {{ reviewer }}", "..."]`
+    #[ortho_config()]
+    pub reply_templates: Vec<String>,
+
     /// Positional PR identifier (bare number or full URL) extracted from
     /// command-line arguments before ortho-config processes the remaining
     /// flags. When set, the TUI is launched without requiring `-T`.
@@ -215,6 +242,7 @@ pub struct FrankieConfig {
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
+const DEFAULT_REPLY_MAX_LENGTH: usize = 500;
 
 impl Default for FrankieConfig {
     fn default() -> Self {
@@ -232,9 +260,19 @@ impl Default for FrankieConfig {
             output: None,
             template: None,
             repo_path: None,
+            reply_max_length: DEFAULT_REPLY_MAX_LENGTH,
+            reply_templates: default_reply_templates(),
             pr_identifier: None,
         }
     }
+}
+
+fn default_reply_templates() -> Vec<String> {
+    vec![
+        "Thanks for the review on {{ file }}:{{ line }}. I will update this.".to_owned(),
+        "Good catch, {{ reviewer }}. I will address this in the next commit.".to_owned(),
+        "I have addressed this feedback and pushed an update.".to_owned(),
+    ]
 }
 
 impl FrankieConfig {
@@ -260,6 +298,8 @@ impl FrankieConfig {
         "--output",
         "--template",
         "--repo-path",
+        "--reply-max-length",
+        "--reply-templates",
         "--config-path",
     ];
 

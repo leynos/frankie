@@ -45,10 +45,13 @@ impl ReviewApp {
             return format!("Codex: {codex_status}{running_suffix}\n");
         }
 
+        if self.has_reply_draft() {
+            return "Reply draft: 1-9:template  text:edit  Backspace:delete  Enter:ready  Esc:cancel\n"
+                .to_owned();
+        }
+
         let hints = match self.view_mode {
-            super::ViewMode::ReviewList => {
-                "j/k:move  f:filter  c:context  t:travel  x:codex  r:refresh  ?:help  q:quit"
-            }
+            super::ViewMode::ReviewList => self.review_list_status_hints(),
             super::ViewMode::DiffContext => "[/]:hunks  Esc:back  ?:help  q:quit",
             super::ViewMode::TimeTravel => "h/l:commits  Esc:back  ?:help  q:quit",
         };
@@ -80,6 +83,7 @@ Other:
   r          Refresh from GitHub
   c          View full-screen context
   t          Time-travel to comment's commit
+  a          Start inline reply draft
   x          Run Codex using filtered comments
   ?          Toggle this help
   q          Quit
@@ -93,6 +97,13 @@ Time-travel:
   h          Previous (older) commit
   l          Next (more recent) commit
   Esc        Return to review list
+
+Reply draft:
+  1-9        Insert template
+  text keys  Edit draft text
+  Backspace  Delete one character
+  Enter      Mark draft ready to send
+  Esc        Discard draft and return
 
 Press any key to close this help.
 ";
@@ -141,5 +152,13 @@ Press any key to close this help.
         output.push_str(&self.render_status_bar());
 
         output
+    }
+
+    const fn review_list_status_hints(&self) -> &'static str {
+        if self.width <= 80 {
+            "q:quit  ?:help  j/k:move  f:filter  a:reply  x:codex"
+        } else {
+            "j/k:move  f:filter  c:context  t:travel  a:reply  x:codex  r:refresh  ?:help  q:quit"
+        }
     }
 }

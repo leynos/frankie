@@ -15,7 +15,9 @@ mod time_travel_view;
 pub mod test_utils;
 
 pub use code_highlight::CodeHighlighter;
-pub use comment_detail::{CommentDetailComponent, CommentDetailViewContext};
+pub use comment_detail::{
+    CommentDetailComponent, CommentDetailViewContext, ReplyDraftRenderContext,
+};
 pub(crate) use diff_context::{DiffContextComponent, DiffContextViewContext};
 pub use review_list::{ReviewListComponent, ReviewListViewContext};
 pub(crate) use time_travel_view::{TimeTravelViewComponent, TimeTravelViewContext};

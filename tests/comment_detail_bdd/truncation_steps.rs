@@ -75,6 +75,7 @@ pub fn when_view_rendered_with_max_height(detail_state: &DetailState, height: us
         selected_comment: Some(&comment),
         max_width: 80,
         max_height: height,
+        reply_draft: None,
     };
     let view = component.view(&ctx);
     detail_state.rendered_view.set(view);

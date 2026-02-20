@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -13,11 +13,11 @@ plan-governance document applies.
 ## Purpose / big picture
 
 Enable users to draft pull-request review replies directly in the TUI by
-inserting configured templates with keyboard shortcuts, editing the draft before
-sending, and seeing immediate length-limit feedback. After this change, a user
-in review-list mode can open a reply composer for the selected comment, insert
-a template with a keypress, edit the text inline, and be blocked from sending
-if the configured maximum length is exceeded.
+inserting configured templates with keyboard shortcuts, editing the draft
+before sending, and seeing immediate length-limit feedback. After this change,
+a user in review-list mode can open a reply composer for the selected comment,
+insert a template with a keypress, edit the text inline, and be blocked from
+sending if the configured maximum length is exceeded.
 
 Success is observable when:
 
@@ -72,29 +72,21 @@ Success is observable when:
 ## Risks
 
 - Risk: keyboard mappings for reply drafting can conflict with existing review,
-  diff-context, time-travel, and resume-prompt contexts.
-  Severity: high.
-  Likelihood: medium.
-  Mitigation: add explicit `InputContext` routing for reply drafting and unit
-  tests for each context to ensure key isolation.
+  diff-context, time-travel, and resume-prompt contexts. Severity: high.
+  Likelihood: medium. Mitigation: add explicit `InputContext` routing for reply
+  drafting and unit tests for each context to ensure key isolation.
 
 - Risk: unclear length semantics (bytes vs Unicode scalar values) can cause
-  inconsistent enforcement and user confusion.
-  Severity: medium.
-  Likelihood: medium.
-  Mitigation: define one counting rule in code/docs (Unicode scalar count) and
-  test with multi-byte content.
+  inconsistent enforcement and user confusion. Severity: medium. Likelihood:
+  medium. Mitigation: define one counting rule in code/docs (Unicode scalar
+  count) and test with multi-byte content.
 
 - Risk: `ReviewApp` and existing handler modules are already near size limits.
-  Severity: medium.
-  Likelihood: high.
-  Mitigation: add focused reply modules (state/handlers/tests) instead of
-  enlarging current files.
+  Severity: medium. Likelihood: high. Mitigation: add focused reply modules
+  (state/handlers/tests) instead of enlarging current files.
 
 - Risk: behavioural tests can become timing-sensitive if they depend on async
-  polling paths unrelated to reply drafting.
-  Severity: medium.
-  Likelihood: low.
+  polling paths unrelated to reply drafting. Severity: medium. Likelihood: low.
   Mitigation: keep reply-drafting BDD scenarios synchronous and state-driven;
   inject deterministic fixtures.
 
@@ -102,54 +94,89 @@ Success is observable when:
 
 - [x] (2026-02-20 00:00Z) Drafted ExecPlan with constraints, tolerances,
       staged implementation, and validation criteria.
-- [ ] Stage A: finalise reply-drafting domain model and configuration surface.
-- [ ] Stage B: implement input/message plumbing and reply draft state
-      transitions.
-- [ ] Stage C: render inline drafts, enforce length limits, and wire
-      edit-before-send UX.
-- [ ] Stage D: add unit and behavioural coverage for happy/unhappy/edge cases.
-- [ ] Stage E: update design/user docs, mark roadmap item done, and run gates.
+- [x] (2026-02-20 00:35Z) Stage A: finalised reply-drafting domain model and
+      configuration surface (`ReplyDraftState`, template rendering helpers,
+      and config keys `reply_max_length` / `reply_templates` with tests).
+- [x] (2026-02-20 00:50Z) Stage B: implemented input/message plumbing and
+      reply draft state transitions (`InputContext::ReplyDraft`, new `AppMsg`
+      variants, routing/handlers).
+- [x] (2026-02-20 01:05Z) Stage C: rendered inline drafts and wired
+      edit-before-send interactions in the detail pane and status/help text.
+- [x] (2026-02-20 02:10Z) Stage D: added unit and behavioural coverage for
+      happy/unhappy/edge cases (`rstest` unit coverage plus
+      `tests/template_reply_drafting_bdd.rs` scenarios).
+- [x] (2026-02-20 02:30Z) Stage E: updated design/user docs, marked roadmap
+      entry done, refreshed snapshots, and passed gates (`make check-fmt`,
+      `make lint`, `make test`).
 
 ## Surprises & discoveries
 
 - Discovery: `rstest-bdd` is already at `0.5.0` in `Cargo.toml`, so no
-  dependency upgrade is needed for this milestone.
-  Evidence: `Cargo.toml` dev-dependencies list
-  `rstest-bdd = "0.5.0"` and `rstest-bdd-macros = "0.5.0"`.
-  Impact: effort can focus on new scenarios and state harnesses.
+  dependency upgrade is needed for this milestone. Evidence: `Cargo.toml`
+  dev-dependencies list `rstest-bdd = "0.5.0"` and
+  `rstest-bdd-macros = "0.5.0"`. Impact: effort can focus on new scenarios and
+  state harnesses.
 
 - Discovery: there is currently no GitHub review-reply submission gateway in
-  the codebase; current TUI support ends at comment viewing/filtering and
-  Codex execution.
-  Evidence: no `create`/`reply` review-comment gateway methods under
-  `src/github/gateway/`.
-  Impact: this plan scopes to drafting/editing/validation UX, with send treated
-  as local draft readiness unless scope is explicitly expanded.
+  the codebase; current TUI support ends at comment viewing/filtering and Codex
+  execution. Evidence: no `create`/`reply` review-comment gateway methods under
+  `src/github/gateway/`. Impact: this plan scopes to
+  drafting/editing/validation UX, with send treated as local draft readiness
+  unless scope is explicitly expanded.
+
+- Discovery: review-list status hints can overflow narrow widths and hide
+  critical controls (`q:quit`) when additional shortcuts are appended.
+  Evidence: failing test
+  `tui::app::tests::tiny_terminal_skips_detail_pane_and_keeps_status_bar_visible`
+   after adding `a:reply`. Impact: status hints now need a width-aware compact
+  variant for narrow terminals.
 
 ## Decision log
 
 - Decision: implement reply drafting as a dedicated TUI state slice with
   keyboard-only interactions, rather than embedding transient logic inside
-  existing Codex handlers.
-  Rationale: keeps responsibilities separated and testable under MVU.
-  Date/Author: 2026-02-20 / plan author.
+  existing Codex handlers. Rationale: keeps responsibilities separated and
+  testable under MVU. Date/Author: 2026-02-20 / plan author.
 
 - Decision: length limits are enforced as Unicode scalar counts, not byte
-  length or display width.
-  Rationale: this rule is deterministic, language-agnostic, and aligns with
-  existing text helpers that reason about character content.
-  Date/Author: 2026-02-20 / plan author.
+  length or display width. Rationale: this rule is deterministic,
+  language-agnostic, and aligns with existing text helpers that reason about
+  character content. Date/Author: 2026-02-20 / plan author.
 
 - Decision: this step covers draft insertion/editing/readiness in the TUI and
   does not introduce live GitHub reply submission unless explicitly requested.
-  Rationale: roadmap acceptance for this step is drafting-focused
-  (inline render, edit-before-send, length limit), while API submission is a
-  larger surface with separate failure semantics.
-  Date/Author: 2026-02-20 / plan author.
+  Rationale: roadmap acceptance for this step is drafting-focused (inline
+  render, edit-before-send, length limit), while API submission is a larger
+  surface with separate failure semantics. Date/Author: 2026-02-20 / plan
+  author.
+
+- Decision: keep the reply-template engine aligned with existing export
+  templating by using `MiniJinja` and a focused comment-variable context.
+  Rationale: this avoids introducing a second templating model and keeps user
+  mental load low (`{{ reviewer }}`, `{{ file }}`, etc. behave consistently).
+  Date/Author: 2026-02-20 / implementation.
+
+- Decision: add width-aware review-list status hints so `q:quit` and `?:help`
+  remain visible on narrow terminals even with new `a:reply` hints. Rationale:
+  preserving escape hatches in constrained layouts is more important than
+  showing every shortcut simultaneously. Date/Author: 2026-02-20 /
+  implementation.
 
 ## Outcomes & retrospective
 
-(To be completed after implementation.)
+- Outcome: reply drafting is now keyboard-driven and inline in the detail pane,
+  with template insertion (`1` to `9`), free-form edits, readiness marking, and
+  cancel flow.
+- Outcome: configured limits are enforced during typing and template insertion
+  using Unicode scalar counts, with explicit user-facing errors for limit
+  violations and invalid template slots.
+- Outcome: configuration is additive and layered (`reply_max_length`,
+  `reply_templates`) across defaults, config file, environment, and CLI.
+- Outcome: feature validation now includes both unit and behavioural test
+  coverage, and snapshot baselines were updated for status-hint changes.
+- Retrospective: adding a new status-bar hint changed narrow-screen snapshots;
+  width-aware hint compaction reduced future risk of truncating escape-hatch
+  controls.
 
 ## Context and orientation
 
@@ -168,8 +195,8 @@ Success is observable when:
 - `src/config/mod.rs` defines `FrankieConfig` and ortho-config mapping from
   CLI/env/config-file layers.
 - `docs/users-guide.md` contains keyboard tables and Codex/TUI behaviour docs.
-- `docs/frankie-design.md` tracks architecture decision records (ADR-001..003);
-  this feature should add the next ADR entry.
+- `docs/frankie-design.md` tracks architecture decision records (ADR-001..004),
+  including the new reply-drafting decision.
 - `docs/roadmap.md` contains the unchecked item for this step under:
   `Phase 3 -> Step: Template and reply automation`.
 
@@ -423,8 +450,7 @@ Planned internal interfaces (names may vary, responsibilities must not):
 
 - Additive config fields in `FrankieConfig`:
 
-  `pub reply_max_length: usize`
-  `pub reply_templates: Vec<String>`
+  `pub reply_max_length: usize` `pub reply_templates: Vec<String>`
 
 - Additive message variants in `AppMsg` for reply draft lifecycle.
 

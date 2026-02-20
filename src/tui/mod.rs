@@ -65,6 +65,15 @@ static GIT_OPS_CONTEXT: OnceLock<GitOpsContext> = OnceLock::new();
 /// time-travel is attempted without a valid local repository.
 static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
 
+/// Global storage for reply-drafting configuration.
+///
+/// This is set before TUI startup from CLI/config sources. When not provided,
+/// the application falls back to built-in defaults.
+static REPLY_DRAFT_CONFIG: OnceLock<ReplyDraftConfig> = OnceLock::new();
+
+/// Static fallback reply-drafting configuration.
+static DEFAULT_REPLY_DRAFT_CONFIG: OnceLock<ReplyDraftConfig> = OnceLock::new();
+
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
     locator: PullRequestLocator,
@@ -93,6 +102,39 @@ pub struct TimeTravelContext {
     pub pr_number: u64,
     /// Reason discovery failed, if applicable.
     pub discovery_failure: Option<String>,
+}
+
+/// Configuration for template-based reply drafting inside the TUI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyDraftConfig {
+    /// Maximum character count for reply drafts.
+    pub max_length: usize,
+    /// Ordered template list mapped to keyboard slots `1`-`9`.
+    pub templates: Vec<String>,
+}
+
+impl Default for ReplyDraftConfig {
+    fn default() -> Self {
+        Self {
+            max_length: 500,
+            templates: vec![
+                "Thanks for the review on {{ file }}:{{ line }}. I will update this.".to_owned(),
+                "Good catch, {{ reviewer }}. I will address this in the next commit.".to_owned(),
+                "I have addressed this feedback and pushed an update.".to_owned(),
+            ],
+        }
+    }
+}
+
+impl ReplyDraftConfig {
+    /// Creates a reply-drafting config while normalising invalid lengths.
+    #[must_use]
+    pub fn new(max_length: usize, templates: Vec<String>) -> Self {
+        Self {
+            max_length: max_length.max(1),
+            templates,
+        }
+    }
 }
 
 /// Sets the initial reviews for the TUI application.
@@ -196,6 +238,16 @@ pub fn set_time_travel_context(context: TimeTravelContext) -> bool {
     TIME_TRAVEL_CONTEXT.set(context).is_ok()
 }
 
+/// Sets reply-drafting configuration for TUI startup.
+///
+/// Returns `true` when the value is set for the first time, or `false` when a
+/// prior value already exists.
+pub fn set_reply_draft_config(config: ReplyDraftConfig) -> bool {
+    REPLY_DRAFT_CONFIG
+        .set(ReplyDraftConfig::new(config.max_length, config.templates))
+        .is_ok()
+}
+
 /// Gets the Git operations context, if configured.
 ///
 /// Called internally by `ReviewApp::init()`. Returns the stored git ops
@@ -212,6 +264,15 @@ pub(crate) fn get_git_ops_context() -> Option<(Arc<dyn GitOperations>, String)> 
 /// contextual error messages.
 pub(crate) fn get_time_travel_context() -> Option<TimeTravelContext> {
     TIME_TRAVEL_CONTEXT.get().cloned()
+}
+
+/// Gets reply-drafting configuration, falling back to defaults.
+pub(crate) fn get_reply_draft_config() -> ReplyDraftConfig {
+    REPLY_DRAFT_CONFIG.get().cloned().unwrap_or_else(|| {
+        DEFAULT_REPLY_DRAFT_CONFIG
+            .get_or_init(ReplyDraftConfig::default)
+            .clone()
+    })
 }
 
 /// Gets the telemetry sink, returning a no-op sink if not configured.
@@ -477,6 +538,30 @@ mod tests {
             assert_eq!(stored.repo, "hello-world");
             assert_eq!(stored.pr_number, 42);
             assert_eq!(stored.discovery_failure.as_deref(), Some("no repo found"));
+        }
+    }
+
+    #[test]
+    fn reply_draft_config_falls_back_to_defaults() {
+        let config = get_reply_draft_config();
+        assert!(
+            config.max_length >= 1,
+            "default reply max_length should be positive"
+        );
+        assert!(
+            !config.templates.is_empty(),
+            "default reply templates should not be empty"
+        );
+    }
+
+    #[test]
+    fn set_reply_draft_config_normalises_zero_max_length() {
+        let custom = ReplyDraftConfig::new(0, vec!["Template".to_owned()]);
+        let was_set = set_reply_draft_config(custom);
+        let config = get_reply_draft_config();
+        assert!(config.max_length >= 1, "max_length should be normalised");
+        if was_set {
+            assert_eq!(config.templates, vec!["Template".to_owned()]);
         }
     }
 }

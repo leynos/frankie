@@ -100,7 +100,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
 
 ### Step: Template and reply automation
 
-- [ ] Provide template-based reply drafting with keyboard-driven insertion;
+- [x] Provide template-based reply drafting with keyboard-driven insertion;
       acceptance: replies render inline, support edit-before-send, and enforce
       configured length limits.
 - [ ] Add AI-powered comment expansion and rewording; acceptance: generated
