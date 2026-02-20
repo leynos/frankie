@@ -1,6 +1,7 @@
 //! Process execution helpers for Codex integration.
 
 mod app_server;
+mod finalise;
 mod messaging;
 mod resume;
 mod session;
@@ -19,12 +20,9 @@ use crate::ai::session::{SessionState, SessionStatus};
 
 use super::transcript::TranscriptWriter;
 
-use self::app_server::AppServerCompletion;
-use self::messaging::{send_failure_with_details, send_success};
-use self::session::{
-    build_running_session_state, log_sidecar_write_error, session_status_from_completion,
-    update_session_status,
-};
+use self::finalise::finalize;
+use self::messaging::send_failure_with_details;
+use self::session::{build_running_session_state, log_sidecar_write_error, update_session_status};
 use self::stderr::StderrCapture;
 use self::stream::{StreamCompletion, StreamProgressContext};
 use self::termination::terminate_child;
@@ -282,6 +280,13 @@ where
         let result = stream_fn(input.stdout, input.stdin, &mut ctx);
         if let Some(tid) = ctx.thread_id.take() {
             run_ctx.session_state.thread_id = Some(tid);
+            if let Err(error) = run_ctx.session_state.write_sidecar() {
+                let detail = error.to_string();
+                log_sidecar_write_error(
+                    run_ctx.session_state.sidecar_path().as_str(),
+                    detail.as_str(),
+                );
+            }
         }
         result
     };
@@ -319,84 +324,6 @@ where
     }
 
     Some(outcome)
-}
-
-fn finalize(
-    child: &mut Child,
-    completion: StreamCompletion,
-    transcript_path: Utf8PathBuf,
-    run_ctx: &mut RunContext<'_>,
-) {
-    match completion {
-        StreamCompletion::AppServer(outcome) => {
-            let terminal_status = session_status_from_completion(&outcome);
-            update_session_status(run_ctx.session_state, terminal_status);
-            terminate_child(child);
-            send_app_server_outcome(outcome, transcript_path, run_ctx);
-        }
-        StreamCompletion::ProcessExit => {
-            complete_with_exit(child, transcript_path, run_ctx);
-        }
-    }
-}
-
-fn send_app_server_outcome(
-    outcome: AppServerCompletion,
-    transcript_path: Utf8PathBuf,
-    run_ctx: &mut RunContext<'_>,
-) {
-    match outcome {
-        AppServerCompletion::Succeeded => {
-            send_success(run_ctx.sender, transcript_path);
-        }
-        AppServerCompletion::Failed { message, .. } => {
-            send_failure_with_details(
-                run_ctx.sender,
-                run_ctx.stderr_capture.append_to(message),
-                None,
-                Some(run_ctx.session_state.transcript_path.clone()),
-            );
-        }
-    }
-}
-
-fn complete_with_exit(
-    child: &mut Child,
-    transcript_path: Utf8PathBuf,
-    run_ctx: &mut RunContext<'_>,
-) {
-    let status = match child.wait() {
-        Ok(status) => status,
-        Err(error) => {
-            update_session_status(run_ctx.session_state, SessionStatus::Failed);
-            send_failure_with_details(
-                run_ctx.sender,
-                run_ctx
-                    .stderr_capture
-                    .append_to(format!("failed waiting for Codex exit: {error}")),
-                None,
-                Some(transcript_path),
-            );
-            return;
-        }
-    };
-
-    if status.success() {
-        update_session_status(run_ctx.session_state, SessionStatus::Completed);
-        send_success(run_ctx.sender, transcript_path);
-        return;
-    }
-
-    update_session_status(run_ctx.session_state, SessionStatus::Failed);
-    let message = run_ctx
-        .stderr_capture
-        .append_to("codex exited with a non-zero status".to_owned());
-    send_failure_with_details(
-        run_ctx.sender,
-        message,
-        status.code(),
-        Some(transcript_path),
-    );
 }
 
 fn build_prompt(request: &CodexExecutionRequest) -> String {
