@@ -34,16 +34,25 @@ pub(crate) use self::resume::{ResumeParams, run_codex_resume};
 #[cfg(test)]
 pub(crate) use self::stream::parse_progress_event;
 
+/// Error returned by Codex process execution helpers.
+///
+/// Carries a human-readable `message` and a `kind` used to distinguish
+/// interruption flows from hard failures.
 #[derive(Debug, thiserror::Error)]
 #[error("{message}")]
 pub(super) struct RunError {
+    /// Human-readable failure detail surfaced to callers and UI updates.
     message: String,
+    /// Classification used to drive interruption-aware handling paths.
     kind: RunErrorKind,
 }
 
+/// Classifies execution failures for control-flow decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RunErrorKind {
+    /// The run was intentionally interrupted and can be surfaced as such.
     Interruption,
+    /// A non-interruption execution failure.
     HardFailure,
 }
 
@@ -67,12 +76,23 @@ impl RunError {
     }
 }
 
+/// Command-line specification for spawning Codex.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CodexCommandSpec {
+    /// Executable path used to spawn the Codex process.
     pub(crate) program: String,
+    /// Default argument vector passed to the executable.
     pub(crate) args: Vec<String>,
 }
 
+/// Builds the command program and default arguments for a Codex run.
+///
+/// Parameters:
+/// - `command_path`: filesystem path (or command name) used as the executable.
+///
+/// Returns:
+/// - A [`CodexCommandSpec`] containing `program = command_path` and the default
+///   `app-server` subcommand argument.
 pub(crate) fn build_command_spec(command_path: &str) -> CodexCommandSpec {
     CodexCommandSpec {
         program: command_path.to_owned(),
@@ -86,6 +106,23 @@ struct RunContext<'a> {
     stderr_capture: StderrCapture,
 }
 
+/// Starts Codex execution on a background thread and returns a handle.
+///
+/// Parameters:
+/// - `command_path`: executable path used to launch Codex.
+/// - `request`: execution payload consumed by the spawned worker thread.
+/// - `transcript_path`: output path for the run transcript.
+///
+/// Returns:
+/// - A [`CodexExecutionHandle`] backed by a channel receiver for streaming
+///   [`CodexExecutionUpdate`] values from the worker thread.
+///
+/// Behaviour:
+/// - Creates an `mpsc` channel.
+/// - Spawns a thread that runs `execute_codex` and publishes updates via the
+///   channel sender.
+/// - Interruption semantics are preserved through [`RunError::interruption`]
+///   within the execution pipeline.
 pub(crate) fn run_codex(
     command_path: String,
     request: CodexExecutionRequest,
