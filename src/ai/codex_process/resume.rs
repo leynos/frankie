@@ -12,11 +12,10 @@ use crate::ai::codex_exec::{CodexExecutionHandle, CodexExecutionUpdate};
 use crate::ai::session::{SessionState, SessionStatus};
 use crate::ai::transcript::TranscriptWriter;
 
+use super::messaging::send_failure_with_details;
+use super::session::update_session_status;
 use super::stream;
-use super::{
-    RunContext, StreamRunInput, finalize, run_stream_with_context, send_failure_with_details,
-    spawn_codex, take_io, update_session_status,
-};
+use super::{RunContext, StreamRunInput, finalize, run_stream_with_context, spawn_codex, take_io};
 
 /// Context for a resumed Codex execution.
 pub(crate) struct ResumeParams {
@@ -74,6 +73,7 @@ fn prepare_session_for_resume(
     let previous_status = session_state.status.clone();
     let previous_finished_at = session_state.finished_at;
     session_state.status = SessionStatus::Running;
+    session_state.started_at = chrono::Utc::now();
     session_state.finished_at = None;
     if let Err(error) = session_state.write_sidecar() {
         session_state.status = previous_status;

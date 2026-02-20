@@ -309,6 +309,9 @@ fn startup_snapshot_reflects_configured_size(
     // Some CI runners provide PTY implementations that never emit frame data.
     // Skip snapshot assertions when the captured buffer is entirely blank.
     if frame_is_blank(&frame) {
+        tracing::warn!(
+            "warning: skipping blank frame in startup_snapshot_reflects_configured_size ({snapshot_name})"
+        );
         return Ok(());
     }
 
@@ -367,6 +370,10 @@ fn viewport_size_snapshots(#[case] case: ViewportSnapshotCase) -> Result<()> {
     // Some CI runners provide PTY implementations that never emit frame data.
     // Skip snapshot assertions when the captured buffer is entirely blank.
     if frame_is_blank(&frame) {
+        tracing::warn!(
+            "warning: skipping blank frame in viewport_size_snapshots ({})",
+            case.snapshot_name
+        );
         return Ok(());
     }
 

@@ -346,7 +346,7 @@ In `src/ai/codex_process/app_server.rs`:
    distinguish interrupted from other failures without string matching.
 2. Update `check_turn_completion()` to set `interrupted: true` when the
    `turn/completed` status is `"interrupted"` or `"cancelled"`.
-3. Expose the thread ID from the `thread/start` response. Currently
+3. Expose the thread ID from the `thread/start` response. Currently,
    `AppServerSession::handle_message()` extracts the thread ID but only uses it
    to send `turn/start`. Store it as a field on `AppServerSession` and expose
    it via a `thread_id(&self) -> Option<&str>` accessor.
@@ -474,7 +474,7 @@ In `src/ai/codex_process/mod.rs`:
    - Uses `TranscriptWriter::open_append()` instead of `create()`.
    - Passes the thread ID to `maybe_start_resume_session()` so the
      app-server session uses `thread/resume` instead of `thread/start`.
-   - Otherwise follows the same spawn → stream → outcome lifecycle as
+   - Otherwise, follows the same spawn → stream → outcome lifecycle as
      `run_codex()`.
 
 To avoid duplicating the full `execute_codex()` body, factor the shared

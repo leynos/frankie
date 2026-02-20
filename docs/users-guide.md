@@ -227,10 +227,10 @@ Interrupted session from 2026-02-15 10:00 UTC. Resume? [y/n]
 ```
 
 - Pressing `y` resumes the interrupted session. Frankie reconnects to the prior
-  Codex server-side thread using the `thread/resume` JSON-RPC method. This
-  preserves any approvals and conversation state from the interrupted run. New
-  content is appended to the existing transcript file after a
-  `--- session resumed ---` separator.
+  Codex server-side thread using the `thread/resume` JSON Remote Procedure Call
+  (JSON-RPC) method. This preserves any approvals and conversation state from
+  the interrupted run. New content is appended to the existing transcript file
+  after a `--- session resumed ---` separator.
 - Pressing `n` or `Esc` declines the prompt and starts a fresh Codex run.
 
 Session state is stored in JSON sidecar files alongside each transcript

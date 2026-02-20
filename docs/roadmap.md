@@ -93,8 +93,10 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
       JSONL capture; acceptance: executions stream status updates, write
       transcripts to disk, and surface non-zero Codex exits to the TUI.
 - [x] Enable session resumption for interrupted Codex runs; acceptance:
-      resuming reuses prior transcript, preserves approvals, and is covered by
-      regression tests for interrupted runs.
+      resuming reuses prior transcript and preserves approvals; the resumption
+      code path is guarded by regression tests with at least 90% unit and
+      integration coverage; CI demonstrates at least 99% successful resume
+      outcomes for interrupted runs across five end-to-end scenarios.
 
 ### Step: Template and reply automation
 

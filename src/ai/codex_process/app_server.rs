@@ -235,12 +235,18 @@ fn write_message(stdin: &mut ChildStdin, message: &Value) -> Result<(), RunError
     let mut encoded = serde_json::to_vec(message)
         .map_err(|error| RunError::new(format!("failed to encode app-server request: {error}")))?;
     encoded.push(b'\n');
-    stdin
-        .write_all(&encoded)
-        .map_err(|error| RunError::new(format!("failed writing app-server request: {error}")))?;
-    stdin
-        .flush()
-        .map_err(|error| RunError::new(format!("failed flushing app-server request: {error}")))?;
+    stdin.write_all(&encoded).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::Interrupted {
+            return RunError::interruption(format!("failed writing app-server request: {error}"));
+        }
+        RunError::new(format!("failed writing app-server request: {error}"))
+    })?;
+    stdin.flush().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::Interrupted {
+            return RunError::interruption(format!("failed flushing app-server request: {error}"));
+        }
+        RunError::new(format!("failed flushing app-server request: {error}"))
+    })?;
     Ok(())
 }
 
@@ -274,6 +280,8 @@ fn thread_start_request() -> Value {
 
 fn thread_resume_request(thread_id: &str) -> Value {
     json!({
+        // `thread/resume` replaces `thread/start` in the protocol sequence, so
+        // reusing this request ID preserves the expected response correlation.
         "id": THREAD_START_REQUEST_ID,
         "method": "thread/resume",
         "params": { "threadId": thread_id }

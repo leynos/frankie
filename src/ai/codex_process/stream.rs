@@ -72,9 +72,12 @@ fn stream_progress_internal(
             break Ok(StreamCompletion::ProcessExit);
         };
 
-        let line = match line_result
-            .map_err(|error| RunError::new(format!("failed to read Codex output: {error}")))
-        {
+        let line = match line_result.map_err(|error| {
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                return RunError::interruption(format!("failed to read Codex output: {error}"));
+            }
+            RunError::new(format!("failed to read Codex output: {error}"))
+        }) {
             Ok(line) => line,
             Err(error) => break Err(error),
         };

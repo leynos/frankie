@@ -60,13 +60,20 @@ impl ReviewApp {
     /// Checks for an interrupted session matching the current PR context.
     fn check_for_interrupted_session() -> Option<SessionState> {
         let locator = crate::tui::get_refresh_locator()?;
-        let base_dir = default_transcript_base_dir().ok()?;
+        let base_dir = default_transcript_base_dir()
+            .map_err(|error| {
+                tracing::debug!("default_transcript_base_dir failed: {:?}", error);
+            })
+            .ok()?;
         find_interrupted_session(
             base_dir.as_path(),
             locator.owner().as_str(),
             locator.repository().as_str(),
             locator.number().get(),
         )
+        .map_err(|error| {
+            tracing::debug!("find_interrupted_session failed: {:?}", error);
+        })
         .ok()
         .flatten()
     }
@@ -133,6 +140,9 @@ impl ReviewApp {
 
     /// Builds the PR URL from the current refresh context.
     fn build_pr_url() -> Option<String> {
+        // This assumes `get_refresh_locator()` points to a GitHub-hosted
+        // repository; update this owner/repository/number URL builder if
+        // provider-agnostic links (e.g. GitLab or Bitbucket) are needed.
         let locator = crate::tui::get_refresh_locator()?;
         Some(format!(
             "https://github.com/{}/{}/pull/{}",

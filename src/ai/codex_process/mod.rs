@@ -1,7 +1,9 @@
 //! Process execution helpers for Codex integration.
 
 mod app_server;
+mod messaging;
 mod resume;
+mod session;
 mod stderr;
 mod stream;
 mod termination;
@@ -11,16 +13,18 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::mpsc::{self, Sender};
 
 use camino::Utf8PathBuf;
-use chrono::Utc;
 
-use crate::ai::codex_exec::{
-    CodexExecutionHandle, CodexExecutionOutcome, CodexExecutionRequest, CodexExecutionUpdate,
-};
+use crate::ai::codex_exec::{CodexExecutionHandle, CodexExecutionRequest, CodexExecutionUpdate};
 use crate::ai::session::{SessionState, SessionStatus};
 
 use super::transcript::TranscriptWriter;
 
 use self::app_server::AppServerCompletion;
+use self::messaging::{send_failure_with_details, send_success};
+use self::session::{
+    build_running_session_state, log_sidecar_write_error, session_status_from_completion,
+    update_session_status,
+};
 use self::stderr::StderrCapture;
 use self::stream::{StreamCompletion, StreamProgressContext};
 use self::termination::terminate_child;
@@ -31,12 +35,35 @@ pub(crate) use self::resume::{ResumeParams, run_codex_resume};
 pub(crate) use self::stream::parse_progress_event;
 
 #[derive(Debug, thiserror::Error)]
-#[error("{0}")]
-pub(super) struct RunError(String);
+#[error("{message}")]
+pub(super) struct RunError {
+    message: String,
+    kind: RunErrorKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunErrorKind {
+    Interruption,
+    HardFailure,
+}
 
 impl RunError {
     pub(super) fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+        Self {
+            message: message.into(),
+            kind: RunErrorKind::HardFailure,
+        }
+    }
+
+    pub(super) fn interruption(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            kind: RunErrorKind::Interruption,
+        }
+    }
+
+    pub(super) const fn is_interruption(&self) -> bool {
+        matches!(self.kind, RunErrorKind::Interruption)
     }
 }
 
@@ -211,7 +238,12 @@ where
     let outcome = match result {
         Ok(completion) => completion,
         Err(error) => {
-            update_session_status(run_ctx.session_state, SessionStatus::Interrupted);
+            let status = if error.is_interruption() {
+                SessionStatus::Interrupted
+            } else {
+                SessionStatus::Failed
+            };
+            update_session_status(run_ctx.session_state, status);
             send_failure_with_details(
                 run_ctx.sender,
                 run_ctx.stderr_capture.append_to(error.to_string()),
@@ -314,68 +346,6 @@ fn complete_with_exit(
         status.code(),
         Some(transcript_path),
     );
-}
-
-fn build_running_session_state(
-    request: &CodexExecutionRequest,
-    transcript_path: &Utf8PathBuf,
-) -> SessionState {
-    SessionState {
-        status: SessionStatus::Running,
-        transcript_path: transcript_path.clone(),
-        thread_id: None,
-        owner: request.context().owner().to_owned(),
-        repository: request.context().repository().to_owned(),
-        pr_number: request.context().pr_number(),
-        started_at: Utc::now(),
-        finished_at: None,
-    }
-}
-
-fn send_success(sender: &Sender<CodexExecutionUpdate>, transcript_path: Utf8PathBuf) {
-    drop(sender.send(CodexExecutionUpdate::Finished(
-        CodexExecutionOutcome::Succeeded { transcript_path },
-    )));
-}
-
-pub(super) fn send_failure_with_details(
-    sender: &Sender<CodexExecutionUpdate>,
-    message: String,
-    exit_code: Option<i32>,
-    transcript_path: Option<Utf8PathBuf>,
-) {
-    drop(sender.send(CodexExecutionUpdate::Finished(
-        CodexExecutionOutcome::Failed {
-            message,
-            exit_code,
-            transcript_path,
-        },
-    )));
-}
-
-const fn session_status_from_completion(completion: &AppServerCompletion) -> SessionStatus {
-    match completion {
-        AppServerCompletion::Succeeded => SessionStatus::Completed,
-        AppServerCompletion::Failed {
-            interrupted: true, ..
-        } => SessionStatus::Interrupted,
-        AppServerCompletion::Failed {
-            interrupted: false, ..
-        } => SessionStatus::Failed,
-    }
-}
-
-pub(super) fn update_session_status(state: &mut SessionState, status: SessionStatus) {
-    state.status = status;
-    state.finished_at = Some(Utc::now());
-    if let Err(error) = state.write_sidecar() {
-        let detail = error.to_string();
-        log_sidecar_write_error(state.sidecar_path().as_str(), detail.as_str());
-    }
-}
-
-fn log_sidecar_write_error(sidecar_path: &str, error: &str) {
-    tracing::warn!("failed to write session sidecar '{sidecar_path}': {error}");
 }
 
 fn build_prompt(request: &CodexExecutionRequest) -> String {
