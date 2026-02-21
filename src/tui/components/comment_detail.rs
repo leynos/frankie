@@ -29,6 +29,21 @@ pub struct CommentDetailViewContext<'a> {
     pub max_width: usize,
     /// Maximum height in lines for the detail pane (0 = unlimited).
     pub max_height: usize,
+    /// Inline reply draft details for the selected comment, if active.
+    pub reply_draft: Option<ReplyDraftRenderContext<'a>>,
+}
+
+/// Render-only reply-draft context for the comment detail view.
+#[derive(Debug, Clone)]
+pub struct ReplyDraftRenderContext<'a> {
+    /// Current reply draft text.
+    pub text: &'a str,
+    /// Current character count of the draft text.
+    pub char_count: usize,
+    /// Maximum configured character count.
+    pub max_length: usize,
+    /// Whether the draft has been marked ready to send.
+    pub ready_to_send: bool,
 }
 
 /// Component for displaying a single review comment with code context.
@@ -89,6 +104,11 @@ impl CommentDetailComponent {
         // Code context
         output.push_str(&self.render_code_context(comment, ctx.max_width));
 
+        // Inline reply draft for the selected comment.
+        if let Some(reply_draft) = &ctx.reply_draft {
+            output.push_str(&Self::render_reply_draft(reply_draft, ctx.max_width));
+        }
+
         // Truncate to max_height if specified
         if ctx.max_height > 0 {
             truncate_to_height(&mut output, ctx.max_height);
@@ -146,6 +166,32 @@ impl CommentDetailComponent {
             output.push('\n');
         }
 
+        output
+    }
+
+    /// Renders inline reply-draft content and length metadata.
+    fn render_reply_draft(reply_draft: &ReplyDraftRenderContext<'_>, max_width: usize) -> String {
+        let mut output = String::from("\nReply draft:\n");
+
+        if reply_draft.text.is_empty() {
+            output.push_str("(empty)\n");
+        } else {
+            output.push_str(&wrap_text(reply_draft.text, max_width));
+            output.push('\n');
+        }
+
+        let readiness_suffix = if reply_draft.ready_to_send {
+            " (ready to send)"
+        } else {
+            ""
+        };
+        output.push_str("Length: ");
+        output.push_str(&reply_draft.char_count.to_string());
+        output.push('/');
+        output.push_str(&reply_draft.max_length.to_string());
+        output.push_str(readiness_suffix);
+        output.push('\n');
+        output.push_str("Templates: 1-9  Enter: ready  Esc: cancel\n");
         output
     }
 }

@@ -82,6 +82,23 @@ pub enum AppMsg {
     /// User declined the resume prompt.
     ResumeDeclined,
 
+    // Reply drafting
+    /// Start a reply draft for the currently selected comment.
+    StartReplyDraft,
+    /// Insert a configured template into the active reply draft.
+    ReplyDraftInsertTemplate {
+        /// Zero-based template index.
+        template_index: usize,
+    },
+    /// Insert one typed character into the active reply draft.
+    ReplyDraftInsertChar(char),
+    /// Remove the final character from the active reply draft.
+    ReplyDraftBackspace,
+    /// Validate the active reply draft and mark it ready to send.
+    ReplyDraftRequestSend,
+    /// Cancel and discard the active reply draft.
+    ReplyDraftCancel,
+
     // Data loading
     /// Request a refresh of review data from the API.
     RefreshRequested,
@@ -175,6 +192,20 @@ impl AppMsg {
                 | Self::ResumePromptShown(_)
                 | Self::ResumeAccepted
                 | Self::ResumeDeclined
+        )
+    }
+
+    /// Returns `true` if this is a reply-drafting message.
+    #[must_use]
+    pub const fn is_reply_draft(&self) -> bool {
+        matches!(
+            self,
+            Self::StartReplyDraft
+                | Self::ReplyDraftInsertTemplate { .. }
+                | Self::ReplyDraftInsertChar(_)
+                | Self::ReplyDraftBackspace
+                | Self::ReplyDraftRequestSend
+                | Self::ReplyDraftCancel
         )
     }
 

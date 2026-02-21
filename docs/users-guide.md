@@ -166,6 +166,7 @@ Table: Review list keyboard shortcuts.
 | `[`         | Previous diff hunk             |
 | `]`         | Next diff hunk                 |
 | `t`         | Enter time-travel mode         |
+| `a`         | Start inline reply drafting    |
 | `x`         | Run Codex on filtered comments |
 | `r`         | Refresh from GitHub            |
 | `?`         | Toggle help overlay            |
@@ -237,6 +238,34 @@ Session state is stored in JSON sidecar files alongside each transcript
 (`<transcript-name>.session.json`). These files record the thread ID, PR
 context, status, and timestamps. Interrupted sessions with a valid thread ID
 are eligible for resumption.
+
+### Inline reply drafting
+
+Press `a` in the review list to start drafting a reply for the currently
+selected comment. The draft appears inline in the comment detail pane and is
+edited entirely from the keyboard.
+
+In reply-draft mode:
+
+- Press `1` to `9` to insert template slots 1 to 9.
+- Type printable keys to edit draft text.
+- Press `Backspace` to delete one character.
+- Press `Enter` to mark the draft as ready to send.
+- Press `Esc` to discard the draft and return to the review list.
+
+Draft length is enforced while typing and during template insertion. Frankie
+counts Unicode scalar values, not bytes. If a template or edit would exceed the
+configured maximum, the change is rejected and an inline error is shown.
+
+`Enter` only marks the draft as ready to send in this phase. It does not post
+the reply to GitHub yet.
+
+Reply drafting can be configured through the same config layering as other
+Frankie settings:
+
+- `--reply-max-length <COUNT>` / `FRANKIE_REPLY_MAX_LENGTH`
+- `--reply-templates '<json-array>'` / `FRANKIE_REPLY_TEMPLATES`
+- `reply_max_length` and `reply_templates` in `.frankie.toml`
 
 ### Filters
 
@@ -539,6 +568,13 @@ database_url = "frankie.sqlite"
 # Pull request metadata cache time-to-live (TTL) (optional, seconds)
 pr_metadata_cache_ttl_seconds = 86400
 
+# Reply drafting options (optional)
+reply_max_length = 500
+reply_templates = [
+  "Thanks {{ reviewer }}. I will update {{ file }}:{{ line }}.",
+  "Good catch, {{ reviewer }}. I'll address this now."
+]
+
 # Database migrations (set to true to run migrations and exit)
 migrate_db = true
 ```
@@ -561,6 +597,8 @@ Frankie searches for configuration files in this order:
 | `FRANKIE_DATABASE_URL`                  | Local SQLite database path for persistence          |
 | `FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` | PR metadata cache TTL (seconds)                     |
 | `FRANKIE_TEMPLATE`                      | Template file path for custom export format         |
+| `FRANKIE_REPLY_MAX_LENGTH`              | Maximum character count for inline reply drafts     |
+| `FRANKIE_REPLY_TEMPLATES`               | JSON array of reply template strings for TUI insert |
 | `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above) |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
@@ -583,6 +621,8 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--export <FORMAT>`                         | `-e`  | Export comments (`markdown`, `jsonl`, `template`) |
 | `--output <PATH>`                           | —     | Output file for export (default: stdout)          |
 | `--template <PATH>`                         | —     | Template file for custom export format            |
+| `--reply-max-length <COUNT>`                | —     | Maximum characters allowed in TUI reply drafts    |
+| `--reply-templates <JSON_ARRAY>`            | —     | Reply template list for keyboard insertion in TUI |
 | `--help`                                    | `-h`  | Show help information                             |
 
 Run `frankie --help` to see all available options and their descriptions.

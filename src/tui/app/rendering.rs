@@ -10,6 +10,24 @@ use crate::tui::components::{
 };
 
 impl ReviewApp {
+    fn render_chrome_with_body<F>(&self, render_body: F) -> String
+    where
+        F: FnOnce(usize) -> String,
+    {
+        let mut output = String::new();
+
+        output.push_str(&self.render_header());
+
+        let chrome_height = 2_usize; // header + status bar
+        let total_height = self.height as usize;
+        let body_height = total_height.saturating_sub(chrome_height);
+
+        output.push_str(&render_body(body_height));
+        output.push_str(&self.render_status_bar());
+
+        output
+    }
+
     /// Renders the header bar.
     pub(super) fn render_header(&self) -> String {
         let title = "Frankie - Review Comments";
@@ -45,10 +63,13 @@ impl ReviewApp {
             return format!("Codex: {codex_status}{running_suffix}\n");
         }
 
+        if self.has_reply_draft() {
+            return "Reply draft: 1-9:template  text:edit  Backspace:delete  Enter:ready  Esc:cancel\n"
+                .to_owned();
+        }
+
         let hints = match self.view_mode {
-            super::ViewMode::ReviewList => {
-                "j/k:move  f:filter  c:context  t:travel  x:codex  r:refresh  ?:help  q:quit"
-            }
+            super::ViewMode::ReviewList => self.review_list_status_hints(),
             super::ViewMode::DiffContext => "[/]:hunks  Esc:back  ?:help  q:quit",
             super::ViewMode::TimeTravel => "h/l:commits  Esc:back  ?:help  q:quit",
         };
@@ -80,6 +101,7 @@ Other:
   r          Refresh from GitHub
   c          View full-screen context
   t          Time-travel to comment's commit
+  a          Start inline reply draft
   x          Run Codex using filtered comments
   ?          Toggle this help
   q          Quit
@@ -94,6 +116,13 @@ Time-travel:
   l          Next (more recent) commit
   Esc        Return to review list
 
+Reply draft:
+  1-9        Insert template
+  text keys  Edit draft text
+  Backspace  Delete one character
+  Enter      Mark draft ready to send
+  Esc        Discard draft and return
+
 Press any key to close this help.
 ";
         help_text.to_owned()
@@ -101,45 +130,35 @@ Press any key to close this help.
 
     /// Renders the full-screen diff context view.
     pub(super) fn render_diff_context_view(&self) -> String {
-        let mut output = String::new();
+        self.render_chrome_with_body(|body_height| {
+            let ctx = DiffContextViewContext {
+                hunks: self.diff_context_state.hunks(),
+                current_index: self.diff_context_state.current_index(),
+                max_height: body_height,
+            };
 
-        output.push_str(&self.render_header());
-
-        let chrome_height = 2_usize; // header + status bar
-        let total_height = self.height as usize;
-        let body_height = total_height.saturating_sub(chrome_height);
-
-        let ctx = DiffContextViewContext {
-            hunks: self.diff_context_state.hunks(),
-            current_index: self.diff_context_state.current_index(),
-            max_height: body_height,
-        };
-
-        output.push_str(&DiffContextComponent::view(&ctx));
-        output.push_str(&self.render_status_bar());
-
-        output
+            DiffContextComponent::view(&ctx)
+        })
     }
 
     /// Renders the time-travel navigation view.
     pub(super) fn render_time_travel_view(&self) -> String {
-        let mut output = String::new();
+        self.render_chrome_with_body(|body_height| {
+            let ctx = TimeTravelViewContext {
+                state: self.time_travel_state.as_ref(),
+                max_width: self.width as usize,
+                max_height: body_height,
+            };
 
-        output.push_str(&self.render_header());
+            TimeTravelViewComponent::view(&ctx)
+        })
+    }
 
-        let chrome_height = 2_usize; // header + status bar
-        let total_height = self.height as usize;
-        let body_height = total_height.saturating_sub(chrome_height);
-
-        let ctx = TimeTravelViewContext {
-            state: self.time_travel_state.as_ref(),
-            max_width: self.width as usize,
-            max_height: body_height,
-        };
-
-        output.push_str(&TimeTravelViewComponent::view(&ctx));
-        output.push_str(&self.render_status_bar());
-
-        output
+    const fn review_list_status_hints(&self) -> &'static str {
+        if self.width <= 80 {
+            "q:quit  ?:help  j/k:move  f:filter  a:reply  x:codex"
+        } else {
+            "j/k:move  f:filter  c:context  t:travel  a:reply  x:codex  r:refresh  ?:help  q:quit"
+        }
     }
 }

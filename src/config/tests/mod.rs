@@ -14,5 +14,6 @@ mod helpers;
 mod local_discovery_config;
 mod operation_mode;
 mod precedence;
+mod reply_drafting;
 mod ttl_loading;
 mod validation;
