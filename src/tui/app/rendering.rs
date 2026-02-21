@@ -10,6 +10,24 @@ use crate::tui::components::{
 };
 
 impl ReviewApp {
+    fn render_chrome_with_body<F>(&self, render_body: F) -> String
+    where
+        F: FnOnce(usize) -> String,
+    {
+        let mut output = String::new();
+
+        output.push_str(&self.render_header());
+
+        let chrome_height = 2_usize; // header + status bar
+        let total_height = self.height as usize;
+        let body_height = total_height.saturating_sub(chrome_height);
+
+        output.push_str(&render_body(body_height));
+        output.push_str(&self.render_status_bar());
+
+        output
+    }
+
     /// Renders the header bar.
     pub(super) fn render_header(&self) -> String {
         let title = "Frankie - Review Comments";
@@ -112,46 +130,28 @@ Press any key to close this help.
 
     /// Renders the full-screen diff context view.
     pub(super) fn render_diff_context_view(&self) -> String {
-        let mut output = String::new();
+        self.render_chrome_with_body(|body_height| {
+            let ctx = DiffContextViewContext {
+                hunks: self.diff_context_state.hunks(),
+                current_index: self.diff_context_state.current_index(),
+                max_height: body_height,
+            };
 
-        output.push_str(&self.render_header());
-
-        let chrome_height = 2_usize; // header + status bar
-        let total_height = self.height as usize;
-        let body_height = total_height.saturating_sub(chrome_height);
-
-        let ctx = DiffContextViewContext {
-            hunks: self.diff_context_state.hunks(),
-            current_index: self.diff_context_state.current_index(),
-            max_height: body_height,
-        };
-
-        output.push_str(&DiffContextComponent::view(&ctx));
-        output.push_str(&self.render_status_bar());
-
-        output
+            DiffContextComponent::view(&ctx)
+        })
     }
 
     /// Renders the time-travel navigation view.
     pub(super) fn render_time_travel_view(&self) -> String {
-        let mut output = String::new();
+        self.render_chrome_with_body(|body_height| {
+            let ctx = TimeTravelViewContext {
+                state: self.time_travel_state.as_ref(),
+                max_width: self.width as usize,
+                max_height: body_height,
+            };
 
-        output.push_str(&self.render_header());
-
-        let chrome_height = 2_usize; // header + status bar
-        let total_height = self.height as usize;
-        let body_height = total_height.saturating_sub(chrome_height);
-
-        let ctx = TimeTravelViewContext {
-            state: self.time_travel_state.as_ref(),
-            max_width: self.width as usize,
-            max_height: body_height,
-        };
-
-        output.push_str(&TimeTravelViewComponent::view(&ctx));
-        output.push_str(&self.render_status_bar());
-
-        output
+            TimeTravelViewComponent::view(&ctx)
+        })
     }
 
     const fn review_list_status_hints(&self) -> &'static str {

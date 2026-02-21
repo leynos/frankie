@@ -20,6 +20,19 @@ fn sample_reviews() -> Vec<ReviewComment> {
     }]
 }
 
+/// Helper to create an app with a draft and inserted template.
+fn app_with_inserted_template(
+    reviews: Vec<ReviewComment>,
+    max_length: usize,
+    template: &str,
+) -> ReviewApp {
+    let mut app = ReviewApp::new(reviews)
+        .with_reply_draft_config(ReplyDraftConfig::new(max_length, vec![template.to_owned()]));
+    app.handle_message(&AppMsg::StartReplyDraft);
+    app.handle_message(&AppMsg::ReplyDraftInsertTemplate { template_index: 0 });
+    app
+}
+
 #[rstest]
 fn start_reply_draft_requires_selected_comment() {
     let mut app = ReviewApp::empty();
@@ -44,13 +57,11 @@ fn start_reply_draft_creates_empty_state(sample_reviews: Vec<ReviewComment>) {
 
 #[rstest]
 fn insert_template_renders_comment_fields(sample_reviews: Vec<ReviewComment>) {
-    let mut app = ReviewApp::new(sample_reviews).with_reply_draft_config(ReplyDraftConfig::new(
+    let app = app_with_inserted_template(
+        sample_reviews,
         200,
-        vec!["Thanks {{ reviewer }} for {{ file }}:{{ line }}".to_owned()],
-    ));
-
-    app.handle_message(&AppMsg::StartReplyDraft);
-    app.handle_message(&AppMsg::ReplyDraftInsertTemplate { template_index: 0 });
+        "Thanks {{ reviewer }} for {{ file }}:{{ line }}",
+    );
 
     let draft = app.reply_draft.as_ref().expect("draft should exist");
     assert_eq!(draft.text(), "Thanks alice for src/main.rs:12");
@@ -71,13 +82,7 @@ fn insert_template_rejects_unconfigured_index(sample_reviews: Vec<ReviewComment>
 
 #[rstest]
 fn insertion_enforces_length_limit(sample_reviews: Vec<ReviewComment>) {
-    let mut app = ReviewApp::new(sample_reviews).with_reply_draft_config(ReplyDraftConfig::new(
-        5,
-        vec!["This template is too long".to_owned()],
-    ));
-
-    app.handle_message(&AppMsg::StartReplyDraft);
-    app.handle_message(&AppMsg::ReplyDraftInsertTemplate { template_index: 0 });
+    let app = app_with_inserted_template(sample_reviews, 5, "This template is too long");
 
     let draft = app.reply_draft.as_ref().expect("draft should exist");
     assert_eq!(draft.text(), "");

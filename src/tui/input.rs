@@ -31,60 +31,78 @@ pub fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     map_key_to_message_with_context(key, InputContext::ReviewList)
 }
 
-/// Maps a key event to an application message with view context.
-///
-/// Different view modes may interpret the same key differently. For example,
-/// `h` and `l` are navigation keys in time-travel mode but have no function
-/// in the review list.
-#[must_use]
-#[doc(hidden)]
-pub fn map_key_to_message_with_context(
+const fn handle_time_travel_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+    use crossterm::event::KeyCode;
+
+    match key.key {
+        KeyCode::Char('h') => Some(AppMsg::PreviousCommit),
+        KeyCode::Char('l') => Some(AppMsg::NextCommit),
+        KeyCode::Esc => Some(AppMsg::ExitTimeTravel),
+        KeyCode::Char('q') => Some(AppMsg::Quit),
+        _ => None,
+    }
+}
+
+const fn handle_diff_context_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+    use crossterm::event::KeyCode;
+
+    match key.key {
+        KeyCode::Char('[') => Some(AppMsg::PreviousHunk),
+        KeyCode::Char(']') => Some(AppMsg::NextHunk),
+        KeyCode::Esc => Some(AppMsg::HideDiffContext),
+        KeyCode::Char('q') => Some(AppMsg::Quit),
+        _ => None,
+    }
+}
+
+const fn handle_resume_prompt_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+    use crossterm::event::KeyCode;
+
+    match key.key {
+        KeyCode::Char('y') => Some(AppMsg::ResumeAccepted),
+        KeyCode::Char('n') | KeyCode::Esc => Some(AppMsg::ResumeDeclined),
+        KeyCode::Char('q') => Some(AppMsg::Quit),
+        _ => None,
+    }
+}
+
+const fn handle_review_list_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+    use crossterm::event::KeyCode;
+
+    match key.key {
+        KeyCode::Char('x') => Some(AppMsg::StartCodexExecution),
+        KeyCode::Char('a') => Some(AppMsg::StartReplyDraft),
+        _ => None,
+    }
+}
+
+const fn handle_reply_draft_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+    use crossterm::event::KeyCode;
+
+    match key.key {
+        KeyCode::Enter => Some(AppMsg::ReplyDraftRequestSend),
+        KeyCode::Backspace => Some(AppMsg::ReplyDraftBackspace),
+        KeyCode::Esc => Some(AppMsg::ReplyDraftCancel),
+        KeyCode::Char(character @ '1'..='9') => {
+            let template_index = character as usize - '1' as usize;
+            Some(AppMsg::ReplyDraftInsertTemplate { template_index })
+        }
+        KeyCode::Char(character) => Some(AppMsg::ReplyDraftInsertChar(character)),
+        _ => None,
+    }
+}
+
+const fn handle_shared_keys(
     key: &bubbletea_rs::event::KeyMsg,
     context: InputContext,
 ) -> Option<AppMsg> {
     use crossterm::event::KeyCode;
 
-    // Context-specific mappings first
-    match context {
-        InputContext::TimeTravel => match key.key {
-            KeyCode::Char('h') => return Some(AppMsg::PreviousCommit),
-            KeyCode::Char('l') => return Some(AppMsg::NextCommit),
-            KeyCode::Esc => return Some(AppMsg::ExitTimeTravel),
-            KeyCode::Char('q') => return Some(AppMsg::Quit),
-            _ => {}
-        },
-        InputContext::DiffContext => match key.key {
-            KeyCode::Char('[') => return Some(AppMsg::PreviousHunk),
-            KeyCode::Char(']') => return Some(AppMsg::NextHunk),
-            KeyCode::Esc => return Some(AppMsg::HideDiffContext),
-            KeyCode::Char('q') => return Some(AppMsg::Quit),
-            _ => {}
-        },
-        InputContext::ResumePrompt => match key.key {
-            KeyCode::Char('y') => return Some(AppMsg::ResumeAccepted),
-            KeyCode::Char('n') | KeyCode::Esc => return Some(AppMsg::ResumeDeclined),
-            KeyCode::Char('q') => return Some(AppMsg::Quit),
-            _ => return None,
-        },
-        InputContext::ReviewList => {
-            if key.key == KeyCode::Char('x') {
-                return Some(AppMsg::StartCodexExecution);
-            }
-            if key.key == KeyCode::Char('a') {
-                return Some(AppMsg::StartReplyDraft);
-            }
-        }
-        InputContext::ReplyDraft => match key.key {
-            KeyCode::Enter => return Some(AppMsg::ReplyDraftRequestSend),
-            KeyCode::Backspace => return Some(AppMsg::ReplyDraftBackspace),
-            KeyCode::Esc => return Some(AppMsg::ReplyDraftCancel),
-            KeyCode::Char(character @ '1'..='9') => {
-                let template_index = character as usize - '1' as usize;
-                return Some(AppMsg::ReplyDraftInsertTemplate { template_index });
-            }
-            KeyCode::Char(character) => return Some(AppMsg::ReplyDraftInsertChar(character)),
-            _ => return None,
-        },
+    if matches!(
+        context,
+        InputContext::ResumePrompt | InputContext::ReplyDraft
+    ) {
+        return None;
     }
 
     // Default/shared mappings
@@ -105,6 +123,34 @@ pub fn map_key_to_message_with_context(
         KeyCode::Char('[') => Some(AppMsg::PreviousHunk),
         KeyCode::Char(']') => Some(AppMsg::NextHunk),
         _ => None,
+    }
+}
+
+/// Maps a key event to an application message with view context.
+///
+/// Different view modes may interpret the same key differently. For example,
+/// `h` and `l` are navigation keys in time-travel mode but have no function
+/// in the review list.
+#[must_use]
+#[doc(hidden)]
+pub fn map_key_to_message_with_context(
+    key: &bubbletea_rs::event::KeyMsg,
+    context: InputContext,
+) -> Option<AppMsg> {
+    match context {
+        InputContext::TimeTravel => {
+            handle_time_travel_keys(key).or_else(|| handle_shared_keys(key, context))
+        }
+        InputContext::DiffContext => {
+            handle_diff_context_keys(key).or_else(|| handle_shared_keys(key, context))
+        }
+        InputContext::ResumePrompt => handle_resume_prompt_keys(key),
+        InputContext::ReviewList => {
+            handle_review_list_keys(key).or_else(|| handle_shared_keys(key, context))
+        }
+        InputContext::ReplyDraft => {
+            handle_reply_draft_keys(key).or_else(|| handle_shared_keys(key, context))
+        }
     }
 }
 

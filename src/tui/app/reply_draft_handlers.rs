@@ -90,38 +90,52 @@ impl ReviewApp {
     }
 
     fn insert_reply_character(&mut self, character: char) {
-        let Some(selected_id) = self.selected_comment().map(|comment| comment.id) else {
-            self.error = Some("Reply drafting requires a selected comment".to_owned());
-            return;
-        };
-
-        let Some(draft) = self.active_reply_draft_mut(selected_id) else {
-            return;
-        };
-
-        if let Err(error) = draft.push_char(character) {
-            self.error = Some(error.to_string());
-            return;
-        }
-
-        self.error = None;
+        let _ = self.with_active_draft(|draft| {
+            draft
+                .push_char(character)
+                .map_err(|error| error.to_string())
+        });
     }
 
     fn backspace_reply_draft(&mut self) {
-        let Some(selected_id) = self.selected_comment().map(|comment| comment.id) else {
-            self.error = Some("Reply drafting requires a selected comment".to_owned());
-            return;
-        };
-
-        let Some(draft) = self.active_reply_draft_mut(selected_id) else {
-            return;
-        };
-
-        draft.backspace();
-        self.error = None;
+        self.with_active_draft_infallible(ReplyDraftState::backspace);
     }
 
     fn request_reply_send(&mut self) {
+        let _ =
+            self.with_active_draft(|draft| draft.request_send().map_err(|error| error.to_string()));
+    }
+
+    fn with_active_draft<T, F>(&mut self, action: F) -> Option<T>
+    where
+        F: FnOnce(&mut ReplyDraftState) -> Result<T, String>,
+    {
+        let Some(selected_id) = self.selected_comment().map(|comment| comment.id) else {
+            self.error = Some("Reply drafting requires a selected comment".to_owned());
+            return None;
+        };
+
+        let result = {
+            let draft = self.active_reply_draft_mut(selected_id)?;
+            action(draft)
+        };
+
+        match result {
+            Ok(value) => {
+                self.error = None;
+                Some(value)
+            }
+            Err(error) => {
+                self.error = Some(error);
+                None
+            }
+        }
+    }
+
+    fn with_active_draft_infallible<F>(&mut self, action: F)
+    where
+        F: FnOnce(&mut ReplyDraftState),
+    {
         let Some(selected_id) = self.selected_comment().map(|comment| comment.id) else {
             self.error = Some("Reply drafting requires a selected comment".to_owned());
             return;
@@ -131,11 +145,7 @@ impl ReviewApp {
             return;
         };
 
-        if let Err(error) = draft.request_send() {
-            self.error = Some(error.to_string());
-            return;
-        }
-
+        action(draft);
         self.error = None;
     }
 
