@@ -21,6 +21,19 @@ pub enum InputContext {
     ReplyDraft,
 }
 
+macro_rules! define_key_handler {
+    ($name:ident, $($key_pattern:pat => $msg:expr),* $(,)?) => {
+        const fn $name(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+            use crossterm::event::KeyCode;
+
+            match key.key {
+                $($key_pattern => Some($msg),)*
+                _ => None,
+            }
+        }
+    };
+}
+
 /// Maps a key event to an application message.
 ///
 /// Returns `None` for unrecognised key events, allowing them to be ignored.
@@ -31,40 +44,29 @@ pub fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     map_key_to_message_with_context(key, InputContext::ReviewList)
 }
 
-const fn handle_time_travel_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
-    use crossterm::event::KeyCode;
+define_key_handler!(
+    handle_time_travel_keys,
+    KeyCode::Char('h') => AppMsg::PreviousCommit,
+    KeyCode::Char('l') => AppMsg::NextCommit,
+    KeyCode::Esc => AppMsg::ExitTimeTravel,
+    KeyCode::Char('q') => AppMsg::Quit,
+);
 
-    match key.key {
-        KeyCode::Char('h') => Some(AppMsg::PreviousCommit),
-        KeyCode::Char('l') => Some(AppMsg::NextCommit),
-        KeyCode::Esc => Some(AppMsg::ExitTimeTravel),
-        KeyCode::Char('q') => Some(AppMsg::Quit),
-        _ => None,
-    }
-}
+define_key_handler!(
+    handle_diff_context_keys,
+    KeyCode::Char('[') => AppMsg::PreviousHunk,
+    KeyCode::Char(']') => AppMsg::NextHunk,
+    KeyCode::Esc => AppMsg::HideDiffContext,
+    KeyCode::Char('q') => AppMsg::Quit,
+);
 
-const fn handle_diff_context_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
-    use crossterm::event::KeyCode;
-
-    match key.key {
-        KeyCode::Char('[') => Some(AppMsg::PreviousHunk),
-        KeyCode::Char(']') => Some(AppMsg::NextHunk),
-        KeyCode::Esc => Some(AppMsg::HideDiffContext),
-        KeyCode::Char('q') => Some(AppMsg::Quit),
-        _ => None,
-    }
-}
-
-const fn handle_resume_prompt_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
-    use crossterm::event::KeyCode;
-
-    match key.key {
-        KeyCode::Char('y') => Some(AppMsg::ResumeAccepted),
-        KeyCode::Char('n') | KeyCode::Esc => Some(AppMsg::ResumeDeclined),
-        KeyCode::Char('q') => Some(AppMsg::Quit),
-        _ => None,
-    }
-}
+define_key_handler!(
+    handle_resume_prompt_keys,
+    KeyCode::Char('y') => AppMsg::ResumeAccepted,
+    KeyCode::Char('n') => AppMsg::ResumeDeclined,
+    KeyCode::Esc => AppMsg::ResumeDeclined,
+    KeyCode::Char('q') => AppMsg::Quit,
+);
 
 const fn handle_review_list_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     use crossterm::event::KeyCode;
