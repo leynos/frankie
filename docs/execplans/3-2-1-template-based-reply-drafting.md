@@ -12,12 +12,12 @@ plan-governance document applies.
 
 ## Purpose / big picture
 
-Enable users to draft pull-request review replies directly in the TUI by
-inserting configured templates with keyboard shortcuts, editing the draft
-before sending, and seeing immediate length-limit feedback. After this change,
-a user in review-list mode can open a reply composer for the selected comment,
-insert a template with a keypress, edit the text inline, and be blocked from
-sending if the configured maximum length is exceeded.
+Enable users to draft pull-request review replies directly in the text user
+interface (TUI) by inserting configured templates with keyboard shortcuts,
+editing the draft before sending, and seeing immediate length-limit feedback.
+After this change, a user in review-list mode can open a reply composer for the
+selected comment, insert a template with a keypress, edit the text inline, and
+be blocked from sending if the configured maximum length is exceeded.
 
 Success is observable when:
 
@@ -32,7 +32,7 @@ Success is observable when:
 
 ## Constraints
 
-- Preserve MVU separation already used by the TUI:
+- Preserve model-view-update (MVU) separation already used by the TUI:
   - input mapping in `src/tui/input.rs`
   - message definitions in `src/tui/messages.rs`
   - state transitions in `src/tui/app/`
@@ -60,12 +60,12 @@ Success is observable when:
 
 - Scope: if implementation needs changes in more than 22 files or more than
   1,400 net new lines, stop and escalate.
-- Interface: if existing public CLI flags must change incompatibly, stop and
-  escalate.
+- Interface: if existing public command-line interface (CLI) flags must change
+  incompatibly, stop and escalate.
 - Dependencies: if any new dependency is required, stop and escalate.
-- Protocol/API: if meeting acceptance requires introducing live GitHub comment
-  submission APIs not already present, stop and confirm scope before adding the
-  gateway surface.
+- Protocol/application programming interface (API): if meeting acceptance
+  requires introducing live GitHub comment submission APIs not already present,
+  stop and confirm scope before adding the gateway surface.
 - Iterations: if any stage fails validation more than three fix cycles, stop
   and escalate with logs.
 

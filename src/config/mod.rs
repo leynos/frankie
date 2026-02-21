@@ -242,7 +242,7 @@ pub struct FrankieConfig {
 }
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
-const DEFAULT_REPLY_MAX_LENGTH: usize = 500;
+pub(crate) const DEFAULT_REPLY_MAX_LENGTH: usize = 500;
 
 impl Default for FrankieConfig {
     fn default() -> Self {
@@ -267,7 +267,7 @@ impl Default for FrankieConfig {
     }
 }
 
-fn default_reply_templates() -> Vec<String> {
+pub(crate) fn default_reply_templates() -> Vec<String> {
     vec![
         "Thanks for the review on {{ file }}:{{ line }}. I will update this.".to_owned(),
         "Good catch, {{ reviewer }}. I will address this in the next commit.".to_owned(),

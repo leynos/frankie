@@ -116,12 +116,8 @@ pub struct ReplyDraftConfig {
 impl Default for ReplyDraftConfig {
     fn default() -> Self {
         Self {
-            max_length: 500,
-            templates: vec![
-                "Thanks for the review on {{ file }}:{{ line }}. I will update this.".to_owned(),
-                "Good catch, {{ reviewer }}. I will address this in the next commit.".to_owned(),
-                "I have addressed this feedback and pushed an update.".to_owned(),
-            ],
+            max_length: crate::config::DEFAULT_REPLY_MAX_LENGTH,
+            templates: crate::config::default_reply_templates(),
         }
     }
 }

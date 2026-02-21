@@ -21,91 +21,18 @@ pub enum InputContext {
     ReplyDraft,
 }
 
-macro_rules! define_key_handler {
-    ($name:ident, $($key_pattern:pat => $msg:expr),* $(,)?) => {
-        const fn $name(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
-            use crossterm::event::KeyCode;
-
-            match key.key {
-                $($key_pattern => Some($msg),)*
-                _ => None,
-            }
-        }
-    };
-}
-
 /// Maps a key event to an application message.
 ///
 /// Returns `None` for unrecognised key events, allowing them to be ignored.
 /// This is a convenience wrapper that assumes the `ReviewList` context.
 /// For context-aware key mapping, use `map_key_to_message_with_context`.
 #[must_use]
-pub fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+pub const fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     map_key_to_message_with_context(key, InputContext::ReviewList)
 }
 
-define_key_handler!(
-    handle_time_travel_keys,
-    KeyCode::Char('h') => AppMsg::PreviousCommit,
-    KeyCode::Char('l') => AppMsg::NextCommit,
-    KeyCode::Esc => AppMsg::ExitTimeTravel,
-    KeyCode::Char('q') => AppMsg::Quit,
-);
-
-define_key_handler!(
-    handle_diff_context_keys,
-    KeyCode::Char('[') => AppMsg::PreviousHunk,
-    KeyCode::Char(']') => AppMsg::NextHunk,
-    KeyCode::Esc => AppMsg::HideDiffContext,
-    KeyCode::Char('q') => AppMsg::Quit,
-);
-
-define_key_handler!(
-    handle_resume_prompt_keys,
-    KeyCode::Char('y') => AppMsg::ResumeAccepted,
-    KeyCode::Char('n') => AppMsg::ResumeDeclined,
-    KeyCode::Esc => AppMsg::ResumeDeclined,
-    KeyCode::Char('q') => AppMsg::Quit,
-);
-
-const fn handle_review_list_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+const fn shared_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     use crossterm::event::KeyCode;
-
-    match key.key {
-        KeyCode::Char('x') => Some(AppMsg::StartCodexExecution),
-        KeyCode::Char('a') => Some(AppMsg::StartReplyDraft),
-        _ => None,
-    }
-}
-
-const fn handle_reply_draft_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
-    use crossterm::event::KeyCode;
-
-    match key.key {
-        KeyCode::Enter => Some(AppMsg::ReplyDraftRequestSend),
-        KeyCode::Backspace => Some(AppMsg::ReplyDraftBackspace),
-        KeyCode::Esc => Some(AppMsg::ReplyDraftCancel),
-        KeyCode::Char(character @ '1'..='9') => {
-            let template_index = character as usize - '1' as usize;
-            Some(AppMsg::ReplyDraftInsertTemplate { template_index })
-        }
-        KeyCode::Char(character) => Some(AppMsg::ReplyDraftInsertChar(character)),
-        _ => None,
-    }
-}
-
-const fn handle_shared_keys(
-    key: &bubbletea_rs::event::KeyMsg,
-    context: InputContext,
-) -> Option<AppMsg> {
-    use crossterm::event::KeyCode;
-
-    if matches!(
-        context,
-        InputContext::ResumePrompt | InputContext::ReplyDraft
-    ) {
-        return None;
-    }
 
     // Default/shared mappings
     match key.key {
@@ -135,24 +62,49 @@ const fn handle_shared_keys(
 /// in the review list.
 #[must_use]
 #[doc(hidden)]
-pub fn map_key_to_message_with_context(
+pub const fn map_key_to_message_with_context(
     key: &bubbletea_rs::event::KeyMsg,
     context: InputContext,
 ) -> Option<AppMsg> {
+    use crossterm::event::KeyCode;
+
     match context {
-        InputContext::TimeTravel => {
-            handle_time_travel_keys(key).or_else(|| handle_shared_keys(key, context))
-        }
-        InputContext::DiffContext => {
-            handle_diff_context_keys(key).or_else(|| handle_shared_keys(key, context))
-        }
-        InputContext::ResumePrompt => handle_resume_prompt_keys(key),
-        InputContext::ReviewList => {
-            handle_review_list_keys(key).or_else(|| handle_shared_keys(key, context))
-        }
-        InputContext::ReplyDraft => {
-            handle_reply_draft_keys(key).or_else(|| handle_shared_keys(key, context))
-        }
+        InputContext::TimeTravel => match key.key {
+            KeyCode::Char('h') => Some(AppMsg::PreviousCommit),
+            KeyCode::Char('l') => Some(AppMsg::NextCommit),
+            KeyCode::Esc => Some(AppMsg::ExitTimeTravel),
+            KeyCode::Char('q') => Some(AppMsg::Quit),
+            _ => shared_keys(key),
+        },
+        InputContext::DiffContext => match key.key {
+            KeyCode::Char('[') => Some(AppMsg::PreviousHunk),
+            KeyCode::Char(']') => Some(AppMsg::NextHunk),
+            KeyCode::Esc => Some(AppMsg::HideDiffContext),
+            KeyCode::Char('q') => Some(AppMsg::Quit),
+            _ => shared_keys(key),
+        },
+        InputContext::ResumePrompt => match key.key {
+            KeyCode::Char('y') => Some(AppMsg::ResumeAccepted),
+            KeyCode::Char('n') | KeyCode::Esc => Some(AppMsg::ResumeDeclined),
+            KeyCode::Char('q') => Some(AppMsg::Quit),
+            _ => None,
+        },
+        InputContext::ReviewList => match key.key {
+            KeyCode::Char('x') => Some(AppMsg::StartCodexExecution),
+            KeyCode::Char('a') => Some(AppMsg::StartReplyDraft),
+            _ => shared_keys(key),
+        },
+        InputContext::ReplyDraft => match key.key {
+            KeyCode::Enter => Some(AppMsg::ReplyDraftRequestSend),
+            KeyCode::Backspace => Some(AppMsg::ReplyDraftBackspace),
+            KeyCode::Esc => Some(AppMsg::ReplyDraftCancel),
+            KeyCode::Char(character @ '1'..='9') => {
+                let template_index = character as usize - '1' as usize;
+                Some(AppMsg::ReplyDraftInsertTemplate { template_index })
+            }
+            KeyCode::Char(character) => Some(AppMsg::ReplyDraftInsertChar(character)),
+            _ => None,
+        },
     }
 }
 

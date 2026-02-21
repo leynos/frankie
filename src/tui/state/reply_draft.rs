@@ -22,10 +22,14 @@ impl ReplyDraftState {
     /// Creates an empty reply draft for the given comment.
     #[must_use]
     pub fn new(comment_id: u64, max_length: usize) -> Self {
+        debug_assert!(
+            max_length >= 1,
+            "reply draft max_length must be normalized before state creation"
+        );
         Self {
             comment_id,
             text: String::new(),
-            max_length: max_length.max(1),
+            max_length,
             ready_to_send: false,
         }
     }
