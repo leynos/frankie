@@ -99,85 +99,72 @@ impl ReviewApp {
     }
 
     fn insert_reply_character(&mut self, character: char) {
-        let Some(selected_id) = self.selected_comment().map(|comment| comment.id) else {
-            self.error = Some("Reply drafting requires a selected comment".to_owned());
-            return;
-        };
-
-        if self.reply_draft.is_none() {
-            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
-            return;
+        match self.get_active_draft_for_editing() {
+            Ok(draft) => {
+                if let Err(error) = draft.push_char(character) {
+                    self.error = Some(error.to_string());
+                } else {
+                    self.error = None;
+                }
+            }
+            Err(error) => {
+                self.error = Some(error);
+            }
         }
-
-        let Some(draft) = self.active_reply_draft_mut(selected_id) else {
-            self.error = Some(
-                "Active reply draft does not match the selected comment. Cancel and restart drafting."
-                    .to_owned(),
-            );
-            return;
-        };
-
-        if let Err(error) = draft.push_char(character) {
-            self.error = Some(error.to_string());
-            return;
-        }
-
-        self.error = None;
     }
 
     fn backspace_reply_draft(&mut self) {
-        let Some(selected_id) = self.selected_comment().map(|comment| comment.id) else {
-            self.error = Some("Reply drafting requires a selected comment".to_owned());
-            return;
-        };
-
-        if self.reply_draft.is_none() {
-            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
-            return;
+        match self.get_active_draft_for_editing() {
+            Ok(draft) => {
+                draft.backspace();
+                self.error = None;
+            }
+            Err(error) => {
+                self.error = Some(error);
+            }
         }
-
-        let Some(draft) = self.active_reply_draft_mut(selected_id) else {
-            self.error = Some(
-                "Active reply draft does not match the selected comment. Cancel and restart drafting."
-                    .to_owned(),
-            );
-            return;
-        };
-
-        draft.backspace();
-        self.error = None;
     }
 
     fn request_reply_send(&mut self) {
-        let Some(selected_id) = self.selected_comment().map(|comment| comment.id) else {
-            self.error = Some("Reply drafting requires a selected comment".to_owned());
-            return;
-        };
-
-        if self.reply_draft.is_none() {
-            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
-            return;
+        match self.get_active_draft_for_editing() {
+            Ok(draft) => {
+                if let Err(error) = draft.request_send() {
+                    self.error = Some(error.to_string());
+                } else {
+                    self.error = None;
+                }
+            }
+            Err(error) => {
+                self.error = Some(error);
+            }
         }
-
-        let Some(draft) = self.active_reply_draft_mut(selected_id) else {
-            self.error = Some(
-                "Active reply draft does not match the selected comment. Cancel and restart drafting."
-                    .to_owned(),
-            );
-            return;
-        };
-
-        if let Err(error) = draft.request_send() {
-            self.error = Some(error.to_string());
-            return;
-        }
-
-        self.error = None;
     }
 
     fn cancel_reply_draft(&mut self) {
         self.reply_draft = None;
         self.error = None;
+    }
+
+    /// Gets the active reply draft for editing, validating preconditions.
+    ///
+    /// Returns an error if:
+    /// - No comment is selected
+    /// - No reply draft is active
+    /// - The active draft doesn't match the selected comment
+    fn get_active_draft_for_editing(&mut self) -> Result<&mut ReplyDraftState, String> {
+        let selected_id = self
+            .selected_comment()
+            .map(|comment| comment.id)
+            .ok_or_else(|| "Reply drafting requires a selected comment".to_owned())?;
+
+        if self.reply_draft.is_none() {
+            return Err("No active reply draft. Press 'a' to start drafting.".to_owned());
+        }
+
+        self.active_reply_draft_mut(selected_id).ok_or_else(|| {
+            "Active reply draft does not match the selected comment. Cancel and restart drafting."
+                .to_owned()
+        })
     }
 
     fn active_reply_draft_mut(&mut self, selected_comment_id: u64) -> Option<&mut ReplyDraftState> {

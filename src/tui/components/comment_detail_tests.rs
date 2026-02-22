@@ -21,6 +21,29 @@ fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
     component.view(&ctx)
 }
 
+/// Helper to render a comment detail view with a reply draft for testing.
+fn render_comment_with_reply_draft(text: &str, char_count: usize, ready_to_send: bool) -> String {
+    let component = CommentDetailComponent::new();
+    let comment = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/main.rs")
+        .line_number(42)
+        .body("nit")
+        .build();
+    let ctx = CommentDetailViewContext {
+        selected_comment: Some(&comment),
+        max_width: 80,
+        max_height: 0,
+        reply_draft: Some(ReplyDraftRenderContext {
+            text,
+            char_count,
+            max_length: 120,
+            ready_to_send,
+        }),
+    };
+    component.view(&ctx)
+}
+
 #[fixture]
 fn sample_comment() -> ReviewComment {
     ReviewCommentBuilder::new(0)
@@ -282,26 +305,8 @@ fn truncate_to_height_exact_boundary() {
 
 #[test]
 fn view_renders_inline_reply_draft_when_present() {
-    let component = CommentDetailComponent::new();
-    let comment = ReviewCommentBuilder::new(1)
-        .author("alice")
-        .file_path("src/main.rs")
-        .line_number(42)
-        .body("nit")
-        .build();
-    let ctx = CommentDetailViewContext {
-        selected_comment: Some(&comment),
-        max_width: 80,
-        max_height: 0,
-        reply_draft: Some(ReplyDraftRenderContext {
-            text: "Thanks for the review.",
-            char_count: 22,
-            max_length: 120,
-            ready_to_send: true,
-        }),
-    };
+    let output = render_comment_with_reply_draft("Thanks for the review.", 22, true);
 
-    let output = component.view(&ctx);
     assert!(output.contains("Reply draft:"));
     assert!(output.contains("Thanks for the review."));
     assert!(output.contains("Length: 22/120 (ready to send)"));
@@ -309,52 +314,16 @@ fn view_renders_inline_reply_draft_when_present() {
 
 #[test]
 fn view_renders_inline_reply_draft_empty_placeholder() {
-    let component = CommentDetailComponent::new();
-    let comment = ReviewCommentBuilder::new(1)
-        .author("alice")
-        .file_path("src/main.rs")
-        .line_number(42)
-        .body("nit")
-        .build();
-    let ctx = CommentDetailViewContext {
-        selected_comment: Some(&comment),
-        max_width: 80,
-        max_height: 0,
-        reply_draft: Some(ReplyDraftRenderContext {
-            text: "",
-            char_count: 0,
-            max_length: 120,
-            ready_to_send: true,
-        }),
-    };
+    let output = render_comment_with_reply_draft("", 0, true);
 
-    let output = component.view(&ctx);
     assert!(output.contains("(empty)"));
     assert!(output.contains("(ready to send)"));
 }
 
 #[test]
 fn view_renders_inline_reply_draft_without_ready_suffix() {
-    let component = CommentDetailComponent::new();
-    let comment = ReviewCommentBuilder::new(1)
-        .author("alice")
-        .file_path("src/main.rs")
-        .line_number(42)
-        .body("nit")
-        .build();
-    let ctx = CommentDetailViewContext {
-        selected_comment: Some(&comment),
-        max_width: 80,
-        max_height: 0,
-        reply_draft: Some(ReplyDraftRenderContext {
-            text: "Work in progress",
-            char_count: 16,
-            max_length: 120,
-            ready_to_send: false,
-        }),
-    };
+    let output = render_comment_with_reply_draft("Work in progress", 16, false);
 
-    let output = component.view(&ctx);
     assert!(output.contains("Work in progress"));
     assert!(!output.contains("(ready to send)"));
 }
