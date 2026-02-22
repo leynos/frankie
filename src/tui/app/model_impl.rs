@@ -10,7 +10,9 @@ use unicode_width::UnicodeWidthChar;
 
 use super::ReviewApp;
 use crate::tui::app::ViewMode;
-use crate::tui::components::{CommentDetailViewContext, ReviewListViewContext};
+use crate::tui::components::{
+    CommentDetailViewContext, ReplyDraftRenderContext, ReviewListViewContext,
+};
 use crate::tui::input::{InputContext, map_key_to_message_with_context};
 use crate::tui::messages::AppMsg;
 
@@ -98,12 +100,16 @@ impl Model for ReviewApp {
         output.push_str(&list_view);
 
         // Render comment detail pane
-        let detail_height = self.calculate_detail_height();
+        let detail_height = self.calculate_detail_height(list_height);
         if detail_height > 0 {
+            let selected_comment = self.selected_comment();
+            let reply_draft =
+                selected_comment.and_then(|comment| self.reply_draft_for_comment(comment.id));
             let detail_ctx = CommentDetailViewContext {
-                selected_comment: self.selected_comment(),
+                selected_comment,
                 max_width: safe_terminal_width,
                 max_height: detail_height,
+                reply_draft,
             };
             output.push_str(&self.comment_detail.view(&detail_ctx));
         }
@@ -115,15 +121,46 @@ impl Model for ReviewApp {
 
 impl ReviewApp {
     /// Returns the current input context for context-aware key mapping.
-    pub(super) const fn input_context(&self) -> InputContext {
+    pub(super) fn input_context(&self) -> InputContext {
         if self.resume_prompt.is_some() {
             return InputContext::ResumePrompt;
         }
         match self.view_mode {
-            ViewMode::ReviewList => InputContext::ReviewList,
+            ViewMode::ReviewList => {
+                if self.has_reply_draft_for_current_selection() {
+                    InputContext::ReplyDraft
+                } else {
+                    InputContext::ReviewList
+                }
+            }
             ViewMode::DiffContext => InputContext::DiffContext,
             ViewMode::TimeTravel => InputContext::TimeTravel,
         }
+    }
+
+    fn has_reply_draft_for_current_selection(&self) -> bool {
+        let Some(draft) = self.reply_draft.as_ref() else {
+            return false;
+        };
+        let Some(selected_comment) = self.selected_comment() else {
+            return false;
+        };
+
+        draft.comment_id() == selected_comment.id
+    }
+
+    fn reply_draft_for_comment(&self, comment_id: u64) -> Option<ReplyDraftRenderContext<'_>> {
+        let draft = self.reply_draft.as_ref()?;
+        if draft.comment_id() != comment_id {
+            return None;
+        }
+
+        Some(ReplyDraftRenderContext {
+            text: draft.text(),
+            char_count: draft.char_count(),
+            max_length: draft.max_length().as_usize(),
+            ready_to_send: draft.is_ready_to_send(),
+        })
     }
 
     /// Normalizes the rendered frame to terminal dimensions.

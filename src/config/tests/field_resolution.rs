@@ -161,3 +161,29 @@ fn value_flags_includes_repo_path() {
         "VALUE_FLAGS should include --repo-path"
     );
 }
+
+#[rstest]
+fn value_flags_include_reply_drafting_flags() {
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--reply-max-length"),
+        "VALUE_FLAGS should include --reply-max-length"
+    );
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--reply-templates"),
+        "VALUE_FLAGS should include --reply-templates"
+    );
+}
+
+#[rstest]
+fn reply_drafting_defaults_are_present() {
+    let config = FrankieConfig::default();
+
+    assert_eq!(
+        config.reply_max_length, 500,
+        "reply_max_length should default to 500"
+    );
+    assert!(
+        !config.reply_templates.is_empty(),
+        "reply_templates should include defaults"
+    );
+}

@@ -12,8 +12,9 @@ use bubbletea_rs::Program;
 use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
-    ReviewApp, TimeTravelContext, set_git_ops_context, set_initial_reviews,
-    set_initial_terminal_size, set_refresh_context, set_telemetry_sink, set_time_travel_context,
+    ReplyDraftConfig, ReplyDraftMaxLength, ReviewApp, TimeTravelContext, set_git_ops_context,
+    set_initial_reviews, set_initial_terminal_size, set_refresh_context, set_reply_draft_config,
+    set_telemetry_sink, set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -60,6 +61,11 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     });
 
     let _ = set_refresh_context(locator, token);
+    let reply_draft_config = ReplyDraftConfig::new(
+        ReplyDraftMaxLength::new(config.reply_max_length),
+        config.reply_templates.clone(),
+    );
+    let _ = set_reply_draft_config(reply_draft_config);
     let _ = set_telemetry_sink(Arc::new(StderrJsonlTelemetrySink));
     run_tui().await.map_err(|error| IntakeError::Api {
         message: format!("TUI error: {error}"),

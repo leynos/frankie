@@ -16,6 +16,30 @@ fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
         selected_comment: comment,
         max_width: 80,
         max_height: 0, // unlimited
+        reply_draft: None,
+    };
+    component.view(&ctx)
+}
+
+/// Helper to render a comment detail view with a reply draft for testing.
+fn render_comment_with_reply_draft(text: &str, char_count: usize, ready_to_send: bool) -> String {
+    let component = CommentDetailComponent::new();
+    let comment = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/main.rs")
+        .line_number(42)
+        .body("nit")
+        .build();
+    let ctx = CommentDetailViewContext {
+        selected_comment: Some(&comment),
+        max_width: 80,
+        max_height: 0,
+        reply_draft: Some(ReplyDraftRenderContext {
+            text,
+            char_count,
+            max_length: 120,
+            ready_to_send,
+        }),
     };
     component.view(&ctx)
 }
@@ -277,4 +301,29 @@ fn truncate_to_height_exact_boundary() {
         output, "line1\nline2\nline3",
         "content exactly at max_height should be unchanged"
     );
+}
+
+#[test]
+fn view_renders_inline_reply_draft_when_present() {
+    let output = render_comment_with_reply_draft("Thanks for the review.", 22, true);
+
+    assert!(output.contains("Reply draft:"));
+    assert!(output.contains("Thanks for the review."));
+    assert!(output.contains("Length: 22/120 (ready to send)"));
+}
+
+#[test]
+fn view_renders_inline_reply_draft_empty_placeholder() {
+    let output = render_comment_with_reply_draft("", 0, true);
+
+    assert!(output.contains("(empty)"));
+    assert!(output.contains("(ready to send)"));
+}
+
+#[test]
+fn view_renders_inline_reply_draft_without_ready_suffix() {
+    let output = render_comment_with_reply_draft("Work in progress", 16, false);
+
+    assert!(output.contains("Work in progress"));
+    assert!(!output.contains("(ready to send)"));
 }

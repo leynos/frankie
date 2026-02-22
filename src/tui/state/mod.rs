@@ -5,6 +5,7 @@
 
 mod diff_context;
 mod filter_state;
+mod reply_draft;
 mod time_travel;
 
 pub(crate) use diff_context::{
@@ -12,5 +13,8 @@ pub(crate) use diff_context::{
     find_hunk_index,
 };
 pub use filter_state::{FilterState, ReviewFilter};
+pub use reply_draft::{
+    ReplyDraftError, ReplyDraftState, ReplyTemplateError, render_reply_template,
+};
 pub(crate) use time_travel::TimeTravelParams;
 pub use time_travel::{TimeTravelInitParams, TimeTravelState};

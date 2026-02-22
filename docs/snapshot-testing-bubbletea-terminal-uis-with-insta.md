@@ -389,8 +389,8 @@ explicit dependency, and keep `view()` a pure function of model state.
 
 In bubbletea-rs, commands are just boxed futures (`Cmd`) that yield an optional
 `Msg`.[^6] That provides a clean seam for mocking: construct a model with fake
-dependencies, trigger an update that returns a command, `await` it in the
-test, and feed any resulting message back into `update`.
+dependencies, trigger an update that returns a command, `await` it in the test,
+and feed any resulting message back into `update`.
 
 A practical pattern is “ports and adapters”: define tiny traits for side-effect
 boundaries and inject them into the model via a constructor used by tests
@@ -648,8 +648,8 @@ be overridden in the macro if needed).
 The advantage of using rstest-bdd is clarity: anyone reading the test can see
 the narrative of the user interaction. It also encourages reusing fixtures (the
 `model` in this case) and separating the action from the verification. Multiple
-scenarios can, for instance, reuse the same `when` step for
-pressing "q" if they start from different states.
+scenarios can, for instance, reuse the same `when` step for pressing "q" if
+they start from different states.
 
 **Isolation:** Each scenario gets its own fresh fixture instances, so one
 scenario’s state changes won’t leak into another. This is critical for snapshot
