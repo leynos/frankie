@@ -242,11 +242,12 @@ pub fn render_reply_template(
 
 #[cfg(test)]
 mod tests {
-    use rstest::rstest;
+    use rstest::{fixture, rstest};
 
     use super::{ReplyDraftError, ReplyDraftState, render_reply_template};
     use crate::github::models::ReviewComment;
 
+    #[fixture]
     fn sample_comment() -> ReviewComment {
         ReviewComment {
             id: 42,
@@ -338,19 +339,18 @@ mod tests {
         assert_eq!(draft.char_count(), expected);
     }
 
-    #[test]
-    fn render_reply_template_includes_comment_fields() {
-        let comment = sample_comment();
-        let rendered = render_reply_template("{{ reviewer }} {{ file }}:{{ line }}", &comment)
-            .expect("template should render");
+    #[rstest]
+    fn render_reply_template_includes_comment_fields(sample_comment: ReviewComment) {
+        let rendered =
+            render_reply_template("{{ reviewer }} {{ file }}:{{ line }}", &sample_comment)
+                .expect("template should render");
 
         assert_eq!(rendered, "alice src/lib.rs:12");
     }
 
-    #[test]
-    fn render_reply_template_reports_invalid_syntax() {
-        let comment = sample_comment();
-        let result = render_reply_template("{{ reviewer", &comment);
+    #[rstest]
+    fn render_reply_template_reports_invalid_syntax(sample_comment: ReviewComment) {
+        let result = render_reply_template("{{ reviewer", &sample_comment);
 
         assert!(
             matches!(result, Err(super::ReplyTemplateError::InvalidSyntax { .. })),

@@ -207,8 +207,7 @@ impl ReviewApp {
     /// Sets reply-drafting configuration for this app instance.
     #[must_use]
     pub fn with_reply_draft_config(mut self, reply_draft_config: ReplyDraftConfig) -> Self {
-        self.reply_draft_config =
-            ReplyDraftConfig::new(reply_draft_config.max_length, reply_draft_config.templates);
+        self.reply_draft_config = reply_draft_config;
         self
     }
 

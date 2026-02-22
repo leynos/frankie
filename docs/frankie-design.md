@@ -2920,13 +2920,17 @@ server-side thread when an interrupted session is detected.
 #### Architecture decision record (ADR-004): Inline template-based reply drafting
 
 **Context**: Review workflows need fast, keyboard-driven reply composition
-without leaving the TUI. The roadmap acceptance for this step requires inline
-rendering, edit-before-send behaviour, and configured length enforcement.
+without leaving the text user interface (TUI). The roadmap acceptance for this
+step requires inline rendering, edit-before-send behaviour, and configured
+length enforcement.
 
 **Decision**: Add a dedicated reply-draft state slice to the review TUI with
 template insertion (`1` to `9`), free-form editing, and a local send-intent
 action. Templates are rendered with `MiniJinja` using comment-scoped variables
-(`comment_id`, `reviewer`, `file`, `line`, `body`).
+(`comment_id`, `reviewer`, `file`, `line`, `body`). The first-use flow is
+explicit: press `a` to enter reply-draft mode, use template slots `1` to `9` to
+insert a starter reply, edit inline, then press `Enter` to mark the reply-draft
+ready to send.
 
 **Rationale**:
 
@@ -2934,16 +2938,16 @@ action. Templates are rendered with `MiniJinja` using comment-scoped variables
    group and handlers so navigation, Codex execution, and sync logic remain
    isolated.
 
-2. **Keyboard-first interaction**: Starting draft mode with `a` and inserting
-   template slots with number keys matches the existing terminal-first UX and
-   avoids modal forms.
+2. **Keyboard-first interaction**: Starting reply-draft mode with `a`, using
+   template slots `1` to `9`, and confirming readiness with `Enter` match the
+   existing terminal-first user experience (UX) and avoid modal forms.
 
 3. **Deterministic validation**: Draft limits are enforced as Unicode scalar
    counts during both typing and template insertion, producing consistent
    behaviour across multilingual text.
 
-4. **Scoped delivery**: `Enter` marks a draft as ready to send but does not
-   post to GitHub in this phase, keeping the change focused on drafting UX.
+4. **Scoped delivery**: `Enter` marks a reply-draft as ready to send but does
+   not post to GitHub in this phase, keeping the change focused on drafting UX.
 
 **Consequences**:
 
@@ -2953,6 +2957,8 @@ action. Templates are rendered with `MiniJinja` using comment-scoped variables
   (`reply_max_length`, `reply_templates`) without code changes.
 - Over-limit insertions and invalid template slots surface explicit inline
   errors instead of silently truncating content.
+- Continuous Integration (CI) coverage now includes the first-use reply-draft
+  flow (`a`, template slots `1` to `9`, inline editing, `Enter` readiness).
 
 ## 5.4 Cross-cutting Concerns
 

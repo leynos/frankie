@@ -21,10 +21,13 @@ pub mod app;
 pub mod components;
 pub mod input;
 pub mod messages;
+mod reply_draft_config;
 pub mod state;
 pub mod sync;
 
 pub use app::ReviewApp;
+pub(crate) use reply_draft_config::get_reply_draft_config;
+pub use reply_draft_config::{ReplyDraftConfig, set_reply_draft_config};
 
 /// Global storage for initial review data.
 ///
@@ -65,15 +68,6 @@ static GIT_OPS_CONTEXT: OnceLock<GitOpsContext> = OnceLock::new();
 /// time-travel is attempted without a valid local repository.
 static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
 
-/// Global storage for reply-drafting configuration.
-///
-/// This is set before TUI startup from CLI/config sources. When not provided,
-/// the application falls back to built-in defaults.
-static REPLY_DRAFT_CONFIG: OnceLock<ReplyDraftConfig> = OnceLock::new();
-
-/// Static fallback reply-drafting configuration.
-static DEFAULT_REPLY_DRAFT_CONFIG: OnceLock<ReplyDraftConfig> = OnceLock::new();
-
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
     locator: PullRequestLocator,
@@ -102,35 +96,6 @@ pub struct TimeTravelContext {
     pub pr_number: u64,
     /// Reason discovery failed, if applicable.
     pub discovery_failure: Option<String>,
-}
-
-/// Configuration for template-based reply drafting inside the TUI.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplyDraftConfig {
-    /// Maximum character count for reply drafts.
-    pub max_length: usize,
-    /// Ordered template list mapped to keyboard slots `1`-`9`.
-    pub templates: Vec<String>,
-}
-
-impl Default for ReplyDraftConfig {
-    fn default() -> Self {
-        Self {
-            max_length: crate::config::DEFAULT_REPLY_MAX_LENGTH,
-            templates: crate::config::default_reply_templates(),
-        }
-    }
-}
-
-impl ReplyDraftConfig {
-    /// Creates a reply-drafting config while normalising invalid lengths.
-    #[must_use]
-    pub fn new(max_length: usize, templates: Vec<String>) -> Self {
-        Self {
-            max_length: max_length.max(1),
-            templates,
-        }
-    }
 }
 
 /// Sets the initial reviews for the TUI application.
@@ -234,16 +199,6 @@ pub fn set_time_travel_context(context: TimeTravelContext) -> bool {
     TIME_TRAVEL_CONTEXT.set(context).is_ok()
 }
 
-/// Sets reply-drafting configuration for TUI startup.
-///
-/// Returns `true` when the value is set for the first time, or `false` when a
-/// prior value already exists.
-pub fn set_reply_draft_config(config: ReplyDraftConfig) -> bool {
-    REPLY_DRAFT_CONFIG
-        .set(ReplyDraftConfig::new(config.max_length, config.templates))
-        .is_ok()
-}
-
 /// Gets the Git operations context, if configured.
 ///
 /// Called internally by `ReviewApp::init()`. Returns the stored git ops
@@ -260,15 +215,6 @@ pub(crate) fn get_git_ops_context() -> Option<(Arc<dyn GitOperations>, String)> 
 /// contextual error messages.
 pub(crate) fn get_time_travel_context() -> Option<TimeTravelContext> {
     TIME_TRAVEL_CONTEXT.get().cloned()
-}
-
-/// Gets reply-drafting configuration, falling back to defaults.
-pub(crate) fn get_reply_draft_config() -> ReplyDraftConfig {
-    REPLY_DRAFT_CONFIG.get().cloned().unwrap_or_else(|| {
-        DEFAULT_REPLY_DRAFT_CONFIG
-            .get_or_init(ReplyDraftConfig::default)
-            .clone()
-    })
 }
 
 /// Gets the telemetry sink, returning a no-op sink if not configured.

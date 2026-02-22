@@ -121,11 +121,11 @@ impl Model for ReviewApp {
 
 impl ReviewApp {
     /// Returns the current input context for context-aware key mapping.
-    pub(super) const fn input_context(&self) -> InputContext {
+    pub(super) fn input_context(&self) -> InputContext {
         if self.resume_prompt.is_some() {
             return InputContext::ResumePrompt;
         }
-        if self.has_reply_draft() {
+        if self.has_reply_draft_for_current_selection() {
             return InputContext::ReplyDraft;
         }
         match self.view_mode {
@@ -133,6 +133,17 @@ impl ReviewApp {
             ViewMode::DiffContext => InputContext::DiffContext,
             ViewMode::TimeTravel => InputContext::TimeTravel,
         }
+    }
+
+    fn has_reply_draft_for_current_selection(&self) -> bool {
+        let Some(draft) = self.reply_draft.as_ref() else {
+            return false;
+        };
+        let Some(selected_comment) = self.selected_comment() else {
+            return false;
+        };
+
+        draft.comment_id() == selected_comment.id
     }
 
     fn reply_draft_for_comment(&self, comment_id: u64) -> Option<ReplyDraftRenderContext<'_>> {

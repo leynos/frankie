@@ -185,8 +185,10 @@ impl CommentDetailComponent {
         } else {
             ""
         };
+        let char_count = reply_draft.text.chars().count();
+        debug_assert_eq!(reply_draft.char_count, char_count);
         output.push_str("Length: ");
-        output.push_str(&reply_draft.char_count.to_string());
+        output.push_str(&char_count.to_string());
         output.push('/');
         output.push_str(&reply_draft.max_length.to_string());
         output.push_str(readiness_suffix);

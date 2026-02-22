@@ -66,7 +66,22 @@ impl ReviewApp {
             return;
         };
 
-        let rendered = match render_reply_template(template_source, &comment) {
+        let template_source_owned = template_source.clone();
+
+        if self.reply_draft.is_none() {
+            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
+            return;
+        }
+
+        if self.active_reply_draft_mut(comment.id).is_none() {
+            self.error = Some(
+                "Active reply draft does not match the selected comment. Cancel and restart drafting."
+                    .to_owned(),
+            );
+            return;
+        }
+
+        let rendered = match render_reply_template(template_source_owned.as_str(), &comment) {
             Ok(rendered) => rendered,
             Err(
                 ReplyTemplateError::InvalidSyntax { message }
@@ -76,11 +91,6 @@ impl ReviewApp {
                 return;
             }
         };
-
-        if self.reply_draft.is_none() {
-            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
-            return;
-        }
 
         let Some(draft) = self.active_reply_draft_mut(comment.id) else {
             self.error = Some(
@@ -99,18 +109,7 @@ impl ReviewApp {
     }
 
     fn insert_reply_character(&mut self, character: char) {
-        match self.get_active_draft_for_editing() {
-            Ok(draft) => {
-                if let Err(error) = draft.push_char(character) {
-                    self.error = Some(error.to_string());
-                } else {
-                    self.error = None;
-                }
-            }
-            Err(error) => {
-                self.error = Some(error);
-            }
-        }
+        self.with_active_draft_operation(|draft| draft.push_char(character));
     }
 
     fn backspace_reply_draft(&mut self) {
@@ -126,9 +125,24 @@ impl ReviewApp {
     }
 
     fn request_reply_send(&mut self) {
+        self.with_active_draft_operation(ReplyDraftState::request_send);
+    }
+
+    fn cancel_reply_draft(&mut self) {
+        self.reply_draft = None;
+        self.error = None;
+    }
+
+    /// Executes an operation on the active draft, handling all error mapping.
+    fn with_active_draft_operation<E>(
+        &mut self,
+        operation: impl FnOnce(&mut ReplyDraftState) -> Result<(), E>,
+    ) where
+        E: std::fmt::Display,
+    {
         match self.get_active_draft_for_editing() {
             Ok(draft) => {
-                if let Err(error) = draft.request_send() {
+                if let Err(error) = operation(draft) {
                     self.error = Some(error.to_string());
                 } else {
                     self.error = None;
@@ -138,11 +152,6 @@ impl ReviewApp {
                 self.error = Some(error);
             }
         }
-    }
-
-    fn cancel_reply_draft(&mut self) {
-        self.reply_draft = None;
-        self.error = None;
     }
 
     /// Gets the active reply draft for editing, validating preconditions.

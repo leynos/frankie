@@ -247,11 +247,11 @@ edited entirely from the keyboard.
 
 In reply-draft mode:
 
-- Press `1` to `9` to insert template slots 1 to 9.
-- Type printable keys to edit draft text.
-- Press `Backspace` to delete one character.
-- Press `Enter` to mark the draft as ready to send.
-- Press `Esc` to discard the draft and return to the review list.
+- Use keys `1` to `9` to insert template slots 1 to 9.
+- Type any printable key to edit the draft text.
+- Use `Backspace` to delete one character.
+- Mark the draft as ready to send with `Enter`.
+- Discard the draft and return to the review list with `Esc`.
 
 Draft length is enforced while typing and during template insertion. Frankie
 counts Unicode scalar values, not bytes. If a template or edit would exceed the

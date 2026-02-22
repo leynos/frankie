@@ -22,7 +22,7 @@ be blocked from sending if the configured maximum length is exceeded.
 Success is observable when:
 
 - A reply draft appears inline in the detail pane for the selected comment.
-- Template insertion is keyboard driven (no mouse, no modal form required).
+- Template insertion is keyboard-driven (no mouse, no modal form required).
 - The inserted text remains editable before send.
 - Length limits from configuration are enforced during insertion and editing.
 - Unit tests (`rstest`) and behavioural tests (`rstest-bdd` v0.5.0) cover
@@ -94,7 +94,7 @@ Success is observable when:
 
 - [x] (2026-02-20 00:00Z) Drafted ExecPlan with constraints, tolerances,
       staged implementation, and validation criteria.
-- [x] (2026-02-20 00:35Z) Stage A: finalised reply-drafting domain model and
+- [x] (2026-02-20 00:35Z) Stage A: finalized reply-drafting domain model and
       configuration surface (`ReplyDraftState`, template rendering helpers,
       and config keys `reply_max_length` / `reply_templates` with tests).
 - [x] (2026-02-20 00:50Z) Stage B: implemented input/message plumbing and
@@ -195,7 +195,7 @@ Success is observable when:
 - `src/config/mod.rs` defines `FrankieConfig` and ortho-config mapping from
   CLI/env/config-file layers.
 - `docs/users-guide.md` contains keyboard tables and Codex/TUI behaviour docs.
-- `docs/frankie-design.md` tracks architecture decision records (ADR-001..004),
+- `docs/frankie-design.md` tracks architecture decision records (ADR-001-004),
   including the new reply-drafting decision.
 - `docs/roadmap.md` contains the unchecked item for this step under:
   `Phase 3 -> Step: Template and reply automation`.
