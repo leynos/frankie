@@ -79,7 +79,7 @@ Success is observable when:
 - Risk: unclear length semantics (bytes vs Unicode scalar values) can cause
   inconsistent enforcement and user confusion. Severity: medium. Likelihood:
   medium. Mitigation: define one counting rule in code/docs (Unicode scalar
-  count) and test with multi-byte content.
+  count) and test with multibyte content.
 
 - Risk: `ReviewApp` and existing handler modules are already near size limits.
   Severity: medium. Likelihood: high. Mitigation: add focused reply modules
@@ -386,7 +386,7 @@ Feature acceptance is satisfied when all of the following are observable:
 - Reply draft renders inline in the selected comment detail pane.
 - Template insertion works from keyboard shortcuts in reply-draft mode.
 - User can edit inserted content before invoking send-intent.
-- Length limit from configuration is enforced during insertion/editing and
+- The length limit from configuration is enforced during insertion/editing and
   blocks send-intent when exceeded.
 
 Testing acceptance:

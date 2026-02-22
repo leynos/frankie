@@ -73,10 +73,13 @@ fn start_reply_draft_creates_empty_state(sample_reviews: Vec<ReviewComment>) {
 
     app.handle_message(&AppMsg::StartReplyDraft);
 
-    let draft = app.reply_draft.as_ref().expect("draft should be created");
-    assert_eq!(draft.comment_id(), 1);
-    assert_eq!(draft.text(), "");
-    assert!(!draft.is_ready_to_send());
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should be created");
+    if let Some(draft) = maybe_draft {
+        assert_eq!(draft.comment_id(), 1);
+        assert_eq!(draft.text(), "");
+        assert!(!draft.is_ready_to_send());
+    }
 }
 
 #[rstest]
@@ -87,8 +90,11 @@ fn insert_template_renders_comment_fields(sample_reviews: Vec<ReviewComment>) {
         "Thanks {{ reviewer }} for {{ file }}:{{ line }}",
     );
 
-    let draft = app.reply_draft.as_ref().expect("draft should exist");
-    assert_eq!(draft.text(), "Thanks alice for src/main.rs:12");
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should exist");
+    if let Some(draft) = maybe_draft {
+        assert_eq!(draft.text(), "Thanks alice for src/main.rs:12");
+    }
     assert!(app.error_message().is_none());
 }
 
@@ -145,8 +151,11 @@ fn insert_template_rejects_mismatched_active_draft(sample_reviews_pair: Vec<Revi
 fn insertion_enforces_length_limit(sample_reviews: Vec<ReviewComment>) {
     let app = app_with_inserted_template(sample_reviews, 5, "This template is too long");
 
-    let draft = app.reply_draft.as_ref().expect("draft should exist");
-    assert_eq!(draft.text(), "");
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should exist");
+    if let Some(draft) = maybe_draft {
+        assert_eq!(draft.text(), "");
+    }
 
     let error = app.error_message().unwrap_or_default();
     assert!(error.contains("exceeds configured limit"));
@@ -161,8 +170,11 @@ fn request_send_marks_draft_ready(sample_reviews: Vec<ReviewComment>) {
     app.handle_message(&AppMsg::ReplyDraftInsertChar('k'));
     app.handle_message(&AppMsg::ReplyDraftRequestSend);
 
-    let draft = app.reply_draft.as_ref().expect("draft should exist");
-    assert!(draft.is_ready_to_send());
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should exist");
+    if let Some(draft) = maybe_draft {
+        assert!(draft.is_ready_to_send());
+    }
 }
 
 #[rstest]
@@ -174,8 +186,11 @@ fn editing_after_ready_clears_ready_state(sample_reviews: Vec<ReviewComment>) {
     app.handle_message(&AppMsg::ReplyDraftRequestSend);
     app.handle_message(&AppMsg::ReplyDraftInsertChar('k'));
 
-    let draft = app.reply_draft.as_ref().expect("draft should exist");
-    assert!(!draft.is_ready_to_send());
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should exist");
+    if let Some(draft) = maybe_draft {
+        assert!(!draft.is_ready_to_send());
+    }
 }
 
 #[rstest]

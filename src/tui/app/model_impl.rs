@@ -100,7 +100,7 @@ impl Model for ReviewApp {
         output.push_str(&list_view);
 
         // Render comment detail pane
-        let detail_height = self.calculate_detail_height();
+        let detail_height = self.calculate_detail_height(list_height);
         if detail_height > 0 {
             let selected_comment = self.selected_comment();
             let reply_draft =
@@ -125,11 +125,14 @@ impl ReviewApp {
         if self.resume_prompt.is_some() {
             return InputContext::ResumePrompt;
         }
-        if self.has_reply_draft_for_current_selection() {
-            return InputContext::ReplyDraft;
-        }
         match self.view_mode {
-            ViewMode::ReviewList => InputContext::ReviewList,
+            ViewMode::ReviewList => {
+                if self.has_reply_draft_for_current_selection() {
+                    InputContext::ReplyDraft
+                } else {
+                    InputContext::ReviewList
+                }
+            }
             ViewMode::DiffContext => InputContext::DiffContext,
             ViewMode::TimeTravel => InputContext::TimeTravel,
         }

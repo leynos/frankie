@@ -39,9 +39,9 @@ impl ReviewApp {
     }
 
     /// Calculates the number of rows available for the detail pane.
-    pub(super) const fn calculate_detail_height(&self) -> usize {
+    pub(super) const fn calculate_detail_height(&self, list_height: usize) -> usize {
         let body_height = self.visible_body_height();
-        body_height.saturating_sub(self.review_list.visible_height())
+        body_height.saturating_sub(list_height)
     }
 
     /// Adjusts scroll offset so the selected cursor remains visible.
