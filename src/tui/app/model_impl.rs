@@ -155,7 +155,7 @@ impl ReviewApp {
         Some(ReplyDraftRenderContext {
             text: draft.text(),
             char_count: draft.char_count(),
-            max_length: draft.max_length(),
+            max_length: draft.max_length().as_usize(),
             ready_to_send: draft.is_ready_to_send(),
         })
     }

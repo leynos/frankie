@@ -3,8 +3,8 @@
 use rstest::{fixture, rstest};
 
 use crate::github::models::ReviewComment;
-use crate::tui::ReplyDraftConfig;
 use crate::tui::messages::AppMsg;
+use crate::tui::{ReplyDraftConfig, ReplyDraftMaxLength};
 
 use super::ReviewApp;
 
@@ -48,8 +48,10 @@ fn app_with_inserted_template(
     max_length: usize,
     template: &str,
 ) -> ReviewApp {
-    let mut app = ReviewApp::new(reviews)
-        .with_reply_draft_config(ReplyDraftConfig::new(max_length, vec![template.to_owned()]));
+    let mut app = ReviewApp::new(reviews).with_reply_draft_config(ReplyDraftConfig::new(
+        ReplyDraftMaxLength::new(max_length),
+        vec![template.to_owned()],
+    ));
     app.handle_message(&AppMsg::StartReplyDraft);
     app.handle_message(&AppMsg::ReplyDraftInsertTemplate { template_index: 0 });
     app
@@ -92,8 +94,10 @@ fn insert_template_renders_comment_fields(sample_reviews: Vec<ReviewComment>) {
 
 #[rstest]
 fn insert_template_rejects_unconfigured_index(sample_reviews: Vec<ReviewComment>) {
-    let mut app = ReviewApp::new(sample_reviews)
-        .with_reply_draft_config(ReplyDraftConfig::new(200, vec!["Template one".to_owned()]));
+    let mut app = ReviewApp::new(sample_reviews).with_reply_draft_config(ReplyDraftConfig::new(
+        ReplyDraftMaxLength::new(200),
+        vec!["Template one".to_owned()],
+    ));
 
     app.handle_message(&AppMsg::StartReplyDraft);
     app.handle_message(&AppMsg::ReplyDraftInsertTemplate { template_index: 1 });
@@ -104,8 +108,10 @@ fn insert_template_rejects_unconfigured_index(sample_reviews: Vec<ReviewComment>
 
 #[rstest]
 fn insert_template_requires_active_draft(sample_reviews: Vec<ReviewComment>) {
-    let mut app = ReviewApp::new(sample_reviews)
-        .with_reply_draft_config(ReplyDraftConfig::new(200, vec!["Template one".to_owned()]));
+    let mut app = ReviewApp::new(sample_reviews).with_reply_draft_config(ReplyDraftConfig::new(
+        ReplyDraftMaxLength::new(200),
+        vec!["Template one".to_owned()],
+    ));
 
     app.handle_message(&AppMsg::ReplyDraftInsertTemplate { template_index: 0 });
 
@@ -117,8 +123,11 @@ fn insert_template_requires_active_draft(sample_reviews: Vec<ReviewComment>) {
 
 #[rstest]
 fn insert_template_rejects_mismatched_active_draft(sample_reviews_pair: Vec<ReviewComment>) {
-    let mut app = ReviewApp::new(sample_reviews_pair)
-        .with_reply_draft_config(ReplyDraftConfig::new(200, vec!["Template one".to_owned()]));
+    let mut app =
+        ReviewApp::new(sample_reviews_pair).with_reply_draft_config(ReplyDraftConfig::new(
+            ReplyDraftMaxLength::new(200),
+            vec!["Template one".to_owned()],
+        ));
 
     app.handle_message(&AppMsg::StartReplyDraft);
     app.handle_message(&AppMsg::CursorDown);

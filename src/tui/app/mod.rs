@@ -9,6 +9,7 @@
 //! - `codex_handlers`: Codex execution trigger and stream polling
 //! - `diff_context_handlers`: Full-screen diff context view management
 //! - `filter_handlers`: Review filter application and cycling
+//! - `layout`: Shared layout and scroll calculations
 //! - `lifecycle_handlers`: Startup, quit, help toggle, and resize handling
 //! - `model_impl`: `bubbletea_rs::Model` trait implementation
 //! - `navigation`: Cursor and page navigation handlers
@@ -35,6 +36,7 @@ use super::state::{DiffContextState, FilterState, ReplyDraftState, ReviewFilter,
 mod codex_handlers;
 mod diff_context_handlers;
 mod filter_handlers;
+mod layout;
 mod lifecycle_handlers;
 mod model_impl;
 mod navigation;
@@ -344,69 +346,6 @@ impl ReviewApp {
         self.filter_state.cursor_position = position;
         self.adjust_scroll_to_cursor();
         self.update_selected_id();
-    }
-
-    /// Returns the number of rows available for the UI chrome and comments.
-    ///
-    /// Body rows available to the list and detail sections.
-    const fn visible_body_height(&self) -> usize {
-        (self.height as usize).saturating_sub(CHROME_HEIGHT)
-    }
-
-    /// Updates the visible row count for the review list and stores it in the
-    /// component.
-    fn set_visible_list_height(&mut self) {
-        let list_height = self.calculate_list_height();
-        self.review_list.set_visible_height(list_height);
-    }
-
-    /// Calculates the number of rows available for the review list.
-    ///
-    /// The detail pane uses the remaining body rows once the list is bounded.
-    /// This ensures both list and detail grow with the terminal and avoids a
-    /// fixed list/detail ratio.
-    fn calculate_list_height(&self) -> usize {
-        let body_height = self.visible_body_height();
-
-        let list_max = if body_height > MIN_DETAIL_HEIGHT {
-            body_height.saturating_sub(MIN_DETAIL_HEIGHT)
-        } else {
-            0
-        };
-
-        let natural_list_height = self.filtered_count().max(MIN_LIST_HEIGHT);
-        natural_list_height.min(list_max).max(MIN_LIST_HEIGHT)
-    }
-
-    /// Calculates the number of rows available for the detail pane.
-    const fn calculate_detail_height(&self) -> usize {
-        let body_height = self.visible_body_height();
-        body_height.saturating_sub(self.review_list.visible_height())
-    }
-
-    /// Adjusts scroll offset so the selected cursor remains visible.
-    const fn adjust_scroll_to_cursor(&mut self) {
-        let cursor = self.filter_state.cursor_position;
-        let visible_height = self.review_list.visible_height();
-
-        // If nothing is visible, keep the scroll offset unchanged.
-        if visible_height == 0 {
-            return;
-        }
-
-        if cursor < self.filter_state.scroll_offset {
-            self.filter_state.scroll_offset = cursor;
-            return;
-        }
-
-        let viewport_end = self
-            .filter_state
-            .scroll_offset
-            .saturating_add(visible_height);
-        if cursor >= viewport_end {
-            self.filter_state.scroll_offset =
-                cursor.saturating_sub(visible_height.saturating_sub(1));
-        }
     }
 
     /// Handles a message and updates state accordingly.

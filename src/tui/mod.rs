@@ -27,7 +27,7 @@ pub mod sync;
 
 pub use app::ReviewApp;
 pub(crate) use reply_draft_config::get_reply_draft_config;
-pub use reply_draft_config::{ReplyDraftConfig, set_reply_draft_config};
+pub use reply_draft_config::{ReplyDraftConfig, ReplyDraftMaxLength, set_reply_draft_config};
 
 /// Global storage for initial review data.
 ///
@@ -487,7 +487,7 @@ mod tests {
     fn reply_draft_config_falls_back_to_defaults() {
         let config = get_reply_draft_config();
         assert!(
-            config.max_length >= 1,
+            config.max_length.as_usize() >= 1,
             "default reply max_length should be positive"
         );
         assert!(
@@ -498,10 +498,14 @@ mod tests {
 
     #[test]
     fn set_reply_draft_config_normalises_zero_max_length() {
-        let custom = ReplyDraftConfig::new(0, vec!["Template".to_owned()]);
+        let custom =
+            ReplyDraftConfig::new(ReplyDraftMaxLength::new(0), vec!["Template".to_owned()]);
         let was_set = set_reply_draft_config(custom);
         let config = get_reply_draft_config();
-        assert!(config.max_length >= 1, "max_length should be normalised");
+        assert!(
+            config.max_length.as_usize() >= 1,
+            "max_length should be normalised"
+        );
         if was_set {
             assert_eq!(config.templates, vec!["Template".to_owned()]);
         }

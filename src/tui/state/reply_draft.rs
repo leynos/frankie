@@ -8,24 +8,21 @@ use minijinja::{Environment, context};
 use thiserror::Error;
 
 use crate::github::models::ReviewComment;
+use crate::tui::ReplyDraftMaxLength;
 
 /// Local reply draft state for a selected review comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplyDraftState {
     comment_id: u64,
     text: String,
-    max_length: usize,
+    max_length: ReplyDraftMaxLength,
     ready_to_send: bool,
 }
 
 impl ReplyDraftState {
     /// Creates an empty reply draft for the given comment.
     #[must_use]
-    pub fn new(comment_id: u64, max_length: usize) -> Self {
-        debug_assert!(
-            max_length >= 1,
-            "reply draft max_length must be normalized before state creation"
-        );
+    pub const fn new(comment_id: u64, max_length: ReplyDraftMaxLength) -> Self {
         Self {
             comment_id,
             text: String::new(),
@@ -48,7 +45,7 @@ impl ReplyDraftState {
 
     /// Returns the configured maximum character count.
     #[must_use]
-    pub const fn max_length(&self) -> usize {
+    pub const fn max_length(&self) -> ReplyDraftMaxLength {
         self.max_length
     }
 
@@ -67,7 +64,7 @@ impl ReplyDraftState {
     /// Returns remaining characters before the draft reaches its limit.
     #[must_use]
     pub fn remaining_chars(&self) -> usize {
-        self.max_length.saturating_sub(self.char_count())
+        self.max_length.as_usize().saturating_sub(self.char_count())
     }
 
     /// Appends free-form text to the draft, enforcing max length.
@@ -138,10 +135,10 @@ impl ReplyDraftState {
     }
 
     const fn ensure_within_limit(&self, attempted: usize) -> Result<(), ReplyDraftError> {
-        if attempted > self.max_length {
+        if attempted > self.max_length.as_usize() {
             return Err(ReplyDraftError::LengthExceeded {
                 attempted,
-                max_length: self.max_length,
+                max_length: self.max_length.as_usize(),
             });
         }
         Ok(())
@@ -246,6 +243,7 @@ mod tests {
 
     use super::{ReplyDraftError, ReplyDraftState, render_reply_template};
     use crate::github::models::ReviewComment;
+    use crate::tui::ReplyDraftMaxLength;
 
     #[fixture]
     fn sample_comment() -> ReviewComment {
@@ -261,18 +259,18 @@ mod tests {
 
     #[test]
     fn new_draft_starts_empty_and_not_ready() {
-        let draft = ReplyDraftState::new(42, 60);
+        let draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(60));
 
         assert_eq!(draft.comment_id(), 42);
         assert_eq!(draft.text(), "");
-        assert_eq!(draft.max_length(), 60);
+        assert_eq!(draft.max_length().as_usize(), 60);
         assert_eq!(draft.char_count(), 0);
         assert!(!draft.is_ready_to_send());
     }
 
     #[test]
     fn append_text_respects_max_length() {
-        let mut draft = ReplyDraftState::new(42, 10);
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(10));
 
         let result = draft.append_text("hello world");
         assert_eq!(
@@ -287,7 +285,7 @@ mod tests {
 
     #[test]
     fn push_char_and_backspace_update_draft() {
-        let mut draft = ReplyDraftState::new(42, 10);
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(10));
 
         assert!(draft.push_char('a').is_ok());
         assert!(draft.push_char('b').is_ok());
@@ -299,7 +297,7 @@ mod tests {
 
     #[test]
     fn request_send_requires_non_empty_draft() {
-        let mut draft = ReplyDraftState::new(42, 10);
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(10));
 
         let result = draft.request_send();
         assert_eq!(result, Err(ReplyDraftError::EmptyDraft));
@@ -308,7 +306,7 @@ mod tests {
 
     #[test]
     fn request_send_marks_ready_when_valid() {
-        let mut draft = ReplyDraftState::new(42, 10);
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(10));
         assert!(draft.append_text("done").is_ok());
 
         assert!(draft.request_send().is_ok());
@@ -317,7 +315,7 @@ mod tests {
 
     #[test]
     fn clear_resets_text_and_readiness() {
-        let mut draft = ReplyDraftState::new(42, 10);
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(10));
         assert!(draft.append_text("done").is_ok());
         assert!(draft.request_send().is_ok());
 
@@ -333,7 +331,7 @@ mod tests {
     #[case("🙂", 1)]
     #[case("🙂🙂", 2)]
     fn char_count_uses_unicode_scalar_values(#[case] text: &str, #[case] expected: usize) {
-        let mut draft = ReplyDraftState::new(42, 20);
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(20));
         assert!(draft.append_text(text).is_ok());
 
         assert_eq!(draft.char_count(), expected);

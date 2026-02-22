@@ -5,8 +5,8 @@ use bubbletea_rs::event::KeyMsg;
 use crossterm::event::{KeyCode, KeyModifiers};
 use frankie::github::models::ReviewComment;
 use frankie::github::models::test_support::minimal_review;
-use frankie::tui::ReplyDraftConfig;
 use frankie::tui::app::ReviewApp;
+use frankie::tui::{ReplyDraftConfig, ReplyDraftMaxLength};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
@@ -29,8 +29,10 @@ fn build_app_with_comments(
     template: &str,
     comments: Vec<ReviewComment>,
 ) -> ReviewApp {
-    ReviewApp::new(comments)
-        .with_reply_draft_config(ReplyDraftConfig::new(max_length, vec![template.to_owned()]))
+    ReviewApp::new(comments).with_reply_draft_config(ReplyDraftConfig::new(
+        ReplyDraftMaxLength::new(max_length),
+        vec![template.to_owned()],
+    ))
 }
 
 fn sample_comment() -> ReviewComment {

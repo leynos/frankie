@@ -2917,7 +2917,7 @@ server-side thread when an interrupted session is detected.
 - The most recent interrupted session per PR is offered for resumption; users
   can decline to start fresh.
 
-#### Architecture decision record (ADR-004): Inline template-based reply drafting
+#### Architecture decision record (ADR-004): inline template-based reply drafting
 
 **Context**: Review workflows need fast, keyboard-driven reply composition
 without leaving the text user interface (TUI). The roadmap acceptance for this

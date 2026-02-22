@@ -208,7 +208,7 @@ Success is observable when:
   template slot using a keypress.
 - Edit-before-send: user can modify inserted template text before triggering a
   send-intent action.
-- Send-intent action: a local action that marks the draft ready for send in
+- Send-intent action: a local action that marks the draft ready to send in
   this step; remote submission is out of scope unless scope is expanded.
 
 ## Plan of work
