@@ -57,6 +57,19 @@ fn app_with_inserted_template(
     app
 }
 
+/// Helper to assert the readiness state of the active reply draft.
+fn assert_draft_readiness(app: &ReviewApp, expected_ready: bool) {
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should exist");
+    if let Some(draft) = maybe_draft {
+        assert_eq!(
+            draft.is_ready_to_send(),
+            expected_ready,
+            "draft readiness should be {expected_ready}"
+        );
+    }
+}
+
 #[rstest]
 fn start_reply_draft_requires_selected_comment() {
     let mut app = ReviewApp::empty();
@@ -170,11 +183,7 @@ fn request_send_marks_draft_ready(sample_reviews: Vec<ReviewComment>) {
     app.handle_message(&AppMsg::ReplyDraftInsertChar('k'));
     app.handle_message(&AppMsg::ReplyDraftRequestSend);
 
-    let maybe_draft = app.reply_draft.as_ref();
-    assert!(maybe_draft.is_some(), "draft should exist");
-    if let Some(draft) = maybe_draft {
-        assert!(draft.is_ready_to_send());
-    }
+    assert_draft_readiness(&app, true);
 }
 
 #[rstest]
@@ -186,11 +195,7 @@ fn editing_after_ready_clears_ready_state(sample_reviews: Vec<ReviewComment>) {
     app.handle_message(&AppMsg::ReplyDraftRequestSend);
     app.handle_message(&AppMsg::ReplyDraftInsertChar('k'));
 
-    let maybe_draft = app.reply_draft.as_ref();
-    assert!(maybe_draft.is_some(), "draft should exist");
-    if let Some(draft) = maybe_draft {
-        assert!(!draft.is_ready_to_send());
-    }
+    assert_draft_readiness(&app, false);
 }
 
 #[rstest]
