@@ -93,21 +93,21 @@ Success is observable when:
 ## Progress
 
 - [x] (2026-02-20 00:00Z) Drafted ExecPlan with constraints, tolerances,
-  staged implementation, and validation criteria.
+      staged implementation, and validation criteria.
 - [x] (2026-02-20 00:35Z) Stage A: finalized reply-drafting domain model and
-  configuration surface (`ReplyDraftState`, template rendering helpers,
-  and config keys `reply_max_length` / `reply_templates` with tests).
+      configuration surface (`ReplyDraftState`, template rendering helpers,
+      and config keys `reply_max_length` / `reply_templates` with tests).
 - [x] (2026-02-20 00:50Z) Stage B: implemented input/message plumbing and
-  reply draft state transitions (`InputContext::ReplyDraft`, new `AppMsg`
-  variants, routing/handlers).
+      reply draft state transitions (`InputContext::ReplyDraft`, new `AppMsg`
+      variants, routing/handlers).
 - [x] (2026-02-20 01:05Z) Stage C: rendered inline drafts and wired
-  edit-before-send interactions in the detail pane and status/help text.
+      edit-before-send interactions in the detail pane and status/help text.
 - [x] (2026-02-20 02:10Z) Stage D: added unit and behavioural coverage for
-  happy/unhappy/edge cases (`rstest` unit coverage plus
-  `tests/template_reply_drafting_bdd.rs` scenarios).
+      happy/unhappy/edge cases (`rstest` unit coverage plus
+      `tests/template_reply_drafting_bdd.rs` scenarios).
 - [x] (2026-02-20 02:30Z) Stage E: updated design/user docs, marked roadmap
-  entry done, refreshed snapshots, and passed gates (`make check-fmt`,
-  `make lint`, `make test`).
+      entry done, refreshed snapshots, and passed gates (`make check-fmt`,
+      `make lint`, `make test`).
 
 ## Surprises & discoveries
 
@@ -128,7 +128,7 @@ Success is observable when:
   critical controls (`q:quit`) when additional shortcuts are appended.
   Evidence: failing test
   `tui::app::tests::tiny_terminal_skips_detail_pane_and_keeps_status_bar_visible`
-  after adding `a:reply`. Impact: status hints now need a width-aware compact
+   after adding `a:reply`. Impact: status hints now need a width-aware compact
   variant for narrow terminals.
 
 ## Decision log
@@ -360,23 +360,18 @@ Then run full required gates and capture logs.
 From repository root (`/home/user/project`), execute:
 
 1. Implement Stage A-C code and unit tests in small, reviewable commits.
+2. Implement Stage D behavioural tests and fixtures.
+3. Update docs and roadmap in Stage E.
+4. Run validation commands with log capture:
 
-1. Implement Stage D behavioural tests and fixtures.
-
-1. Update docs and roadmap in Stage E.
-
-1. Run validation commands with log capture:
-
-   set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-2-1-check-fmt.log
-   set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-2-1-lint.log
-   set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-2-1-test.log
+    set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-2-1-check-fmt.log
+    set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-2-1-lint.log
+    set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-2-1-test.log
 
 Recommended documentation gates when docs are touched:
 
-```
-set -o pipefail; make markdownlint 2>&1 | tee /tmp/execplan-3-2-1-markdownlint.log
-set -o pipefail; make nixie 2>&1 | tee /tmp/execplan-3-2-1-nixie.log
-```
+    set -o pipefail; make markdownlint 2>&1 | tee /tmp/execplan-3-2-1-markdownlint.log
+    set -o pipefail; make nixie 2>&1 | tee /tmp/execplan-3-2-1-nixie.log
 
 Expected short transcripts:
 
@@ -438,20 +433,20 @@ Planned internal interfaces (names may vary, responsibilities must not):
 
 - Reply draft state API in `src/tui/state/reply_draft.rs`, e.g.:
 
-  pub struct ReplyDraftState {
-  pub comment_id: u64,
-  pub text: String,
-  pub max_length: usize,
-  pub ready_to_send: bool,
-  }
+    pub struct ReplyDraftState {
+        pub comment_id: u64,
+        pub text: String,
+        pub max_length: usize,
+        pub ready_to_send: bool,
+    }
 
-  impl ReplyDraftState {
-  pub fn insert_template(&mut self, template: &str) -> Result\<(), ReplyDraftError>;
-  pub fn push_char(&mut self, ch: char) -> Result\<(), ReplyDraftError>;
-  pub fn backspace(&mut self);
-  pub fn request_send(&mut self) -> Result\<(), ReplyDraftError>;
-  pub fn char_count(&self) -> usize;
-  }
+    impl ReplyDraftState {
+        pub fn insert_template(&mut self, template: &str) -> Result<(), ReplyDraftError>;
+        pub fn push_char(&mut self, ch: char) -> Result<(), ReplyDraftError>;
+        pub fn backspace(&mut self);
+        pub fn request_send(&mut self) -> Result<(), ReplyDraftError>;
+        pub fn char_count(&self) -> usize;
+    }
 
 - Additive config fields in `FrankieConfig`:
 

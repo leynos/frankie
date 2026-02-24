@@ -54,7 +54,8 @@ support later workflow features.
 ### Step: Persistence and configuration
 
 - [x] Define initial SQLite schema (repositories, pull requests, comments,
-  sync checkpoints) using Diesel migrations; acceptance: `diesel migration run` succeeds and schema version is recorded in app telemetry.
+  sync checkpoints) using Diesel migrations; acceptance: `diesel migration
+  run` succeeds and schema version is recorded in app telemetry.
 - [x] Implement local caching layer with coherent expiry policy; acceptance:
   cached PR metadata is reused across sessions and invalidates on ETag or
   Last-Modified changes detected via octocrab responses.

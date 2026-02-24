@@ -17,7 +17,7 @@ including simulating user input (keypresses), structuring tests with **rstest**
 and **rstest-bdd**, and dealing with common challenges like dynamic output and
 terminal sizing.
 
-**Why snapshot-test a TUI?** Traditional assertions are tedious for TUIs –
+**Why snapshot-test a TUI?**  Traditional assertions are tedious for TUIs –
 every piece of text, whitespace, or colour would need to be checked manually.
 Snapshot tests (also called golden file tests) capture the entire screen output
 and allow differences to be reviewed when they occur. This is invaluable for
@@ -988,6 +988,25 @@ Combined with rstest-bdd, test code can read almost like a specification of the
 UI’s behaviour. This not only helps catch bugs but also serves as documentation
 for how the TUI is supposed to react to input.
 
+[^1]: Ratatui snapshot testing note on colour handling:
+      <https://ratatui.rs/recipes/testing/snapshots/#:~:text=Note>
+[^2]: Ratatui snapshot recipe examples showing line-by-line snapshots:
+      <https://ratatui.rs/recipes/testing/snapshots/#:~:text=snapshots%2Fdemo2__tests__render_app>
+       and
+      <https://ratatui.rs/recipes/testing/snapshots/#:~:text=,Traceroute%20%20Weather>
+[^3]: bubbletea-rs defines `Msg` as `Box<dyn Any + Send>` (messages must be
+      boxed):
+      <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.html>
+[^4]: bubbletea-rs `DummyTerminal` (headless terminal implementation for tests):
+      <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/terminal/struct.DummyTerminal.html>
+[^5]: ratatui-testlib overview and `TuiTestHarness` API (PTY-based integration
+      testing with insta support):
+      <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/>
+       and
+      <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/struct.TuiTestHarness.html>
+[^6]: bubbletea-rs defines `Cmd` as a boxed future returning `Option<Msg>`:
+      <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/type.Cmd.html>
+
 **Sources:**
 
 - bubbletea-rs documentation (Model/Msg/Cmd and DummyTerminal)
@@ -996,27 +1015,3 @@ for how the TUI is supposed to react to input.
 - Ratatui snapshot testing recipe (buffer-based snapshot testing with insta)
 - Charm’s Bubble Tea teatest (Go) golden-file testing inspiration
 - Insta documentation (filters/redactions and snapshot review workflow)
-
-[^3]: bubbletea-rs defines `Msg` as `Box<dyn Any + Send>` (messages must be
-    boxed):
-    <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.html>
-
-[^5]: ratatui-testlib overview and `TuiTestHarness` API (PTY-based integration
-    testing with insta support):
-    <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/>
-    and
-    <https://docs.rs/ratatui-testlib/latest/ratatui_testlib/struct.TuiTestHarness.html>
-
-[^4]: bubbletea-rs `DummyTerminal` (headless terminal implementation for tests):
-    <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/terminal/struct.DummyTerminal.html>
-
-[^1]: Ratatui snapshot testing note on colour handling:
-    <https://ratatui.rs/recipes/testing/snapshots/#:~:text=Note>
-
-[^2]: Ratatui snapshot recipe examples showing line-by-line snapshots:
-    <https://ratatui.rs/recipes/testing/snapshots/#:~:text=snapshots%2Fdemo2__tests__render_app>
-    and
-    <https://ratatui.rs/recipes/testing/snapshots/#:~:text=,Traceroute%20%20Weather>
-
-[^6]: bubbletea-rs defines `Cmd` as a boxed future returning `Option<Msg>`:
-    <https://docs.rs/bubbletea-rs/latest/bubbletea_rs/command/type.Cmd.html>

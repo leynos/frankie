@@ -184,12 +184,10 @@ done, run all validation gates.
 ### Stage A: Export Data Model
 
 1. Create `src/cli/export/mod.rs` with:
-
    - Module-level documentation
    - Re-exports for public API
 
-1. Create `src/cli/export/model.rs` with:
-
+2. Create `src/cli/export/model.rs` with:
    - `ExportedComment` struct with `#[derive(Debug, Clone, Serialize)]`:
      - `id: u64`
      - `author: Option<String>`
@@ -205,8 +203,7 @@ done, run all validation gates.
    - `ExportFormat` enum: `Markdown`, `Jsonl`
    - `impl FromStr for ExportFormat` for CLI parsing
 
-1. Create `src/cli/export/ordering.rs` with:
-
+3. Create `src/cli/export/ordering.rs` with:
    - `sort_comments(comments: &mut [ExportedComment])` function
    - Sorting by (file_path, line_number, id) with None values last
    - Unit tests inline
@@ -214,7 +211,6 @@ done, run all validation gates.
 ### Stage B: Export Formatters
 
 1. Create `src/cli/export/markdown.rs` with:
-
    - `write_markdown<W>(writer, comments, pr_url) -> Result<(), IntakeError>`
    - Header section with PR metadata
    - Per-comment section with:
@@ -224,8 +220,7 @@ done, run all validation gates.
      - Author and timestamp
    - Unit tests inline
 
-1. Create `src/cli/export/jsonl.rs` with:
-
+2. Create `src/cli/export/jsonl.rs` with:
    - `write_jsonl<W>(writer, comments) -> Result<(), IntakeError>`
    - One JSON object per line
    - Proper newline handling
@@ -234,68 +229,57 @@ done, run all validation gates.
 ### Stage C: CLI Integration
 
 1. Update `src/config/mod.rs`:
-
    - Add `export: Option<String>` field for format selection
    - Add `output: Option<String>` field for output path
    - Add `#[ortho_config(cli_short = 'e')]` for `--export`/`-e`
 
-1. Update `OperationMode` enum:
-
+2. Update `OperationMode` enum:
    - Add `ExportComments` variant
 
-1. Update `FrankieConfig::operation_mode()`:
-
+3. Update `FrankieConfig::operation_mode()`:
    - Return `ExportComments` when `export.is_some() && pr_url.is_some()`
 
-1. Create `src/cli/export_comments.rs` with:
-
+4. Create `src/cli/export_comments.rs` with:
    - `pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError>`
    - Load PR and review comments via gateway
    - Convert to `ExportedComment` and sort
    - Write to stdout or file based on config
    - Error handling for invalid format
 
-1. Update `src/cli/mod.rs`:
-
+5. Update `src/cli/mod.rs`:
    - Add `pub mod export;`
    - Add `pub mod export_comments;`
 
-1. Update `src/main.rs`:
-
+6. Update `src/main.rs`:
    - Add `OperationMode::ExportComments` match arm
    - Call `cli::export_comments::run()`
 
 ### Stage D: Unit Testing
 
 1. Add tests to `src/cli/export/ordering.rs`:
-
    - Test stable ordering with full data
    - Test ordering with None values
    - Test ordering with duplicate file paths
 
-1. Add tests to `src/cli/export/markdown.rs`:
-
+2. Add tests to `src/cli/export/markdown.rs`:
    - Test basic Markdown output structure
    - Test code block language detection
    - Test escaping of special characters
    - Test empty comments list
 
-1. Add tests to `src/cli/export/jsonl.rs`:
-
+3. Add tests to `src/cli/export/jsonl.rs`:
    - Test single comment JSONL
    - Test multiple comments (one per line)
    - Test JSON escaping
    - Test empty comments list
 
-1. Add tests to `src/cli/export/model.rs`:
-
+4. Add tests to `src/cli/export/model.rs`:
    - Test From conversion preserves fields
    - Test ExportFormat parsing
 
 ### Stage E: BDD Testing
 
 1. Create `tests/features/comment_export.feature` with scenarios:
-
    - Export comments in Markdown format
    - Export comments in JSONL format
    - Export with stable ordering
@@ -303,17 +287,15 @@ done, run all validation gates.
    - Export with missing optional fields
    - Invalid export format produces error
 
-1. Create `tests/comment_export_bdd.rs` entry point.
+2. Create `tests/comment_export_bdd.rs` entry point.
 
-1. Create `tests/comment_export_bdd/mod.rs` with step module imports.
+3. Create `tests/comment_export_bdd/mod.rs` with step module imports.
 
-1. Create `tests/comment_export_bdd/state.rs` with:
-
+4. Create `tests/comment_export_bdd/state.rs` with:
    - `ExportState` struct using `Slot` pattern
    - Fields for runtime, mock server, output buffer, error
 
-1. Create `tests/comment_export_bdd/steps.rs` with:
-
+5. Create `tests/comment_export_bdd/steps.rs` with:
    - Given steps for setting up mock server with comments
    - When steps for invoking export
    - Then steps for asserting output format and content
@@ -321,33 +303,31 @@ done, run all validation gates.
 ### Stage F: Documentation and Close-out
 
 1. Update `docs/users-guide.md` with:
-
    - New "Comment export" section
    - CLI flags documentation (`--export`, `--output`)
    - Format descriptions (Markdown, JSONL)
    - Example usage commands
 
-1. Mark roadmap entry as done in `docs/roadmap.md`:
-
+2. Mark roadmap entry as done in `docs/roadmap.md`:
    - Change `[ ]` to `[x]` for the comment export pipeline item
 
-1. Run validation gates:
+3. Run validation gates:
 
-   ```bash
-   set -o pipefail
-   make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
-   make lint 2>&1 | tee /tmp/frankie-lint.log
-   make test 2>&1 | tee /tmp/frankie-test.log
-   ```
+    ```bash
+    set -o pipefail
+    make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
+    make lint 2>&1 | tee /tmp/frankie-lint.log
+    make test 2>&1 | tee /tmp/frankie-test.log
+    ```
 
-1. Run documentation validators:
+4. Run documentation validators:
 
-   ```bash
-   set -o pipefail
-   make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
-   make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
-   make nixie 2>&1 | tee /tmp/frankie-nixie.log
-   ```
+    ```bash
+    set -o pipefail
+    make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
+    make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
+    make nixie 2>&1 | tee /tmp/frankie-nixie.log
+    ```
 
 ## Validation and acceptance
 

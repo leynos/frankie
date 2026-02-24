@@ -78,7 +78,7 @@ to a maximum of 80 columns and still renders when the highlighter cannot load.
   layout.
 - [x] (2026-01-13 02:00Z) Update design documentation and user guide.
 - [x] (2026-01-13 02:30Z) Run formatting, linting, tests, and documentation
-  validators.
+      validators.
 - [x] (2026-01-13 02:45Z) Mark roadmap entry complete and record outcomes.
 
 ## Surprises & discoveries
@@ -176,40 +176,40 @@ stage only if the current stage validation succeeds.
 
 1. Inspect current TUI layout and review comment fields:
 
-   rg -n "ReviewApp::view|render\_" src/tui/app
-   rg -n "ReviewListComponent" src/tui/components
-   rg -n "diff_hunk|file_path|line_number" src/github/models/mod.rs
+    rg -n "ReviewApp::view|render_" src/tui/app
+    rg -n "ReviewListComponent" src/tui/components
+    rg -n "diff_hunk|file_path|line_number" src/github/models/mod.rs
 
-1. Add unit tests for the new detail component and wrapping behaviour, using
+2. Add unit tests for the new detail component and wrapping behaviour, using
    `rstest` fixtures and `expect` only in tests.
 
-1. Add a new feature file (for example,
+3. Add a new feature file (for example,
    `tests/features/comment_detail.feature`) and a `rstest-bdd` scenario module
    (for example, `tests/comment_detail_bdd.rs`) that asserts detail rendering
    output for both highlighted and fallback paths.
 
-1. Implement the new comment detail component and integrate it into
+4. Implement the new comment detail component and integrate it into
    `ReviewApp::view()`. Ensure new modules start with `//!` comments and stay
    under 400 lines.
 
-1. Update documentation in `docs/frankie-design.md` and `docs/users-guide.md`.
+5. Update documentation in `docs/frankie-design.md` and `docs/users-guide.md`.
 
-1. Run the full validation pipeline. For long outputs, use `tee` and
+6. Run the full validation pipeline. For long outputs, use `tee` and
    `set -o pipefail` as required:
 
-   set -o pipefail
-   make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
-   make lint 2>&1 | tee /tmp/frankie-lint.log
-   make test 2>&1 | tee /tmp/frankie-test.log
+    set -o pipefail
+    make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
+    make lint 2>&1 | tee /tmp/frankie-lint.log
+    make test 2>&1 | tee /tmp/frankie-test.log
 
-1. If documentation changed, run the documentation validators:
+7. If documentation changed, run the documentation validators:
 
-   set -o pipefail
-   make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
-   make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
-   make nixie 2>&1 | tee /tmp/frankie-nixie.log
+    set -o pipefail
+    make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
+    make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
+    make nixie 2>&1 | tee /tmp/frankie-nixie.log
 
-1. Mark the roadmap item complete in `docs/roadmap.md` and update the Progress
+8. Mark the roadmap item complete in `docs/roadmap.md` and update the Progress
    and Outcomes sections of this ExecPlan.
 
 ## Validation and acceptance
@@ -245,20 +245,16 @@ on the component in isolation before re-integrating.
 
 Example detail rendering (illustrative, not a snapshot):
 
-```
-[alice] src/lib.rs:42
-Comment: Please extract this helper.
+    [alice] src/lib.rs:42
+    Comment: Please extract this helper.
 
-@@ -40,6 +40,10 @@
-+fn wrap_line(input: &str) -> String { … }
-+fn format_view(…) -> String { … }
-```
+    @@ -40,6 +40,10 @@
+    +fn wrap_line(input: &str) -> String { … }
+    +fn format_view(…) -> String { … }
 
 Example acceptance check for 80-column wrapping in unit tests:
 
-```
-assert!(output.lines().all(|line| line.chars().count() <= 80));
-```
+    assert!(output.lines().all(|line| line.chars().count() <= 80));
 
 ## Interfaces and dependencies
 

@@ -68,19 +68,19 @@ still validating both startup and dynamic resize behaviour.
 
 - [x] Inspected current issue context and code paths.
 - [x] Confirmed existing terminal size and resize plumbing exists and needs
-  hardening.
+      hardening.
 - [x] Implement layout and detail-height fix to make list/detail height dynamic.
 - [x] Implement PTY/integration snapshot coverage for startup and resize using
-  bounded read windows to avoid blocking.
+      bounded read windows to avoid blocking.
 - [x] Add snapshot fixtures and assertions in
-  `tests/interactive_tui_resize_snapshots.rs` (3 snapshots + resize
-  transition captures).
+      `tests/interactive_tui_resize_snapshots.rs` (3 snapshots + resize
+      transition captures).
 - [x] Validate the issue with dedicated PTY + `insta` integration tests.
 - [x] Run workspace-wide required gates for the touched area, or capture
-  explicit approval to defer.
+      explicit approval to defer.
 - [x] Address post-merge review feedback covering ANSI-safe truncation,
-  timeout failure semantics in the PTY fixture, and documentation fixes for
-  quote escaping and style guidance.
+      timeout failure semantics in the PTY fixture, and documentation fixes for
+      quote escaping and style guidance.
 
 ## Decision log
 
@@ -94,7 +94,6 @@ still validating both startup and dynamic resize behaviour.
 ## Plan
 
 1. Verify size source-of-truth and startup behaviour
-
    - In `src/cli/review_tui.rs`, confirm terminal dimensions are queried before
      UI creation.
    - Ensure failures in size detection fall back to a safe deterministic
@@ -102,8 +101,7 @@ still validating both startup and dynamic resize behaviour.
    - Ensure the queried values are always passed into `ReviewApp`
      initialization consistently.
 
-1. Remove height cap and make layout adaptive
-
+2. Remove height cap and make layout adaptive
    - In `src/tui/app/mod.rs`:
      - Keep terminal chrome constants only where fixed by UI semantics.
      - Recompute list/detail allocation from full `height` every render cycle.
@@ -115,23 +113,20 @@ still validating both startup and dynamic resize behaviour.
    - Keep `handle_resize` as the single code path for updating viewport
      dimensions.
 
-1. Preserve cursor and scroll invariants on resize
-
+3. Preserve cursor and scroll invariants on resize
    - In `src/tui/app/mod.rs`, validate `set_cursor_visible_rows` and list
      scroll bounds after `handle_resize`.
    - Add/update unit tests asserting cursor and top indices remain valid at
      minimum and large heights.
    - Explicitly test edge sizes and one-step larger/smaller transitions.
 
-1. Wire runtime resize handling confidence
-
+4. Wire runtime resize handling confidence
    - In `src/tui/app/model_impl.rs`, confirm translation from framework resize
      events maps to `AppMsg::WindowResized { width, height }`.
    - Verify terminal event subscription is still active for interactive mode
      and that the app receives updates.
 
-1. Add ratatui-testlib + insta PTY tests
-
+5. Add ratatui-testlib + insta PTY tests
    - Create plan-aligned tests in `tests/`:
      - `tests/interactive_tui_resize_snapshots.rs`
    - Use `ratatui_testlib` to boot the app in controlled terminal sizes.
@@ -145,15 +140,13 @@ still validating both startup and dynamic resize behaviour.
      duplicated setup.
    - Normalize/strip variable ANSI cursor state before snapshot assertions.
 
-1. Dependency and build config updates
-
+6. Dependency and build config updates
    - If not already present, add `ratatui-testlib` and `insta` as
      dev-dependencies in `Cargo.toml`.
    - Keep versions as normalized workspace dependency style and match lockfile
      on commit.
 
-1. Validation and completion
-
+7. Validation and completion
    - Run quality commands after changes:
 
      ```sh
@@ -164,9 +157,7 @@ still validating both startup and dynamic resize behaviour.
      ```
 
    - Include docs checks only if markdown changes are made.
-
    - Capture and inspect any snapshot diffs before commit.
-
    - Record test evidence and remaining risk in the final handoff.
 
 ## Surprises & discoveries

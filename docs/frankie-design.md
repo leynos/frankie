@@ -2982,9 +2982,9 @@ future roadmap item, completion requires:
 1. A documented, test-covered public library API that external hosts can call
    directly.
 
-1. TUI integration for interactive review workflows.
+2. TUI integration for interactive review workflows.
 
-1. A pure CLI surface for non-interactive workflows, or an explicit documented
+3. A pure CLI surface for non-interactive workflows, or an explicit documented
    rationale when CLI is not applicable.
 
 **Rationale**:
@@ -2992,13 +2992,13 @@ future roadmap item, completion requires:
 1. **Capability reuse**: Agent hosts should not need to reimplement TUI-only
    logic to use Frankie features.
 
-1. **Operational consistency**: Shared library behaviour keeps TUI, CLI, and
+2. **Operational consistency**: Shared library behaviour keeps TUI, CLI, and
    embedded automation aligned on validation, error handling, and outcomes.
 
-1. **Testability**: Library-first boundaries reduce UI-coupled tests and make
+3. **Testability**: Library-first boundaries reduce UI-coupled tests and make
    deterministic behavioural testing easier.
 
-1. **Roadmap durability**: Surface parity prevents future features from
+4. **Roadmap durability**: Surface parity prevents future features from
    becoming inaccessible to non-TUI consumers.
 
 **Consequences**:

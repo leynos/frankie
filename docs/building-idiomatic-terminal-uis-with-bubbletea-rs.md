@@ -16,7 +16,7 @@ for those coming from Elm, React, or the original Go Bubble Tea framework).
 Bubbletea-rs is a Rust re-imagining of the Go Bubble Tea TUI framework, built
 on the **Model–View–Update**
 pattern([1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=Bubble%20Tea%20,performance%2C%20and%20great%20developer%20experience)).
-In this architecture, the application logic is separated into clear stages:
+ In this architecture, the application logic is separated into clear stages:
 
 - **Model:** The application state and business logic.
 
@@ -38,7 +38,7 @@ This MVU loop is managed by Bubbletea-rs’s runtime. The framework is built on
 Tokio and is **async-first**, meaning commands are non-blocking and run
 concurrently on an async
 runtime([1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=%2A%20Model,batch%20operations%2C%20and%20custom%20async)).
-The TUI runs in an event loop that processes input events and command results,
+ The TUI runs in an event loop that processes input events and command results,
 updates the model, and re-renders the view accordingly. This unidirectional
 data flow ensures a predictable state progression and a clear separation
 between **what** the UI should display and **how** interactions update the
@@ -78,7 +78,7 @@ impl Model for MyModel {
 A notable aspect of Bubbletea-rs is its **dynamic message system**. The `Msg`
 type is defined as a type alias for
 `Box<dyn std::any::Any + Send>`([3](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.html#:~:text=pub%20type%20Msg%20%3D%20Box,Any%20%2B%20Send)).
-In practice, this means a message can be **any Rust type** (commonly an enum
+ In practice, this means a message can be **any Rust type** (commonly an enum
 or struct that you define for your app, or a message type from a library
 component). Each event – whether a key press, a mouse click, or a custom event
 – is encapsulated as a boxed value and passed to `update`. This design provides
@@ -91,7 +91,7 @@ messages)([3](https://docs.rs/bubbletea-rs/latest/bubbletea_rs/event/type.Msg.ht
 instance, if you define your own message enum `AppMsg` for application-specific
 events, you would downcast and match on it:
 
-````rust
+```rust
 use bubbletea_rs::event::KeyMsg;
 enum AppMsg { Increment, Decrement, Quit }
 
@@ -1097,4 +1097,3 @@ performant([1](https://github.com/whit3rabbit/bubbletea-rs#:~:text=Bubble%20Tea%
   (2024)(
   [10](https://dev.to/dev-tngsh/go-vs-rust-for-tui-development-a-deep-dive-into-bubbletea-and-ratatui-2b7#:~:text=Core%20Philosophy%20Opinionated%20,module))
    (for conceptual comparison)
-````

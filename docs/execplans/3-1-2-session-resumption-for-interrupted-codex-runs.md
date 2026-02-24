@@ -106,24 +106,24 @@ Success is observable when:
 ## Progress
 
 - [x] Drafted self-contained ExecPlan with constraints, tolerances, staged
-  implementation, and validation approach.
+      implementation, and validation approach.
 - [x] Stage A: session state model and persistence layer in `src/ai/`.
 - [x] Stage B: session lifecycle hooks (sidecar creation and status
-  updates in the execution pipeline).
+      updates in the execution pipeline).
 - [x] Stage C: session discovery (find most recent interrupted session for
-  a PR).
+      a PR).
 - [x] Stage D: resume execution path (`thread/resume` protocol support,
-  transcript append, `CodexResumeRequest`).
+      transcript append, `CodexResumeRequest`).
 - [x] Stage E: TUI integration — resume prompt on `x` key when interrupted
-  session exists.
+      session exists.
 - [x] Stage F: unit tests for session state persistence, discovery, and
-  resumption.
+      resumption.
 - [x] Stage G: behavioural tests (BDD) for end-to-end resume and
-  fresh-start flows.
+      fresh-start flows.
 - [x] Stage H: documentation updates (`frankie-design.md`,
-  `users-guide.md`, `roadmap.md`).
+      `users-guide.md`, `roadmap.md`).
 - [x] Stage I: quality gates pass (`make check-fmt`, `make lint`,
-  `make test`).
+      `make test`).
 
 ## Surprises & discoveries
 
@@ -233,18 +233,18 @@ these files:
 ### Key types and flow
 
 1. TUI user presses `x` → `AppMsg::StartCodexExecution`.
-1. `handle_start_codex_execution()` builds a `CodexExecutionRequest` from
+2. `handle_start_codex_execution()` builds a `CodexExecutionRequest` from
    filtered comments and calls `codex_service.start(request)`.
-1. `SystemCodexExecutionService::start()` resolves the transcript path,
+3. `SystemCodexExecutionService::start()` resolves the transcript path,
    then calls `run_codex()` which spawns a background thread.
-1. The background thread creates a `TranscriptWriter`, spawns
+4. The background thread creates a `TranscriptWriter`, spawns
    `codex app-server`, writes JSON-RPC initialization messages to stdin, and
    enters `stream_progress()` which reads stdout lines, writes each to the
    transcript, sends `CodexExecutionUpdate::Progress` to the channel, and
    delegates JSON-RPC responses to `AppServerSession`.
-1. When `turn/completed` arrives or the process exits, a
+5. When `turn/completed` arrives or the process exits, a
    `CodexExecutionUpdate::Finished` is sent through the channel.
-1. The TUI polls the handle on `CodexPollTick` messages and drains
+6. The TUI polls the handle on `CodexPollTick` messages and drains
    updates.
 
 ### Codex `app-server` resumption protocol
@@ -253,27 +253,21 @@ The Codex `app-server` supports native session resumption via `thread/resume`.
 The protocol for a resumed session is:
 
 1. Spawn a new `codex app-server` process.
-
-1. Send `initialize` (ID=1) and `initialized` (notification) — same as a
+2. Send `initialize` (ID=1) and `initialized` (notification) — same as a
    fresh session.
-
-1. Instead of `thread/start`, send `thread/resume` with the stored thread
+3. Instead of `thread/start`, send `thread/resume` with the stored thread
    ID:
 
-   ```
-   {
-     "id": 2,
-     "method": "thread/resume",
-     "params": { "threadId": "<stored-thread-id>" }
-   }
-   ```
+       {
+         "id": 2,
+         "method": "thread/resume",
+         "params": { "threadId": "<stored-thread-id>" }
+       }
 
-1. The response carries the same thread object shape as `thread/start`.
-
-1. Send `turn/start` (ID=3) with updated comments — same as a fresh
+4. The response carries the same thread object shape as `thread/start`.
+5. Send `turn/start` (ID=3) with updated comments — same as a fresh
    session.
-
-1. Stream progress and handle `turn/completed` — same as a fresh session.
+6. Stream progress and handle `turn/completed` — same as a fresh session.
 
 The server preserves the full conversation history (including prior approvals)
 for the thread, so the resumed turn has access to all prior context without
@@ -317,17 +311,20 @@ Create `src/ai/session.rs` (new file, module-level doc comment required):
 
 1. Define `SessionStatus` enum: `Running`, `Completed`, `Interrupted`,
    `Failed`, `Cancelled`.
-1. Define `SessionState` struct: `status: SessionStatus`,
+2. Define `SessionState` struct: `status: SessionStatus`,
    `transcript_path: Utf8PathBuf`, `thread_id: Option<String>` (populated once
    `thread/start` response arrives), `owner: String`, `repository: String`,
    `pr_number: u64`, `started_at: DateTime<Utc>`,
    `finished_at: Option<DateTime<Utc>>`.
-1. Derive `Serialize`, `Deserialize` for both types using `serde`.
-1. Implement `SessionState::sidecar_path(&self) -> Utf8PathBuf` — replaces
+3. Derive `Serialize`, `Deserialize` for both types using `serde`.
+4. Implement `SessionState::sidecar_path(&self) -> Utf8PathBuf` — replaces
    the transcript file's `.jsonl` extension with `.session.json`.
-1. Implement `SessionState::write_sidecar(&self) -> Result<(), IntakeError>` — writes the JSON sidecar file using `cap_std ` filesystem primitives.
-1. Implement `SessionState::read_sidecar(path: &Utf8Path) -> Result<Self, IntakeError>` — reads and deserializes a sidecar file.
-1. Add `serde` and `serde_json` to the import list (both are already in
+5. Implement `SessionState::write_sidecar(&self) -> Result<(),
+   IntakeError>` — writes the JSON sidecar file using `cap_std
+   ` filesystem primitives.
+6. Implement `SessionState::read_sidecar(path: &Utf8Path) -> Result<Self,
+   IntakeError>` — reads and deserializes a sidecar file.
+7. Add `serde` and `serde_json` to the import list (both are already in
    `Cargo.toml`).
 
 Add to `src/ai/mod.rs`:
@@ -347,9 +344,9 @@ In `src/ai/codex_process/app_server.rs`:
 1. Refine `AppServerCompletion::Failed` into
    `Failed { message: String, interrupted: bool }` so downstream code can
    distinguish interrupted from other failures without string matching.
-1. Update `check_turn_completion()` to set `interrupted: true` when the
+2. Update `check_turn_completion()` to set `interrupted: true` when the
    `turn/completed` status is `"interrupted"` or `"cancelled"`.
-1. Expose the thread ID from the `thread/start` response. Currently,
+3. Expose the thread ID from the `thread/start` response. Currently,
    `AppServerSession::handle_message()` extracts the thread ID but only uses it
    to send `turn/start`. Store it as a field on `AppServerSession` and expose
    it via a `thread_id(&self) -> Option<&str>` accessor.
@@ -364,9 +361,9 @@ In `src/ai/codex_process/mod.rs`:
 
 1. After `TranscriptWriter::create()` succeeds in `execute_codex()`,
    create a `SessionState` with status `Running` and write its sidecar.
-1. After stream progress completes, capture the thread ID from the session
+2. After stream progress completes, capture the thread ID from the session
    and store it in the `SessionState` via sidecar update.
-1. Before each `send_failure()` call and before each successful `Finished`
+3. Before each `send_failure()` call and before each successful `Finished`
    send, update the session state to the appropriate terminal status
    (`Interrupted`, `Failed`, `Cancelled`, or `Completed`) and rewrite the
    sidecar.
@@ -392,7 +389,9 @@ PR.
 
 In `src/ai/session.rs`:
 
-1. Implement `fn find_interrupted_session(base_dir: &Utf8Path, owner: &str, repository: &str, pr_number: u64) -> Result<Option<SessionState>, IntakeError>`:
+1. Implement `fn find_interrupted_session(base_dir: &Utf8Path,
+   owner: &str, repository: &str, pr_number: u64) ->
+   Result<Option<SessionState>, IntakeError>`:
    - List all `.session.json` files in `base_dir`.
    - Parse each as `SessionState`; skip unparseable files silently.
    - Filter to those matching the owner, repository, and PR number.
@@ -400,7 +399,7 @@ In `src/ai/session.rs`:
      `thread_id`.
    - Sort by `started_at` descending.
    - Return the most recent match, or `None`.
-1. Use `cap_std::fs_utf8::Dir` for directory listing (consistent with
+2. Use `cap_std::fs_utf8::Dir` for directory listing (consistent with
    existing transcript code).
 
 Validation: unit tests in Stage F.
@@ -413,28 +412,24 @@ Extend `CodexExecutionService` and the process layer to support resumption via
 In `src/ai/codex_exec.rs`:
 
 1. Add a new `CodexResumeRequest` struct containing:
-
    - `session: SessionState` — the interrupted session to resume (includes
      `thread_id` and `transcript_path`).
    - `new_comments_jsonl: String` — current comments (may have changed
      since the interrupted run).
    - `pr_url: Option<String>`.
+2. Add a new method to the `CodexExecutionService` trait:
 
-1. Add a new method to the `CodexExecutionService` trait:
-
-   ```
-   fn resume(
-       &self,
-       request: CodexResumeRequest,
-   ) -> Result<CodexExecutionHandle, IntakeError>;
-   ```
+       fn resume(
+           &self,
+           request: CodexResumeRequest,
+       ) -> Result<CodexExecutionHandle, IntakeError>;
 
    Provide a default implementation that returns
-   `Err(IntakeError::Configuration {   message: "resume not supported" })` so existing implementors
+   `Err(IntakeError::Configuration {
+     message: "resume not supported" })` so existing implementors
    (including test stubs) are not broken.
 
-1. Implement `resume()` on `SystemCodexExecutionService`:
-
+3. Implement `resume()` on `SystemCodexExecutionService`:
    - Validate that `session.thread_id` is present.
    - Call `run_codex_resume()` with the thread ID and transcript path from
      the session.
@@ -452,27 +447,25 @@ In `src/ai/codex_process/app_server.rs`:
    that sends `initialize`, `initialized`, then `thread/resume` (instead of
    `thread/start`):
 
-   ```
-   fn thread_resume_request(thread_id: &str) -> Value {
-       json!({
-           "id": THREAD_START_REQUEST_ID,
-           "method": "thread/resume",
-           "params": { "threadId": thread_id }
-       })
-   }
+       fn thread_resume_request(thread_id: &str) -> Value {
+           json!({
+               "id": THREAD_START_REQUEST_ID,
+               "method": "thread/resume",
+               "params": { "threadId": thread_id }
+           })
+       }
 
-   fn resume_protocol(
-       stdin: &mut ChildStdin,
-       thread_id: &str,
-   ) -> Result<(), RunError> {
-       write_message(stdin, &initialize_request())?;
-       write_message(stdin, &initialized_notification())?;
-       write_message(stdin, &thread_resume_request(thread_id))?;
-       Ok(())
-   }
-   ```
+       fn resume_protocol(
+           stdin: &mut ChildStdin,
+           thread_id: &str,
+       ) -> Result<(), RunError> {
+           write_message(stdin, &initialize_request())?;
+           write_message(stdin, &initialized_notification())?;
+           write_message(stdin, &thread_resume_request(thread_id))?;
+           Ok(())
+       }
 
-1. Add `maybe_start_resume_session()` (analogous to
+2. Add `maybe_start_resume_session()` (analogous to
    `maybe_start_session()`) that uses `resume_protocol()`.
 
 In `src/ai/codex_process/mod.rs`:
@@ -516,7 +509,6 @@ In `src/tui/app/mod.rs`:
 In `src/tui/app/codex_handlers.rs`:
 
 1. Modify `handle_start_codex_execution()`:
-
    - Before starting a fresh run, call `find_interrupted_session()` to
      check for a resumable session.
    - If found, set `self.resume_prompt = Some(session)` and update the
@@ -524,25 +516,23 @@ In `src/tui/app/codex_handlers.rs`:
    - Return without starting execution (wait for user response).
    - If no interrupted session, proceed as before.
 
-1. Add `handle_resume_accepted(session: SessionState)`:
-
+2. Add `handle_resume_accepted(session: SessionState)`:
    - Build a `CodexResumeRequest` from the session and current comments.
    - Call `codex_service.resume(request)`.
    - Store handle, arm poll timer (same as fresh start).
    - Clear `resume_prompt`.
 
-1. Add `handle_resume_declined()`:
-
+3. Add `handle_resume_declined()`:
    - Clear `resume_prompt`.
    - Proceed with fresh execution (call the existing fresh-start logic).
 
-1. Extend `handle_codex_msg()` to route `ResumeAccepted` and
+4. Extend `handle_codex_msg()` to route `ResumeAccepted` and
    `ResumeDeclined` messages.
 
 In `src/tui/app/rendering.rs`:
 
 1. When `resume_prompt` is `Some`, render the resume prompt text in the
-   status bar area: "Interrupted session from \<timestamp>. Resume? [y/n]".
+   status bar area: "Interrupted session from \<timestamp\>. Resume? [y/n]".
 
 Validation: `make check-fmt && make lint` pass.
 
@@ -554,15 +544,15 @@ In `src/ai/session.rs` (inline `#[cfg(test)]` module):
 
 1. `session_state_sidecar_path_replaces_extension` — verify `.jsonl` →
    `.session.json`.
-1. `session_state_write_and_read_roundtrip` — write then read a sidecar,
+2. `session_state_write_and_read_roundtrip` — write then read a sidecar,
    assert equality.
-1. `session_state_read_invalid_json_returns_error` — corrupted sidecar.
-1. `find_interrupted_session_returns_most_recent` — multiple sidecar
+3. `session_state_read_invalid_json_returns_error` — corrupted sidecar.
+4. `find_interrupted_session_returns_most_recent` — multiple sidecar
    files, only the most recent interrupted one is returned.
-1. `find_interrupted_session_ignores_completed` — completed sessions are
+5. `find_interrupted_session_ignores_completed` — completed sessions are
    not returned.
-1. `find_interrupted_session_returns_none_when_empty` — no sessions.
-1. `find_interrupted_session_ignores_sessions_without_thread_id` —
+6. `find_interrupted_session_returns_none_when_empty` — no sessions.
+7. `find_interrupted_session_ignores_sessions_without_thread_id` —
    sessions with `thread_id: None` are not resumable.
 
 In `src/ai/transcript.rs` (extend existing test module):
@@ -578,9 +568,9 @@ In `src/tui/app/codex_handlers_tests.rs` (extend existing test module):
 
 1. `start_codex_shows_resume_prompt_when_interrupted_session_exists` —
    verify prompt appears.
-1. `resume_accepted_starts_resumed_execution` — verify handle is set.
-1. `resume_declined_starts_fresh_execution` — verify fresh start.
-1. `no_resume_prompt_when_no_interrupted_session` — verify direct start.
+2. `resume_accepted_starts_resumed_execution` — verify handle is set.
+3. `resume_declined_starts_fresh_execution` — verify fresh start.
+4. `no_resume_prompt_when_no_interrupted_session` — verify direct start.
 
 ### Stage G: Behavioural tests (BDD)
 
@@ -588,49 +578,47 @@ Add `rstest-bdd` v0.5.0 scenarios for session resumption.
 
 Create `tests/features/codex_session_resume.feature`:
 
-```
-Feature: Codex session resumption
+    Feature: Codex session resumption
 
-  Scenario: Resume prompt is shown for interrupted session
-    Given an interrupted Codex session exists for the current PR
-    When the user presses x to start Codex execution
-    Then the status bar shows a resume prompt
+      Scenario: Resume prompt is shown for interrupted session
+        Given an interrupted Codex session exists for the current PR
+        When the user presses x to start Codex execution
+        Then the status bar shows a resume prompt
 
-  Scenario: Accepting resume reuses prior thread
-    Given an interrupted Codex session exists for the current PR
-    When the user presses x to start Codex execution
-    And the user accepts the resume prompt
-    And a wait of 200 milliseconds
-    And the Codex poll tick is processed
-    Then the status bar contains "Codex execution completed"
-    And the transcript file contains "session resumed"
-    And no TUI error is shown
+      Scenario: Accepting resume reuses prior thread
+        Given an interrupted Codex session exists for the current PR
+        When the user presses x to start Codex execution
+        And the user accepts the resume prompt
+        And a wait of 200 milliseconds
+        And the Codex poll tick is processed
+        Then the status bar contains "Codex execution completed"
+        And the transcript file contains "session resumed"
+        And no TUI error is shown
 
-  Scenario: Declining resume starts fresh session
-    Given an interrupted Codex session exists for the current PR
-    When the user presses x to start Codex execution
-    And the user declines the resume prompt
-    And a wait of 200 milliseconds
-    And the Codex poll tick is processed
-    Then the status bar contains "Codex execution completed"
-    And no TUI error is shown
+      Scenario: Declining resume starts fresh session
+        Given an interrupted Codex session exists for the current PR
+        When the user presses x to start Codex execution
+        And the user declines the resume prompt
+        And a wait of 200 milliseconds
+        And the Codex poll tick is processed
+        Then the status bar contains "Codex execution completed"
+        And no TUI error is shown
 
-  Scenario: No resume prompt when no interrupted session exists
-    Given no interrupted Codex session exists
-    When the user presses x to start Codex execution
-    And a wait of 200 milliseconds
-    And the Codex poll tick is processed
-    Then the status bar contains "Codex execution completed"
-    And no TUI error is shown
+      Scenario: No resume prompt when no interrupted session exists
+        Given no interrupted Codex session exists
+        When the user presses x to start Codex execution
+        And a wait of 200 milliseconds
+        And the Codex poll tick is processed
+        Then the status bar contains "Codex execution completed"
+        And no TUI error is shown
 
-  Scenario: Interrupted run creates session state file
-    Given a Codex run that is interrupted mid-execution
-    When Codex execution is started from the review text user interface (TUI)
-    And a wait of 200 milliseconds
-    And the Codex poll tick is processed
-    Then the session state file exists
-    And the session state file shows status interrupted
-```
+      Scenario: Interrupted run creates session state file
+        Given a Codex run that is interrupted mid-execution
+        When Codex execution is started from the review text user interface (TUI)
+        And a wait of 200 milliseconds
+        And the Codex poll tick is processed
+        Then the session state file exists
+        And the session state file shows status interrupted
 
 Create `tests/codex_session_resume_bdd.rs` with step definitions and scenario
 bindings following the pattern in `tests/codex_exec_bdd.rs`.
@@ -670,12 +658,10 @@ Update `docs/roadmap.md`:
 
 Run all quality gates from repository root:
 
-```
-set -o pipefail
-make check-fmt 2>&1 | tee /tmp/execplan-3-1-2-check-fmt.log
-make lint 2>&1 | tee /tmp/execplan-3-1-2-lint.log
-make test 2>&1 | tee /tmp/execplan-3-1-2-test.log
-```
+    set -o pipefail
+    make check-fmt 2>&1 | tee /tmp/execplan-3-1-2-check-fmt.log
+    make lint 2>&1 | tee /tmp/execplan-3-1-2-lint.log
+    make test 2>&1 | tee /tmp/execplan-3-1-2-test.log
 
 Expected: each command exits 0 with no lint warnings promoted to errors and no
 failing tests.
@@ -688,15 +674,11 @@ All commands are run from the repository root (`/home/user/project`).
 
 1. Create `src/ai/session.rs` with `SessionStatus`, `SessionState`,
    sidecar read/write methods.
+2. Update `src/ai/mod.rs` to export the new module.
+3. Run:
 
-1. Update `src/ai/mod.rs` to export the new module.
-
-1. Run:
-
-   ```
-   set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-a-fmt.log
-   set -o pipefail; make lint 2>&1 | tee /tmp/stage-a-lint.log
-   ```
+       set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-a-fmt.log
+       set -o pipefail; make lint 2>&1 | tee /tmp/stage-a-lint.log
 
    Expected: both exit 0.
 
@@ -705,62 +687,45 @@ All commands are run from the repository root (`/home/user/project`).
 1. Refine `AppServerCompletion::Failed` in
    `src/ai/codex_process/app_server.rs` into a struct variant with an
    `interrupted` field. Expose thread ID via accessor.
-
-1. Update `check_turn_completion()` to set `interrupted: true` when
+2. Update `check_turn_completion()` to set `interrupted: true` when
    status is `"interrupted"` or `"cancelled"`.
-
-1. Pass thread ID through `StreamProgressContext` or
+3. Pass thread ID through `StreamProgressContext` or
    `StreamCompletion`.
-
-1. Update `execute_codex()` in `src/ai/codex_process/mod.rs` to create
+4. Update `execute_codex()` in `src/ai/codex_process/mod.rs` to create
    and update `SessionState` (including thread ID) at process start and on each
    terminal outcome.
+5. Run:
 
-1. Run:
-
-   ```
-   set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-b-fmt.log
-   set -o pipefail; make lint 2>&1 | tee /tmp/stage-b-lint.log
-   ```
+       set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-b-fmt.log
+       set -o pipefail; make lint 2>&1 | tee /tmp/stage-b-lint.log
 
    Expected: both exit 0.
 
 ### Commands: Stage C — session discovery
 
 1. Implement `find_interrupted_session()` in `src/ai/session.rs`.
+2. Run:
 
-1. Run:
-
-   ```
-   set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-c-fmt.log
-   set -o pipefail; make lint 2>&1 | tee /tmp/stage-c-lint.log
-   ```
+       set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-c-fmt.log
+       set -o pipefail; make lint 2>&1 | tee /tmp/stage-c-lint.log
 
    Expected: both exit 0.
 
 ### Commands: Stage D — resume execution path
 
 1. Define `CodexResumeRequest` in `src/ai/codex_exec.rs`.
-
-1. Add `resume()` to `CodexExecutionService` with default
+2. Add `resume()` to `CodexExecutionService` with default
    implementation.
-
-1. Implement `resume()` on `SystemCodexExecutionService`.
-
-1. Add `TranscriptWriter::open_append()` to `src/ai/transcript.rs`.
-
-1. Add `resume_protocol()` and `maybe_start_resume_session()` to
+3. Implement `resume()` on `SystemCodexExecutionService`.
+4. Add `TranscriptWriter::open_append()` to `src/ai/transcript.rs`.
+5. Add `resume_protocol()` and `maybe_start_resume_session()` to
    `src/ai/codex_process/app_server.rs`.
-
-1. Add `run_codex_resume()` in `src/ai/codex_process/mod.rs`; factor
+6. Add `run_codex_resume()` in `src/ai/codex_process/mod.rs`; factor
    shared lifecycle into a common helper.
+7. Run:
 
-1. Run:
-
-   ```
-   set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-d-fmt.log
-   set -o pipefail; make lint 2>&1 | tee /tmp/stage-d-lint.log
-   ```
+       set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-d-fmt.log
+       set -o pipefail; make lint 2>&1 | tee /tmp/stage-d-lint.log
 
    Expected: both exit 0.
 
@@ -768,23 +733,16 @@ All commands are run from the repository root (`/home/user/project`).
 
 1. Add `ResumePromptShown`, `ResumeAccepted`, `ResumeDeclined` to
    `AppMsg` in `src/tui/messages.rs`.
-
-1. Add `ResumePrompt` input context and key mappings in
+2. Add `ResumePrompt` input context and key mappings in
    `src/tui/input.rs`.
-
-1. Add `resume_prompt` field to `ReviewApp` in `src/tui/app/mod.rs`.
-
-1. Modify `handle_start_codex_execution()` and add resume handlers in
+3. Add `resume_prompt` field to `ReviewApp` in `src/tui/app/mod.rs`.
+4. Modify `handle_start_codex_execution()` and add resume handlers in
    `src/tui/app/codex_handlers.rs`.
+5. Update rendering in `src/tui/app/rendering.rs`.
+6. Run:
 
-1. Update rendering in `src/tui/app/rendering.rs`.
-
-1. Run:
-
-   ```
-   set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-e-fmt.log
-   set -o pipefail; make lint 2>&1 | tee /tmp/stage-e-lint.log
-   ```
+       set -o pipefail; make check-fmt 2>&1 | tee /tmp/stage-e-fmt.log
+       set -o pipefail; make lint 2>&1 | tee /tmp/stage-e-lint.log
 
    Expected: both exit 0.
 
@@ -792,44 +750,31 @@ All commands are run from the repository root (`/home/user/project`).
 
 1. Add tests to `src/ai/session.rs`, `src/ai/transcript.rs`,
    `src/ai/codex_exec_tests.rs`, and `src/tui/app/codex_handlers_tests.rs`.
+2. Run:
 
-1. Run:
-
-   ```
-   set -o pipefail; make test 2>&1 | tee /tmp/stage-f-test.log
-   ```
+       set -o pipefail; make test 2>&1 | tee /tmp/stage-f-test.log
 
    Expected: exit 0, all tests pass.
 
 ### Commands: Stage G — behavioural tests
 
 1. Create `tests/features/codex_session_resume.feature`.
+2. Create `tests/codex_session_resume_bdd.rs`.
+3. Extend `tests/codex_exec_bdd/state.rs` with resume stub support.
+4. Run:
 
-1. Create `tests/codex_session_resume_bdd.rs`.
-
-1. Extend `tests/codex_exec_bdd/state.rs` with resume stub support.
-
-1. Run:
-
-   ```
-   set -o pipefail; make test 2>&1 | tee /tmp/stage-g-test.log
-   ```
+       set -o pipefail; make test 2>&1 | tee /tmp/stage-g-test.log
 
    Expected: exit 0, all tests pass (including new BDD scenarios).
 
 ### Commands: Stage H — documentation
 
 1. Update `docs/frankie-design.md` with ADR.
+2. Update `docs/users-guide.md` with session resumption section.
+3. Update `docs/roadmap.md` — mark item `[x]`.
+4. Run:
 
-1. Update `docs/users-guide.md` with session resumption section.
-
-1. Update `docs/roadmap.md` — mark item `[x]`.
-
-1. Run:
-
-   ```
-   make markdownlint
-   ```
+       make markdownlint
 
    Expected: exit 0.
 
@@ -837,11 +782,9 @@ All commands are run from the repository root (`/home/user/project`).
 
 1. Run:
 
-   ```
-   set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-1-2-check-fmt.log
-   set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-1-2-lint.log
-   set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-1-2-test.log
-   ```
+       set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-1-2-check-fmt.log
+       set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-1-2-lint.log
+       set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-1-2-test.log
 
    Expected: all exit 0.
 
@@ -883,11 +826,9 @@ Test acceptance checks:
 
 Required quality-gate commands (from repository root):
 
-```
-set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-1-2-check-fmt.log
-set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-1-2-lint.log
-set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-1-2-test.log
-```
+    set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-1-2-check-fmt.log
+    set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-1-2-lint.log
+    set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-1-2-test.log
 
 Expected results:
 
@@ -923,122 +864,106 @@ Implementation should preserve concise evidence for reviewers:
 
 ### New types in `src/ai/session.rs`
 
-```
-/// Status of a Codex execution session.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SessionStatus {
-    Running,
-    Completed,
-    Interrupted,
-    Failed,
-    Cancelled,
-}
+    /// Status of a Codex execution session.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub enum SessionStatus {
+        Running,
+        Completed,
+        Interrupted,
+        Failed,
+        Cancelled,
+    }
 
-/// Persistent state for a Codex execution session.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SessionState {
-    pub status: SessionStatus,
-    pub transcript_path: Utf8PathBuf,
-    pub thread_id: Option<String>,
-    pub owner: String,
-    pub repository: String,
-    pub pr_number: u64,
-    pub started_at: DateTime<Utc>,
-    pub finished_at: Option<DateTime<Utc>>,
-}
-```
+    /// Persistent state for a Codex execution session.
+    #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct SessionState {
+        pub status: SessionStatus,
+        pub transcript_path: Utf8PathBuf,
+        pub thread_id: Option<String>,
+        pub owner: String,
+        pub repository: String,
+        pub pr_number: u64,
+        pub started_at: DateTime<Utc>,
+        pub finished_at: Option<DateTime<Utc>>,
+    }
 
 ### New type in `src/ai/codex_exec.rs`
 
-```
-/// Request payload for resuming an interrupted Codex session.
-#[derive(Debug, Clone)]
-pub struct CodexResumeRequest {
-    pub session: SessionState,
-    pub new_comments_jsonl: String,
-    pub pr_url: Option<String>,
-}
-```
+    /// Request payload for resuming an interrupted Codex session.
+    #[derive(Debug, Clone)]
+    pub struct CodexResumeRequest {
+        pub session: SessionState,
+        pub new_comments_jsonl: String,
+        pub pr_url: Option<String>,
+    }
 
 ### Extended trait in `src/ai/codex_exec.rs`
 
-```
-pub trait CodexExecutionService: Send + Sync + std::fmt::Debug {
-    fn start(
-        &self,
-        request: CodexExecutionRequest,
-    ) -> Result<CodexExecutionHandle, IntakeError>;
+    pub trait CodexExecutionService: Send + Sync + std::fmt::Debug {
+        fn start(
+            &self,
+            request: CodexExecutionRequest,
+        ) -> Result<CodexExecutionHandle, IntakeError>;
 
-    fn resume(
-        &self,
-        request: CodexResumeRequest,
-    ) -> Result<CodexExecutionHandle, IntakeError> {
-        let _ = request;
-        Err(IntakeError::Configuration {
-            message: "resume not supported by this service"
-                .to_owned(),
-        })
+        fn resume(
+            &self,
+            request: CodexResumeRequest,
+        ) -> Result<CodexExecutionHandle, IntakeError> {
+            let _ = request;
+            Err(IntakeError::Configuration {
+                message: "resume not supported by this service"
+                    .to_owned(),
+            })
+        }
     }
-}
-```
 
 ### New function in `src/ai/session.rs`
 
-```
-pub fn find_interrupted_session(
-    base_dir: &Utf8Path,
-    owner: &str,
-    repository: &str,
-    pr_number: u64,
-) -> Result<Option<SessionState>, IntakeError>
-```
+    pub fn find_interrupted_session(
+        base_dir: &Utf8Path,
+        owner: &str,
+        repository: &str,
+        pr_number: u64,
+    ) -> Result<Option<SessionState>, IntakeError>
 
 ### New method in `src/ai/transcript.rs`
 
-```
-impl TranscriptWriter {
-    pub fn open_append(
-        path: &Utf8Path,
-    ) -> Result<Self, IntakeError>;
-}
-```
+    impl TranscriptWriter {
+        pub fn open_append(
+            path: &Utf8Path,
+        ) -> Result<Self, IntakeError>;
+    }
 
 ### New functions in `src/ai/codex_process/app_server.rs`
 
-```
-fn thread_resume_request(thread_id: &str) -> Value
+    fn thread_resume_request(thread_id: &str) -> Value
 
-fn resume_protocol(
-    stdin: &mut ChildStdin,
-    thread_id: &str,
-) -> Result<(), RunError>
+    fn resume_protocol(
+        stdin: &mut ChildStdin,
+        thread_id: &str,
+    ) -> Result<(), RunError>
 
-pub(super) fn maybe_start_resume_session(
-    maybe_stdin: Option<&mut ChildStdin>,
-    prompt: &str,
-    thread_id: &str,
-) -> Option<AppServerSession>
-```
+    pub(super) fn maybe_start_resume_session(
+        maybe_stdin: Option<&mut ChildStdin>,
+        prompt: &str,
+        thread_id: &str,
+    ) -> Option<AppServerSession>
 
 ### New `AppMsg` variants in `src/tui/messages.rs`
 
-```
-ResumePromptShown(Box<SessionState>),
-ResumeAccepted(Box<SessionState>),
-ResumeDeclined,
-```
+    ResumePromptShown(Box<SessionState>),
+    ResumeAccepted(Box<SessionState>),
+    ResumeDeclined,
 
 ### Refined `AppServerCompletion`
 
-```
-pub(super) enum AppServerCompletion {
-    Succeeded,
-    Failed {
-        message: String,
-        interrupted: bool,
-    },
-}
-```
+    pub(super) enum AppServerCompletion {
+        Succeeded,
+        Failed {
+            message: String,
+            interrupted: bool,
+        },
+    }
 
 ### Files expected to change
 

@@ -91,18 +91,18 @@ TUI if Codex exits with a non-zero status.
 ## Progress
 
 - [x] (2026-02-10 00:00Z) Drafted self-contained ExecPlan with constraints,
-  tolerances, staged implementation, and validation approach.
+      tolerances, staged implementation, and validation approach.
 - [x] (2026-02-12 00:00Z) Implemented command invocation and JSONL event
-  parsing for `codex app-server`.
+      parsing for `codex app-server`.
 - [x] (2026-02-12 00:00Z) Implemented Codex execution service and transcript
-  persistence in `src/ai/`.
+      persistence in `src/ai/`.
 - [x] (2026-02-12 00:00Z) Integrated TUI trigger (`x`), polling-based progress
-  streaming, and non-zero exit surfacing.
+      streaming, and non-zero exit surfacing.
 - [x] (2026-02-12 00:00Z) Added unit and behavioural coverage for happy and
-  unhappy paths, including malformed stream and transcript failure cases.
+      unhappy paths, including malformed stream and transcript failure cases.
 - [x] (2026-02-12 00:00Z) Updated design and user documentation.
 - [x] (2026-02-12 00:00Z) Marked roadmap item complete and ran full quality
-  gates.
+      gates.
 
 ## Surprises & discoveries
 
@@ -207,12 +207,13 @@ Each stage ends with validation and a go/no-go checkpoint.
 
 1. Update `Cargo.toml` dev dependencies:
    - `rstest-bdd = "0.5.0"`
-   - `rstest-bdd-macros = { version = "0.5.0", features = [ "compile-time-validation"] }`
-1. Run behavioural tests and fix compatibility issues introduced by v0.5.0.
-1. Add a small prototype test/module that validates expected `codex app-server`
+   - `rstest-bdd-macros = { version = "0.5.0", features = [
+     "compile-time-validation"] }`
+2. Run behavioural tests and fix compatibility issues introduced by v0.5.0.
+3. Add a small prototype test/module that validates expected `codex app-server`
    process contract (stdout JSONL lines, stderr progress, exit status handling)
    using an injectable fake command runner.
-1. Go/no-go:
+4. Go/no-go:
    - Go when BDD baseline is green on v0.5.0 and the command contract is clear.
    - No-go if contract remains ambiguous after prototype; escalate with options.
 
@@ -222,50 +223,50 @@ Each stage ends with validation and a go/no-go checkpoint.
    - `src/ai/mod.rs`
    - `src/ai/codex_exec.rs`
    - `src/ai/transcript.rs`
-1. Define core types (names may vary, but responsibility must match):
+2. Define core types (names may vary, but responsibility must match):
    - execution request from exported comments + PR context
    - stream event enum mapped from JSONL event lines
    - execution result with exit status and transcript path
-1. Reuse existing export code to produce JSONL payload from current comments
+3. Reuse existing export code to produce JSONL payload from current comments
    before invoking Codex.
-1. Implement transcript file lifecycle:
+4. Implement transcript file lifecycle:
    - deterministic filename per run
    - line-by-line JSONL append
    - flush on completion and failure
-1. Unit tests (`rstest`) to cover:
+5. Unit tests (`rstest`) to cover:
    - event parsing (valid/invalid JSONL)
    - transcript writing and path handling
    - command construction from execution request
    - non-zero exit mapping to TUI-consumable failure detail
    - edge cases (empty export set, malformed stream line, I/O failure)
-1. Validation:
+6. Validation:
    - run module-focused tests first, then full unit suite.
 
 ### Stage C: TUI trigger + streaming progress + BDD
 
 1. Extend message model in `src/tui/messages.rs` with Codex lifecycle events:
    start, progress, completion, failure, and poll tick.
-1. Extend key mapping in `src/tui/input.rs`:
+2. Extend key mapping in `src/tui/input.rs`:
    - map `x` in `ReviewList` context to Codex execution start message.
-1. Add Codex handler module under `src/tui/app/` (for example
+3. Add Codex handler module under `src/tui/app/` (for example
    `codex_handlers.rs`) and wire it from `src/tui/app/mod.rs`.
-1. Integrate progress streaming:
+4. Integrate progress streaming:
    - start async execution task
    - drain queued progress events on periodic poll tick messages
    - update status bar text while run is active
-1. Integrate failure propagation:
+5. Integrate failure propagation:
    - if exit code non-zero, set TUI error state with exit code and transcript
      location.
-1. Update `src/tui/app/rendering.rs` help/status hints to include new `x` key
+6. Update `src/tui/app/rendering.rs` help/status hints to include new `x` key
    and running-state messaging.
-1. Add behavioural tests using `rstest-bdd` v0.5.0:
+7. Add behavioural tests using `rstest-bdd` v0.5.0:
    - feature file: `tests/features/codex_exec.feature`
    - scenarios:
      - successful run streams multiple status updates and writes transcript
      - non-zero exit surfaces failure in TUI
      - malformed event line is handled without panic and is recorded
      - transcript write failure is surfaced clearly
-1. Validation:
+8. Validation:
    - run Codex-specific BDD test target
    - run full behavioural suite.
 
@@ -274,14 +275,14 @@ Each stage ends with validation and a go/no-go checkpoint.
 1. Update `docs/frankie-design.md`:
    - add ADR entry documenting Codex execution wiring, streaming architecture,
      transcript persistence location, and error surfacing policy.
-1. Update `docs/users-guide.md`:
+2. Update `docs/users-guide.md`:
    - new `x` key behaviour
    - where transcripts are written
    - what users see on success and non-zero Codex exits.
-1. Mark roadmap item done in `docs/roadmap.md`:
+3. Mark roadmap item done in `docs/roadmap.md`:
    - set `Wire comment exports into codex app-server …` checklist entry to `[x]`
      only after all acceptance checks pass.
-1. Run full validation gates (commands listed below) and capture logs.
+4. Run full validation gates (commands listed below) and capture logs.
 
 ## Validation and acceptance
 
@@ -302,11 +303,9 @@ Test acceptance checks:
 
 Required quality-gate commands (from repository root):
 
-```
-set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-1-1-check-fmt.log
-set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-1-1-lint.log
-set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-1-1-test.log
-```
+    set -o pipefail; make check-fmt 2>&1 | tee /tmp/execplan-3-1-1-check-fmt.log
+    set -o pipefail; make lint 2>&1 | tee /tmp/execplan-3-1-1-lint.log
+    set -o pipefail; make test 2>&1 | tee /tmp/execplan-3-1-1-test.log
 
 Expected results:
 
@@ -344,22 +343,20 @@ New internal interfaces to define (exact names may vary):
 
 Concrete interface sketch to reduce ambiguity:
 
-```
-pub trait CodexExecutionService {
-    fn start(
-        &self,
-        request: CodexExecutionRequest,
-    ) -> Result<CodexExecutionHandle, IntakeError>;
-}
+    pub trait CodexExecutionService {
+        fn start(
+            &self,
+            request: CodexExecutionRequest,
+        ) -> Result<CodexExecutionHandle, IntakeError>;
+    }
 
-pub enum CodexProgressEvent {
-    ThreadStarted { thread_id: String },
-    TurnStarted,
-    ItemCompleted { kind: String },
-    AgentMessage { text: String },
-    ParseWarning { raw_line: String },
-}
-```
+    pub enum CodexProgressEvent {
+        ThreadStarted { thread_id: String },
+        TurnStarted,
+        ItemCompleted { kind: String },
+        AgentMessage { text: String },
+        ParseWarning { raw_line: String },
+    }
 
 Transcript storage convention:
 
