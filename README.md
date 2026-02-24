@@ -3,8 +3,7 @@
 > Making code review easy and fun in an agentic world
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](
-rust-toolchain.toml)
+[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](rust-toolchain.toml)
 [![Phase](https://img.shields.io/badge/phase-2%2F5-green.svg)](docs/roadmap.md)
 
 ## What is Frankie?
@@ -80,9 +79,11 @@ cd /path/to/your/repo
 1. **Get a GitHub token**:
    [Create a personal access token](https://github.com/settings/tokens) with
    `repo` access
-2. **Set your token**: Export as `FRANKIE_TOKEN` or `GITHUB_TOKEN` environment
+
+1. **Set your token**: Export as `FRANKIE_TOKEN` or `GITHUB_TOKEN` environment
    variable
-3. **Optional—Enable caching**:
+
+1. **Optional—Enable caching**:
 
    ```bash
    ./target/debug/frankie --migrate-db --database-url frankie.sqlite

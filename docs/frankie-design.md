@@ -4,12 +4,12 @@
 
 ### 1.1.1 Brief Overview Of The Project
 
-Frankie Goes to Code Review is a Terminal User Interface (TUI) application
-built in Rust that leverages the Model-View-Update pattern to provide an
-efficient, keyboard-driven interface for managing agentic GitHub code reviews.
-The application serves as a comprehensive code review management system that
-bridges the gap between traditional code review workflows and modern
-AI-assisted development practices.
+Frankie Goes to Code Review is a Rust code review platform with three delivery
+surfaces: an interactive Terminal User Interface (TUI), an embeddable library
+API, and a pure command-line interface (CLI) mode for non-interactive
+workflows. It leverages the Model-View-Update pattern for interactive flows and
+shared domain modules for reusable automation, bridging the gap between
+traditional code review workflows and modern AI-assisted development practices.
 
 ### 1.1.2 Core Business Problem Being Solved
 
@@ -55,10 +55,10 @@ The application delivers measurable value through:
 #### Business Context And Market Positioning
 
 The application leverages bubbletea-rs, a Rust implementation of the popular
-Bubble Tea TUI framework, positioning it within the growing ecosystem of
-terminal-based development tools. This approach aligns with the industry trend
-toward developer-centric tooling that prioritizes efficiency and
-keyboard-driven workflows.
+Bubble Tea TUI framework, while exposing shared capabilities through a public
+library surface and non-interactive CLI commands. This approach aligns with the
+industry trend toward developer-centric tooling that prioritizes efficiency,
+automation, and composability inside larger agent-hosting systems.
 
 #### Current System Limitations
 
@@ -93,26 +93,30 @@ The system integrates with established development infrastructure through:
 The application provides comprehensive code review management through:
 
 1. **Multi-Modal Repository Access**: Support for PR URL input,
-    owner/repo specification, and automatic repository discovery
-2. **Intelligent Review Management**: Filtering and organization of
-    code reviews by resolution status, files, reviewers, and commit
-    ranges
-3. **AI-Assisted Resolution**: Integration with OpenAI Codex exec
-    command for non-interactive code review resolution and automated
-    workflow execution
-4. **Contextual Code Navigation**: Full-screen change context display
-    with time-travel capabilities for tracking code evolution
-5. **Template-Based Communication**: Automated comment generation and
-    PR-level discussion management
+   owner/repo specification, and automatic repository discovery
+1. **Intelligent Review Management**: Filtering and organization of
+   code reviews by resolution status, files, reviewers, and commit
+   ranges
+1. **AI-Assisted Resolution**: Integration with OpenAI Codex exec
+   command for non-interactive code review resolution and automated
+   workflow execution
+1. **Contextual Code Navigation**: Full-screen change context display
+   with time-travel capabilities for tracking code evolution
+1. **Template-Based Communication**: Automated comment generation and
+   PR-level discussion management
+1. **Cross-Surface Capability Parity**: Shared features exposed through TUI,
+   library API, and CLI surfaces as applicable
 
 #### Major System Components
 
 ```mermaid
 flowchart LR
-    subgraph "User Interface Layer"
+    subgraph "Delivery Surfaces"
         B["Keyboard Navigation"]
         C["Help System"]
         A["Bubbletea-rs TUI"]
+        A2["Pure CLI Commands"]
+        A3["Embeddable Library API"]
     end
 
     subgraph "Core Application Logic"
@@ -136,6 +140,8 @@ flowchart LR
     end
 
     A --> D
+    A2 --> D
+    A3 --> D
     D --> H
     D --> I
     D --> J
@@ -174,13 +180,13 @@ emphasizes:
 #### Critical Success Factors
 
 1. **Performance**: Sub-second response times for GitHub API operations
-    and local repository access
-2. **Reliability**: 99.5% uptime for core functionality with graceful
-    degradation for external service failures
-3. **Usability**: Intuitive keyboard-driven interface requiring minimal
-    learning curve for terminal-experienced developers
-4. **Integration Quality**: Seamless workflow between code review
-    identification and AI-assisted resolution
+   and local repository access
+1. **Reliability**: 99.5% uptime for core functionality with graceful
+   degradation for external service failures
+1. **Usability**: Intuitive keyboard-driven interface requiring minimal
+   learning curve for terminal-experienced developers
+1. **Integration Quality**: Seamless workflow between code review
+   identification and AI-assisted resolution
 
 #### Key Performance Indicators (kpis)
 
@@ -466,13 +472,13 @@ classDiagram
 #### Primary User Workflows
 
 1. **Review Discovery**: Repository access → PR listing → Review
-    filtering
-2. **Review Analysis**: Comment examination → Context viewing →
-    Time-travel navigation
-3. **AI-Assisted Resolution**: Comment export → Codex integration →
-    Solution application
-4. **Communication Management**: Template-based replies → PR-level
-    comment generation
+   filtering
+1. **Review Analysis**: Comment examination → Context viewing →
+   Time-travel navigation
+1. **AI-Assisted Resolution**: Comment export → Codex integration →
+   Solution application
+1. **Communication Management**: Template-based replies → PR-level
+   comment generation
 
 #### Essential Integrations
 
@@ -1004,7 +1010,7 @@ hunk; the example lines "+line added", "-line removed", and "line unchanged"
 are illustrative markers, ensuring diff markers stay intact while remaining
 valid XML:
 
-```xml
+````xml
 <comment index="1">
   <location>path/to/file.py:168</location>
   <code-context><![CDATA[
@@ -1018,7 +1024,7 @@ valid XML:
     Comment text (rendered in markdown with details tags collapsed).
   </issue-to-address>
 </comment>
-```
+````
 
 ### 2.2.3 Ai Integration Requirements
 
@@ -1100,6 +1106,8 @@ flowchart LR
 | GitHub API Access      | F-001, F-002, F-004, F-009 | octocrab 0.44.1 client  | Authentication, Rate limiting          |
 | Local Git Operations   | F-003, F-006, F-007, F-008 | git2 library            | Repository metadata, History access    |
 | TUI Framework          | F-011, F-012, F-001, F-004 | bubbletea-rs 0.0.9      | Event handling, Rendering              |
+| Library API Surface    | F-001 through F-013        | Public Rust modules     | Typed contracts, Embedding integration |
+| CLI Surface            | F-001 through F-013        | Ortho-config CLI schema | Automation, Batch operation            |
 | AI Service Integration | F-008, F-009, F-010        | OpenAI Codex CLI 0.64.0 | Command execution, Response processing |
 
 ### 2.3.3 Shared Components
@@ -2826,17 +2834,17 @@ ID-based selection tracking.
    prevents timer accumulation. Manual refresh (`r` key) delegates to the same
    sync logic for consistent behaviour.
 
-2. **ID-Based Merge**: Comments are merged using `ReviewComment.id` as the
+1. **ID-Based Merge**: Comments are merged using `ReviewComment.id` as the
    stable identifier. The algorithm inserts new comments, updates modified
    ones, and removes deleted ones. Results are sorted by ID for deterministic
    ordering.
 
-3. **Selection Preservation**: Instead of tracking cursor position (which
+1. **Selection Preservation**: Instead of tracking cursor position (which
    becomes invalid after data changes), the TUI tracks `selected_comment_id`.
    After merge, the cursor is restored to the new index of the selected ID, or
    clamped if the comment was deleted.
 
-4. **Telemetry Integration**: Sync latency is recorded via the
+1. **Telemetry Integration**: Sync latency is recorded via the
    `SyncLatencyRecorded` telemetry event, including duration, comment count,
    and whether the sync was incremental.
 
@@ -2862,11 +2870,11 @@ state directory.
 1. **Boundary clarity**: Process execution and stream parsing live in `src/ai/`
    so TUI state transitions remain in `src/tui/`.
 
-2. **Deterministic persistence**: Transcript files use a deterministic naming
+1. **Deterministic persistence**: Transcript files use a deterministic naming
    pattern `<owner>-<repo>-pr-<number>-<utc-yyyymmddThhmmssZ>.jsonl` under
    `${XDG_STATE_HOME:-$HOME/.local/state}/frankie/codex-transcripts/`.
 
-3. **Operational visibility**: The TUI status bar shows streamed progress
+1. **Operational visibility**: The TUI status bar shows streamed progress
    events while runs are active and maps non-zero exits into explicit error
    messages including exit code and transcript path.
 
@@ -2894,15 +2902,15 @@ server-side thread when an interrupted session is detected.
    and timestamps. Sidecar files are self-contained and do not require database
    changes.
 
-2. **Native protocol usage**: The `thread/resume` method is part of the Codex
+1. **Native protocol usage**: The `thread/resume` method is part of the Codex
    `app-server` JSON-RPC protocol. Using it directly avoids re-implementing
    conversation state management and preserves server-side approvals.
 
-3. **Thread ID capture**: The thread ID from the `thread/start` response is
+1. **Thread ID capture**: The thread ID from the `thread/start` response is
    stored in session state as soon as it is received. This ensures resumption
    is possible even when the interruption occurs during execution.
 
-4. **Resume prompt UX**: The resume prompt is shown inline in the status bar
+1. **Resume prompt UX**: The resume prompt is shown inline in the status bar
    (`y`/`n`/`Esc`) rather than as a modal dialog. This keeps the interaction
    lightweight and consistent with the existing TUI key-driven workflow.
 
@@ -2938,15 +2946,15 @@ ready to send.
    group and handlers so navigation, Codex execution, and sync logic remain
    isolated.
 
-2. **Keyboard-first interaction**: Starting reply-draft mode with `a`, using
+1. **Keyboard-first interaction**: Starting reply-draft mode with `a`, using
    template slots `1` to `9`, and confirming readiness with `Enter` match the
    existing terminal-first user experience (UX) and avoid modal forms.
 
-3. **Deterministic validation**: Draft limits are enforced as Unicode scalar
+1. **Deterministic validation**: Draft limits are enforced as Unicode scalar
    counts during both typing and template insertion, producing consistent
    behaviour across multilingual text.
 
-4. **Scoped delivery**: `Enter` marks a reply-draft as ready to send but does
+1. **Scoped delivery**: `Enter` marks a reply-draft as ready to send but does
    not post to GitHub in this phase, keeping the change focused on drafting UX.
 
 **Consequences**:
@@ -2959,6 +2967,48 @@ ready to send.
   errors instead of silently truncating content.
 - Continuous Integration (CI) coverage now includes the first-use reply-draft
   flow (`a`, template slots `1` to `9`, inline editing, `Enter` readiness).
+
+#### Architecture decision record (ADR-005): cross-surface, library-first delivery
+
+**Context**: Frankie capabilities must now be usable both in the interactive
+TUI and as reusable library functions embedded in a larger agent-hosting tool.
+Some workflows also need non-interactive CLI execution for automation and batch
+orchestration.
+
+**Decision**: Implement feature behaviour in shared `frankie` library modules
+first, then expose that behaviour through TUI and CLI adapters. For every
+future roadmap item, completion requires:
+
+1. A documented, test-covered public library API that external hosts can call
+   directly.
+
+1. TUI integration for interactive review workflows.
+
+1. A pure CLI surface for non-interactive workflows, or an explicit documented
+   rationale when CLI is not applicable.
+
+**Rationale**:
+
+1. **Capability reuse**: Agent hosts should not need to reimplement TUI-only
+   logic to use Frankie features.
+
+1. **Operational consistency**: Shared library behaviour keeps TUI, CLI, and
+   embedded automation aligned on validation, error handling, and outcomes.
+
+1. **Testability**: Library-first boundaries reduce UI-coupled tests and make
+   deterministic behavioural testing easier.
+
+1. **Roadmap durability**: Surface parity prevents future features from
+   becoming inaccessible to non-TUI consumers.
+
+**Consequences**:
+
+- New feature work must avoid storing core business logic only in `src/tui/`.
+- Existing TUI-centric capabilities (for example reply templating and
+  time-travel orchestration) should be progressively extracted into shared
+  library modules with TUI wrappers.
+- Documentation and acceptance criteria now treat library, TUI, and CLI support
+  as part of feature completion.
 
 ## 5.4 Cross-cutting Concerns
 
@@ -3355,9 +3405,9 @@ sacrificing performance. It takes full advantage of Rust's type system to
 create a low overhead query builder that "feels like Rust."
 
 **Technical Implementation**: Uses diesel = { version = "2.2.0", features =
-\["sqlite", "returning_clauses_for_sqlite_3_35"\] } for enhanced SQL
+["sqlite", "returning_clauses_for_sqlite_3_35"] } for enhanced SQL
 capabilities. Includes diesel_migrations = { version = "2.2.0", features =
-\["sqlite"\] } for automatic migrations.
+["sqlite"] } for automatic migrations.
 
 **Schema Design**:
 
@@ -4258,7 +4308,7 @@ flowchart LR
 SQLite offers a powerful tool called EXPLAIN that lets you look under the hood
 of your SQL queries to see how they get executed. This gives insight into
 whether your indexes are being used correctly or if your queries can be
-optimized further. EXPLAIN QUERY PLAN SELECT \* FROM users WHERE name =
+optimized further. EXPLAIN QUERY PLAN SELECT * FROM users WHERE name =
 'Alice';Copy · Interpreting the output allows you to determine whether you're
 evaluating too many rows or whether the execution plan can be improved by
 adding or changing indexes.
@@ -4500,10 +4550,10 @@ flowchart LR
 
 | Component     | Fault Tolerance Mechanism             | Recovery Time | Data Loss Tolerance                  |
 | ------------- | ------------------------------------- | ------------- | ------------------------------------ |
-| Database File | WAL mode with automatic checkpointing | \< 1 second   | None (ACID compliance)               |
-| Cache Layer   | Automatic rebuild from source         | \< 30 seconds | Acceptable (performance impact only) |
-| Configuration | Automatic backup on change            | \< 5 seconds  | None (critical for operation)        |
-| AI Sessions   | Session state persistence             | \< 10 seconds | Minimal (resumable operations)       |
+| Database File | WAL mode with automatic checkpointing | < 1 second    | None (ACID compliance)               |
+| Cache Layer   | Automatic rebuild from source         | < 30 seconds  | Acceptable (performance impact only) |
+| Configuration | Automatic backup on change            | < 5 seconds   | None (critical for operation)        |
+| AI Sessions   | Session state persistence             | < 10 seconds  | Minimal (resumable operations)       |
 
 This comprehensive Database Design section provides detailed specifications for
 implementing a robust, performant, and compliant data layer for Frankie Goes to
@@ -4866,12 +4916,12 @@ sequenceDiagram
 
 **Stream Event Types**:
 
-| Event Type       | JSON Schema                                   | Processing Action           | UI Update               |
-| ---------------- | --------------------------------------------- | --------------------------- | ----------------------- |
-| `thread.started` | `{"type":"thread.started","thread_id":"…"}`   | Initialize session tracking | Show progress indicator |
-| `turn.started`   | `{"type":"turn.started"}`                     | Begin processing turn       | Update status message   |
-| `item.completed` | `{"type":"item.completed","item":{…}}`        | Process completed item      | Update progress bar     |
-| `agent_message`  | `{"type":"agent_message","text":"…"}`         | Display agent response      | Show final message      |
+| Event Type       | JSON Schema                                 | Processing Action           | UI Update               |
+| ---------------- | ------------------------------------------- | --------------------------- | ----------------------- |
+| `thread.started` | `{"type":"thread.started","thread_id":"…"}` | Initialize session tracking | Show progress indicator |
+| `turn.started`   | `{"type":"turn.started"}`                   | Begin processing turn       | Update status message   |
+| `item.completed` | `{"type":"item.completed","item":{…}}`      | Process completed item      | Update progress bar     |
+| `agent_message`  | `{"type":"agent_message","text":"…"}`       | Display agent response      | Show final message      |
 
 #### 6.7.2.3 Batch Processing Flows
 
@@ -5094,12 +5144,12 @@ flowchart TD
 
 **OpenAI Codex CLI Service Contract**:
 
-| Contract Element | Specification                                                                                                                                                           | SLA                    | Monitoring                |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- |
-| Availability     | Included with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans                                                                                                    | Plan-dependent         | Process health monitoring |
-| Response Time    | Variable based on task complexity                                                                                                                                       | No specific SLA        | Execution time tracking   |
-| Resource Usage   | Local compute resources                                                                                                                                                 | User machine dependent | Resource monitoring       |
-| Data Privacy     | All file reads, writes, and command executions happen locally. Only your prompt, high‑level context, and optional diff summaries are sent to the model for generation   | Privacy by design      | Data flow auditing        |
+| Contract Element | Specification                                                                                                                                                         | SLA                    | Monitoring                |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- |
+| Availability     | Included with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans                                                                                                  | Plan-dependent         | Process health monitoring |
+| Response Time    | Variable based on task complexity                                                                                                                                     | No specific SLA        | Execution time tracking   |
+| Resource Usage   | Local compute resources                                                                                                                                               | User machine dependent | Resource monitoring       |
+| Data Privacy     | All file reads, writes, and command executions happen locally. Only your prompt, high‑level context, and optional diff summaries are sent to the model for generation | Privacy by design      | Data flow auditing        |
 
 ### 6.7.4 Integration Flow Diagrams
 
@@ -6233,8 +6283,8 @@ flowchart LR
 | ----------------------- | ------------------------------------ | ------------------------ | ----------------------------------- |
 | Critical Error          | Application crash or data corruption | Modal dialog + error log | Restart application                 |
 | Service Unavailable     | GitHub API or Codex CLI failure      | Status bar warning       | Continue with limited functionality |
-| Performance Degradation | Response time \>1 second             | Status indicator         | Background optimization             |
-| Resource Exhaustion     | Memory usage \>500MB                 | Warning message          | Cache cleanup                       |
+| Performance Degradation | Response time >1 second              | Status indicator         | Background optimization             |
+| Resource Exhaustion     | Memory usage >500MB                  | Warning message          | Cache cleanup                       |
 
 #### 6.9.3.7 Development And Debugging Support
 
@@ -6349,7 +6399,7 @@ guarantees.
 Detailed Testing Strategy is not applicable for this system. Frankie Goes to
 Code Review is a single-user Terminal User Interface (TUI) application that
 operates as a local development tool. The application automatically runs all
-functions annotated with the \#\[test\] attribute in multiple threads, and
+functions annotated with the #[test] attribute in multiple threads, and
 tests can be run with cargo test. The application's architecture as a
 monolithic TUI tool with local-first data processing significantly simplifies
 the testing requirements compared to distributed systems or web applications.
@@ -6377,7 +6427,7 @@ see the value of testing - it saves time (and money!)
 
 **Primary Testing Framework**: Cargo's built-in testing framework with libtest,
 which creates a special executable by linking your code with libtest and
-automatically runs all functions annotated with the \#\[test\] attribute.
+automatically runs all functions annotated with the #[test] attribute.
 
 **Enhanced Testing Libraries**:
 
@@ -6461,7 +6511,7 @@ async fn test_github_pr_retrieval() {
 
 **Component Mocking with Mockall**:
 
-Using the \#\[automock\] modifier on a trait, Mockall generates a mock struct.
+Using the #[automock] modifier on a trait, Mockall generates a mock struct.
 This method is easy to use but limited in its capabilities.
 
 ```rust
@@ -6880,33 +6930,33 @@ management.
 **Repository Access Workflow**:
 
 1. **PR URL Entry**: Direct access to specific GitHub pull requests via
-    URL input
-2. **Repository Discovery**: Browse pull requests by owner/repository
-    specification
-3. **Local Repository Detection**: Automatic discovery from current Git
-    directory
+   URL input
+1. **Repository Discovery**: Browse pull requests by owner/repository
+   specification
+1. **Local Repository Detection**: Automatic discovery from current Git
+   directory
 
 **Code Review Management Workflow**:
 
 1. **Review Listing**: Display all pull request reviews with filtering
-    capabilities
-2. **Comment Processing**: Export structured comment data for AI
-    integration
-3. **Context Viewing**: Full-screen display of code changes with syntax
-    highlighting
-4. **Time Travel Navigation**: Historical view of code evolution
-    through PR branch
+   capabilities
+1. **Comment Processing**: Export structured comment data for AI
+   integration
+1. **Context Viewing**: Full-screen display of code changes with syntax
+   highlighting
+1. **Time Travel Navigation**: Historical view of code evolution
+   through PR branch
 
 **AI Integration Workflow**:
 
 1. **Comment Export**: Generate structured format for OpenAI Codex CLI
-    exec command automation
-2. **AI Execution**: Stream Codex activity to stderr while writing
-    final agent message to stdout for easy piping
-3. **Progress Monitoring**: Real-time JSON Lines (JSONL) event
-    streaming during agent execution
-4. **Session Management**: Resume previous non-interactive sessions
-    with preserved conversation context
+   exec command automation
+1. **AI Execution**: Stream Codex activity to stderr while writing
+   final agent message to stdout for easy piping
+1. **Progress Monitoring**: Real-time JSON Lines (JSONL) event
+   streaming during agent execution
+1. **Session Management**: Resume previous non-interactive sessions
+   with preserved conversation context
 
 ### 7.2.2 User Interaction Patterns
 
@@ -7454,9 +7504,7 @@ is a backlog item rather than a launch dependency.
 GitHub Actions runs the following:
 
 - Triggers: push/PR to `main`; tags matching `v*` publish a release.
-- Job `quality`: `cargo fmt --check`, `cargo clippy --all-targets
-  --all-features -D warnings`, `cargo test
-  --all-features` (or nextest where available), and `cargo audit`.
+- Job `quality`: `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`, `cargo test --all-features` (or nextest where available), and `cargo audit`.
 - Job `build`: matrix over the targets above producing release binaries and
   checksums.
 - Job `release`: on tags, attach artefacts to the GitHub Release and publish
@@ -7487,11 +7535,11 @@ resort.
 
 **Semantic Versioning Strategy**:
 
-| Version Component | Increment Trigger                  | Example         | Impact                   |
-| ----------------- | ---------------------------------- | --------------- | ------------------------ |
-| Major (X.0.0)     | Breaking changes to CLI interface  | 1.0.0 → 2.0.0   | Requires user adaptation |
-| Minor (0.X.0)     | New features, non-breaking changes | 1.1.0 → 1.2.0   | Backward compatible      |
-| Patch (0.0.X)     | Bug fixes, security updates        | 1.1.1 → 1.1.2   | Drop-in replacement      |
+| Version Component | Increment Trigger                  | Example       | Impact                   |
+| ----------------- | ---------------------------------- | ------------- | ------------------------ |
+| Major (X.0.0)     | Breaking changes to CLI interface  | 1.0.0 → 2.0.0 | Requires user adaptation |
+| Minor (0.X.0)     | New features, non-breaking changes | 1.1.0 → 1.2.0 | Backward compatible      |
+| Patch (0.0.X)     | Bug fixes, security updates        | 1.1.1 → 1.1.2 | Drop-in replacement      |
 
 **Release Automation Workflow**:
 
@@ -7523,8 +7571,8 @@ sequenceDiagram
 | Unit Tests        | `cargo test --all-features`       | 100% test pass rate              | Block release  |
 | Integration Tests | End-to-end TUI testing            | All workflows functional         | Block release  |
 | Security Audit    | `cargo audit`                     | No high/critical vulnerabilities | Block release  |
-| Code Coverage     | `grcov` with LLVM instrumentation | \>85% line coverage              | Warning only   |
-| Performance Tests | Benchmark suite                   | No \>10% regression              | Warning only   |
+| Code Coverage     | `grcov` with LLVM instrumentation | >85% line coverage               | Warning only   |
+| Performance Tests | Benchmark suite                   | No >10% regression               | Warning only   |
 
 **Security Scanning Integration**:
 
@@ -7637,12 +7685,12 @@ local_only = true  # No external transmission
 Since Frankie Goes to Code Review is a standalone application, infrastructure
 costs are minimal:
 
-| Cost Category    | Monthly Cost      | Description              | Optimization              |
-| ---------------- | ----------------- | ------------------------ | ------------------------- |
-| GitHub Actions   | \$0 (public repo) | CI/CD pipeline execution | Efficient workflow design |
-| GitHub Releases  | \$0               | Binary distribution      | Included in GitHub        |
-| Domain/Website   | \$0               | GitHub Pages hosting     | Static site generation    |
-| Package Registry | \$0               | crates.io publishing     | Community service         |
+| Cost Category    | Monthly Cost     | Description              | Optimization              |
+| ---------------- | ---------------- | ------------------------ | ------------------------- |
+| GitHub Actions   | $0 (public repo) | CI/CD pipeline execution | Efficient workflow design |
+| GitHub Releases  | $0               | Binary distribution      | Included in GitHub        |
+| Domain/Website   | $0               | GitHub Pages hosting     | Static site generation    |
+| Package Registry | $0               | crates.io publishing     | Community service         |
 
 **Development Costs**:
 
@@ -7651,7 +7699,7 @@ costs are minimal:
 | Developer Time       | Primary cost   | Feature development and maintenance  | Core value creation        |
 | Third-party Services | Minimal        | Optional services like code coverage | Quality assurance          |
 | Hardware             | Existing       | Developer workstations               | No additional requirements |
-| Licensing            | \$0            | Open source dependencies             | MIT/Apache 2.0 licenses    |
+| Licensing            | $0             | Open source dependencies             | MIT/Apache 2.0 licenses    |
 
 This minimal infrastructure approach aligns perfectly with the local-first
 philosophy of Frankie Goes to Code Review, providing efficient distribution and
@@ -7758,7 +7806,7 @@ characteristics:
 
 - diesel = { version = "2.2.0", features = \["sqlite",
   "returning_clauses_for_sqlite_3_35"\] }
-- diesel_migrations = { version = "2.2.0", features = \["sqlite"\] }
+- diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 
 ### 9.1.5 Terminal User Interface Capabilities
 

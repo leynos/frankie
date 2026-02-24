@@ -58,7 +58,7 @@ reviewer, and status, and unit/BDD tests cover substitution and escaping rules.
   Likelihood: medium. Mitigation: use empty string for None values, document
   behaviour.
 - Risk: Complex templates slow down export. Severity: low. Likelihood: low.
-  Mitigation: typical PRs have <100 comments; performance is not a concern.
+  Mitigation: typical PRs have \<100 comments; performance is not a concern.
 
 ## Progress
 
@@ -185,46 +185,48 @@ Stage I: Run validation gates, mark roadmap entry done.
 ### Stage B: Template engine wrapper
 
 1. Create `src/export/template.rs` with:
+
    - Module-level documentation
    - `TemplateComment` struct with Serialize derive mapping ExportedComment
      fields to template-friendly names
    - `From<&ExportedComment>` implementation
    - `write_template<W: Write>()` function using minijinja
 
-2. Create `src/export/template_tests.rs` with unit tests (linked via `#[path]`
+1. Create `src/export/template_tests.rs` with unit tests (linked via `#[path]`
    attribute).
 
-3. Update `src/export/mod.rs` to include `mod template` and export
+1. Update `src/export/mod.rs` to include `mod template` and export
    `write_template`.
 
 ### Stage C: Model updates
 
 1. Add `Template` variant to `ExportFormat` enum in `src/export/model.rs`.
 
-2. Update `FromStr` to parse "template", "tpl", "jinja", "jinja2".
+1. Update `FromStr` to parse "template", "tpl", "jinja", "jinja2".
 
-3. Update `Display` to show "template".
+1. Update `Display` to show "template".
 
-4. Update existing tests for new variant.
+1. Update existing tests for new variant.
 
 ### Stage D: Configuration updates
 
 1. Add `template: Option<String>` field to `FrankieConfig` in
    `src/config/mod.rs`.
 
-2. Update `Default` implementation.
+1. Update `Default` implementation.
 
 ### Stage E: CLI integration
 
 1. Update `src/cli/export/mod.rs` to re-export `write_template`.
 
-2. Update `src/cli/export_comments.rs`:
+1. Update `src/cli/export_comments.rs`:
+
    - Add `load_template_if_needed()` function to read template file
    - Add `read_template_file()` helper using cap_std
    - Update `write_format()` to handle Template case
    - Update `write_output()` signature to accept template content
 
-3. Update `src/lib.rs` to export `write_template`.
+1. Update `src/lib.rs` to export `write_template`.
 
 ### Stage F: Unit tests
 
@@ -256,6 +258,7 @@ Tests in `src/export/template_tests.rs`:
 ### Stage G: BDD tests
 
 1. Create `tests/features/template_export.feature` with scenarios:
+
    - Export with simple template renders all placeholders
    - Template with document-level variables
    - Template renders file and line placeholders
@@ -264,13 +267,13 @@ Tests in `src/export/template_tests.rs`:
    - Empty comment list with template produces document-only output
    - Invalid template syntax produces error
 
-2. Create `tests/template_export_bdd.rs` entry point.
+1. Create `tests/template_export_bdd.rs` entry point.
 
-3. Create `tests/template_export_bdd/mod.rs` with support module imports.
+1. Create `tests/template_export_bdd/mod.rs` with support module imports.
 
-4. Create `tests/template_export_bdd/state.rs` with `TemplateExportState`.
+1. Create `tests/template_export_bdd/state.rs` with `TemplateExportState`.
 
-5. Create `tests/template_export_bdd/harness.rs` with test data generators.
+1. Create `tests/template_export_bdd/harness.rs` with test data generators.
 
 ### Stage H: Documentation
 
@@ -287,23 +290,23 @@ Tests in `src/export/template_tests.rs`:
 
 1. Run validation gates:
 
-    ```bash
-    set -o pipefail
-    make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
-    make lint 2>&1 | tee /tmp/frankie-lint.log
-    make test 2>&1 | tee /tmp/frankie-test.log
-    ```
+   ```bash
+   set -o pipefail
+   make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
+   make lint 2>&1 | tee /tmp/frankie-lint.log
+   make test 2>&1 | tee /tmp/frankie-test.log
+   ```
 
-2. Run documentation validators:
+1. Run documentation validators:
 
-    ```bash
-    set -o pipefail
-    make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
-    make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
-    make nixie 2>&1 | tee /tmp/frankie-nixie.log
-    ```
+   ```bash
+   set -o pipefail
+   make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
+   make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
+   make nixie 2>&1 | tee /tmp/frankie-nixie.log
+   ```
 
-3. Mark roadmap entry done in `docs/roadmap.md`.
+1. Mark roadmap entry done in `docs/roadmap.md`.
 
 ## Validation and acceptance
 

@@ -11,7 +11,7 @@ employed for speed and confidence:
   (inside `#[cfg(test)] mod tests` in the same file) for convenient access to
   internal
   functions([1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L9-L17)).
-   This yields quick turnaround and allows testing logic without hitting the
+  This yields quick turnaround and allows testing logic without hitting the
   real GitHub API.
 
 - **Behavioural Integration Tests (Tier 2)** – Higher-level tests that verify
@@ -22,7 +22,7 @@ employed for speed and confidence:
   These tests run in the Rust integration test suite (files under `tests/`
   directory)(
   [1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32)).
-   They are slower but give confidence that the client’s requests and
+  They are slower but give confidence that the client’s requests and
   Octocrab’s parsing logic work correctly against real HTTP interactions.
 
 This two-tier strategy ensures fast feedback during development (via unit
@@ -82,7 +82,7 @@ impl GitHubApi for octocrab::Octocrab {
 Here, `#[cfg_attr(test, automock)]` ensures that in test builds, `mockall`
 creates a `MockGitHubApi` struct
 automatically([3](https://medium.com/@cuongleqq/unlock-100-coverage-mock-your-rust-unit-tests-the-right-way-3afbabc5dc5e#:~:text=,Result%3CTxid%3E%3B)).
- Production code can use `Octocrab` (which implements `GitHubApi`) normally,
+Production code can use `Octocrab` (which implements `GitHubApi`) normally,
 while tests can substitute the mock.
 
 > **Why a trait?** In Rust, using a trait as an abstraction layer enables
@@ -99,7 +99,7 @@ generic parameter). This enables unit tests to inject a `MockGitHubApi`.
 
 Unit tests reside alongside code in the same
 module([1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L9-L17)).
- The `MockGitHubApi` simulates various API responses and verifies the logic.
+The `MockGitHubApi` simulates various API responses and verifies the logic.
 Here's an example unit test using the mock:
 
 ```rust
@@ -232,7 +232,7 @@ This integration test simulates a **“List PR Commits”** API call:
   the client should call, and `respond_with(...)` provides a canned JSON
   response(
   [4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=%2F%2F%20when%20it%20receives%20a,await)).
-   In this case, the stubbed endpoint is
+  In this case, the stubbed endpoint is
   `GET /repos/myorg/myrepo/pulls/42/commits`.
 
 - Include a sample JSON payload (perhaps stored in a `fixtures/` file for
@@ -242,7 +242,7 @@ This integration test simulates a **“List PR Commits”** API call:
   (e.g. `http://127.0.0.1:XXXXX` where the server is listening). Octocrab’s
   builder supports overriding the base API
   URL([5](https://docs.rs/octocrab/latest/octocrab/struct.OctocrabBuilder.html#:~:text=,112%3CSelf)),
-   which is intended for GitHub Enterprise or testing. This ensures all
+  which is intended for GitHub Enterprise or testing. This ensures all
   requests from this `octo` client go to the `MockServer` instead of the real
   `api.github.com` domain.
 
@@ -266,13 +266,13 @@ system.
 **Test organization:** These are placed in `tests/` as integration tests, each
 file compiled as a separate crate by
 Cargo([1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32)).
- Async tests with `tokio::test` (or `rstest` with async support) still work for
+Async tests with `tokio::test` (or `rstest` with async support) still work for
 this suite.
 
 **Tip:** **Do not reuse a single `MockServer` across tests.** Each test (or
 each scenario) should spawn its own `MockServer` on a fresh port for
 isolation([4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=Each%20instance%20of%20MockServer%20is,assigned%20to%20the%20new%20MockServer)).
- This prevents interference between tests and allows running tests in parallel
+This prevents interference between tests and allows running tests in parallel
 safely. The Wiremock server will automatically shut down when it goes out of
 scope at test end, freeing the
 port([4](https://github.com/LukeMathWalker/wiremock-rs#:~:text=MockServers%20should%20be%20created%20in,test%20where%20they%20are%20used)).
@@ -384,7 +384,7 @@ GitHub data:
   `POST /repos/:owner/:repo/issues/:number/comments`, etc., with appropriate
   JSON responses. An integration test would configure the stub via
   `Mock::given(method("GET")).and(path("/repos/ORG/REPO/issues/123"))...respond_with(...)`,
-   then call `octocrab_client.issues("ORG","REPO").get(123).await` and assert
+  then call `octocrab_client.issues("ORG","REPO").get(123).await` and assert
   on the returned `Issue`. Creating a comment can also be simulated by stubbing
   the POST and verifying (Wiremock supports verifying that a request was
   received a certain number of times or with certain body
@@ -462,7 +462,7 @@ the real world is simulated for accuracy – all within the comfort of
 - Rust testing conventions for unit vs integration
   tests(
   [1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L9-L17)
-   )(
+  )(
   [1](https://github.com/microsoft/rust-for-dotnet-devs/blob/afccfb002194a51cca68d57d247d0e367cea46f2/src/testing/index.md#L27-L32))
 
 - Using `mockall::automock` to generate mocks for unit

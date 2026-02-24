@@ -168,50 +168,51 @@ next stage if the current stage validation fails.
 
 1. Review existing UI state, messages, and view rendering:
 
-    rg -n "ReviewApp|render_|AppMsg|map_key_to_message" src/tui
-    rg -n "diff_hunk" src/github/models/mod.rs
+   rg -n "ReviewApp|render\_|AppMsg|map_key_to_message" src/tui
+   rg -n "diff_hunk" src/github/models/mod.rs
 
-2. Define hunk extraction and navigation helpers with unit tests (rstest).
+1. Define hunk extraction and navigation helpers with unit tests (rstest).
 
-3. Add behavioural tests with `rstest-bdd` v0.3.2 and a Gherkin feature file
+1. Add behavioural tests with `rstest-bdd` v0.3.2 and a Gherkin feature file
    covering:
+
    - Entering full-screen context from the review list.
    - Moving between hunks with the new shortcuts.
    - Handling comments without diff hunks.
    - Exiting back to the list without losing selection.
 
-4. Implement the full-screen diff context component, view mode state, and
+1. Implement the full-screen diff context component, view mode state, and
    navigation handlers. Ensure rendering uses cached/pre-wrapped strings to
    keep `view()` fast.
 
-5. Add a local profiling check for rendering time against the reference
+1. Add a local profiling check for rendering time against the reference
    dataset (for example, an ignored test or a small profiling helper binary
    that logs elapsed milliseconds). Document the dataset path and expected
    output in this ExecPlan and the design document.
 
-6. Update documentation (`docs/frankie-design.md`, `docs/users-guide.md`) and
+1. Update documentation (`docs/frankie-design.md`, `docs/users-guide.md`) and
    mark the roadmap entry as done.
 
-7. Run validation. For long outputs, use `tee` and `set -o pipefail`:
+1. Run validation. For long outputs, use `tee` and `set -o pipefail`:
 
-    set -o pipefail
-    make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
-    make lint 2>&1 | tee /tmp/frankie-lint.log
-    make test 2>&1 | tee /tmp/frankie-test.log
+   set -o pipefail
+   make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
+   make lint 2>&1 | tee /tmp/frankie-lint.log
+   make test 2>&1 | tee /tmp/frankie-test.log
 
-8. If documentation changed, run documentation validators:
+1. If documentation changed, run documentation validators:
 
-    set -o pipefail
-    make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
-    make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
-    make nixie 2>&1 | tee /tmp/frankie-nixie.log
+   set -o pipefail
+   make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
+   make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
+   make nixie 2>&1 | tee /tmp/frankie-nixie.log
 
-9. Run the profiling command and record results (example, update with actual
+1. Run the profiling command and record results (example, update with actual
    command and dataset path once defined):
 
-    cargo test -p frankie diff_context_render_perf -- --ignored --nocapture
+   cargo test -p frankie diff_context_render_perf -- --ignored --nocapture
 
-10. Update the Progress and Outcomes sections with the actual results.
+1. Update the Progress and Outcomes sections with the actual results.
 
 ## Validation and acceptance
 
@@ -237,7 +238,7 @@ Quality criteria:
 - Tests: rstest unit tests and rstest-bdd scenarios for the new behaviour.
 - Lint/typecheck: `make lint` clean.
 - Formatting: `make check-fmt` clean.
-- Performance: profiling output shows <100ms render time on the reference
+- Performance: profiling output shows \<100ms render time on the reference
   dataset.
 
 ## Idempotence and recovery
@@ -252,15 +253,21 @@ before proceeding.
 
 Example full-screen context header (illustrative):
 
-    File: src/main.rs  Hunk 2/5  (press [ / ] to jump)
+```
+File: src/main.rs  Hunk 2/5  (press [ / ] to jump)
+```
 
 Example placeholder when no hunks are available:
 
-    (No diff context available for this comment)
+```
+(No diff context available for this comment)
+```
 
 Example navigation assertion in unit tests:
 
-    assert_eq!(state.current_index(), 1);
+```
+assert_eq!(state.current_index(), 1);
+```
 
 ## Interfaces and dependencies
 

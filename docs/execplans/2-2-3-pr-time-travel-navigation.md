@@ -190,15 +190,18 @@ done, run all validation gates.
 ### Stage A: Git2 Foundation
 
 1. Create `src/local/commit.rs` with:
+
    - `CommitSnapshot` struct (sha, message, author, timestamp, file_content)
    - `LineMappingResult` enum (Exact, Moved, Deleted, NotFound)
    - `LineMappingVerification` struct (original_line, current_line, status)
 
-2. Extend `src/local/error.rs` with:
+1. Extend `src/local/error.rs` with:
+
    - `CommitAccessFailed` variant
    - `DiffComputationFailed` variant
 
-3. Create `src/local/git_ops.rs` with:
+1. Create `src/local/git_ops.rs` with:
+
    - `GitOperations` trait defining:
      - `get_commit_snapshot(sha, file_path) -> Result<CommitSnapshot>`
      - `get_file_at_commit(sha, file_path) -> Result<String>`
@@ -206,112 +209,120 @@ done, run all validation gates.
      - `get_parent_commits(sha, limit) -> Result<Vec<String>>`
    - `Git2Operations` struct implementing the trait
 
-4. Update `src/local/mod.rs` to export new types.
+1. Update `src/local/mod.rs` to export new types.
 
-5. Add unit tests for git operations (inline in `git_ops.rs`).
+1. Add unit tests for git operations (inline in `git_ops.rs`).
 
 ### Stage B: TUI State
 
 1. Create `src/tui/state/time_travel.rs` with:
+
    - `TimeTravelState` struct (commit_sha, file_path, file_content,
      line_mapping, commit_history, current_index, loading)
    - Navigation methods (next_commit, previous_commit)
    - Factory method to create from ReviewComment
 
-2. Update `src/tui/state/mod.rs` to export new types.
+1. Update `src/tui/state/mod.rs` to export new types.
 
-3. Add unit tests for state navigation.
+1. Add unit tests for state navigation.
 
 ### Stage C: Messages and Input
 
 1. Add message variants to `src/tui/messages.rs`:
+
    - `EnterTimeTravel`
    - `ExitTimeTravel`
    - `TimeTravelLoaded(Result<TimeTravelState>)`
    - `NextCommit`
    - `PreviousCommit`
 
-2. Add `is_time_travel()` classification method.
+1. Add `is_time_travel()` classification method.
 
-3. Add keybindings to `src/tui/input.rs`:
-    - `t` in ReviewList → `EnterTimeTravel`
-    - `h` in TimeTravel → `PreviousCommit`
-    - `l` in TimeTravel → `NextCommit`
-    - `Esc` in TimeTravel → `ExitTimeTravel`
+1. Add keybindings to `src/tui/input.rs`:
+
+   - `t` in ReviewList → `EnterTimeTravel`
+   - `h` in TimeTravel → `PreviousCommit`
+   - `l` in TimeTravel → `NextCommit`
+   - `Esc` in TimeTravel → `ExitTimeTravel`
 
 ### Stage D: App Integration
 
 1. Add `ViewMode::TimeTravel` to `src/tui/app/mod.rs`.
 
-2. Add fields to `ReviewApp`:
-    - `time_travel_state: Option<TimeTravelState>`
-    - `repo_path: Option<Utf8PathBuf>`
-    - `git_ops: Option<Arc<dyn GitOperations>>`
+1. Add fields to `ReviewApp`:
 
-3. Create `src/tui/app/time_travel_handlers.rs` with handler methods:
-    - `handle_enter_time_travel()`
-    - `handle_exit_time_travel()`
-    - `handle_time_travel_loaded()`
-    - `handle_next_commit()`
-    - `handle_previous_commit()`
+   - `time_travel_state: Option<TimeTravelState>`
+   - `repo_path: Option<Utf8PathBuf>`
+   - `git_ops: Option<Arc<dyn GitOperations>>`
 
-4. Update message routing in `handle_message()`.
+1. Create `src/tui/app/time_travel_handlers.rs` with handler methods:
+
+   - `handle_enter_time_travel()`
+   - `handle_exit_time_travel()`
+   - `handle_time_travel_loaded()`
+   - `handle_next_commit()`
+   - `handle_previous_commit()`
+
+1. Update message routing in `handle_message()`.
 
 ### Stage E: View Component
 
 1. Create `src/tui/components/time_travel_view.rs` with:
-    - `TimeTravelViewComponent`
-    - `TimeTravelViewContext` (state, dimensions)
-    - Header rendering (commit info, navigation position)
-    - File content rendering with line highlighting
-    - Line mapping status indicator
 
-2. Update `src/tui/components/mod.rs` to export.
+   - `TimeTravelViewComponent`
+   - `TimeTravelViewContext` (state, dimensions)
+   - Header rendering (commit info, navigation position)
+   - File content rendering with line highlighting
+   - Line mapping status indicator
 
-3. Add rendering call in `view()` method for TimeTravel mode.
+1. Update `src/tui/components/mod.rs` to export.
+
+1. Add rendering call in `view()` method for TimeTravel mode.
 
 ### Stage F: BDD Testing
 
 1. Create `tests/features/time_travel.feature` with scenarios:
-    - Enter time-travel mode from review list
-    - Display commit snapshot with file content
-    - Navigate between commits with h/l
-    - Show line mapping verification status
-    - Handle missing commit gracefully
-    - Handle missing local repository gracefully
-    - Exit time-travel mode with Esc
 
-2. Create `tests/time_travel_bdd.rs` entry point.
+   - Enter time-travel mode from review list
+   - Display commit snapshot with file content
+   - Navigate between commits with h/l
+   - Show line mapping verification status
+   - Handle missing commit gracefully
+   - Handle missing local repository gracefully
+   - Exit time-travel mode with Esc
 
-3. Create `tests/time_travel_bdd/state.rs` with `ScenarioState`.
+1. Create `tests/time_travel_bdd.rs` entry point.
 
-4. Create `tests/time_travel_bdd/mock_git_ops.rs` with mock implementation.
+1. Create `tests/time_travel_bdd/state.rs` with `ScenarioState`.
+
+1. Create `tests/time_travel_bdd/mock_git_ops.rs` with mock implementation.
 
 ### Stage G: Documentation and Close-out
 
 1. Update `docs/users-guide.md` with:
-    - Time-travel mode keybindings
-    - Feature description and workflow
 
-2. Mark roadmap entry as done in `docs/roadmap.md`.
+   - Time-travel mode keybindings
+   - Feature description and workflow
 
-3. Run validation gates:
+1. Mark roadmap entry as done in `docs/roadmap.md`.
 
-    ```bash
-    set -o pipefail
-    make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
-    make lint 2>&1 | tee /tmp/frankie-lint.log
-    make test 2>&1 | tee /tmp/frankie-test.log
-    ```
+1. Run validation gates:
 
-4. Run documentation validators:
+   ```bash
+   set -o pipefail
+   make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
+   make lint 2>&1 | tee /tmp/frankie-lint.log
+   make test 2>&1 | tee /tmp/frankie-test.log
+   ```
 
-    ```bash
-    set -o pipefail
-    make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
-    make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
-    make nixie 2>&1 | tee /tmp/frankie-nixie.log
-    ```
+1. Run documentation validators:
+
+   ```bash
+   set -o pipefail
+   make markdownlint 2>&1 | tee /tmp/frankie-markdownlint.log
+   make fmt 2>&1 | tee /tmp/frankie-docs-fmt.log
+   make nixie 2>&1 | tee /tmp/frankie-nixie.log
+   ```
 
 ## Validation and acceptance
 

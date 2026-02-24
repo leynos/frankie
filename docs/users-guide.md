@@ -15,12 +15,12 @@ including loading individual pull requests and listing PRs for a repository.
 Frankie supports five operation modes:
 
 1. **Interactive mode** — Auto-detect repository from local Git directory
-2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
-3. **Repository listing mode** — List PRs for a repository using `--owner` and
+1. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
+1. **Repository listing mode** — List PRs for a repository using `--owner` and
    `--repo`
-4. **Review text user interface (TUI) mode** — Interactive terminal interface
+1. **Review text user interface (TUI) mode** — Interactive terminal interface
    for navigating and filtering review comments using `--tui` with `--pr-url`
-5. **Comment export mode** — Export review comments in structured formats using
+1. **Comment export mode** — Export review comments in structured formats using
    `--export` with `--pr-url`
 
 ## Interactive mode (local discovery)
@@ -328,7 +328,7 @@ left, especially when the code has changed significantly since then.
 To enter time-travel mode:
 
 1. Select a review comment in the list
-2. Press `t` to enter time-travel mode
+1. Press `t` to enter time-travel mode
 
 Frankie loads the commit snapshot associated with the comment and displays:
 
@@ -411,8 +411,8 @@ frankie --pr-url https://github.com/owner/repo/pull/123 --export jsonl --output 
 Comments are sorted in a stable, deterministic order:
 
 1. By file path (alphabetically, missing paths sorted last)
-2. By line number (ascending, missing line numbers sorted last)
-3. By comment ID (ascending, for tie-breaking)
+1. By line number (ascending, missing line numbers sorted last)
+1. By comment ID (ascending, for tie-breaking)
 
 This ensures consistent output across runs for the same PR state.
 
@@ -421,7 +421,7 @@ This ensures consistent output across runs for the same PR state.
 The output includes a header, then each comment with location, reviewer, body,
 and code context (if available):
 
-```markdown
+````markdown
 # Review Comments Export
 
 PR: https://github.com/owner/repo/pull/123
@@ -440,16 +440,16 @@ Consider using a constant here instead of a magic number.
 -    token.len() > 0
 +    token.len() > 8
  }
-```
+````
 
-```---
+````---
 
 ### JSONL format example
 
 ```jsonl
 {"id":456,"author":"alice","file_path":"src/auth.rs","line_number":42,"body":"Consider using a constant here.","diff_hunk":"@@ -40,3 +40,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T10:30:00Z"}
 {"id":457,"author":"bob","file_path":"src/auth.rs","line_number":50,"body":"Add error handling.","diff_hunk":"@@ -48,3 +48,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T11:00:00Z"}
-```
+````
 
 ### Custom template format
 
@@ -537,10 +537,10 @@ Frankie supports configuration through multiple sources with the following
 precedence (lowest to highest):
 
 1. **Defaults** — Built-in application defaults
-2. **Configuration file** — `.frankie.toml` in current directory, home
+1. **Configuration file** — `.frankie.toml` in current directory, home
    directory, or XDG config directory
-3. **Environment variables** — `FRANKIE_*` variables or legacy `GITHUB_TOKEN`
-4. **Command-line arguments** — command-line interface (CLI) flags take the
+1. **Environment variables** — `FRANKIE_*` variables or legacy `GITHUB_TOKEN`
+1. **Command-line arguments** — command-line interface (CLI) flags take the
    highest precedence
 
 Higher precedence sources override lower ones. For example, a CLI flag always
@@ -582,8 +582,8 @@ migrate_db = true
 Frankie searches for configuration files in this order:
 
 1. `.frankie.toml` in the current working directory
-2. `.frankie.toml` in the home directory
-3. `frankie.toml` in `$XDG_CONFIG_HOME/frankie/` (typically
+1. `.frankie.toml` in the home directory
+1. `frankie.toml` in `$XDG_CONFIG_HOME/frankie/` (typically
    `~/.config/frankie/`)
 
 ### Environment variables
@@ -663,7 +663,7 @@ To enable caching:
    frankie --migrate-db --database-url frankie.sqlite
    ```
 
-2. Use the same database path when loading a pull request:
+1. Use the same database path when loading a pull request:
 
    ```bash
    frankie --pr-url https://github.com/owner/repo/pull/123 --database-url frankie.sqlite
