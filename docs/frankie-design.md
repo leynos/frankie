@@ -104,7 +104,8 @@ The application provides comprehensive code review management through:
 5. **Template-Based Communication**: Automated comment generation and
    PR-level discussion management
 6. **Cross-Surface Capability Parity**: Shared features exposed through TUI,
-   library API, and CLI surfaces as applicable
+   library API, and CLI surfaces as applicable, with documented exceptions for
+   UX-only TUI polish and docs-only planning items
 
 #### Major System Components
 
@@ -440,6 +441,22 @@ classDiagram
 - `src/local/remote.rs` — `GitHubOrigin` enum and `parse_github_remote`
 - `src/local/discovery.rs` — `LocalRepository`, `discover_repository`
 - `src/github/locator.rs` — `RepositoryLocator::from_github_origin`
+
+### 1.2.6 Architecture decision record index
+
+The canonical ADR set is maintained in
+[Section 5.3.6](#536-architecture-decision-records):
+
+- [ADR-001](#architecture-decision-record-adr-001-incremental-sync-for-review-comments):
+  Incremental sync for review comments.
+- [ADR-002](#architecture-decision-record-adr-002-codex-execution-stream-and-transcript-model):
+  Codex execution stream and transcript model.
+- [ADR-003](#architecture-decision-record-adr-003-session-resumption-for-interrupted-codex-runs):
+  Session resumption for interrupted Codex runs.
+- [ADR-004](#architecture-decision-record-adr-004-inline-template-based-reply-drafting):
+  Inline template-based reply drafting.
+- [ADR-005](#architecture-decision-record-adr-005-cross-surface-library-first-delivery):
+  Cross-surface, library-first delivery contract.
 
 ## 1.3 Scope
 
@@ -2986,6 +3003,10 @@ future roadmap item, completion requires:
 3. A pure CLI surface for non-interactive workflows, or an explicit documented
    rationale when CLI is not applicable.
 
+4. Explicitly documented exceptions for:
+   - UX-only TUI polish that does not introduce reusable domain behaviour.
+   - Documentation-only roadmap or design updates.
+
 **Rationale**:
 
 1. **Capability reuse**: Agent hosts should not need to reimplement TUI-only
@@ -3008,6 +3029,8 @@ future roadmap item, completion requires:
   library modules with TUI wrappers.
 - Documentation and acceptance criteria now treat library, TUI, and CLI support
   as part of feature completion.
+- Surface-specific exceptions are allowed only when explicitly documented with
+  rationale and out-of-scope boundaries.
 
 ## 5.4 Cross-cutting Concerns
 
@@ -3347,103 +3370,109 @@ flowchart TD
 **Template Export Invocation Sequence**:
 
 Caption: Sequence diagram showing template export flow through the shared
-library path and the CLI adapter path.
+library path and the CLI adapter path using concrete code symbols from
+`src/cli/export_comments.rs`, `src/lib.rs`, and `src/export/template.rs`.
 
 ```mermaid
 sequenceDiagram
     actor HostApp
-    participant CLI as CLI_binary
-    participant Lib as frankie_library
-    participant Export as export_module
-    participant Template as export_template_submodule
-    participant Engine as TemplateEngineWrapper
-    participant Writer as OutputWriter
+    participant CliRun as cli::export_comments::run
+    participant Parse as cli::export_comments::parse_export_format
+    participant LoadTpl as cli::export_comments::load_template_if_needed
+    participant WriteFmt as cli::export_comments::write_format
+    participant LibFn as frankie::write_template
+    participant TplFn as export::template::write_template
+    participant TplMap as export::template::TemplateComment
+    participant Engine as minijinja::Environment
+    participant Writer as std::io::Write
 
     rect rgb(235,235,255)
-        HostApp->>Lib: create_FrankieConfig_with_template()
-        HostApp->>Lib: write_template(writer, template_str, exported_comments, pr_url)
-        Lib->>Export: write_template(writer, template_str, exported_comments, pr_url)
-        Export->>Template: write_template(writer, template_str, exported_comments, pr_url)
-        Template->>Template: map_ExportedComment_to_TemplateComment
-        Template->>Engine: render(template_str, template_comments, pr_url)
-        Engine-->>Template: rendered_body
-        Template->>Writer: write(rendered_body)
+        HostApp->>LibFn: write_template(writer, comments, pr_url, template_content)
+        LibFn->>TplFn: re-exported function call
+        TplFn->>TplMap: impl From<&ExportedComment>
+        TplFn->>Engine: add_template/get_template/render
+        Engine-->>TplFn: rendered output
+        TplFn->>Writer: write_all(output.as_bytes())
         Writer-->>HostApp: ok
     end
 
     rect rgb(235,255,235)
-        HostApp->>CLI: invoke_with_flags(--export template --template path)
-        CLI->>Lib: parse_config_to_FrankieConfig
-        CLI->>Template: load_template_if_needed(config.template)
-        CLI->>Export: write_format(Template, writer, comments, loaded_template, pr_url)
-        Export->>Template: write_template(writer, loaded_template, comments, pr_url)
-        Template->>Engine: render(loaded_template, template_comments, pr_url)
-        Engine-->>Template: rendered_body
-        Template->>Writer: write(rendered_body)
-        Writer-->>CLI: ok
-        CLI-->>HostApp: exit_code_0
+        HostApp->>CliRun: run(config)
+        CliRun->>Parse: parse_export_format(config)
+        CliRun->>LoadTpl: load_template_if_needed(config, ExportFormat::Template)
+        CliRun->>WriteFmt: write_format(writer, params)
+        WriteFmt->>LibFn: write_template(writer, comments, pr_url, template_content)
+        LibFn->>TplFn: re-exported function call
+        TplFn->>Engine: add_template/get_template/render
+        TplFn->>Writer: write_all(output.as_bytes())
+        Writer-->>CliRun: ok
+        CliRun-->>HostApp: exit_code_0
     end
 ```
 
 **Template Export Type Relationships**:
 
 Caption: Class diagram showing configuration, export formats, comment models,
-and template rendering dependencies.
+and template rendering dependencies with names aligned to code paths.
 
 ```mermaid
 classDiagram
-    class FrankieConfig {
+    class FrankieConfig["config::FrankieConfig"] {
+        +Option~String~ export
         +Option~String~ template
     }
 
-    class ExportFormat {
+    class ExportFormat["export::model::ExportFormat"] {
         <<enum>>
         Markdown
         Jsonl
         Template
-        +from_str(s: &str) Result~ExportFormat, IntakeError~
+        +from_str(s: &str) Result~Self, IntakeError~
         +to_string() String
     }
 
-    class ExportedComment {
+    class ExportedComment["export::model::ExportedComment"] {
         +u64 id
         +Option~String~ author
         +Option~String~ file_path
-        +Option~u64~ line_number
-        +String body
+        +Option~u32~ line_number
+        +Option~u32~ original_line_number
+        +Option~String~ body
         +Option~String~ diff_hunk
         +Option~String~ commit_sha
+        +Option~u64~ in_reply_to_id
         +Option~String~ created_at
     }
 
-    class TemplateComment {
+    class TemplateComment["export::template::TemplateComment"] {
         +u64 id
-        +String author
-        +String file_path
-        +u64 line_number
+        +String file
+        +String line
+        +String reviewer
+        +str status
         +String body
-        +String diff_hunk
-        +String commit_sha
-        +String created_at
+        +String context
+        +String commit
+        +String timestamp
+        +String reply_to
         +from_exported_comment(src: &ExportedComment) TemplateComment
     }
 
-    class ExportModule {
-        +write_markdown(writer: &mut Write, comments: &[ExportedComment], pr_url: &str) Result~(), IntakeError~
-        +write_jsonl(writer: &mut Write, comments: &[ExportedComment]) Result~(), IntakeError~
-        +write_template(writer: &mut Write, template: &str, comments: &[ExportedComment], pr_url: &str) Result~(), IntakeError~
+    class WriteTemplate["export::template::write_template"] {
+        +write_template(writer, comments, pr_url, template_content)
     }
 
-    class TemplateEngineWrapper {
-        +render(template: &str, comments: &[TemplateComment], pr_url: &str) Result~String, IntakeError~
+    class MiniJinjaEnvironment["minijinja::Environment"] {
+        +add_template(name, template_content)
+        +get_template(name)
+        +render(context)
     }
 
-    FrankieConfig --> ExportFormat : uses_for_export_choice
-    ExportModule --> ExportFormat : selects_variant
-    TemplateComment ..> ExportedComment : From~&ExportedComment~
-    ExportModule --> ExportedComment : input_comments
-    ExportModule --> TemplateComment : maps_for_template
-    ExportModule --> TemplateEngineWrapper : delegates_rendering
+    FrankieConfig --> ExportFormat : parse_export_format
+    TemplateComment ..> ExportedComment : impl From<&ExportedComment>
+    WriteTemplate --> ExportedComment : input comments
+    WriteTemplate --> TemplateComment : mapping for template context
+    WriteTemplate --> MiniJinjaEnvironment : template compile and render
 ```
 
 ### 6.1.4 Ai Integration Service Component
