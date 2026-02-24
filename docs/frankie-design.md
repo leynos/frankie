@@ -4,12 +4,12 @@
 
 ### 1.1.1 Brief Overview Of The Project
 
-Frankie Goes to Code Review is a Terminal User Interface (TUI) application
-built in Rust that leverages the Model-View-Update pattern to provide an
-efficient, keyboard-driven interface for managing agentic GitHub code reviews.
-The application serves as a comprehensive code review management system that
-bridges the gap between traditional code review workflows and modern
-AI-assisted development practices.
+Frankie Goes to Code Review is a Rust code review platform with three delivery
+surfaces: an interactive Terminal User Interface (TUI), an embeddable library
+API, and a pure command-line interface (CLI) mode for non-interactive
+workflows. It leverages the Model-View-Update pattern for interactive flows and
+shared domain modules for reusable automation, bridging the gap between
+traditional code review workflows and modern AI-assisted development practices.
 
 ### 1.1.2 Core Business Problem Being Solved
 
@@ -55,10 +55,10 @@ The application delivers measurable value through:
 #### Business Context And Market Positioning
 
 The application leverages bubbletea-rs, a Rust implementation of the popular
-Bubble Tea TUI framework, positioning it within the growing ecosystem of
-terminal-based development tools. This approach aligns with the industry trend
-toward developer-centric tooling that prioritizes efficiency and
-keyboard-driven workflows.
+Bubble Tea TUI framework, while exposing shared capabilities through a public
+library surface and non-interactive CLI commands. This approach aligns with the
+industry trend toward developer-centric tooling that prioritizes efficiency,
+automation, and composability inside larger agent-hosting systems.
 
 #### Current System Limitations
 
@@ -93,26 +93,33 @@ The system integrates with established development infrastructure through:
 The application provides comprehensive code review management through:
 
 1. **Multi-Modal Repository Access**: Support for PR URL input,
-    owner/repo specification, and automatic repository discovery
+   owner/repo specification, and automatic repository discovery
 2. **Intelligent Review Management**: Filtering and organization of
-    code reviews by resolution status, files, reviewers, and commit
-    ranges
+   code reviews by resolution status, files, reviewers, and commit ranges
 3. **AI-Assisted Resolution**: Integration with OpenAI Codex exec
-    command for non-interactive code review resolution and automated
-    workflow execution
+   command for non-interactive code review resolution and automated workflow
+   execution
 4. **Contextual Code Navigation**: Full-screen change context display
-    with time-travel capabilities for tracking code evolution
+   with time-travel capabilities for tracking code evolution
 5. **Template-Based Communication**: Automated comment generation and
-    PR-level discussion management
+   PR-level discussion management
+6. **Cross-Surface Capability Parity**: Shared features exposed through TUI,
+   library API, and CLI surfaces as applicable, with documented exceptions for
+   UX-only TUI polish and docs-only planning items
 
 #### Major System Components
 
+Diagram showing high-level system components and their interactions across
+delivery surfaces, core logic, data layer, and external integrations.
+
 ```mermaid
 flowchart LR
-    subgraph "User Interface Layer"
+    subgraph "Delivery Surfaces"
         B["Keyboard Navigation"]
         C["Help System"]
         A["Bubbletea-rs TUI"]
+        A2["Pure CLI Commands"]
+        A3["Embeddable Library API"]
     end
 
     subgraph "Core Application Logic"
@@ -136,6 +143,8 @@ flowchart LR
     end
 
     A --> D
+    A2 --> D
+    A3 --> D
     D --> H
     D --> I
     D --> J
@@ -146,6 +155,9 @@ flowchart LR
     E --> I
     G --> F
 ```
+
+Figure: Major System Components - components and interactions across delivery
+surfaces, core logic, data layer, and external integrations.
 
 #### Core Technical Approach
 
@@ -174,13 +186,13 @@ emphasizes:
 #### Critical Success Factors
 
 1. **Performance**: Sub-second response times for GitHub API operations
-    and local repository access
+   and local repository access
 2. **Reliability**: 99.5% uptime for core functionality with graceful
-    degradation for external service failures
+   degradation for external service failures
 3. **Usability**: Intuitive keyboard-driven interface requiring minimal
-    learning curve for terminal-experienced developers
+   learning curve for terminal-experienced developers
 4. **Integration Quality**: Seamless workflow between code review
-    identification and AI-assisted resolution
+   identification and AI-assisted resolution
 
 #### Key Performance Indicators (kpis)
 
@@ -436,6 +448,22 @@ classDiagram
 - `src/local/discovery.rs` — `LocalRepository`, `discover_repository`
 - `src/github/locator.rs` — `RepositoryLocator::from_github_origin`
 
+### 1.2.6 Architecture decision record index
+
+The canonical ADR set is maintained in
+[Section 5.3.6](#536-architecture-decision-records):
+
+- [ADR-001](#architecture-decision-record-adr-001-incremental-sync-for-review-comments):
+  Incremental sync for review comments.
+- [ADR-002](#architecture-decision-record-adr-002-codex-execution-stream-and-transcript-model):
+  Codex execution stream and transcript model.
+- [ADR-003](#architecture-decision-record-adr-003-session-resumption-for-interrupted-codex-runs):
+  Session resumption for interrupted Codex runs.
+- [ADR-004](#architecture-decision-record-adr-004-inline-template-based-reply-drafting):
+  Inline template-based reply drafting.
+- [ADR-005](#architecture-decision-record-adr-005-cross-surface-library-first-delivery):
+  Cross-surface, library-first delivery contract.
+
 ## 1.3 Scope
 
 ### 1.3.1 In-scope
@@ -466,13 +494,13 @@ classDiagram
 #### Primary User Workflows
 
 1. **Review Discovery**: Repository access → PR listing → Review
-    filtering
+   filtering
 2. **Review Analysis**: Comment examination → Context viewing →
-    Time-travel navigation
+   Time-travel navigation
 3. **AI-Assisted Resolution**: Comment export → Codex integration →
-    Solution application
+   Solution application
 4. **Communication Management**: Template-based replies → PR-level
-    comment generation
+   comment generation
 
 #### Essential Integrations
 
@@ -1095,11 +1123,16 @@ flowchart LR
 
 ### 2.3.2 Integration Points
 
+Table: Integration points, involved features, shared components, and common
+services.
+
 | Integration Point      | Features Involved          | Shared Components       | Common Services                        |
 | ---------------------- | -------------------------- | ----------------------- | -------------------------------------- |
 | GitHub API Access      | F-001, F-002, F-004, F-009 | octocrab 0.44.1 client  | Authentication, Rate limiting          |
 | Local Git Operations   | F-003, F-006, F-007, F-008 | git2 library            | Repository metadata, History access    |
 | TUI Framework          | F-011, F-012, F-001, F-004 | bubbletea-rs 0.0.9      | Event handling, Rendering              |
+| Library API Surface    | F-001 through F-013        | Public Rust modules     | Typed contracts, Embedding integration |
+| CLI Surface            | F-001 through F-013        | Ortho-config CLI schema | Automation, Batch operation            |
 | AI Service Integration | F-008, F-009, F-010        | OpenAI Codex CLI 0.64.0 | Command execution, Response processing |
 
 ### 2.3.3 Shared Components
@@ -2960,6 +2993,54 @@ ready to send.
 - Continuous Integration (CI) coverage now includes the first-use reply-draft
   flow (`a`, template slots `1` to `9`, inline editing, `Enter` readiness).
 
+#### Architecture decision record (ADR-005): cross-surface, library-first delivery
+
+**Context**: Frankie capabilities must now be usable both in the interactive
+TUI and as reusable library functions embedded in a larger agent-hosting tool.
+Some workflows also need non-interactive CLI execution for automation and batch
+orchestration.
+
+**Decision**: Implement feature behaviour in shared `frankie` library modules
+first, then expose that behaviour through TUI and CLI adapters. For every
+future roadmap item, completion requires:
+
+1. A documented, test-covered public library API that external hosts can call
+   directly.
+
+2. TUI integration for interactive review workflows.
+
+3. A pure CLI surface for non-interactive workflows, or an explicit documented
+   rationale when CLI is not applicable.
+
+4. Explicitly documented exceptions for:
+   - UX-only TUI polish that does not introduce reusable domain behaviour.
+   - Documentation-only roadmap or design updates.
+
+**Rationale**:
+
+1. **Capability reuse**: Agent hosts should not need to reimplement TUI-only
+   logic to use Frankie features.
+
+2. **Operational consistency**: Shared library behaviour keeps TUI, CLI, and
+   embedded automation aligned on validation, error handling, and outcomes.
+
+3. **Testability**: Library-first boundaries reduce UI-coupled tests and make
+   deterministic behavioural testing easier.
+
+4. **Roadmap durability**: Surface parity prevents future features from
+   becoming inaccessible to non-TUI consumers.
+
+**Consequences**:
+
+- New feature work must avoid storing core business logic only in `src/tui/`.
+- Existing TUI-centric capabilities (for example reply templating and
+  time-travel orchestration) should be progressively extracted into shared
+  library modules with TUI wrappers.
+- Documentation and acceptance criteria now treat library, TUI, and CLI support
+  as part of feature completion.
+- Surface-specific exceptions are allowed only when explicitly documented with
+  rationale and out-of-scope boundaries.
+
 ## 5.4 Cross-cutting Concerns
 
 ### 5.4.1 Monitoring And Observability Approach
@@ -3295,6 +3376,116 @@ flowchart TD
 - **AI Integration**: Template-based formatting for OpenAI Codex CLI
   compatibility
 
+**Template Export Invocation Sequence**:
+
+Caption: Sequence diagram showing template export flow through the shared
+library path and the CLI adapter path using concrete code symbols from
+`src/cli/export_comments.rs`, `src/lib.rs`, and `src/export/template.rs`. The
+canonical library call signature is
+`write_template(writer, comments, pr_url, template_content)`.
+
+```mermaid
+sequenceDiagram
+    actor HostApp
+    participant CliRun as cli::export_comments::run
+    participant Parse as cli::export_comments::parse_export_format
+    participant LoadTpl as cli::export_comments::load_template_if_needed
+    participant WriteFmt as cli::export_comments::write_format
+    participant LibFn as frankie::write_template
+    participant TplFn as export::template::write_template
+    participant TplMap as export::template::TemplateComment
+    participant Engine as minijinja::Environment
+    participant Writer as std::io::Write
+
+    rect rgb(235,235,255)
+        HostApp->>LibFn: write_template(writer, comments, pr_url, template_content)
+        LibFn->>TplFn: re-exported function call
+        TplFn->>TplMap: impl From<&ExportedComment>
+        TplFn->>Engine: add_template/get_template/render
+        Engine-->>TplFn: rendered output
+        TplFn->>Writer: write_all(output.as_bytes())
+        Writer-->>HostApp: ok
+    end
+
+    rect rgb(235,255,235)
+        HostApp->>CliRun: run(config)
+        CliRun->>Parse: parse_export_format(config)
+        CliRun->>LoadTpl: load_template_if_needed(config, ExportFormat::Template)
+        CliRun->>WriteFmt: write_format(writer, params)
+        WriteFmt->>LibFn: write_template(writer, comments, pr_url, template_content)
+        LibFn->>TplFn: re-exported function call
+        TplFn->>Engine: add_template/get_template/render
+        TplFn->>Writer: write_all(output.as_bytes())
+        Writer-->>CliRun: ok
+        CliRun-->>HostApp: exit_code_0
+    end
+```
+
+**Template Export Type Relationships**:
+
+Caption: Class diagram showing configuration, export formats, comment models,
+and template rendering dependencies with names aligned to code paths.
+
+```mermaid
+classDiagram
+    class FrankieConfig["config::FrankieConfig"] {
+        +Option~String~ export
+        +Option~String~ template
+    }
+
+    class ExportFormat["export::model::ExportFormat"] {
+        <<enum>>
+        Markdown
+        Jsonl
+        Template
+        +from_str(s: &str) Result~Self, IntakeError~
+        +to_string() String
+    }
+
+    class ExportedComment["export::model::ExportedComment"] {
+        +u64 id
+        +Option~String~ author
+        +Option~String~ file_path
+        +Option~u32~ line_number
+        +Option~u32~ original_line_number
+        +Option~String~ body
+        +Option~String~ diff_hunk
+        +Option~String~ commit_sha
+        +Option~u64~ in_reply_to_id
+        +Option~String~ created_at
+    }
+
+    class TemplateComment["export::template::TemplateComment"] {
+        +u64 id
+        +String file
+        +String line
+        +String reviewer
+        +str status
+        +String body
+        +String context
+        +String commit
+        +String timestamp
+        +String reply_to
+        +from_exported_comment(src: &ExportedComment) TemplateComment
+    }
+
+    class WriteTemplate["export::template::write_template"] {
+        +write_template(writer, comments, pr_url, template_content)
+    }
+
+    class MiniJinjaEnvironment["minijinja::Environment"] {
+        +add_template(name, template_content)
+        +get_template(name)
+        +render(context)
+    }
+
+    FrankieConfig --> ExportFormat : parse_export_format
+    TemplateComment ..> ExportedComment : impl From<&ExportedComment>
+    WriteTemplate --> ExportedComment : input comments
+    WriteTemplate --> TemplateComment : mapping for template context
+    WriteTemplate --> MiniJinjaEnvironment : template compile and render
+```
+
 ### 6.1.4 Ai Integration Service Component
 
 **Component Overview**: The AI Integration Service manages OpenAI Codex CLI
@@ -3355,9 +3546,9 @@ sacrificing performance. It takes full advantage of Rust's type system to
 create a low overhead query builder that "feels like Rust."
 
 **Technical Implementation**: Uses diesel = { version = "2.2.0", features =
-\["sqlite", "returning_clauses_for_sqlite_3_35"\] } for enhanced SQL
+["sqlite", "returning_clauses_for_sqlite_3_35"] } for enhanced SQL
 capabilities. Includes diesel_migrations = { version = "2.2.0", features =
-\["sqlite"\] } for automatic migrations.
+["sqlite"] } for automatic migrations.
 
 **Schema Design**:
 
@@ -4258,7 +4449,7 @@ flowchart LR
 SQLite offers a powerful tool called EXPLAIN that lets you look under the hood
 of your SQL queries to see how they get executed. This gives insight into
 whether your indexes are being used correctly or if your queries can be
-optimized further. EXPLAIN QUERY PLAN SELECT \* FROM users WHERE name =
+optimized further. EXPLAIN QUERY PLAN SELECT * FROM users WHERE name =
 'Alice';Copy · Interpreting the output allows you to determine whether you're
 evaluating too many rows or whether the execution plan can be improved by
 adding or changing indexes.
@@ -4500,10 +4691,10 @@ flowchart LR
 
 | Component     | Fault Tolerance Mechanism             | Recovery Time | Data Loss Tolerance                  |
 | ------------- | ------------------------------------- | ------------- | ------------------------------------ |
-| Database File | WAL mode with automatic checkpointing | \< 1 second   | None (ACID compliance)               |
-| Cache Layer   | Automatic rebuild from source         | \< 30 seconds | Acceptable (performance impact only) |
-| Configuration | Automatic backup on change            | \< 5 seconds  | None (critical for operation)        |
-| AI Sessions   | Session state persistence             | \< 10 seconds | Minimal (resumable operations)       |
+| Database File | WAL mode with automatic checkpointing | < 1 second    | None (ACID compliance)               |
+| Cache Layer   | Automatic rebuild from source         | < 30 seconds  | Acceptable (performance impact only) |
+| Configuration | Automatic backup on change            | < 5 seconds   | None (critical for operation)        |
+| AI Sessions   | Session state persistence             | < 10 seconds  | Minimal (resumable operations)       |
 
 This comprehensive Database Design section provides detailed specifications for
 implementing a robust, performant, and compliant data layer for Frankie Goes to
@@ -6233,8 +6424,8 @@ flowchart LR
 | ----------------------- | ------------------------------------ | ------------------------ | ----------------------------------- |
 | Critical Error          | Application crash or data corruption | Modal dialog + error log | Restart application                 |
 | Service Unavailable     | GitHub API or Codex CLI failure      | Status bar warning       | Continue with limited functionality |
-| Performance Degradation | Response time \>1 second             | Status indicator         | Background optimization             |
-| Resource Exhaustion     | Memory usage \>500MB                 | Warning message          | Cache cleanup                       |
+| Performance Degradation | Response time >1 second              | Status indicator         | Background optimization             |
+| Resource Exhaustion     | Memory usage >500MB                  | Warning message          | Cache cleanup                       |
 
 #### 6.9.3.7 Development And Debugging Support
 
@@ -6349,10 +6540,10 @@ guarantees.
 Detailed Testing Strategy is not applicable for this system. Frankie Goes to
 Code Review is a single-user Terminal User Interface (TUI) application that
 operates as a local development tool. The application automatically runs all
-functions annotated with the \#\[test\] attribute in multiple threads, and
-tests can be run with cargo test. The application's architecture as a
-monolithic TUI tool with local-first data processing significantly simplifies
-the testing requirements compared to distributed systems or web applications.
+functions annotated with the #[test] attribute in multiple threads, and tests
+can be run with cargo test. The application's architecture as a monolithic TUI
+tool with local-first data processing significantly simplifies the testing
+requirements compared to distributed systems or web applications.
 
 ### 6.10.2 Basic Testing Approach Rationale
 
@@ -6377,7 +6568,7 @@ see the value of testing - it saves time (and money!)
 
 **Primary Testing Framework**: Cargo's built-in testing framework with libtest,
 which creates a special executable by linking your code with libtest and
-automatically runs all functions annotated with the \#\[test\] attribute.
+automatically runs all functions annotated with the #[test] attribute.
 
 **Enhanced Testing Libraries**:
 
@@ -6461,7 +6652,7 @@ async fn test_github_pr_retrieval() {
 
 **Component Mocking with Mockall**:
 
-Using the \#\[automock\] modifier on a trait, Mockall generates a mock struct.
+Using the #[automock] modifier on a trait, Mockall generates a mock struct.
 This method is easy to use but limited in its capabilities.
 
 ```rust
@@ -6880,33 +7071,33 @@ management.
 **Repository Access Workflow**:
 
 1. **PR URL Entry**: Direct access to specific GitHub pull requests via
-    URL input
+   URL input
 2. **Repository Discovery**: Browse pull requests by owner/repository
-    specification
+   specification
 3. **Local Repository Detection**: Automatic discovery from current Git
-    directory
+   directory
 
 **Code Review Management Workflow**:
 
 1. **Review Listing**: Display all pull request reviews with filtering
-    capabilities
+   capabilities
 2. **Comment Processing**: Export structured comment data for AI
-    integration
+   integration
 3. **Context Viewing**: Full-screen display of code changes with syntax
-    highlighting
+   highlighting
 4. **Time Travel Navigation**: Historical view of code evolution
-    through PR branch
+   through PR branch
 
 **AI Integration Workflow**:
 
 1. **Comment Export**: Generate structured format for OpenAI Codex CLI
-    exec command automation
+   exec command automation
 2. **AI Execution**: Stream Codex activity to stderr while writing
-    final agent message to stdout for easy piping
+   final agent message to stdout for easy piping
 3. **Progress Monitoring**: Real-time JSON Lines (JSONL) event
-    streaming during agent execution
+   streaming during agent execution
 4. **Session Management**: Resume previous non-interactive sessions
-    with preserved conversation context
+   with preserved conversation context
 
 ### 7.2.2 User Interaction Patterns
 
@@ -7454,9 +7645,9 @@ is a backlog item rather than a launch dependency.
 GitHub Actions runs the following:
 
 - Triggers: push/PR to `main`; tags matching `v*` publish a release.
-- Job `quality`: `cargo fmt --check`, `cargo clippy --all-targets
-  --all-features -D warnings`, `cargo test
-  --all-features` (or nextest where available), and `cargo audit`.
+- Job `quality`: `cargo fmt --check`,
+  `cargo clippy --all-targets --all-features -D warnings`,
+  `cargo test --all-features` (or nextest where available), and `cargo audit`.
 - Job `build`: matrix over the targets above producing release binaries and
   checksums.
 - Job `release`: on tags, attach artefacts to the GitHub Release and publish
@@ -7523,8 +7714,8 @@ sequenceDiagram
 | Unit Tests        | `cargo test --all-features`       | 100% test pass rate              | Block release  |
 | Integration Tests | End-to-end TUI testing            | All workflows functional         | Block release  |
 | Security Audit    | `cargo audit`                     | No high/critical vulnerabilities | Block release  |
-| Code Coverage     | `grcov` with LLVM instrumentation | \>85% line coverage              | Warning only   |
-| Performance Tests | Benchmark suite                   | No \>10% regression              | Warning only   |
+| Code Coverage     | `grcov` with LLVM instrumentation | >85% line coverage               | Warning only   |
+| Performance Tests | Benchmark suite                   | No >10% regression               | Warning only   |
 
 **Security Scanning Integration**:
 
@@ -7637,12 +7828,12 @@ local_only = true  # No external transmission
 Since Frankie Goes to Code Review is a standalone application, infrastructure
 costs are minimal:
 
-| Cost Category    | Monthly Cost      | Description              | Optimization              |
-| ---------------- | ----------------- | ------------------------ | ------------------------- |
-| GitHub Actions   | \$0 (public repo) | CI/CD pipeline execution | Efficient workflow design |
-| GitHub Releases  | \$0               | Binary distribution      | Included in GitHub        |
-| Domain/Website   | \$0               | GitHub Pages hosting     | Static site generation    |
-| Package Registry | \$0               | crates.io publishing     | Community service         |
+| Cost Category    | Monthly Cost     | Description              | Optimization              |
+| ---------------- | ---------------- | ------------------------ | ------------------------- |
+| GitHub Actions   | $0 (public repo) | CI/CD pipeline execution | Efficient workflow design |
+| GitHub Releases  | $0               | Binary distribution      | Included in GitHub        |
+| Domain/Website   | $0               | GitHub Pages hosting     | Static site generation    |
+| Package Registry | $0               | crates.io publishing     | Community service         |
 
 **Development Costs**:
 
@@ -7651,7 +7842,7 @@ costs are minimal:
 | Developer Time       | Primary cost   | Feature development and maintenance  | Core value creation        |
 | Third-party Services | Minimal        | Optional services like code coverage | Quality assurance          |
 | Hardware             | Existing       | Developer workstations               | No additional requirements |
-| Licensing            | \$0            | Open source dependencies             | MIT/Apache 2.0 licenses    |
+| Licensing            | $0             | Open source dependencies             | MIT/Apache 2.0 licenses    |
 
 This minimal infrastructure approach aligns perfectly with the local-first
 philosophy of Frankie Goes to Code Review, providing efficient distribution and
@@ -7758,7 +7949,7 @@ characteristics:
 
 - diesel = { version = "2.2.0", features = \["sqlite",
   "returning_clauses_for_sqlite_3_35"\] }
-- diesel_migrations = { version = "2.2.0", features = \["sqlite"\] }
+- diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 
 ### 9.1.5 Terminal User Interface Capabilities
 
