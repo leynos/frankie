@@ -94,17 +94,16 @@ The application provides comprehensive code review management through:
 
 1. **Multi-Modal Repository Access**: Support for PR URL input,
    owner/repo specification, and automatic repository discovery
-1. **Intelligent Review Management**: Filtering and organization of
-   code reviews by resolution status, files, reviewers, and commit
-   ranges
-1. **AI-Assisted Resolution**: Integration with OpenAI Codex exec
-   command for non-interactive code review resolution and automated
-   workflow execution
-1. **Contextual Code Navigation**: Full-screen change context display
+2. **Intelligent Review Management**: Filtering and organization of
+   code reviews by resolution status, files, reviewers, and commit ranges
+3. **AI-Assisted Resolution**: Integration with OpenAI Codex exec
+   command for non-interactive code review resolution and automated workflow
+   execution
+4. **Contextual Code Navigation**: Full-screen change context display
    with time-travel capabilities for tracking code evolution
-1. **Template-Based Communication**: Automated comment generation and
+5. **Template-Based Communication**: Automated comment generation and
    PR-level discussion management
-1. **Cross-Surface Capability Parity**: Shared features exposed through TUI,
+6. **Cross-Surface Capability Parity**: Shared features exposed through TUI,
    library API, and CLI surfaces as applicable
 
 #### Major System Components
@@ -181,11 +180,11 @@ emphasizes:
 
 1. **Performance**: Sub-second response times for GitHub API operations
    and local repository access
-1. **Reliability**: 99.5% uptime for core functionality with graceful
+2. **Reliability**: 99.5% uptime for core functionality with graceful
    degradation for external service failures
-1. **Usability**: Intuitive keyboard-driven interface requiring minimal
+3. **Usability**: Intuitive keyboard-driven interface requiring minimal
    learning curve for terminal-experienced developers
-1. **Integration Quality**: Seamless workflow between code review
+4. **Integration Quality**: Seamless workflow between code review
    identification and AI-assisted resolution
 
 #### Key Performance Indicators (kpis)
@@ -473,11 +472,11 @@ classDiagram
 
 1. **Review Discovery**: Repository access → PR listing → Review
    filtering
-1. **Review Analysis**: Comment examination → Context viewing →
+2. **Review Analysis**: Comment examination → Context viewing →
    Time-travel navigation
-1. **AI-Assisted Resolution**: Comment export → Codex integration →
+3. **AI-Assisted Resolution**: Comment export → Codex integration →
    Solution application
-1. **Communication Management**: Template-based replies → PR-level
+4. **Communication Management**: Template-based replies → PR-level
    comment generation
 
 #### Essential Integrations
@@ -1010,7 +1009,7 @@ hunk; the example lines "+line added", "-line removed", and "line unchanged"
 are illustrative markers, ensuring diff markers stay intact while remaining
 valid XML:
 
-````xml
+```xml
 <comment index="1">
   <location>path/to/file.py:168</location>
   <code-context><![CDATA[
@@ -1024,7 +1023,7 @@ valid XML:
     Comment text (rendered in markdown with details tags collapsed).
   </issue-to-address>
 </comment>
-````
+```
 
 ### 2.2.3 Ai Integration Requirements
 
@@ -2834,17 +2833,17 @@ ID-based selection tracking.
    prevents timer accumulation. Manual refresh (`r` key) delegates to the same
    sync logic for consistent behaviour.
 
-1. **ID-Based Merge**: Comments are merged using `ReviewComment.id` as the
+2. **ID-Based Merge**: Comments are merged using `ReviewComment.id` as the
    stable identifier. The algorithm inserts new comments, updates modified
    ones, and removes deleted ones. Results are sorted by ID for deterministic
    ordering.
 
-1. **Selection Preservation**: Instead of tracking cursor position (which
+3. **Selection Preservation**: Instead of tracking cursor position (which
    becomes invalid after data changes), the TUI tracks `selected_comment_id`.
    After merge, the cursor is restored to the new index of the selected ID, or
    clamped if the comment was deleted.
 
-1. **Telemetry Integration**: Sync latency is recorded via the
+4. **Telemetry Integration**: Sync latency is recorded via the
    `SyncLatencyRecorded` telemetry event, including duration, comment count,
    and whether the sync was incremental.
 
@@ -2870,11 +2869,11 @@ state directory.
 1. **Boundary clarity**: Process execution and stream parsing live in `src/ai/`
    so TUI state transitions remain in `src/tui/`.
 
-1. **Deterministic persistence**: Transcript files use a deterministic naming
+2. **Deterministic persistence**: Transcript files use a deterministic naming
    pattern `<owner>-<repo>-pr-<number>-<utc-yyyymmddThhmmssZ>.jsonl` under
    `${XDG_STATE_HOME:-$HOME/.local/state}/frankie/codex-transcripts/`.
 
-1. **Operational visibility**: The TUI status bar shows streamed progress
+3. **Operational visibility**: The TUI status bar shows streamed progress
    events while runs are active and maps non-zero exits into explicit error
    messages including exit code and transcript path.
 
@@ -2902,15 +2901,15 @@ server-side thread when an interrupted session is detected.
    and timestamps. Sidecar files are self-contained and do not require database
    changes.
 
-1. **Native protocol usage**: The `thread/resume` method is part of the Codex
+2. **Native protocol usage**: The `thread/resume` method is part of the Codex
    `app-server` JSON-RPC protocol. Using it directly avoids re-implementing
    conversation state management and preserves server-side approvals.
 
-1. **Thread ID capture**: The thread ID from the `thread/start` response is
+3. **Thread ID capture**: The thread ID from the `thread/start` response is
    stored in session state as soon as it is received. This ensures resumption
    is possible even when the interruption occurs during execution.
 
-1. **Resume prompt UX**: The resume prompt is shown inline in the status bar
+4. **Resume prompt UX**: The resume prompt is shown inline in the status bar
    (`y`/`n`/`Esc`) rather than as a modal dialog. This keeps the interaction
    lightweight and consistent with the existing TUI key-driven workflow.
 
@@ -2946,15 +2945,15 @@ ready to send.
    group and handlers so navigation, Codex execution, and sync logic remain
    isolated.
 
-1. **Keyboard-first interaction**: Starting reply-draft mode with `a`, using
+2. **Keyboard-first interaction**: Starting reply-draft mode with `a`, using
    template slots `1` to `9`, and confirming readiness with `Enter` match the
    existing terminal-first user experience (UX) and avoid modal forms.
 
-1. **Deterministic validation**: Draft limits are enforced as Unicode scalar
+3. **Deterministic validation**: Draft limits are enforced as Unicode scalar
    counts during both typing and template insertion, producing consistent
    behaviour across multilingual text.
 
-1. **Scoped delivery**: `Enter` marks a reply-draft as ready to send but does
+4. **Scoped delivery**: `Enter` marks a reply-draft as ready to send but does
    not post to GitHub in this phase, keeping the change focused on drafting UX.
 
 **Consequences**:
@@ -3344,6 +3343,108 @@ flowchart TD
   highlighting
 - **AI Integration**: Template-based formatting for OpenAI Codex CLI
   compatibility
+
+**Template Export Invocation Sequence**:
+
+Caption: Sequence diagram showing template export flow through the shared
+library path and the CLI adapter path.
+
+```mermaid
+sequenceDiagram
+    actor HostApp
+    participant CLI as CLI_binary
+    participant Lib as frankie_library
+    participant Export as export_module
+    participant Template as export_template_submodule
+    participant Engine as TemplateEngineWrapper
+    participant Writer as OutputWriter
+
+    rect rgb(235,235,255)
+        HostApp->>Lib: create_FrankieConfig_with_template()
+        HostApp->>Lib: write_template(writer, template_str, exported_comments, pr_url)
+        Lib->>Export: write_template(writer, template_str, exported_comments, pr_url)
+        Export->>Template: write_template(writer, template_str, exported_comments, pr_url)
+        Template->>Template: map_ExportedComment_to_TemplateComment
+        Template->>Engine: render(template_str, template_comments, pr_url)
+        Engine-->>Template: rendered_body
+        Template->>Writer: write(rendered_body)
+        Writer-->>HostApp: ok
+    end
+
+    rect rgb(235,255,235)
+        HostApp->>CLI: invoke_with_flags(--export template --template path)
+        CLI->>Lib: parse_config_to_FrankieConfig
+        CLI->>Template: load_template_if_needed(config.template)
+        CLI->>Export: write_format(Template, writer, comments, loaded_template, pr_url)
+        Export->>Template: write_template(writer, loaded_template, comments, pr_url)
+        Template->>Engine: render(loaded_template, template_comments, pr_url)
+        Engine-->>Template: rendered_body
+        Template->>Writer: write(rendered_body)
+        Writer-->>CLI: ok
+        CLI-->>HostApp: exit_code_0
+    end
+```
+
+**Template Export Type Relationships**:
+
+Caption: Class diagram showing configuration, export formats, comment models,
+and template rendering dependencies.
+
+```mermaid
+classDiagram
+    class FrankieConfig {
+        +Option~String~ template
+    }
+
+    class ExportFormat {
+        <<enum>>
+        Markdown
+        Jsonl
+        Template
+        +from_str(s: &str) Result~ExportFormat, IntakeError~
+        +to_string() String
+    }
+
+    class ExportedComment {
+        +u64 id
+        +Option~String~ author
+        +Option~String~ file_path
+        +Option~u64~ line_number
+        +String body
+        +Option~String~ diff_hunk
+        +Option~String~ commit_sha
+        +Option~String~ created_at
+    }
+
+    class TemplateComment {
+        +u64 id
+        +String author
+        +String file_path
+        +u64 line_number
+        +String body
+        +String diff_hunk
+        +String commit_sha
+        +String created_at
+        +from_exported_comment(src: &ExportedComment) TemplateComment
+    }
+
+    class ExportModule {
+        +write_markdown(writer: &mut Write, comments: &[ExportedComment], pr_url: &str) Result~(), IntakeError~
+        +write_jsonl(writer: &mut Write, comments: &[ExportedComment]) Result~(), IntakeError~
+        +write_template(writer: &mut Write, template: &str, comments: &[ExportedComment], pr_url: &str) Result~(), IntakeError~
+    }
+
+    class TemplateEngineWrapper {
+        +render(template: &str, comments: &[TemplateComment], pr_url: &str) Result~String, IntakeError~
+    }
+
+    FrankieConfig --> ExportFormat : uses_for_export_choice
+    ExportModule --> ExportFormat : selects_variant
+    TemplateComment ..> ExportedComment : From~&ExportedComment~
+    ExportModule --> ExportedComment : input_comments
+    ExportModule --> TemplateComment : maps_for_template
+    ExportModule --> TemplateEngineWrapper : delegates_rendering
+```
 
 ### 6.1.4 Ai Integration Service Component
 
@@ -4916,12 +5017,12 @@ sequenceDiagram
 
 **Stream Event Types**:
 
-| Event Type       | JSON Schema                                 | Processing Action           | UI Update               |
-| ---------------- | ------------------------------------------- | --------------------------- | ----------------------- |
-| `thread.started` | `{"type":"thread.started","thread_id":"…"}` | Initialize session tracking | Show progress indicator |
-| `turn.started`   | `{"type":"turn.started"}`                   | Begin processing turn       | Update status message   |
-| `item.completed` | `{"type":"item.completed","item":{…}}`      | Process completed item      | Update progress bar     |
-| `agent_message`  | `{"type":"agent_message","text":"…"}`       | Display agent response      | Show final message      |
+| Event Type       | JSON Schema                                   | Processing Action           | UI Update               |
+| ---------------- | --------------------------------------------- | --------------------------- | ----------------------- |
+| `thread.started` | `{"type":"thread.started","thread_id":"…"}`   | Initialize session tracking | Show progress indicator |
+| `turn.started`   | `{"type":"turn.started"}`                     | Begin processing turn       | Update status message   |
+| `item.completed` | `{"type":"item.completed","item":{…}}`        | Process completed item      | Update progress bar     |
+| `agent_message`  | `{"type":"agent_message","text":"…"}`         | Display agent response      | Show final message      |
 
 #### 6.7.2.3 Batch Processing Flows
 
@@ -5144,12 +5245,12 @@ flowchart TD
 
 **OpenAI Codex CLI Service Contract**:
 
-| Contract Element | Specification                                                                                                                                                         | SLA                    | Monitoring                |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- |
-| Availability     | Included with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans                                                                                                  | Plan-dependent         | Process health monitoring |
-| Response Time    | Variable based on task complexity                                                                                                                                     | No specific SLA        | Execution time tracking   |
-| Resource Usage   | Local compute resources                                                                                                                                               | User machine dependent | Resource monitoring       |
-| Data Privacy     | All file reads, writes, and command executions happen locally. Only your prompt, high‑level context, and optional diff summaries are sent to the model for generation | Privacy by design      | Data flow auditing        |
+| Contract Element | Specification                                                                                                                                                           | SLA                    | Monitoring                |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- |
+| Availability     | Included with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans                                                                                                    | Plan-dependent         | Process health monitoring |
+| Response Time    | Variable based on task complexity                                                                                                                                       | No specific SLA        | Execution time tracking   |
+| Resource Usage   | Local compute resources                                                                                                                                                 | User machine dependent | Resource monitoring       |
+| Data Privacy     | All file reads, writes, and command executions happen locally. Only your prompt, high‑level context, and optional diff summaries are sent to the model for generation   | Privacy by design      | Data flow auditing        |
 
 ### 6.7.4 Integration Flow Diagrams
 
@@ -6399,10 +6500,10 @@ guarantees.
 Detailed Testing Strategy is not applicable for this system. Frankie Goes to
 Code Review is a single-user Terminal User Interface (TUI) application that
 operates as a local development tool. The application automatically runs all
-functions annotated with the #[test] attribute in multiple threads, and
-tests can be run with cargo test. The application's architecture as a
-monolithic TUI tool with local-first data processing significantly simplifies
-the testing requirements compared to distributed systems or web applications.
+functions annotated with the #[test] attribute in multiple threads, and tests
+can be run with cargo test. The application's architecture as a monolithic TUI
+tool with local-first data processing significantly simplifies the testing
+requirements compared to distributed systems or web applications.
 
 ### 6.10.2 Basic Testing Approach Rationale
 
@@ -6931,31 +7032,31 @@ management.
 
 1. **PR URL Entry**: Direct access to specific GitHub pull requests via
    URL input
-1. **Repository Discovery**: Browse pull requests by owner/repository
+2. **Repository Discovery**: Browse pull requests by owner/repository
    specification
-1. **Local Repository Detection**: Automatic discovery from current Git
+3. **Local Repository Detection**: Automatic discovery from current Git
    directory
 
 **Code Review Management Workflow**:
 
 1. **Review Listing**: Display all pull request reviews with filtering
    capabilities
-1. **Comment Processing**: Export structured comment data for AI
+2. **Comment Processing**: Export structured comment data for AI
    integration
-1. **Context Viewing**: Full-screen display of code changes with syntax
+3. **Context Viewing**: Full-screen display of code changes with syntax
    highlighting
-1. **Time Travel Navigation**: Historical view of code evolution
+4. **Time Travel Navigation**: Historical view of code evolution
    through PR branch
 
 **AI Integration Workflow**:
 
 1. **Comment Export**: Generate structured format for OpenAI Codex CLI
    exec command automation
-1. **AI Execution**: Stream Codex activity to stderr while writing
+2. **AI Execution**: Stream Codex activity to stderr while writing
    final agent message to stdout for easy piping
-1. **Progress Monitoring**: Real-time JSON Lines (JSONL) event
+3. **Progress Monitoring**: Real-time JSON Lines (JSONL) event
    streaming during agent execution
-1. **Session Management**: Resume previous non-interactive sessions
+4. **Session Management**: Resume previous non-interactive sessions
    with preserved conversation context
 
 ### 7.2.2 User Interaction Patterns
@@ -7504,7 +7605,9 @@ is a backlog item rather than a launch dependency.
 GitHub Actions runs the following:
 
 - Triggers: push/PR to `main`; tags matching `v*` publish a release.
-- Job `quality`: `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`, `cargo test --all-features` (or nextest where available), and `cargo audit`.
+- Job `quality`: `cargo fmt --check`,
+  `cargo clippy --all-targets --all-features -D warnings`,
+  `cargo test --all-features` (or nextest where available), and `cargo audit`.
 - Job `build`: matrix over the targets above producing release binaries and
   checksums.
 - Job `release`: on tags, attach artefacts to the GitHub Release and publish
@@ -7535,11 +7638,11 @@ resort.
 
 **Semantic Versioning Strategy**:
 
-| Version Component | Increment Trigger                  | Example       | Impact                   |
-| ----------------- | ---------------------------------- | ------------- | ------------------------ |
-| Major (X.0.0)     | Breaking changes to CLI interface  | 1.0.0 → 2.0.0 | Requires user adaptation |
-| Minor (0.X.0)     | New features, non-breaking changes | 1.1.0 → 1.2.0 | Backward compatible      |
-| Patch (0.0.X)     | Bug fixes, security updates        | 1.1.1 → 1.1.2 | Drop-in replacement      |
+| Version Component | Increment Trigger                  | Example         | Impact                   |
+| ----------------- | ---------------------------------- | --------------- | ------------------------ |
+| Major (X.0.0)     | Breaking changes to CLI interface  | 1.0.0 → 2.0.0   | Requires user adaptation |
+| Minor (0.X.0)     | New features, non-breaking changes | 1.1.0 → 1.2.0   | Backward compatible      |
+| Patch (0.0.X)     | Bug fixes, security updates        | 1.1.1 → 1.1.2   | Drop-in replacement      |
 
 **Release Automation Workflow**:
 
