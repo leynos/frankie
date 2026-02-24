@@ -109,6 +109,9 @@ The application provides comprehensive code review management through:
 
 #### Major System Components
 
+Diagram showing high-level system components and their interactions across
+delivery surfaces, core logic, data layer, and external integrations.
+
 ```mermaid
 flowchart LR
     subgraph "Delivery Surfaces"
@@ -152,6 +155,9 @@ flowchart LR
     E --> I
     G --> F
 ```
+
+Figure: Major System Components - components and interactions across delivery
+surfaces, core logic, data layer, and external integrations.
 
 #### Core Technical Approach
 
@@ -1116,6 +1122,9 @@ flowchart LR
 ```
 
 ### 2.3.2 Integration Points
+
+Table: Integration points, involved features, shared components, and common
+services.
 
 | Integration Point      | Features Involved          | Shared Components       | Common Services                        |
 | ---------------------- | -------------------------- | ----------------------- | -------------------------------------- |
@@ -3371,7 +3380,9 @@ flowchart TD
 
 Caption: Sequence diagram showing template export flow through the shared
 library path and the CLI adapter path using concrete code symbols from
-`src/cli/export_comments.rs`, `src/lib.rs`, and `src/export/template.rs`.
+`src/cli/export_comments.rs`, `src/lib.rs`, and `src/export/template.rs`. The
+canonical library call signature is
+`write_template(writer, comments, pr_url, template_content)`.
 
 ```mermaid
 sequenceDiagram
