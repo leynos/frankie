@@ -250,3 +250,7 @@ impl CommentDetailComponent {
 #[cfg(test)]
 #[path = "comment_detail_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "comment_detail_ai_preview_tests.rs"]
+mod ai_preview_tests;

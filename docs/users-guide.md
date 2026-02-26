@@ -22,8 +22,8 @@ Frankie supports six operation modes:
    for navigating and filtering review comments using `--tui` with `--pr-url`
 5. **Comment export mode** — Export review comments in structured formats using
    `--export` with `--pr-url`
-6. **AI rewrite mode** — Expand or reword draft text non-interactively using
-   `--ai-rewrite-mode` and `--ai-rewrite-text`
+6. **Artificial intelligence (AI) rewrite mode** — Expand or reword draft text
+   non-interactively using `--ai-rewrite-mode` and `--ai-rewrite-text`
 
 ## Interactive mode (local discovery)
 
@@ -149,7 +149,7 @@ frankie \
   --ai-api-key sk_example
 ```
 
-The CLI output includes:
+The command-line interface (CLI) output includes:
 
 - An explicit `AI-originated` label on generated text.
 - A side-by-side preview (`original || candidate`).

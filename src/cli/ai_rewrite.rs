@@ -186,6 +186,22 @@ mod tests {
     }
 
     #[rstest]
+    fn run_with_service_prints_generated_outcome_with_unchanged_preview() {
+        let config = base_config();
+        let service = StubCommentRewriteService::success("Please fix this");
+        let mut output = Vec::new();
+
+        let result = run_with_service(&mut output, &config, &service);
+
+        assert!(result.is_ok(), "generated flow should succeed");
+        let output_text = String::from_utf8(output).unwrap_or_default();
+        assert!(output_text.contains("Status: generated"));
+        assert!(output_text.contains("Origin: AI-originated"));
+        assert!(output_text.contains("Preview: original || candidate"));
+        assert!(output_text.contains("Changed: no"));
+    }
+
+    #[rstest]
     fn run_with_service_prints_fallback_without_failing_process() {
         let config = base_config();
         let service = StubCommentRewriteService::failure(IntakeError::Network {

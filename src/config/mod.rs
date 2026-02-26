@@ -405,8 +405,20 @@ impl FrankieConfig {
         self.export.is_some()
     }
 
-    const fn should_ai_rewrite(&self) -> bool {
-        self.ai_rewrite_mode.is_some() || self.ai_rewrite_text.is_some()
+    fn non_empty_trimmed(value: Option<&str>) -> bool {
+        value.is_some_and(|text| !text.trim().is_empty())
+    }
+
+    fn rewrite_mode_present(&self) -> bool {
+        Self::non_empty_trimmed(self.ai_rewrite_mode.as_deref())
+    }
+
+    fn rewrite_text_present(&self) -> bool {
+        Self::non_empty_trimmed(self.ai_rewrite_text.as_deref())
+    }
+
+    fn should_ai_rewrite(&self) -> bool {
+        self.rewrite_mode_present() || self.rewrite_text_present()
     }
 
     const fn has_pr_identifier(&self) -> bool {
@@ -426,7 +438,7 @@ impl FrankieConfig {
     /// PR URL is provided without TUI or export, `RepositoryListing` if both
     /// owner and repo are provided, or `Interactive` otherwise.
     #[must_use]
-    pub const fn operation_mode(&self) -> OperationMode {
+    pub fn operation_mode(&self) -> OperationMode {
         if self.should_ai_rewrite() {
             OperationMode::AiRewrite
         } else if self.should_export_comments() {
@@ -471,14 +483,8 @@ impl FrankieConfig {
             });
         }
 
-        let mode_present = self
-            .ai_rewrite_mode
-            .as_ref()
-            .is_some_and(|mode| !mode.trim().is_empty());
-        let text_present = self
-            .ai_rewrite_text
-            .as_ref()
-            .is_some_and(|text| !text.trim().is_empty());
+        let mode_present = self.rewrite_mode_present();
+        let text_present = self.rewrite_text_present();
         let mode_without_text = mode_present && !text_present;
         let text_without_mode = !mode_present && text_present;
         if mode_without_text || text_without_mode {

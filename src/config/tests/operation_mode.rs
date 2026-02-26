@@ -140,6 +140,21 @@ fn ai_rewrite_takes_precedence_over_export() {
 }
 
 #[rstest]
+fn whitespace_only_ai_rewrite_fields_do_not_select_ai_rewrite_mode() {
+    let config = FrankieConfig {
+        ai_rewrite_mode: Some("   ".to_owned()),
+        ai_rewrite_text: Some("\t".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::Interactive,
+        "whitespace-only rewrite fields should not enable AiRewrite mode"
+    );
+}
+
+#[rstest]
 fn pr_identifier_url_triggers_review_tui() {
     let config = FrankieConfig {
         pr_identifier: Some("https://github.com/o/r/pull/1".to_owned()),

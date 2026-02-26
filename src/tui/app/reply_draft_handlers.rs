@@ -223,11 +223,36 @@ impl ReviewApp {
         Some(draft)
     }
 
+    fn ensure_active_reply_draft_matches_comment(&mut self, comment_id: u64) -> bool {
+        if self.reply_draft.is_none() {
+            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
+            return false;
+        }
+
+        let is_mismatched = self
+            .reply_draft
+            .as_ref()
+            .is_some_and(|draft| draft.comment_id() != comment_id);
+        if is_mismatched {
+            self.error = Some(
+                "Active reply draft does not match selected comment. Navigate to that comment or discard the draft."
+                    .to_owned(),
+            );
+            return false;
+        }
+
+        true
+    }
+
     fn request_ai_rewrite(&mut self, mode: CommentRewriteMode) -> Option<Cmd> {
         let Some(comment) = self.selected_comment().cloned() else {
             self.error = Some("Reply drafting requires a selected comment".to_owned());
             return None;
         };
+
+        if !self.ensure_active_reply_draft_matches_comment(comment.id) {
+            return None;
+        }
 
         let Some(draft) = self.active_reply_draft_mut(comment.id) else {
             self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
@@ -273,6 +298,11 @@ impl ReviewApp {
                     self.error = Some("Reply drafting requires a selected comment".to_owned());
                     return;
                 };
+
+                if !self.ensure_active_reply_draft_matches_comment(comment_id) {
+                    return;
+                }
+
                 let Some(draft) = self.active_reply_draft_mut(comment_id) else {
                     self.error =
                         Some("No active reply draft. Press 'a' to start drafting.".to_owned());
