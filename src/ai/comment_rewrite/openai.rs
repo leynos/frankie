@@ -5,7 +5,6 @@ use std::time::Duration;
 use reqwest::StatusCode;
 use reqwest::blocking::Client;
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::github::IntakeError;
 
@@ -28,6 +27,7 @@ pub struct OpenAiCommentRewriteConfig {
     /// HTTP timeout.
     pub timeout: Duration,
     /// Additional request headers (primarily useful for deterministic tests).
+    #[cfg(any(test, feature = "test-support"))]
     pub additional_headers: Vec<(String, String)>,
 }
 
@@ -38,6 +38,7 @@ impl Default for OpenAiCommentRewriteConfig {
             model: DEFAULT_MODEL.to_owned(),
             api_key: None,
             timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+            #[cfg(any(test, feature = "test-support"))]
             additional_headers: Vec::new(),
         }
     }
@@ -57,11 +58,13 @@ impl OpenAiCommentRewriteConfig {
             model: model.into(),
             api_key,
             timeout,
+            #[cfg(any(test, feature = "test-support"))]
             additional_headers: Vec::new(),
         }
     }
 
     /// Adds one extra HTTP header.
+    #[cfg(any(test, feature = "test-support"))]
     #[must_use]
     pub fn with_additional_header(
         mut self,
@@ -130,7 +133,11 @@ impl CommentRewriteService for OpenAiCommentRewriteService {
             ],
         };
         let client = self.create_http_client()?;
+        #[cfg(any(test, feature = "test-support"))]
         let mut request_builder = client.post(endpoint).bearer_auth(api_key).json(&payload);
+        #[cfg(not(any(test, feature = "test-support")))]
+        let request_builder = client.post(endpoint).bearer_auth(api_key).json(&payload);
+        #[cfg(any(test, feature = "test-support"))]
         for (name, value) in &self.config.additional_headers {
             request_builder = request_builder.header(name, value);
         }
@@ -193,8 +200,21 @@ struct ChatChoice {
 }
 
 #[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+enum ChatContent {
+    Text(String),
+    Parts(Vec<ChatContentPart>),
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct ChatContentPart {
+    text: Option<String>,
+    content: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
 struct ChatChoiceMessage {
-    content: Value,
+    content: ChatContent,
 }
 
 fn build_system_prompt(mode: CommentRewriteMode) -> String {
@@ -256,18 +276,13 @@ fn build_prompt(request: &CommentRewriteRequest) -> String {
     prompt
 }
 
-fn parse_content_value(content: &Value) -> Option<&str> {
-    if let Some(text) = content.as_str() {
-        return Some(text);
+fn parse_content_value(content: &ChatContent) -> Option<&str> {
+    match content {
+        ChatContent::Text(text) => Some(text.as_str()),
+        ChatContent::Parts(parts) => parts
+            .iter()
+            .find_map(|part| part.text.as_deref().or(part.content.as_deref())),
     }
-
-    content.as_array().and_then(|items| {
-        items.iter().find_map(|item| {
-            item.get("text")
-                .and_then(Value::as_str)
-                .or_else(|| item.get("content").and_then(Value::as_str))
-        })
-    })
 }
 
 fn truncate_for_message(message: &str, max_chars: usize) -> String {
