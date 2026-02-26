@@ -4,6 +4,8 @@ mod model;
 mod openai;
 mod preview;
 mod service;
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 pub use model::{
     CommentRewriteContext, CommentRewriteFallback, CommentRewriteGenerated, CommentRewriteMode,

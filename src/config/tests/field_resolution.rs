@@ -163,42 +163,26 @@ fn value_flags_includes_repo_path() {
 }
 
 #[rstest]
-fn value_flags_include_reply_drafting_flags() {
+#[case("--reply-max-length")]
+#[case("--reply-templates")]
+fn value_flags_include_reply_drafting_flags(#[case] flag: &str) {
     assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--reply-max-length"),
-        "VALUE_FLAGS should include --reply-max-length"
-    );
-    assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--reply-templates"),
-        "VALUE_FLAGS should include --reply-templates"
+        FrankieConfig::VALUE_FLAGS.contains(&flag),
+        "VALUE_FLAGS should include {flag}"
     );
 }
 
 #[rstest]
-fn value_flags_include_ai_rewrite_flags() {
+#[case("--ai-rewrite-mode")]
+#[case("--ai-rewrite-text")]
+#[case("--ai-base-url")]
+#[case("--ai-model")]
+#[case("--ai-api-key")]
+#[case("--ai-timeout-seconds")]
+fn value_flags_include_ai_rewrite_flags(#[case] flag: &str) {
     assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--ai-rewrite-mode"),
-        "VALUE_FLAGS should include --ai-rewrite-mode"
-    );
-    assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--ai-rewrite-text"),
-        "VALUE_FLAGS should include --ai-rewrite-text"
-    );
-    assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--ai-base-url"),
-        "VALUE_FLAGS should include --ai-base-url"
-    );
-    assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--ai-model"),
-        "VALUE_FLAGS should include --ai-model"
-    );
-    assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--ai-api-key"),
-        "VALUE_FLAGS should include --ai-api-key"
-    );
-    assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--ai-timeout-seconds"),
-        "VALUE_FLAGS should include --ai-timeout-seconds"
+        FrankieConfig::VALUE_FLAGS.contains(&flag),
+        "VALUE_FLAGS should include {flag}"
     );
 }
 

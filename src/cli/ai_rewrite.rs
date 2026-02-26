@@ -6,7 +6,7 @@ use std::time::Duration;
 use frankie::ai::{
     CommentRewriteContext, CommentRewriteMode, CommentRewriteOutcome, CommentRewriteRequest,
     CommentRewriteService, OpenAiCommentRewriteConfig, OpenAiCommentRewriteService,
-    build_side_by_side_diff_preview, rewrite_with_fallback,
+    build_side_by_side_diff_preview,
 };
 use frankie::{FrankieConfig, IntakeError};
 
@@ -44,9 +44,32 @@ fn run_with_service<W: Write>(
     let mode = resolve_rewrite_mode(config)?;
     let source_text = resolve_rewrite_source(config)?;
     let request = CommentRewriteRequest::new(mode, source_text, CommentRewriteContext::default());
-    let outcome = rewrite_with_fallback(service, &request);
+    let outcome = rewrite_for_cli(service, &request)?;
 
     write_outcome(writer, mode, source_text, &outcome)
+}
+
+fn rewrite_for_cli(
+    service: &dyn CommentRewriteService,
+    request: &CommentRewriteRequest,
+) -> Result<CommentRewriteOutcome, IntakeError> {
+    match service.rewrite_text(request) {
+        Ok(rewritten_text) => {
+            let trimmed = rewritten_text.trim();
+            if trimmed.is_empty() {
+                return Ok(CommentRewriteOutcome::fallback(
+                    request.source_text(),
+                    "AI response was empty; keeping the original draft",
+                ));
+            }
+            Ok(CommentRewriteOutcome::generated(trimmed.to_owned()))
+        }
+        Err(IntakeError::Configuration { message }) => Err(IntakeError::Configuration { message }),
+        Err(error) => Ok(CommentRewriteOutcome::fallback(
+            request.source_text(),
+            format!("AI request failed: {error}"),
+        )),
+    }
 }
 
 fn resolve_rewrite_mode(config: &FrankieConfig) -> Result<CommentRewriteMode, IntakeError> {
@@ -135,19 +158,8 @@ mod tests {
     use rstest::rstest;
 
     use super::run_with_service;
-    use frankie::ai::{CommentRewriteRequest, CommentRewriteService};
+    use frankie::ai::comment_rewrite::test_support::StubCommentRewriteService;
     use frankie::{FrankieConfig, IntakeError};
-
-    #[derive(Debug)]
-    struct StubRewriteService {
-        response: Result<String, IntakeError>,
-    }
-
-    impl CommentRewriteService for StubRewriteService {
-        fn rewrite_text(&self, _request: &CommentRewriteRequest) -> Result<String, IntakeError> {
-            self.response.clone()
-        }
-    }
 
     fn base_config() -> FrankieConfig {
         FrankieConfig {
@@ -160,9 +172,7 @@ mod tests {
     #[rstest]
     fn run_with_service_prints_generated_outcome_with_preview() {
         let config = base_config();
-        let service = StubRewriteService {
-            response: Ok("Please fix this thoroughly.".to_owned()),
-        };
+        let service = StubCommentRewriteService::success("Please fix this thoroughly.");
         let mut output = Vec::new();
 
         let result = run_with_service(&mut output, &config, &service);
@@ -178,11 +188,9 @@ mod tests {
     #[rstest]
     fn run_with_service_prints_fallback_without_failing_process() {
         let config = base_config();
-        let service = StubRewriteService {
-            response: Err(IntakeError::Network {
-                message: "timeout".to_owned(),
-            }),
-        };
+        let service = StubCommentRewriteService::failure(IntakeError::Network {
+            message: "timeout".to_owned(),
+        });
         let mut output = Vec::new();
 
         let result = run_with_service(&mut output, &config, &service);
@@ -198,9 +206,7 @@ mod tests {
     fn run_with_service_rejects_invalid_mode() {
         let mut config = base_config();
         config.ai_rewrite_mode = Some("invalid".to_owned());
-        let service = StubRewriteService {
-            response: Ok("ignored".to_owned()),
-        };
+        let service = StubCommentRewriteService::success("ignored");
         let mut output = Vec::new();
 
         let result = run_with_service(&mut output, &config, &service);
@@ -208,6 +214,22 @@ mod tests {
         assert!(
             matches!(result, Err(IntakeError::Configuration { .. })),
             "invalid mode should return configuration error"
+        );
+    }
+
+    #[rstest]
+    fn run_with_service_returns_error_for_configuration_failure() {
+        let config = base_config();
+        let service = StubCommentRewriteService::failure(IntakeError::Configuration {
+            message: "AI API key is required".to_owned(),
+        });
+        let mut output = Vec::new();
+
+        let result = run_with_service(&mut output, &config, &service);
+
+        assert!(
+            matches!(result, Err(IntakeError::Configuration { .. })),
+            "configuration failures should be hard errors"
         );
     }
 }

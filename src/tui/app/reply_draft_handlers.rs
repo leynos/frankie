@@ -45,9 +45,19 @@ impl ReviewApp {
                 self.cancel_reply_draft();
                 None
             }
+            _ => self.handle_reply_draft_ai_msg(msg),
+        }
+    }
+
+    fn handle_reply_draft_ai_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
             AppMsg::ReplyDraftRequestAiRewrite { mode } => self.request_ai_rewrite(*mode),
-            AppMsg::ReplyDraftAiRewriteReady { mode, outcome } => {
-                self.handle_ai_rewrite_ready(*mode, outcome);
+            AppMsg::ReplyDraftAiRewriteReady {
+                request_id,
+                mode,
+                outcome,
+            } => {
+                self.handle_ai_rewrite_ready(*request_id, *mode, outcome);
                 None
             }
             AppMsg::ReplyDraftAiApply => {
@@ -73,6 +83,7 @@ impl ReviewApp {
             self.reply_draft_config.max_length,
         ));
         self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = None;
         self.error = None;
     }
 
@@ -131,6 +142,7 @@ impl ReviewApp {
         }
 
         self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = None;
         self.error = None;
     }
 
@@ -139,15 +151,10 @@ impl ReviewApp {
     }
 
     fn backspace_reply_draft(&mut self) {
-        match self.get_active_draft_for_editing() {
-            Ok(draft) => {
-                draft.backspace();
-                self.error = None;
-            }
-            Err(error) => {
-                self.error = Some(error);
-            }
-        }
+        self.with_active_draft_operation(|draft| {
+            draft.backspace();
+            Ok::<(), String>(())
+        });
     }
 
     fn request_reply_send(&mut self) {
@@ -157,6 +164,7 @@ impl ReviewApp {
     fn cancel_reply_draft(&mut self) {
         self.reply_draft = None;
         self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = None;
         self.error = None;
     }
 
@@ -173,6 +181,7 @@ impl ReviewApp {
                     self.error = Some(error.to_string());
                 } else {
                     self.reply_draft_ai_preview = None;
+                    self.in_flight_ai_rewrite_request_id = None;
                     self.error = None;
                 }
             }
@@ -233,20 +242,31 @@ impl ReviewApp {
 
         let request =
             CommentRewriteRequest::new(mode, source_text, CommentRewriteContext::from(&comment));
+        let request_id = self.next_ai_rewrite_request_id;
+        self.next_ai_rewrite_request_id = self.next_ai_rewrite_request_id.saturating_add(1);
 
+        self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = Some(request_id);
         self.error = None;
         Some(spawn_ai_rewrite_request(
             Arc::clone(&self.comment_rewrite_service),
             request,
             mode,
+            request_id,
         ))
     }
 
     fn handle_ai_rewrite_ready(
         &mut self,
+        request_id: u64,
         mode: CommentRewriteMode,
         outcome: &CommentRewriteOutcome,
     ) {
+        if self.in_flight_ai_rewrite_request_id != Some(request_id) {
+            return;
+        }
+        self.in_flight_ai_rewrite_request_id = None;
+
         match outcome {
             CommentRewriteOutcome::Generated(generated) => {
                 let Some(comment_id) = self.selected_comment().map(|comment| comment.id) else {
@@ -312,7 +332,9 @@ fn spawn_ai_rewrite_request(
     service: Arc<dyn CommentRewriteService>,
     request: CommentRewriteRequest,
     mode: CommentRewriteMode,
+    request_id: u64,
 ) -> Cmd {
+    let original_text = request.source_text().to_owned();
     Box::pin(async move {
         let outcome = match tokio::task::spawn_blocking(move || {
             rewrite_with_fallback(service.as_ref(), &request)
@@ -321,12 +343,16 @@ fn spawn_ai_rewrite_request(
         {
             Ok(outcome) => outcome,
             Err(error) => CommentRewriteOutcome::fallback(
-                String::new(),
+                original_text,
                 format!("AI rewrite task failed: {error}"),
             ),
         };
 
-        Some(Box::new(AppMsg::ReplyDraftAiRewriteReady { mode, outcome }) as Box<dyn Any + Send>)
+        Some(Box::new(AppMsg::ReplyDraftAiRewriteReady {
+            request_id,
+            mode,
+            outcome,
+        }) as Box<dyn Any + Send>)
     })
 }
 

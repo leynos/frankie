@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use bubbletea_rs::Cmd;
 use bubbletea_rs::Model;
-use frankie::ai::{CommentRewriteMode, CommentRewriteRequest, CommentRewriteService};
+use frankie::ai::comment_rewrite::test_support::StubCommentRewriteService;
+use frankie::ai::{CommentRewriteMode, CommentRewriteService};
 use frankie::github::IntakeError;
 use frankie::github::models::ReviewComment;
 use frankie::github::models::test_support::minimal_review;
@@ -19,17 +20,6 @@ struct AiRewriteState {
     app: Slot<ReviewApp>,
     rendered_view: Slot<String>,
     pending_cmd: Slot<Option<Cmd>>,
-}
-
-#[derive(Debug)]
-struct StubRewriteService {
-    response: Result<String, IntakeError>,
-}
-
-impl CommentRewriteService for StubRewriteService {
-    fn rewrite_text(&self, _request: &CommentRewriteRequest) -> Result<String, IntakeError> {
-        self.response.clone()
-    }
 }
 
 #[fixture]
@@ -60,20 +50,20 @@ fn parse_mode(mode: &str) -> Result<CommentRewriteMode, Box<dyn std::error::Erro
 
 #[given("a review TUI with AI rewrite succeeding to {text}")]
 fn given_tui_with_success(ai_rewrite_state: &AiRewriteState, text: String) {
-    let app = build_app_with_service(Arc::new(StubRewriteService {
-        response: Ok(text.trim_matches('"').to_owned()),
-    }));
+    let app = build_app_with_service(Arc::new(StubCommentRewriteService::success(
+        text.trim_matches('"').to_owned(),
+    )));
     ai_rewrite_state.app.set(app);
     ai_rewrite_state.pending_cmd.set(None);
 }
 
 #[given("a review TUI with AI rewrite failing with {text}")]
 fn given_tui_with_failure(ai_rewrite_state: &AiRewriteState, text: String) {
-    let app = build_app_with_service(Arc::new(StubRewriteService {
-        response: Err(IntakeError::Network {
+    let app = build_app_with_service(Arc::new(StubCommentRewriteService::failure(
+        IntakeError::Network {
             message: text.trim_matches('"').to_owned(),
-        }),
-    }));
+        },
+    )));
     ai_rewrite_state.app.set(app);
     ai_rewrite_state.pending_cmd.set(None);
 }

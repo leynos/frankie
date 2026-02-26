@@ -43,10 +43,7 @@ fn split_lines_preserving_empty(text: &str) -> Vec<String> {
         return vec![String::new()];
     }
 
-    let mut lines: Vec<String> = text.split('\n').map(ToOwned::to_owned).collect();
-    if lines.is_empty() {
-        lines.push(String::new());
-    }
+    let lines: Vec<String> = text.split('\n').map(ToOwned::to_owned).collect();
     lines
 }
 

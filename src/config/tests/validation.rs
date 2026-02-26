@@ -55,6 +55,22 @@ fn validates_when_ai_rewrite_mode_and_text_are_both_set() {
     FrankieConfig { ai_rewrite_text: Some("hello".to_owned()), ..Default::default() },
     "text without mode"
 )]
+#[case(
+    FrankieConfig {
+        ai_rewrite_mode: Some("   ".to_owned()),
+        ai_rewrite_text: Some("hello".to_owned()),
+        ..Default::default()
+    },
+    "blank mode with text"
+)]
+#[case(
+    FrankieConfig {
+        ai_rewrite_mode: Some("expand".to_owned()),
+        ai_rewrite_text: Some("   ".to_owned()),
+        ..Default::default()
+    },
+    "mode with blank text"
+)]
 fn rejects_incomplete_ai_rewrite_configuration(
     #[case] config: FrankieConfig,
     #[case] description: &str,

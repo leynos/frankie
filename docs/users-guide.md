@@ -145,7 +145,7 @@ Run non-interactive AI text rewriting with `expand` or `reword` mode:
 ```bash
 frankie \
   --ai-rewrite-mode expand \
-  --ai-rewrite-text "Thanks, I will update this." \
+  --ai-rewrite-text "Thanks, this will be updated." \
   --ai-api-key sk_example
 ```
 
@@ -286,7 +286,7 @@ configured maximum, the change is rejected and an inline error is shown.
 the reply to GitHub yet.
 
 When AI rewrite succeeds, Frankie shows a side-by-side preview and labels the
-candidate as `AI-originated` before you apply it. If the AI call fails, Frankie
+candidate as `AI-originated` before applying it. If the AI call fails, Frankie
 keeps the original draft and surfaces a fallback error.
 
 Reply drafting can be configured through the same config layering as other

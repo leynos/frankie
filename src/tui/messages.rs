@@ -108,6 +108,8 @@ pub enum AppMsg {
     },
     /// AI rewrite request completed with generated or fallback outcome.
     ReplyDraftAiRewriteReady {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
         /// Rewrite mode that was requested.
         mode: CommentRewriteMode,
         /// Provider outcome used to update preview or errors.

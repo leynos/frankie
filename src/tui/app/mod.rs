@@ -46,16 +46,10 @@ mod reply_draft_handlers;
 mod routing;
 mod sync_handlers;
 mod time_travel_handlers;
+mod view_mode;
 
 use routing::MessageRouting;
-
-/// Layout rows reserved for header, filter bar, separator newline, and status bar.
-const CHROME_HEIGHT: usize = 4;
-/// Minimum rows reserved for the comment detail pane to keep detail area visible.
-const MIN_DETAIL_HEIGHT: usize = 2;
-/// Minimum rows for the review list, ensuring at least one row is visible
-/// even when the terminal height is very small.
-const MIN_LIST_HEIGHT: usize = 1;
+pub(crate) use view_mode::{CHROME_HEIGHT, MIN_DETAIL_HEIGHT, MIN_LIST_HEIGHT, ViewMode};
 
 /// Main application model for the review listing TUI.
 #[derive(Debug)]
@@ -110,6 +104,10 @@ pub struct ReviewApp {
     reply_draft: Option<ReplyDraftState>,
     /// Pending AI rewrite preview for the active draft, if any.
     reply_draft_ai_preview: Option<ReplyDraftAiPreview>,
+    /// Monotonic request ID used to identify stale async rewrite completions.
+    next_ai_rewrite_request_id: u64,
+    /// Most recent in-flight rewrite request ID, if one is pending.
+    in_flight_ai_rewrite_request_id: Option<u64>,
     /// Reply-drafting templates and max-length configuration.
     reply_draft_config: ReplyDraftConfig,
     /// Service used to perform AI rewrite requests.
@@ -127,14 +125,6 @@ pub(crate) struct ReplyDraftAiPreview {
     pub origin_label: String,
     /// Side-by-side preview model.
     pub side_by_side_preview: SideBySideDiffPreview,
-}
-
-/// Tracks which view is currently active in the TUI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ViewMode {
-    ReviewList,
-    DiffContext,
-    TimeTravel,
 }
 
 impl ReviewApp {
@@ -188,6 +178,8 @@ impl ReviewApp {
             resume_prompt: None,
             reply_draft: None,
             reply_draft_ai_preview: None,
+            next_ai_rewrite_request_id: 1,
+            in_flight_ai_rewrite_request_id: None,
             reply_draft_config: super::get_reply_draft_config(),
             comment_rewrite_service: super::get_comment_rewrite_service(),
         };

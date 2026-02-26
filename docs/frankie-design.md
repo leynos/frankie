@@ -3058,9 +3058,9 @@ and graceful failure handling across both TUI and CLI surfaces.
 - A shared side-by-side preview model used by both TUI and CLI adapters.
 - A mandatory `AI-originated` provenance label on generated candidates.
 
-In the TUI, rewrite requests are asynchronous and always previewed before
-apply. In CLI mode, generated and fallback outcomes are rendered using the same
-shared outcome contract.
+In the TUI, rewrite requests are asynchronous and always shown in a preview
+before being applied. In CLI mode, generated and fallback outcomes are rendered
+using the same shared outcome contract.
 
 **Rationale**:
 

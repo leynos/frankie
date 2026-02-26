@@ -471,8 +471,16 @@ impl FrankieConfig {
             });
         }
 
-        let mode_without_text = self.ai_rewrite_mode.is_some() && self.ai_rewrite_text.is_none();
-        let text_without_mode = self.ai_rewrite_mode.is_none() && self.ai_rewrite_text.is_some();
+        let mode_present = self
+            .ai_rewrite_mode
+            .as_ref()
+            .is_some_and(|mode| !mode.trim().is_empty());
+        let text_present = self
+            .ai_rewrite_text
+            .as_ref()
+            .is_some_and(|text| !text.trim().is_empty());
+        let mode_without_text = mode_present && !text_present;
+        let text_without_mode = !mode_present && text_present;
         if mode_without_text || text_without_mode {
             return Err(IntakeError::Configuration {
                 message: concat!(

@@ -1,4 +1,4 @@
-# Implement AI-powered comment expansion and rewording
+# Implement artificial intelligence (AI)-powered comment expansion and rewording
 
 This execution plan (ExecPlan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
@@ -20,17 +20,20 @@ generated content, and apply or discard the suggestion. If the AI request
 fails, Frankie keeps the original draft and surfaces a clear fallback message
 instead of breaking the flow.
 
-This step must ship as shared library behaviour with both TUI and CLI adapters,
-with deterministic tests for happy/unhappy paths and edge cases.
+This step must ship as shared library behaviour with both text-based user
+interface (TUI) and command-line interface (CLI) adapters, with deterministic
+tests for happy/unhappy paths and edge cases.
 
 Success is observable when:
 
-- TUI reply drafting can request `expand` and `reword` actions.
+- text-based user interface (TUI) reply drafting can request `expand` and
+  `reword` actions.
 - Generated text is explicitly labelled as AI-originated.
 - A side-by-side diff preview is shown before applying AI text.
 - AI call failures degrade gracefully (original draft preserved, actionable
   message shown).
-- The same core behaviour is available via a non-interactive CLI path.
+- The same core behaviour is available via a non-interactive command-line
+  interface (CLI) path.
 - Unit tests (`rstest`) and behavioural tests (`rstest-bdd` v0.5.0) pass for
   both successful and failing AI interactions.
 - `docs/frankie-design.md`, `docs/users-guide.md`, and `docs/roadmap.md` are
@@ -136,7 +139,7 @@ Success is observable when:
   with deterministic output contracts (`Generated` and `Fallback`). Rationale:
   guarantees parity between TUI and CLI surfaces while keeping tests
   independent of UI details. Date/Author: 2026-02-25 / plan author.
-- Decision: require explicit AI-origin labeling in the domain model (not just
+- Decision: require explicit AI-origin labelling in the domain model (not just
   render text) so both adapters cannot omit provenance accidentally. Rationale:
   acceptance requires generated text be labelled AI-originated. Date/Author:
   2026-02-25 / plan author.
@@ -144,9 +147,10 @@ Success is observable when:
   fixtures in behavioural tests. Rationale: deterministic local simulation is
   required and avoids flaky external calls. Date/Author: 2026-02-25 / plan
   author.
-- Decision: apply roadmap ADR practice by adding a new ADR entry in
-  `docs/frankie-design.md` for this feature. Rationale: user explicitly
-  requires design-decision capture. Date/Author: 2026-02-25 / plan author.
+- Decision: apply roadmap architecture decision record (ADR) practice by
+  adding a new ADR entry in `docs/frankie-design.md` for this feature.
+  Rationale: user explicitly requires design-decision capture. Date/Author:
+  2026-02-25 / plan author.
 - Decision: map AI rewrite keys to uppercase (`E`, `W`, `Y`, `N`) in
   reply-draft mode. Rationale: preserves lowercase free-text editing while
   keeping rewrite/apply/discard actions discoverable. Date/Author: 2026-02-26 /
@@ -160,7 +164,7 @@ Implemented and validated:
   preview models reused by both adapters.
 - OpenAI-compatible rewrite adapter with deterministic `vidaimock` tests for
   success and malformed-response fallback.
-- New non-interactive CLI mode (`AiRewrite`) with provenance labeling,
+- New non-interactive CLI mode (`AiRewrite`) with provenance labelling,
   side-by-side preview output, and graceful fallback output.
 - TUI reply-draft AI workflow with async rewrite requests, side-by-side preview
   rendering, apply/discard controls, and fallback error handling.
@@ -214,7 +218,7 @@ Introduce a dedicated shared module for AI rewrite behaviour, for example:
 - `src/ai/comment_rewrite/mod.rs`
 - `src/ai/comment_rewrite/model.rs`
 - `src/ai/comment_rewrite/service.rs`
-- `src/ai/comment_rewrite/diff_preview.rs`
+- `src/ai/comment_rewrite/preview.rs`
 
 Define stable types and trait boundaries:
 
@@ -228,7 +232,7 @@ Define stable types and trait boundaries:
 
 Go/no-go for Stage A:
 
-- Go when unit tests validate mode mapping, provenance labeling, and fallback
+- Go when unit tests validate mode mapping, provenance labelling, and fallback
   invariants.
 - No-go if contracts cannot express fallback and preview requirements without UI
   coupling.
@@ -264,11 +268,11 @@ Go/no-go for Stage B:
 
 Extend reply-draft mode with AI rewrite interactions.
 
-Likely touch points:
+Likely touchpoints:
 
 - `src/tui/messages.rs`: add AI rewrite request/result/apply/cancel messages.
-- `src/tui/input.rs`: map new keys in reply-draft context (for example `e` for
-  expand, `w` for reword, `y` apply, `n` discard preview).
+- `src/tui/input.rs`: map new keys in reply-draft context (for example `E` for
+  expand, `W` for reword, `Y` apply, `N` discard preview).
 - `src/tui/app/reply_draft_handlers.rs`: call shared service and store pending
   candidate state.
 - `src/tui/components/comment_detail.rs`: render side-by-side preview and
@@ -291,7 +295,7 @@ Implementation direction:
 - Add a new CLI handler module (for example `src/cli/ai_rewrite.rs`) that:
   - accepts rewrite mode and source text/context input,
   - calls shared library service,
-  - prints labeled result and preview/diff,
+  - prints labelled result and preview/diff,
   - returns graceful fallback output when AI fails.
 - Update `src/main.rs` mode dispatch and config validation tests.
 
@@ -307,7 +311,7 @@ Add or extend tests in three layers.
 
 1. Unit tests (`rstest`):
    - request validation and mode handling,
-   - provenance labeling,
+   - provenance labelling,
    - diff-preview shaping,
    - fallback mapping for provider failure cases,
    - config parsing/operation-mode precedence.
