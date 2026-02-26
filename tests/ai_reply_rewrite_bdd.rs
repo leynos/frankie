@@ -167,32 +167,38 @@ fn when_view_is_rendered(ai_rewrite_state: &AiRewriteState) -> StepResult {
     Ok(())
 }
 
-#[then("the view contains {text}")]
-fn then_view_contains(ai_rewrite_state: &AiRewriteState, text: String) -> StepResult {
-    let expected = text.trim_matches('"');
+/// Asserts whether the rendered view contains the provided text fragment.
+fn assert_view_content(
+    ai_rewrite_state: &AiRewriteState,
+    text: String,
+    should_contain: bool,
+) -> StepResult {
+    let owned_text = text;
+    let expected = owned_text.trim_matches('"');
     let view = ai_rewrite_state
         .rendered_view
         .with_ref(Clone::clone)
         .ok_or("view should be rendered before assertions")?;
-    if !view.contains(expected) {
-        return Err(format!("expected view to contain '{expected}', got:\n{view}").into());
+    if view.contains(expected) != should_contain {
+        let verb = if should_contain {
+            "contain"
+        } else {
+            "not contain"
+        };
+        return Err(format!("expected view to {verb} '{expected}', got:\n{view}").into());
     }
 
     Ok(())
 }
 
+#[then("the view contains {text}")]
+fn then_view_contains(ai_rewrite_state: &AiRewriteState, text: String) -> StepResult {
+    assert_view_content(ai_rewrite_state, text, true)
+}
+
 #[then("the view does not contain {text}")]
 fn then_view_does_not_contain(ai_rewrite_state: &AiRewriteState, text: String) -> StepResult {
-    let expected = text.trim_matches('"');
-    let view = ai_rewrite_state
-        .rendered_view
-        .with_ref(Clone::clone)
-        .ok_or("view should be rendered before assertions")?;
-    if view.contains(expected) {
-        return Err(format!("expected view to not contain '{expected}', got:\n{view}").into());
-    }
-
-    Ok(())
+    assert_view_content(ai_rewrite_state, text, false)
 }
 
 #[then("the TUI error contains {text}")]

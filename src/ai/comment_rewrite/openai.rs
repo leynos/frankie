@@ -85,12 +85,9 @@ impl OpenAiCommentRewriteService {
     pub const fn new(config: OpenAiCommentRewriteConfig) -> Self {
         Self { config }
     }
-}
 
-impl CommentRewriteService for OpenAiCommentRewriteService {
-    fn rewrite_text(&self, request: &CommentRewriteRequest) -> Result<String, IntakeError> {
-        let api_key = self
-            .config
+    fn extract_api_key(&self) -> Result<&str, IntakeError> {
+        self.config
             .api_key
             .as_deref()
             .ok_or_else(|| IntakeError::Configuration {
@@ -99,15 +96,20 @@ impl CommentRewriteService for OpenAiCommentRewriteService {
                     "FRANKIE_AI_API_KEY, or OPENAI_API_KEY)"
                 )
                 .to_owned(),
-            })?;
+            })
+    }
 
-        let endpoint = format!(
+    fn build_endpoint(&self) -> String {
+        format!(
             "{}/chat/completions",
             self.config.base_url.trim_end_matches('/')
-        );
+        )
+    }
+
+    fn build_chat_payload(&self, request: &CommentRewriteRequest) -> ChatCompletionsRequest<'_> {
         let prompt = build_prompt(request);
 
-        let payload = ChatCompletionsRequest {
+        ChatCompletionsRequest {
             model: self.config.model.as_str(),
             messages: vec![
                 ChatCompletionsMessage {
@@ -119,37 +121,66 @@ impl CommentRewriteService for OpenAiCommentRewriteService {
                     content: prompt,
                 },
             ],
-        };
+        }
+    }
 
-        let client = Client::builder()
+    fn create_http_client(&self) -> Result<Client, IntakeError> {
+        Client::builder()
             .timeout(self.config.timeout)
             .build()
             .map_err(|error| IntakeError::Configuration {
                 message: format!("failed to configure AI HTTP client: {error}"),
-            })?;
+            })
+    }
 
-        let mut request_builder = client.post(endpoint).bearer_auth(api_key).json(&payload);
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Signature is required by the requested refactor contract"
+    )]
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "Signature is required by the requested refactor contract"
+    )]
+    fn build_request(
+        &self,
+        client: &Client,
+        endpoint: &str,
+        api_key: &str,
+        payload: &ChatCompletionsRequest<'_>,
+    ) -> Result<reqwest::blocking::RequestBuilder, IntakeError> {
+        let mut request_builder = client.post(endpoint).bearer_auth(api_key).json(payload);
         for (name, value) in &self.config.additional_headers {
             request_builder = request_builder.header(name, value);
         }
+        Ok(request_builder)
+    }
 
-        let response = request_builder
-            .send()
-            .map_err(|error| IntakeError::Network {
-                message: format!("AI request transport failed: {error}"),
-            })?;
+    #[expect(
+        clippy::unused_self,
+        reason = "Signature is required by the requested refactor contract"
+    )]
+    fn handle_error_response(
+        &self,
+        response: reqwest::blocking::Response,
+    ) -> Result<String, IntakeError> {
+        let status = response.status();
+        let body = response.text().map_or_else(
+            |_| "(failed to read error response body)".to_owned(),
+            |content| truncate_for_message(content.as_str(), 160),
+        );
+        Err(IntakeError::Api {
+            message: format!("AI request failed with status {}: {body}", status.as_u16()),
+        })
+    }
 
-        if response.status() != StatusCode::OK {
-            let status = response.status();
-            let body = response.text().map_or_else(
-                |_| "(failed to read error response body)".to_owned(),
-                |content| truncate_for_message(content.as_str(), 160),
-            );
-            return Err(IntakeError::Api {
-                message: format!("AI request failed with status {}: {body}", status.as_u16()),
-            });
-        }
-
+    #[expect(
+        clippy::unused_self,
+        reason = "Signature is required by the requested refactor contract"
+    )]
+    fn extract_response_text(
+        &self,
+        response: reqwest::blocking::Response,
+    ) -> Result<String, IntakeError> {
         let response_payload: ChatCompletionsResponse =
             response.json().map_err(|error| IntakeError::Api {
                 message: format!("AI response JSON decoding failed: {error}"),
@@ -165,6 +196,28 @@ impl CommentRewriteService for OpenAiCommentRewriteService {
             .ok_or_else(|| IntakeError::Api {
                 message: "AI response did not contain assistant text".to_owned(),
             })
+    }
+}
+
+impl CommentRewriteService for OpenAiCommentRewriteService {
+    fn rewrite_text(&self, request: &CommentRewriteRequest) -> Result<String, IntakeError> {
+        let api_key = self.extract_api_key()?;
+        let endpoint = self.build_endpoint();
+        let payload = self.build_chat_payload(request);
+        let client = self.create_http_client()?;
+        let request_builder = self.build_request(&client, endpoint.as_str(), api_key, &payload)?;
+
+        let response = request_builder
+            .send()
+            .map_err(|error| IntakeError::Network {
+                message: format!("AI request transport failed: {error}"),
+            })?;
+
+        if response.status() != StatusCode::OK {
+            return self.handle_error_response(response);
+        }
+
+        self.extract_response_text(response)
     }
 }
 

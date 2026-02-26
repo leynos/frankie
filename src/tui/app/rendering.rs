@@ -55,21 +55,11 @@ impl ReviewApp {
         }
 
         if let Some(codex_status) = &self.codex_status {
-            let running_suffix = if self.is_codex_running() {
-                " (running)"
-            } else {
-                ""
-            };
-            return format!("Codex: {codex_status}{running_suffix}\n");
+            return self.render_codex_status(codex_status);
         }
 
         if self.has_reply_draft() {
-            if self.has_reply_draft_ai_preview() {
-                return "Reply draft: Y:apply  N:discard  text:edit  Enter:ready  Esc:cancel\n"
-                    .to_owned();
-            }
-            return "Reply draft: 1-9:template  E:expand  W:reword  text:edit  Backspace:delete  Enter:ready  Esc:cancel\n"
-                .to_owned();
+            return self.render_reply_draft_status();
         }
 
         let hints = match self.view_mode {
@@ -78,6 +68,24 @@ impl ReviewApp {
             super::ViewMode::TimeTravel => "h/l:commits  Esc:back  ?:help  q:quit",
         };
         format!("{hints}\n")
+    }
+
+    fn render_codex_status(&self, status: &str) -> String {
+        let running_suffix = if self.is_codex_running() {
+            " (running)"
+        } else {
+            ""
+        };
+        format!("Codex: {status}{running_suffix}\n")
+    }
+
+    fn render_reply_draft_status(&self) -> String {
+        if self.has_reply_draft_ai_preview() {
+            "Reply draft: Y:apply  N:discard  text:edit  Enter:ready  Esc:cancel\n".to_owned()
+        } else {
+            "Reply draft: 1-9:template  E:expand  W:reword  text:edit  Backspace:delete  Enter:ready  Esc:cancel\n"
+                .to_owned()
+        }
     }
 
     /// Renders the help overlay if visible.
