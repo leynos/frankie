@@ -323,62 +323,59 @@ async fn ai_rewrite_preview_can_be_discarded() -> Result<(), &'static str> {
     Ok(())
 }
 
-#[test]
-fn ai_rewrite_request_with_empty_draft_sets_error_and_returns_no_command() {
-    let mut app = ReviewApp::new(sample_reviews())
-        .with_comment_rewrite_service(Arc::new(StubCommentRewriteService::success("unused")));
-
-    app.handle_message(&AppMsg::StartReplyDraft);
-
+/// Helper to assert that an AI rewrite request on an invalid draft state
+/// returns no command and sets the expected error message.
+fn assert_ai_rewrite_request_fails_with_error<F>(setup: F, expected_error: &str)
+where
+    F: FnOnce() -> ReviewApp,
+{
+    let mut app = setup();
     let maybe_cmd = app.handle_message(&AppMsg::ReplyDraftRequestAiRewrite {
         mode: CommentRewriteMode::Expand,
     });
 
     assert!(
         maybe_cmd.is_none(),
-        "empty drafts should not dispatch commands"
+        "invalid draft state should not dispatch commands"
     );
-    assert_eq!(
-        app.error_message(),
-        Some("Reply draft is empty; type text before AI rewrite.")
+    assert_eq!(app.error_message(), Some(expected_error));
+}
+
+#[test]
+fn ai_rewrite_request_with_empty_draft_sets_error_and_returns_no_command() {
+    assert_ai_rewrite_request_fails_with_error(
+        || {
+            let mut app = ReviewApp::new(sample_reviews()).with_comment_rewrite_service(Arc::new(
+                StubCommentRewriteService::success("unused"),
+            ));
+            app.handle_message(&AppMsg::StartReplyDraft);
+            app
+        },
+        "Reply draft is empty; type text before AI rewrite.",
     );
 }
 
 #[test]
 fn ai_rewrite_request_without_active_draft_sets_error_and_returns_no_command() {
-    let mut app = ReviewApp::new(sample_reviews())
-        .with_comment_rewrite_service(Arc::new(StubCommentRewriteService::success("unused")));
-
-    let maybe_cmd = app.handle_message(&AppMsg::ReplyDraftRequestAiRewrite {
-        mode: CommentRewriteMode::Expand,
-    });
-
-    assert!(
-        maybe_cmd.is_none(),
-        "missing active draft should not dispatch commands"
-    );
-    assert_eq!(
-        app.error_message(),
-        Some("No active reply draft. Press 'a' to start drafting.")
+    assert_ai_rewrite_request_fails_with_error(
+        || {
+            ReviewApp::new(sample_reviews()).with_comment_rewrite_service(Arc::new(
+                StubCommentRewriteService::success("unused"),
+            ))
+        },
+        "No active reply draft. Press 'a' to start drafting.",
     );
 }
 
 #[test]
 fn ai_rewrite_request_without_selected_comment_sets_error_and_returns_no_command() {
-    let mut app = ReviewApp::empty()
-        .with_comment_rewrite_service(Arc::new(StubCommentRewriteService::success("unused")));
-
-    let maybe_cmd = app.handle_message(&AppMsg::ReplyDraftRequestAiRewrite {
-        mode: CommentRewriteMode::Expand,
-    });
-
-    assert!(
-        maybe_cmd.is_none(),
-        "missing selection should not dispatch commands"
-    );
-    assert_eq!(
-        app.error_message(),
-        Some("Reply drafting requires a selected comment")
+    assert_ai_rewrite_request_fails_with_error(
+        || {
+            ReviewApp::empty().with_comment_rewrite_service(Arc::new(
+                StubCommentRewriteService::success("unused"),
+            ))
+        },
+        "Reply drafting requires a selected comment",
     );
 }
 
