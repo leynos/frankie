@@ -109,21 +109,6 @@ fn export_takes_precedence_over_pr_identifier() {
 }
 
 #[rstest]
-fn ai_rewrite_mode_is_selected_when_rewrite_fields_present() {
-    let config = FrankieConfig {
-        ai_rewrite_mode: Some("expand".to_owned()),
-        ai_rewrite_text: Some("hello".to_owned()),
-        ..Default::default()
-    };
-
-    assert_eq!(
-        config.operation_mode(),
-        OperationMode::AiRewrite,
-        "ai rewrite fields should select AiRewrite mode"
-    );
-}
-
-#[rstest]
 fn ai_rewrite_takes_precedence_over_export() {
     let config = FrankieConfig {
         ai_rewrite_mode: Some("reword".to_owned()),
@@ -140,18 +125,31 @@ fn ai_rewrite_takes_precedence_over_export() {
 }
 
 #[rstest]
-fn whitespace_only_ai_rewrite_fields_do_not_select_ai_rewrite_mode() {
+#[case(
+    Some("expand".to_owned()),
+    Some("hello".to_owned()),
+    OperationMode::AiRewrite,
+    "ai rewrite fields should select AiRewrite mode"
+)]
+#[case(
+    Some("   ".to_owned()),
+    Some("\t".to_owned()),
+    OperationMode::Interactive,
+    "whitespace-only rewrite fields should not enable AiRewrite mode"
+)]
+fn ai_rewrite_mode_selection(
+    #[case] ai_rewrite_mode: Option<String>,
+    #[case] ai_rewrite_text: Option<String>,
+    #[case] expected_mode: OperationMode,
+    #[case] description: &str,
+) {
     let config = FrankieConfig {
-        ai_rewrite_mode: Some("   ".to_owned()),
-        ai_rewrite_text: Some("\t".to_owned()),
+        ai_rewrite_mode,
+        ai_rewrite_text,
         ..Default::default()
     };
 
-    assert_eq!(
-        config.operation_mode(),
-        OperationMode::Interactive,
-        "whitespace-only rewrite fields should not enable AiRewrite mode"
-    );
+    assert_eq!(config.operation_mode(), expected_mode, "{description}");
 }
 
 #[rstest]
