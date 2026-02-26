@@ -79,6 +79,13 @@ pub struct OpenAiCommentRewriteService {
     config: OpenAiCommentRewriteConfig,
 }
 
+/// Parameters for building an HTTP request to the AI service.
+struct RequestParams<'a> {
+    endpoint: String,
+    api_key: &'a str,
+    payload: ChatCompletionsRequest<'a>,
+}
+
 impl OpenAiCommentRewriteService {
     /// Creates a service from explicit configuration.
     #[must_use]
@@ -134,21 +141,18 @@ impl OpenAiCommentRewriteService {
     }
 
     #[expect(
-        clippy::too_many_arguments,
-        reason = "Signature is required by the requested refactor contract"
-    )]
-    #[expect(
         clippy::unnecessary_wraps,
         reason = "Signature is required by the requested refactor contract"
     )]
     fn build_request(
         &self,
         client: &Client,
-        endpoint: &str,
-        api_key: &str,
-        payload: &ChatCompletionsRequest<'_>,
+        params: &RequestParams<'_>,
     ) -> Result<reqwest::blocking::RequestBuilder, IntakeError> {
-        let mut request_builder = client.post(endpoint).bearer_auth(api_key).json(payload);
+        let mut request_builder = client
+            .post(&params.endpoint)
+            .bearer_auth(params.api_key)
+            .json(&params.payload);
         for (name, value) in &self.config.additional_headers {
             request_builder = request_builder.header(name, value);
         }
@@ -205,7 +209,12 @@ impl CommentRewriteService for OpenAiCommentRewriteService {
         let endpoint = self.build_endpoint();
         let payload = self.build_chat_payload(request);
         let client = self.create_http_client()?;
-        let request_builder = self.build_request(&client, endpoint.as_str(), api_key, &payload)?;
+        let params = RequestParams {
+            endpoint,
+            api_key,
+            payload,
+        };
+        let request_builder = self.build_request(&client, &params)?;
 
         let response = request_builder
             .send()
