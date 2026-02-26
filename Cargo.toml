@@ -25,6 +25,7 @@ git2 = "0.20.3"
 chrono = { version = "0.4.43", features = ["serde"] }
 cap-std = { version = "4.0.0", features = ["fs_utf8"] }
 tracing = "0.1.41"
+reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 # TUI framework
 bubbletea-rs = "0.0.9"

@@ -109,6 +109,37 @@ fn export_takes_precedence_over_pr_identifier() {
 }
 
 #[rstest]
+fn ai_rewrite_mode_is_selected_when_rewrite_fields_present() {
+    let config = FrankieConfig {
+        ai_rewrite_mode: Some("expand".to_owned()),
+        ai_rewrite_text: Some("hello".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::AiRewrite,
+        "ai rewrite fields should select AiRewrite mode"
+    );
+}
+
+#[rstest]
+fn ai_rewrite_takes_precedence_over_export() {
+    let config = FrankieConfig {
+        ai_rewrite_mode: Some("reword".to_owned()),
+        ai_rewrite_text: Some("hello".to_owned()),
+        export: Some("markdown".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::AiRewrite,
+        "ai rewrite mode should take precedence over export mode"
+    );
+}
+
+#[rstest]
 fn pr_identifier_url_triggers_review_tui() {
     let config = FrankieConfig {
         pr_identifier: Some("https://github.com/o/r/pull/1".to_owned()),

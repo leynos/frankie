@@ -31,6 +31,8 @@ pub enum OperationMode {
     ReviewTui,
     /// Export review comments in structured format.
     ExportComments,
+    /// AI-powered draft rewrite mode.
+    AiRewrite,
 }
 
 /// Application configuration supporting CLI, environment, and file sources.
@@ -45,6 +47,12 @@ pub enum OperationMode {
 /// - `FRANKIE_TEMPLATE` or `--template`: Template file path for custom export
 /// - `FRANKIE_REPLY_MAX_LENGTH` or `--reply-max-length`: Max reply length
 /// - `FRANKIE_REPLY_TEMPLATES` or `--reply-templates`: Reply templates
+/// - `FRANKIE_AI_REWRITE_MODE` or `--ai-rewrite-mode`: Rewrite mode
+/// - `FRANKIE_AI_REWRITE_TEXT` or `--ai-rewrite-text`: Source draft text
+/// - `FRANKIE_AI_BASE_URL` or `--ai-base-url`: AI API base URL
+/// - `FRANKIE_AI_MODEL` or `--ai-model`: AI model identifier
+/// - `FRANKIE_AI_API_KEY`, `OPENAI_API_KEY`, or `--ai-api-key`: AI API key
+/// - `FRANKIE_AI_TIMEOUT_SECONDS` or `--ai-timeout-seconds`: Request timeout
 ///
 /// # Example
 ///
@@ -234,6 +242,36 @@ pub struct FrankieConfig {
     #[ortho_config()]
     pub reply_templates: Vec<String>,
 
+    /// Rewrite mode for non-interactive AI draft rewriting.
+    ///
+    /// Valid values are `expand` and `reword`.
+    #[ortho_config()]
+    pub ai_rewrite_mode: Option<String>,
+
+    /// Source draft text for non-interactive AI draft rewriting.
+    #[ortho_config()]
+    pub ai_rewrite_text: Option<String>,
+
+    /// Base URL for the OpenAI-compatible rewrite API.
+    ///
+    /// Defaults to `https://api.openai.com/v1`.
+    #[ortho_config()]
+    pub ai_base_url: String,
+
+    /// Model identifier used for rewrite requests.
+    ///
+    /// Defaults to `gpt-4o-mini`.
+    #[ortho_config()]
+    pub ai_model: String,
+
+    /// API key for OpenAI-compatible rewrite requests.
+    #[ortho_config()]
+    pub ai_api_key: Option<String>,
+
+    /// Timeout for AI rewrite requests, in seconds.
+    #[ortho_config()]
+    pub ai_timeout_seconds: u64,
+
     /// Positional PR identifier (bare number or full URL) extracted from
     /// command-line arguments before ortho-config processes the remaining
     /// flags. When set, the TUI is launched without requiring `-T`.
@@ -243,6 +281,9 @@ pub struct FrankieConfig {
 
 const DEFAULT_PR_METADATA_CACHE_TTL_SECONDS: u64 = 86_400;
 pub(crate) const DEFAULT_REPLY_MAX_LENGTH: usize = 500;
+pub(crate) const DEFAULT_AI_BASE_URL: &str = "https://api.openai.com/v1";
+pub(crate) const DEFAULT_AI_MODEL: &str = "gpt-4o-mini";
+pub(crate) const DEFAULT_AI_TIMEOUT_SECONDS: u64 = 20;
 
 impl Default for FrankieConfig {
     fn default() -> Self {
@@ -262,6 +303,12 @@ impl Default for FrankieConfig {
             repo_path: None,
             reply_max_length: DEFAULT_REPLY_MAX_LENGTH,
             reply_templates: default_reply_templates(),
+            ai_rewrite_mode: None,
+            ai_rewrite_text: None,
+            ai_base_url: DEFAULT_AI_BASE_URL.to_owned(),
+            ai_model: DEFAULT_AI_MODEL.to_owned(),
+            ai_api_key: None,
+            ai_timeout_seconds: DEFAULT_AI_TIMEOUT_SECONDS,
             pr_identifier: None,
         }
     }
@@ -300,6 +347,12 @@ impl FrankieConfig {
         "--repo-path",
         "--reply-max-length",
         "--reply-templates",
+        "--ai-rewrite-mode",
+        "--ai-rewrite-text",
+        "--ai-base-url",
+        "--ai-model",
+        "--ai-api-key",
+        "--ai-timeout-seconds",
         "--config-path",
     ];
 
@@ -319,6 +372,14 @@ impl FrankieConfig {
             .clone()
             .or_else(|| env::var("GITHUB_TOKEN").ok())
             .ok_or(IntakeError::MissingToken)
+    }
+
+    /// Resolves the AI API key from configuration or `OPENAI_API_KEY`.
+    #[must_use]
+    pub fn resolve_ai_api_key(&self) -> Option<String> {
+        self.ai_api_key
+            .clone()
+            .or_else(|| env::var("OPENAI_API_KEY").ok())
     }
 
     /// Returns the pull request URL or an error if missing.
@@ -344,6 +405,10 @@ impl FrankieConfig {
         self.export.is_some()
     }
 
+    const fn should_ai_rewrite(&self) -> bool {
+        self.ai_rewrite_mode.is_some() || self.ai_rewrite_text.is_some()
+    }
+
     const fn has_pr_identifier(&self) -> bool {
         self.pr_identifier.is_some()
     }
@@ -354,15 +419,17 @@ impl FrankieConfig {
 
     /// Determines the operation mode based on provided configuration.
     ///
-    /// Returns `ExportComments` if export format is set (PR URL validation
-    /// is deferred to `export_comments::run`), `ReviewTui` if a positional
-    /// PR identifier is present or TUI mode is enabled with a PR URL,
-    /// `SinglePullRequest` if a PR URL is provided without TUI or export,
-    /// `RepositoryListing` if both owner and repo are provided, or
-    /// `Interactive` otherwise.
+    /// Returns `AiRewrite` if AI rewrite fields are set, `ExportComments` if
+    /// export format is set (PR URL validation is deferred to
+    /// `export_comments::run`), `ReviewTui` if a positional PR identifier is
+    /// present or TUI mode is enabled with a PR URL, `SinglePullRequest` if a
+    /// PR URL is provided without TUI or export, `RepositoryListing` if both
+    /// owner and repo are provided, or `Interactive` otherwise.
     #[must_use]
     pub const fn operation_mode(&self) -> OperationMode {
-        if self.should_export_comments() {
+        if self.should_ai_rewrite() {
+            OperationMode::AiRewrite
+        } else if self.should_export_comments() {
             OperationMode::ExportComments
         } else if self.should_review_tui() {
             OperationMode::ReviewTui
@@ -403,6 +470,19 @@ impl FrankieConfig {
                 .to_owned(),
             });
         }
+
+        let mode_without_text = self.ai_rewrite_mode.is_some() && self.ai_rewrite_text.is_none();
+        let text_without_mode = self.ai_rewrite_mode.is_none() && self.ai_rewrite_text.is_some();
+        if mode_without_text || text_without_mode {
+            return Err(IntakeError::Configuration {
+                message: concat!(
+                    "--ai-rewrite-mode and --ai-rewrite-text must be provided ",
+                    "together"
+                )
+                .to_owned(),
+            });
+        }
+
         Ok(())
     }
 

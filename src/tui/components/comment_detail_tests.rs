@@ -17,12 +17,18 @@ fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
         max_width: 80,
         max_height: 0, // unlimited
         reply_draft: None,
+        reply_draft_ai_preview: None,
     };
     component.view(&ctx)
 }
 
 /// Helper to render a comment detail view with a reply draft for testing.
-fn render_comment_with_reply_draft(text: &str, char_count: usize, ready_to_send: bool) -> String {
+fn render_comment_with_reply_draft(
+    text: &str,
+    char_count: usize,
+    ready_to_send: bool,
+    origin_label: Option<&str>,
+) -> String {
     let component = CommentDetailComponent::new();
     let comment = ReviewCommentBuilder::new(1)
         .author("alice")
@@ -39,7 +45,9 @@ fn render_comment_with_reply_draft(text: &str, char_count: usize, ready_to_send:
             char_count,
             max_length: 120,
             ready_to_send,
+            origin_label,
         }),
+        reply_draft_ai_preview: None,
     };
     component.view(&ctx)
 }
@@ -305,7 +313,7 @@ fn truncate_to_height_exact_boundary() {
 
 #[test]
 fn view_renders_inline_reply_draft_when_present() {
-    let output = render_comment_with_reply_draft("Thanks for the review.", 22, true);
+    let output = render_comment_with_reply_draft("Thanks for the review.", 22, true, None);
 
     assert!(output.contains("Reply draft:"));
     assert!(output.contains("Thanks for the review."));
@@ -314,7 +322,7 @@ fn view_renders_inline_reply_draft_when_present() {
 
 #[test]
 fn view_renders_inline_reply_draft_empty_placeholder() {
-    let output = render_comment_with_reply_draft("", 0, true);
+    let output = render_comment_with_reply_draft("", 0, true, None);
 
     assert!(output.contains("(empty)"));
     assert!(output.contains("(ready to send)"));
@@ -322,8 +330,49 @@ fn view_renders_inline_reply_draft_empty_placeholder() {
 
 #[test]
 fn view_renders_inline_reply_draft_without_ready_suffix() {
-    let output = render_comment_with_reply_draft("Work in progress", 16, false);
+    let output = render_comment_with_reply_draft("Work in progress", 16, false, None);
 
     assert!(output.contains("Work in progress"));
     assert!(!output.contains("(ready to send)"));
+}
+
+#[test]
+fn view_renders_ai_origin_label_for_reply_draft() {
+    let output = render_comment_with_reply_draft("AI suggestion", 13, false, Some("AI-originated"));
+
+    assert!(output.contains("Origin: AI-originated"));
+}
+
+#[test]
+fn view_renders_ai_preview_section() {
+    let component = CommentDetailComponent::new();
+    let comment = ReviewCommentBuilder::new(1)
+        .author("alice")
+        .file_path("src/main.rs")
+        .line_number(42)
+        .body("nit")
+        .build();
+    let preview_lines = vec![crate::ai::SideBySideLine {
+        original: "old".to_owned(),
+        candidate: "new".to_owned(),
+    }];
+    let ctx = CommentDetailViewContext {
+        selected_comment: Some(&comment),
+        max_width: 80,
+        max_height: 0,
+        reply_draft: None,
+        reply_draft_ai_preview: Some(ReplyDraftAiPreviewRenderContext {
+            mode: crate::ai::CommentRewriteMode::Expand,
+            origin_label: "AI-originated",
+            lines: preview_lines.as_slice(),
+            has_changes: true,
+        }),
+    };
+
+    let output = component.view(&ctx);
+
+    assert!(output.contains("AI rewrite preview (expand):"));
+    assert!(output.contains("Origin: AI-originated"));
+    assert!(output.contains("old || new"));
+    assert!(output.contains("Apply: Y  Discard: N"));
 }

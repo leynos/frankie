@@ -12,7 +12,7 @@ including loading individual pull requests and listing PRs for a repository.
 
 ## Operation modes
 
-Frankie supports five operation modes:
+Frankie supports six operation modes:
 
 1. **Interactive mode** — Auto-detect repository from local Git directory
 2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
@@ -22,6 +22,8 @@ Frankie supports five operation modes:
    for navigating and filtering review comments using `--tui` with `--pr-url`
 5. **Comment export mode** — Export review comments in structured formats using
    `--export` with `--pr-url`
+6. **AI rewrite mode** — Expand or reword draft text non-interactively using
+   `--ai-rewrite-mode` and `--ai-rewrite-text`
 
 ## Interactive mode (local discovery)
 
@@ -136,6 +138,27 @@ Frankie handles GitHub API rate limits gracefully:
 - The error includes information about when the rate limit resets, if
   available.
 
+## AI rewrite mode
+
+Run non-interactive AI text rewriting with `expand` or `reword` mode:
+
+```bash
+frankie \
+  --ai-rewrite-mode expand \
+  --ai-rewrite-text "Thanks, I will update this." \
+  --ai-api-key sk_example
+```
+
+The CLI output includes:
+
+- An explicit `AI-originated` label on generated text.
+- A side-by-side preview (`original || candidate`).
+- Graceful fallback output when the AI call fails, while preserving original
+  text.
+
+If `--ai-rewrite-mode` and `--ai-rewrite-text` are not provided together,
+Frankie returns a configuration error.
+
 ## Review TUI mode
 
 Launch an interactive terminal interface for navigating and filtering review
@@ -248,6 +271,8 @@ edited entirely from the keyboard.
 In reply-draft mode:
 
 - Use keys `1` to `9` to insert template slots 1 to 9.
+- Use `E` to request AI expansion and `W` to request AI rewording.
+- Use `Y` to apply the current AI preview, or `N` to discard it.
 - Type any printable key to edit the draft text.
 - Use `Backspace` to delete one character.
 - Mark the draft as ready to send with `Enter`.
@@ -259,6 +284,10 @@ configured maximum, the change is rejected and an inline error is shown.
 
 `Enter` only marks the draft as ready to send in this phase. It does not post
 the reply to GitHub yet.
+
+When AI rewrite succeeds, Frankie shows a side-by-side preview and labels the
+candidate as `AI-originated` before you apply it. If the AI call fails, Frankie
+keeps the original draft and surfaces a fallback error.
 
 Reply drafting can be configured through the same config layering as other
 Frankie settings:
@@ -599,6 +628,13 @@ Frankie searches for configuration files in this order:
 | `FRANKIE_TEMPLATE`                      | Template file path for custom export format         |
 | `FRANKIE_REPLY_MAX_LENGTH`              | Maximum character count for inline reply drafts     |
 | `FRANKIE_REPLY_TEMPLATES`               | JSON array of reply template strings for TUI insert |
+| `FRANKIE_AI_REWRITE_MODE`               | AI rewrite mode (`expand` or `reword`)              |
+| `FRANKIE_AI_REWRITE_TEXT`               | Source text for non-interactive AI rewrite          |
+| `FRANKIE_AI_BASE_URL`                   | OpenAI-compatible API base URL                      |
+| `FRANKIE_AI_MODEL`                      | Model name for AI rewrite requests                  |
+| `FRANKIE_AI_API_KEY`                    | API key for AI rewrite requests                     |
+| `OPENAI_API_KEY`                        | Fallback API key for AI rewrite requests            |
+| `FRANKIE_AI_TIMEOUT_SECONDS`            | Timeout for AI rewrite requests (seconds)           |
 | `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above) |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
@@ -623,6 +659,12 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--template <PATH>`                         | —     | Template file for custom export format            |
 | `--reply-max-length <COUNT>`                | —     | Maximum characters allowed in TUI reply drafts    |
 | `--reply-templates <JSON_ARRAY>`            | —     | Reply template list for keyboard insertion in TUI |
+| `--ai-rewrite-mode <MODE>`                  | —     | AI rewrite mode (`expand`, `reword`)              |
+| `--ai-rewrite-text <TEXT>`                  | —     | Source text for non-interactive AI rewrite        |
+| `--ai-base-url <URL>`                       | —     | OpenAI-compatible API base URL                    |
+| `--ai-model <MODEL>`                        | —     | Model name for AI rewrite requests                |
+| `--ai-api-key <KEY>`                        | —     | API key for AI rewrite requests                   |
+| `--ai-timeout-seconds <SECONDS>`            | —     | Timeout for AI rewrite requests                   |
 | `--help`                                    | `-h`  | Show help information                             |
 
 Run `frankie --help` to see all available options and their descriptions.

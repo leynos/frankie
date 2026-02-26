@@ -64,7 +64,11 @@ impl ReviewApp {
         }
 
         if self.has_reply_draft() {
-            return "Reply draft: 1-9:template  text:edit  Backspace:delete  Enter:ready  Esc:cancel\n"
+            if self.has_reply_draft_ai_preview() {
+                return "Reply draft: Y:apply  N:discard  text:edit  Enter:ready  Esc:cancel\n"
+                    .to_owned();
+            }
+            return "Reply draft: 1-9:template  E:expand  W:reword  text:edit  Backspace:delete  Enter:ready  Esc:cancel\n"
                 .to_owned();
         }
 
@@ -118,6 +122,10 @@ Time-travel:
 
 Reply draft:
   1-9        Insert template
+  E          AI expand draft
+  W          AI reword draft
+  Y          Apply AI preview
+  N          Discard AI preview
   text keys  Edit draft text
   Backspace  Delete one character
   Enter      Mark draft ready to send

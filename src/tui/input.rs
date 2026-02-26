@@ -4,6 +4,7 @@
 //! events into application messages.
 
 use super::messages::AppMsg;
+use crate::ai::CommentRewriteMode;
 
 /// View mode for context-aware key mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -98,6 +99,14 @@ pub const fn map_key_to_message_with_context(
             KeyCode::Enter => Some(AppMsg::ReplyDraftRequestSend),
             KeyCode::Backspace => Some(AppMsg::ReplyDraftBackspace),
             KeyCode::Esc => Some(AppMsg::ReplyDraftCancel),
+            KeyCode::Char('E') => Some(AppMsg::ReplyDraftRequestAiRewrite {
+                mode: CommentRewriteMode::Expand,
+            }),
+            KeyCode::Char('W') => Some(AppMsg::ReplyDraftRequestAiRewrite {
+                mode: CommentRewriteMode::Reword,
+            }),
+            KeyCode::Char('Y') => Some(AppMsg::ReplyDraftAiApply),
+            KeyCode::Char('N') => Some(AppMsg::ReplyDraftAiDiscard),
             KeyCode::Char(character @ '1'..='9') => {
                 let template_index = character as usize - '1' as usize;
                 Some(AppMsg::ReplyDraftInsertTemplate { template_index })
@@ -184,6 +193,26 @@ mod tests {
         KeyCode::Char('2'),
         Some(InputContext::ReplyDraft),
         Some(AppMsg::ReplyDraftInsertTemplate { template_index: 1 })
+    )]
+    #[case::reply_draft_ai_expand(
+        KeyCode::Char('E'),
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftRequestAiRewrite { mode: CommentRewriteMode::Expand })
+    )]
+    #[case::reply_draft_ai_reword(
+        KeyCode::Char('W'),
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftRequestAiRewrite { mode: CommentRewriteMode::Reword })
+    )]
+    #[case::reply_draft_ai_apply(
+        KeyCode::Char('Y'),
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftAiApply)
+    )]
+    #[case::reply_draft_ai_discard(
+        KeyCode::Char('N'),
+        Some(InputContext::ReplyDraft),
+        Some(AppMsg::ReplyDraftAiDiscard)
     )]
     #[case::reply_draft_insert_char(
         KeyCode::Char('q'),

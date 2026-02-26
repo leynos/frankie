@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -98,15 +98,18 @@ Success is observable when:
 
 - [x] (2026-02-25 00:00Z) Drafted ExecPlan with architecture, test strategy,
       and `vidaimock` validation path for step 3-2-2.
-- [ ] Stage A: Finalize shared AI rewrite domain model and provider boundaries.
-- [ ] Stage B: Implement library APIs, fallback contract, and diff-preview
-      model.
-- [ ] Stage C: Wire TUI interaction, preview rendering, and apply/cancel flow.
-- [ ] Stage D: Add CLI access path for non-interactive AI expansion/rewording.
-- [ ] Stage E: Add unit + behavioural tests (including `vidaimock` unhappy
-      paths).
-- [ ] Stage F: Update design/user docs, mark roadmap item done, and pass all
-      gates.
+- [x] (2026-02-26 00:00Z) Stage A: Finalized shared AI rewrite domain model
+      and provider boundaries in `src/ai/comment_rewrite/`.
+- [x] (2026-02-26 00:00Z) Stage B: Implemented shared fallback contract and
+      side-by-side diff-preview model.
+- [x] (2026-02-26 00:00Z) Stage C: Wired TUI AI request/preview/apply/discard
+      flow with provenance and fallback handling.
+- [x] (2026-02-26 00:00Z) Stage D: Added CLI `AiRewrite` access path with
+      generated/fallback preview output.
+- [x] (2026-02-26 00:00Z) Stage E: Added unit + behavioural tests, including
+      `vidaimock`-driven success and malformed JSON fallback coverage.
+- [x] (2026-02-26 00:00Z) Stage F: Updated design/user docs, marked roadmap
+      item done, and passed required quality gates.
 
 ## Surprises & discoveries
 
@@ -122,6 +125,10 @@ Success is observable when:
   not yet exposed as a stable library API boundary for AI rewrite workflows.
   Impact: this step must extract/introduce reusable library-level contracts to
   satisfy roadmap cross-surface requirements.
+- Discovery: TUI startup already uses global `OnceLock` wiring for other
+  adapter services; adding rewrite-service injection through
+  `set_comment_rewrite_service` preserved the existing bootstrap pattern and
+  kept `ReviewApp` testable through explicit DI overrides.
 
 ## Decision log
 
@@ -140,10 +147,33 @@ Success is observable when:
 - Decision: apply roadmap ADR practice by adding a new ADR entry in
   `docs/frankie-design.md` for this feature. Rationale: user explicitly
   requires design-decision capture. Date/Author: 2026-02-25 / plan author.
+- Decision: map AI rewrite keys to uppercase (`E`, `W`, `Y`, `N`) in
+  reply-draft mode. Rationale: preserves lowercase free-text editing while
+  keeping rewrite/apply/discard actions discoverable. Date/Author: 2026-02-26 /
+  implementation author.
 
 ## Outcomes & retrospective
 
-(To be completed after implementation.)
+Implemented and validated:
+
+- Shared AI rewrite library APIs in `src/ai/comment_rewrite/` with outcome and
+  preview models reused by both adapters.
+- OpenAI-compatible rewrite adapter with deterministic `vidaimock` tests for
+  success and malformed-response fallback.
+- New non-interactive CLI mode (`AiRewrite`) with provenance labeling,
+  side-by-side preview output, and graceful fallback output.
+- TUI reply-draft AI workflow with async rewrite requests, side-by-side preview
+  rendering, apply/discard controls, and fallback error handling.
+- Unit and behavioural coverage (`rstest`, `rstest-bdd`), including new feature
+  scenarios in `tests/ai_reply_rewrite_bdd.rs`.
+- Documentation updates in `docs/frankie-design.md`, `docs/users-guide.md`,
+  and `docs/roadmap.md`.
+
+Validation snapshot:
+
+- `make test` passed (722 tests).
+- `make check-fmt`, `make lint`, and markdown gates were run successfully at
+  completion.
 
 ## Context and orientation
 

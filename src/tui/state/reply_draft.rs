@@ -15,6 +15,7 @@ use crate::tui::ReplyDraftMaxLength;
 pub struct ReplyDraftState {
     comment_id: u64,
     text: String,
+    origin_label: Option<String>,
     max_length: ReplyDraftMaxLength,
     ready_to_send: bool,
 }
@@ -26,6 +27,7 @@ impl ReplyDraftState {
         Self {
             comment_id,
             text: String::new(),
+            origin_label: None,
             max_length,
             ready_to_send: false,
         }
@@ -41,6 +43,12 @@ impl ReplyDraftState {
     #[must_use]
     pub const fn text(&self) -> &str {
         self.text.as_str()
+    }
+
+    /// Returns the optional origin label for the current draft text.
+    #[must_use]
+    pub fn origin_label(&self) -> Option<&str> {
+        self.origin_label.as_deref()
     }
 
     /// Returns the configured maximum character count.
@@ -82,7 +90,7 @@ impl ReplyDraftState {
         self.ensure_within_limit(attempted)?;
 
         self.text.push_str(suffix);
-        self.ready_to_send = false;
+        self.mark_manual_edit();
         Ok(())
     }
 
@@ -97,20 +105,39 @@ impl ReplyDraftState {
         self.ensure_within_limit(attempted)?;
 
         self.text.push(character);
-        self.ready_to_send = false;
+        self.mark_manual_edit();
         Ok(())
     }
 
     /// Removes the last character from the draft, if present.
     pub fn backspace(&mut self) {
         let _ = self.text.pop();
-        self.ready_to_send = false;
+        self.mark_manual_edit();
     }
 
     /// Clears the draft text and readiness state.
     pub fn clear(&mut self) {
         self.text.clear();
+        self.mark_manual_edit();
+    }
+
+    /// Replaces the draft text and optional provenance label.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReplyDraftError::LengthExceeded`] when `text` exceeds the
+    /// configured maximum length.
+    pub fn replace_text(
+        &mut self,
+        text: &str,
+        origin_label: Option<String>,
+    ) -> Result<(), ReplyDraftError> {
+        self.ensure_within_limit(text.chars().count())?;
+        self.text.clear();
+        self.text.push_str(text);
+        self.origin_label = origin_label.filter(|label| !label.trim().is_empty());
         self.ready_to_send = false;
+        Ok(())
     }
 
     /// Marks the draft as ready to send.
@@ -142,6 +169,11 @@ impl ReplyDraftState {
             });
         }
         Ok(())
+    }
+
+    fn mark_manual_edit(&mut self) {
+        self.ready_to_send = false;
+        self.origin_label = None;
     }
 }
 
@@ -263,6 +295,7 @@ mod tests {
 
         assert_eq!(draft.comment_id(), 42);
         assert_eq!(draft.text(), "");
+        assert_eq!(draft.origin_label(), None);
         assert_eq!(draft.max_length().as_usize(), 60);
         assert_eq!(draft.char_count(), 0);
         assert!(!draft.is_ready_to_send());
@@ -322,7 +355,32 @@ mod tests {
         draft.clear();
 
         assert_eq!(draft.text(), "");
+        assert_eq!(draft.origin_label(), None);
         assert!(!draft.is_ready_to_send());
+    }
+
+    #[test]
+    fn replace_text_sets_origin_label() {
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(40));
+
+        let result = draft.replace_text("Expanded text", Some("AI-originated".to_owned()));
+        assert!(result.is_ok());
+        assert_eq!(draft.text(), "Expanded text");
+        assert_eq!(draft.origin_label(), Some("AI-originated"));
+    }
+
+    #[test]
+    fn manual_edit_clears_origin_label() {
+        let mut draft = ReplyDraftState::new(42, ReplyDraftMaxLength::new(40));
+        assert!(
+            draft
+                .replace_text("Expanded", Some("AI-originated".to_owned()))
+                .is_ok()
+        );
+
+        assert!(draft.push_char('!').is_ok());
+
+        assert_eq!(draft.origin_label(), None);
     }
 
     #[rstest]

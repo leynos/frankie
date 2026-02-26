@@ -23,7 +23,8 @@ use std::sync::Arc;
 use bubbletea_rs::Cmd;
 
 use crate::ai::{
-    CodexExecutionHandle, CodexExecutionService, SessionState, SystemCodexExecutionService,
+    CodexExecutionHandle, CodexExecutionService, CommentRewriteMode, CommentRewriteService,
+    SessionState, SideBySideDiffPreview, SystemCodexExecutionService,
 };
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
@@ -107,8 +108,25 @@ pub struct ReviewApp {
     resume_prompt: Option<SessionState>,
     /// Active inline reply draft for the selected comment.
     reply_draft: Option<ReplyDraftState>,
+    /// Pending AI rewrite preview for the active draft, if any.
+    reply_draft_ai_preview: Option<ReplyDraftAiPreview>,
     /// Reply-drafting templates and max-length configuration.
     reply_draft_config: ReplyDraftConfig,
+    /// Service used to perform AI rewrite requests.
+    comment_rewrite_service: Arc<dyn CommentRewriteService>,
+}
+
+/// Generated preview state before AI text is applied to a draft.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReplyDraftAiPreview {
+    /// Rewrite mode used to generate this candidate.
+    pub mode: CommentRewriteMode,
+    /// Candidate text returned by the rewrite service.
+    pub rewritten_text: String,
+    /// Provenance label shown in the UI.
+    pub origin_label: String,
+    /// Side-by-side preview model.
+    pub side_by_side_preview: SideBySideDiffPreview,
 }
 
 /// Tracks which view is currently active in the TUI.
@@ -169,7 +187,9 @@ impl ReviewApp {
             has_initialized: false,
             resume_prompt: None,
             reply_draft: None,
+            reply_draft_ai_preview: None,
             reply_draft_config: super::get_reply_draft_config(),
+            comment_rewrite_service: super::get_comment_rewrite_service(),
         };
         app.set_visible_list_height();
         app
@@ -213,6 +233,16 @@ impl ReviewApp {
         self
     }
 
+    /// Sets the rewrite service used by AI draft helpers.
+    #[must_use]
+    pub fn with_comment_rewrite_service(
+        mut self,
+        comment_rewrite_service: Arc<dyn CommentRewriteService>,
+    ) -> Self {
+        self.comment_rewrite_service = comment_rewrite_service;
+        self
+    }
+
     /// Returns whether a Codex execution run is currently active.
     #[must_use]
     pub(super) const fn is_codex_running(&self) -> bool {
@@ -223,6 +253,12 @@ impl ReviewApp {
     #[must_use]
     pub(super) const fn has_reply_draft(&self) -> bool {
         self.reply_draft.is_some()
+    }
+
+    /// Returns whether an AI preview is currently available for apply/discard.
+    #[must_use]
+    pub(super) const fn has_reply_draft_ai_preview(&self) -> bool {
+        self.reply_draft_ai_preview.is_some()
     }
 
     /// Returns the currently filtered reviews.

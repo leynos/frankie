@@ -1,7 +1,12 @@
 //! Tests for reply-drafting handlers.
 
+use std::sync::Arc;
+
+use bubbletea_rs::Cmd;
 use rstest::{fixture, rstest};
 
+use crate::ai::{CommentRewriteMode, CommentRewriteRequest, CommentRewriteService};
+use crate::github::IntakeError;
 use crate::github::models::ReviewComment;
 use crate::tui::messages::AppMsg;
 use crate::tui::{ReplyDraftConfig, ReplyDraftMaxLength};
@@ -68,6 +73,25 @@ fn assert_draft_readiness(app: &ReviewApp, expected_ready: bool) {
             "draft readiness should be {expected_ready}"
         );
     }
+}
+
+#[derive(Debug)]
+struct StubRewriteService {
+    response: Result<String, IntakeError>,
+}
+
+impl CommentRewriteService for StubRewriteService {
+    fn rewrite_text(&self, _request: &CommentRewriteRequest) -> Result<String, IntakeError> {
+        self.response.clone()
+    }
+}
+
+async fn resolve_cmd_to_app_msg(cmd: Cmd) -> Option<AppMsg> {
+    let maybe_boxed = cmd.await?;
+    maybe_boxed
+        .downcast::<AppMsg>()
+        .ok()
+        .map(|message| *message)
 }
 
 #[rstest]
@@ -208,4 +232,112 @@ fn cancel_reply_draft_discards_state(sample_reviews: Vec<ReviewComment>) {
 
     assert!(app.reply_draft.is_none());
     assert!(app.error_message().is_none());
+}
+
+#[tokio::test]
+async fn ai_rewrite_generated_preview_can_be_applied() {
+    let mut app = ReviewApp::new(sample_reviews()).with_comment_rewrite_service(Arc::new(
+        StubRewriteService {
+            response: Ok("Expanded suggestion".to_owned()),
+        },
+    ));
+
+    app.handle_message(&AppMsg::StartReplyDraft);
+    app.handle_message(&AppMsg::ReplyDraftInsertChar('h'));
+    app.handle_message(&AppMsg::ReplyDraftInsertChar('i'));
+
+    let maybe_cmd = app.handle_message(&AppMsg::ReplyDraftRequestAiRewrite {
+        mode: CommentRewriteMode::Expand,
+    });
+    let Some(cmd) = maybe_cmd else {
+        panic!("AI rewrite should return a command");
+    };
+
+    let maybe_msg = resolve_cmd_to_app_msg(cmd).await;
+    let Some(msg) = maybe_msg else {
+        panic!("AI rewrite command should emit a message");
+    };
+    app.handle_message(&msg);
+
+    assert!(
+        app.reply_draft_ai_preview.is_some(),
+        "preview should be present"
+    );
+    app.handle_message(&AppMsg::ReplyDraftAiApply);
+
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should remain active");
+    if let Some(draft) = maybe_draft {
+        assert_eq!(draft.text(), "Expanded suggestion");
+        assert_eq!(draft.origin_label(), Some("AI-originated"));
+    }
+    assert!(
+        app.reply_draft_ai_preview.is_none(),
+        "preview should be cleared"
+    );
+    assert!(app.error_message().is_none());
+}
+
+#[tokio::test]
+async fn ai_rewrite_fallback_preserves_original_draft() {
+    let mut app = ReviewApp::new(sample_reviews()).with_comment_rewrite_service(Arc::new(
+        StubRewriteService {
+            response: Err(IntakeError::Network {
+                message: "timeout".to_owned(),
+            }),
+        },
+    ));
+
+    app.handle_message(&AppMsg::StartReplyDraft);
+    app.handle_message(&AppMsg::ReplyDraftInsertChar('o'));
+    app.handle_message(&AppMsg::ReplyDraftInsertChar('k'));
+
+    let maybe_cmd = app.handle_message(&AppMsg::ReplyDraftRequestAiRewrite {
+        mode: CommentRewriteMode::Reword,
+    });
+    let Some(cmd) = maybe_cmd else {
+        panic!("AI rewrite should return a command");
+    };
+
+    let maybe_msg = resolve_cmd_to_app_msg(cmd).await;
+    let Some(msg) = maybe_msg else {
+        panic!("AI rewrite command should emit a message");
+    };
+    app.handle_message(&msg);
+
+    let maybe_draft = app.reply_draft.as_ref();
+    assert!(maybe_draft.is_some(), "draft should remain active");
+    if let Some(draft) = maybe_draft {
+        assert_eq!(draft.text(), "ok");
+    }
+    assert!(app.reply_draft_ai_preview.is_none());
+    let error_text = app.error_message().unwrap_or_default();
+    assert!(error_text.contains("AI request failed"));
+}
+
+#[tokio::test]
+async fn ai_rewrite_preview_can_be_discarded() {
+    let mut app = ReviewApp::new(sample_reviews()).with_comment_rewrite_service(Arc::new(
+        StubRewriteService {
+            response: Ok("AI candidate".to_owned()),
+        },
+    ));
+
+    app.handle_message(&AppMsg::StartReplyDraft);
+    app.handle_message(&AppMsg::ReplyDraftInsertChar('x'));
+    let maybe_cmd = app.handle_message(&AppMsg::ReplyDraftRequestAiRewrite {
+        mode: CommentRewriteMode::Expand,
+    });
+    let Some(cmd) = maybe_cmd else {
+        panic!("AI rewrite should return a command");
+    };
+    let maybe_msg = resolve_cmd_to_app_msg(cmd).await;
+    let Some(msg) = maybe_msg else {
+        panic!("AI rewrite command should emit a message");
+    };
+    app.handle_message(&msg);
+
+    assert!(app.reply_draft_ai_preview.is_some());
+    app.handle_message(&AppMsg::ReplyDraftAiDiscard);
+    assert!(app.reply_draft_ai_preview.is_none());
 }

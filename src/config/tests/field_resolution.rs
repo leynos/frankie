@@ -175,6 +175,53 @@ fn value_flags_include_reply_drafting_flags() {
 }
 
 #[rstest]
+fn value_flags_include_ai_rewrite_flags() {
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--ai-rewrite-mode"),
+        "VALUE_FLAGS should include --ai-rewrite-mode"
+    );
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--ai-rewrite-text"),
+        "VALUE_FLAGS should include --ai-rewrite-text"
+    );
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--ai-base-url"),
+        "VALUE_FLAGS should include --ai-base-url"
+    );
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--ai-model"),
+        "VALUE_FLAGS should include --ai-model"
+    );
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--ai-api-key"),
+        "VALUE_FLAGS should include --ai-api-key"
+    );
+    assert!(
+        FrankieConfig::VALUE_FLAGS.contains(&"--ai-timeout-seconds"),
+        "VALUE_FLAGS should include --ai-timeout-seconds"
+    );
+}
+
+#[rstest]
+fn resolve_ai_api_key_prefers_config_value() {
+    let _guard = env_lock::lock_env([("OPENAI_API_KEY", Some("env-key"))]);
+    let config = FrankieConfig {
+        ai_api_key: Some("config-key".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(config.resolve_ai_api_key(), Some("config-key".to_owned()));
+}
+
+#[rstest]
+fn resolve_ai_api_key_falls_back_to_environment() {
+    let _guard = env_lock::lock_env([("OPENAI_API_KEY", Some("env-key"))]);
+    let config = FrankieConfig::default();
+
+    assert_eq!(config.resolve_ai_api_key(), Some("env-key".to_owned()));
+}
+
+#[rstest]
 fn reply_drafting_defaults_are_present() {
     let config = FrankieConfig::default();
 

@@ -11,7 +11,8 @@ use unicode_width::UnicodeWidthChar;
 use super::ReviewApp;
 use crate::tui::app::ViewMode;
 use crate::tui::components::{
-    CommentDetailViewContext, ReplyDraftRenderContext, ReviewListViewContext,
+    CommentDetailViewContext, ReplyDraftAiPreviewRenderContext, ReplyDraftRenderContext,
+    ReviewListViewContext,
 };
 use crate::tui::input::{InputContext, map_key_to_message_with_context};
 use crate::tui::messages::AppMsg;
@@ -105,11 +106,14 @@ impl Model for ReviewApp {
             let selected_comment = self.selected_comment();
             let reply_draft =
                 selected_comment.and_then(|comment| self.reply_draft_for_comment(comment.id));
+            let reply_draft_ai_preview = selected_comment
+                .and_then(|comment| self.reply_draft_ai_preview_for_comment(comment.id));
             let detail_ctx = CommentDetailViewContext {
                 selected_comment,
                 max_width: safe_terminal_width,
                 max_height: detail_height,
                 reply_draft,
+                reply_draft_ai_preview,
             };
             output.push_str(&self.comment_detail.view(&detail_ctx));
         }
@@ -160,6 +164,25 @@ impl ReviewApp {
             char_count: draft.char_count(),
             max_length: draft.max_length().as_usize(),
             ready_to_send: draft.is_ready_to_send(),
+            origin_label: draft.origin_label(),
+        })
+    }
+
+    fn reply_draft_ai_preview_for_comment(
+        &self,
+        comment_id: u64,
+    ) -> Option<ReplyDraftAiPreviewRenderContext<'_>> {
+        let draft = self.reply_draft.as_ref()?;
+        if draft.comment_id() != comment_id {
+            return None;
+        }
+
+        let preview = self.reply_draft_ai_preview.as_ref()?;
+        Some(ReplyDraftAiPreviewRenderContext {
+            mode: preview.mode,
+            origin_label: preview.origin_label.as_str(),
+            lines: preview.side_by_side_preview.lines.as_slice(),
+            has_changes: preview.side_by_side_preview.has_changes,
         })
     }
 

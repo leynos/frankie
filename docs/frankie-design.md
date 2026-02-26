@@ -463,6 +463,8 @@ The canonical ADR set is maintained in
   Inline template-based reply drafting.
 - [ADR-005](#architecture-decision-record-adr-005-cross-surface-library-first-delivery):
   Cross-surface, library-first delivery contract.
+- [ADR-006](#architecture-decision-record-adr-006-ai-rewrite-preview-and-fallback-contract):
+  AI rewrite preview and fallback contract.
 
 ## 1.3 Scope
 
@@ -3040,6 +3042,45 @@ future roadmap item, completion requires:
   as part of feature completion.
 - Surface-specific exceptions are allowed only when explicitly documented with
   rationale and out-of-scope boundaries.
+
+#### Architecture decision record (ADR-006): AI rewrite preview and fallback contract
+
+**Context**: Reply drafting now supports AI-assisted expansion and rewording.
+The roadmap acceptance requires explicit AI provenance, preview-before-apply,
+and graceful failure handling across both TUI and CLI surfaces.
+
+**Decision**: Introduce a shared AI rewrite library boundary in
+`src/ai/comment_rewrite/` with:
+
+- `CommentRewriteMode`, `CommentRewriteRequest`, and
+  `CommentRewriteOutcome::{Generated,Fallback}`.
+- A reusable `CommentRewriteService` trait with an OpenAI-compatible adapter.
+- A shared side-by-side preview model used by both TUI and CLI adapters.
+- A mandatory `AI-originated` provenance label on generated candidates.
+
+In the TUI, rewrite requests are asynchronous and always previewed before
+apply. In CLI mode, generated and fallback outcomes are rendered using the same
+shared outcome contract.
+
+**Rationale**:
+
+1. **Parity across surfaces**: one domain contract keeps TUI and CLI behaviour
+   consistent.
+2. **Safety by default**: preview-before-apply avoids silent draft mutation.
+3. **Failure resilience**: fallback outcomes preserve original text and surface
+   actionable reasons instead of failing the workflow.
+4. **Testability**: dependency-injected service trait enables deterministic
+   unit tests and `rstest-bdd` behavioural scenarios.
+
+**Consequences**:
+
+- Users can request AI expand/reword in reply-draft mode and inspect
+  side-by-side previews before applying.
+- Applied AI text is visibly labelled `AI-originated` until manually edited.
+- CLI users can run non-interactive AI rewrite with generated/fallback output
+  and preview metadata.
+- Operation-mode precedence now includes `AiRewrite` ahead of export and PR
+  loading modes when rewrite flags are set.
 
 ## 5.4 Cross-cutting Concerns
 

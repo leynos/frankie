@@ -5,6 +5,7 @@
 //! is extracted from the comment's `diff_hunk` field and wrapped to a
 //! maximum width (typically 80 columns or the terminal width if narrower).
 
+use crate::ai::{CommentRewriteMode, SideBySideLine};
 use crate::github::models::ReviewComment;
 
 use super::code_highlight::CodeHighlighter;
@@ -31,6 +32,8 @@ pub struct CommentDetailViewContext<'a> {
     pub max_height: usize,
     /// Inline reply draft details for the selected comment, if active.
     pub reply_draft: Option<ReplyDraftRenderContext<'a>>,
+    /// Pending AI rewrite preview details for the active reply draft, if any.
+    pub reply_draft_ai_preview: Option<ReplyDraftAiPreviewRenderContext<'a>>,
 }
 
 /// Render-only reply-draft context for the comment detail view.
@@ -44,6 +47,21 @@ pub struct ReplyDraftRenderContext<'a> {
     pub max_length: usize,
     /// Whether the draft has been marked ready to send.
     pub ready_to_send: bool,
+    /// Provenance label for the current draft text.
+    pub origin_label: Option<&'a str>,
+}
+
+/// Render-only AI preview context for reply-draft rewrite suggestions.
+#[derive(Debug, Clone)]
+pub struct ReplyDraftAiPreviewRenderContext<'a> {
+    /// Rewrite mode used for this candidate.
+    pub mode: CommentRewriteMode,
+    /// Provenance label to show with the candidate output.
+    pub origin_label: &'a str,
+    /// Side-by-side preview lines (original and candidate).
+    pub lines: &'a [SideBySideLine],
+    /// Whether the candidate differs from the original text.
+    pub has_changes: bool,
 }
 
 /// Component for displaying a single review comment with code context.
@@ -107,6 +125,9 @@ impl CommentDetailComponent {
         // Inline reply draft for the selected comment.
         if let Some(reply_draft) = &ctx.reply_draft {
             output.push_str(&Self::render_reply_draft(reply_draft, ctx.max_width));
+        }
+        if let Some(preview) = &ctx.reply_draft_ai_preview {
+            output.push_str(&Self::render_ai_preview(preview, ctx.max_width));
         }
 
         // Truncate to max_height if specified
@@ -179,6 +200,11 @@ impl CommentDetailComponent {
             output.push_str(&wrap_text(reply_draft.text, max_width));
             output.push('\n');
         }
+        if let Some(origin_label) = reply_draft.origin_label {
+            output.push_str("Origin: ");
+            output.push_str(origin_label);
+            output.push('\n');
+        }
 
         let readiness_suffix = if reply_draft.ready_to_send {
             " (ready to send)"
@@ -193,7 +219,30 @@ impl CommentDetailComponent {
         output.push_str(&reply_draft.max_length.to_string());
         output.push_str(readiness_suffix);
         output.push('\n');
-        output.push_str("Templates: 1-9  Enter: ready  Esc: cancel\n");
+        output.push_str("Templates: 1-9  E:expand  W:reword  Enter:ready  Esc:cancel\n");
+        output
+    }
+
+    fn render_ai_preview(
+        preview: &ReplyDraftAiPreviewRenderContext<'_>,
+        max_width: usize,
+    ) -> String {
+        let mut output = format!("\nAI rewrite preview ({}):\n", preview.mode.label());
+        output.push_str("Origin: ");
+        output.push_str(preview.origin_label);
+        output.push('\n');
+        output.push_str("Changed: ");
+        output.push_str(if preview.has_changes { "yes" } else { "no" });
+        output.push('\n');
+        output.push_str("Original || Candidate\n");
+
+        for (index, line) in preview.lines.iter().enumerate() {
+            let row = format!("{:>3}: {} || {}", index + 1, line.original, line.candidate);
+            output.push_str(&wrap_text(row.as_str(), max_width));
+            output.push('\n');
+        }
+
+        output.push_str("Apply: Y  Discard: N\n");
         output
     }
 }
