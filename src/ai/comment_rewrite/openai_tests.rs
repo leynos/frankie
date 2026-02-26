@@ -1,21 +1,15 @@
 //! Unit tests for the OpenAI-compatible comment rewrite adapter.
 
-use rstest::{fixture, rstest};
+use rstest::rstest;
 
 use crate::ai::comment_rewrite::{
     CommentRewriteContext, CommentRewriteMode, CommentRewriteRequest, CommentRewriteService,
 };
 
 use super::{ChatContent, OpenAiCommentRewriteService, parse_content_value};
+use rewrite_request_fixture::rewrite_request;
 
-#[fixture]
-fn rewrite_request() -> CommentRewriteRequest {
-    CommentRewriteRequest::new(
-        CommentRewriteMode::Expand,
-        "Please fix this",
-        CommentRewriteContext::default(),
-    )
-}
+mod rewrite_request_fixture;
 
 #[test]
 fn parse_content_value_supports_string_and_array() {
