@@ -318,6 +318,7 @@ fn view_renders_inline_reply_draft_when_present() {
     assert!(output.contains("Reply draft:"));
     assert!(output.contains("Thanks for the review."));
     assert!(output.contains("Length: 22/120 (ready to send)"));
+    assert!(!output.contains("Origin:"));
 }
 
 #[test]
@@ -326,6 +327,7 @@ fn view_renders_inline_reply_draft_empty_placeholder() {
 
     assert!(output.contains("(empty)"));
     assert!(output.contains("(ready to send)"));
+    assert!(!output.contains("Origin:"));
 }
 
 #[test]
@@ -334,6 +336,7 @@ fn view_renders_inline_reply_draft_without_ready_suffix() {
 
     assert!(output.contains("Work in progress"));
     assert!(!output.contains("(ready to send)"));
+    assert!(!output.contains("Origin:"));
 }
 
 #[test]
@@ -341,4 +344,6 @@ fn view_renders_ai_origin_label_for_reply_draft() {
     let output = render_comment_with_reply_draft("AI suggestion", 13, false, Some("AI-originated"));
 
     assert!(output.contains("Origin: AI-originated"));
+    assert!(output.contains("AI suggestion"));
+    assert!(output.contains("13"));
 }

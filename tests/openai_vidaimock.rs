@@ -105,12 +105,16 @@ fn spawn_vidaimock() -> TestResult<VidaiServer> {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
-    let child = command
+    let mut child = command
         .spawn()
         .map_err(|error| io::Error::other(format!("failed to spawn vidaimock process: {error}")))?;
     let base_url = format!("http://127.0.0.1:{port}");
 
-    wait_for_server(base_url.as_str())?;
+    if let Err(error) = wait_for_server(base_url.as_str()) {
+        let _kill_ignored = child.kill();
+        let _wait_ignored = child.wait();
+        return Err(error);
+    }
 
     Ok(VidaiServer { base_url, child })
 }
