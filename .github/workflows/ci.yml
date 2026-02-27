@@ -28,6 +28,17 @@ jobs:
             !**/dist/**
       - name: Lint
         run: make lint
+      - name: Install VidaiMock
+        shell: bash
+        run: |
+          mkdir -p "${HOME}/.local/bin"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          mkdir -p "${HOME}/git"
+          pushd "${HOME}/git"
+          curl -LO https://github.com/vidaiUK/VidaiMock/releases/download/v0.1.2/vidaimock-linux-x64.tar.gz
+          tar -xzf vidaimock-linux-x64.tar.gz
+          cp vidaimock/vidaimock "${HOME}/.local/bin"
+          popd
       - name: Test and Measure Coverage
         uses: leynos/shared-actions/.github/actions/generate-coverage@aebb3f5b831102e2a10ef909c83d7d50ea86c332
         with:
