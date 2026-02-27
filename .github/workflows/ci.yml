@@ -53,7 +53,7 @@ jobs:
           cp vidaimock/vidaimock "${HOME}/.local/bin"
           popd
           chmod +x "${HOME}/.local/bin/vidaimock"
-          if ! "${HOME}/.local/bin/vidaimock" --version >/dev/null 2>&1; then
+          if ! "${HOME}/.local/bin/vidaimock" --version >/dev/null; then
             echo "VidaiMock sanity check failed: --version returned non-zero." >&2
             exit 1
           fi
