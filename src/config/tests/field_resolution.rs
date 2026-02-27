@@ -163,15 +163,46 @@ fn value_flags_includes_repo_path() {
 }
 
 #[rstest]
-fn value_flags_include_reply_drafting_flags() {
+#[case("--reply-max-length")]
+#[case("--reply-templates")]
+fn value_flags_include_reply_drafting_flags(#[case] flag: &str) {
     assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--reply-max-length"),
-        "VALUE_FLAGS should include --reply-max-length"
+        FrankieConfig::VALUE_FLAGS.contains(&flag),
+        "VALUE_FLAGS should include {flag}"
     );
+}
+
+#[rstest]
+#[case("--ai-rewrite-mode")]
+#[case("--ai-rewrite-text")]
+#[case("--ai-base-url")]
+#[case("--ai-model")]
+#[case("--ai-api-key")]
+#[case("--ai-timeout-seconds")]
+fn value_flags_include_ai_rewrite_flags(#[case] flag: &str) {
     assert!(
-        FrankieConfig::VALUE_FLAGS.contains(&"--reply-templates"),
-        "VALUE_FLAGS should include --reply-templates"
+        FrankieConfig::VALUE_FLAGS.contains(&flag),
+        "VALUE_FLAGS should include {flag}"
     );
+}
+
+#[rstest]
+fn resolve_ai_api_key_prefers_config_value() {
+    let _guard = env_lock::lock_env([("OPENAI_API_KEY", Some("env-key"))]);
+    let config = FrankieConfig {
+        ai_api_key: Some("config-key".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(config.resolve_ai_api_key(), Some("config-key".to_owned()));
+}
+
+#[rstest]
+fn resolve_ai_api_key_falls_back_to_environment() {
+    let _guard = env_lock::lock_env([("OPENAI_API_KEY", Some("env-key"))]);
+    let config = FrankieConfig::default();
+
+    assert_eq!(config.resolve_ai_api_key(), Some("env-key".to_owned()));
 }
 
 #[rstest]

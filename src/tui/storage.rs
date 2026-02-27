@@ -8,6 +8,7 @@ use std::sync::{Arc, OnceLock};
 
 use crossterm::terminal;
 
+use crate::ai::{CommentRewriteService, OpenAiCommentRewriteService};
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
@@ -40,6 +41,12 @@ static TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
 /// This is used by `get_telemetry_sink` when no sink has been configured,
 /// avoiding repeated `Arc::new` allocations.
 static DEFAULT_TELEMETRY_SINK: OnceLock<Arc<dyn TelemetrySink>> = OnceLock::new();
+
+/// Global storage for AI rewrite service used by reply-draft workflows.
+static COMMENT_REWRITE_SERVICE: OnceLock<Arc<dyn CommentRewriteService>> = OnceLock::new();
+
+/// Static fallback rewrite service for deployments without explicit AI config.
+static DEFAULT_COMMENT_REWRITE_SERVICE: OnceLock<Arc<dyn CommentRewriteService>> = OnceLock::new();
 
 /// Global storage for Git operations context.
 ///
@@ -152,6 +159,13 @@ pub fn set_telemetry_sink(sink: Arc<dyn TelemetrySink>) -> bool {
     TELEMETRY_SINK.set(sink).is_ok()
 }
 
+/// Sets the AI rewrite service for the TUI application.
+///
+/// Returns `true` if the service was set, or `false` when one already exists.
+pub fn set_comment_rewrite_service(service: Arc<dyn CommentRewriteService>) -> bool {
+    COMMENT_REWRITE_SERVICE.set(service).is_ok()
+}
+
 /// Sets the Git operations context for time-travel navigation.
 ///
 /// This must be called before starting the bubbletea-rs program. When a
@@ -209,6 +223,16 @@ pub(crate) fn get_time_travel_context() -> Option<TimeTravelContext> {
 fn get_telemetry_sink() -> Arc<dyn TelemetrySink> {
     TELEMETRY_SINK.get().cloned().unwrap_or_else(|| {
         Arc::clone(DEFAULT_TELEMETRY_SINK.get_or_init(|| Arc::new(NoopTelemetrySink)))
+    })
+}
+
+/// Gets the configured rewrite service or a fallback implementation.
+pub(crate) fn get_comment_rewrite_service() -> Arc<dyn CommentRewriteService> {
+    COMMENT_REWRITE_SERVICE.get().cloned().unwrap_or_else(|| {
+        Arc::clone(
+            DEFAULT_COMMENT_REWRITE_SERVICE
+                .get_or_init(|| Arc::new(OpenAiCommentRewriteService::default())),
+        )
     })
 }
 

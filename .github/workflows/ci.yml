@@ -28,6 +28,35 @@ jobs:
             !**/dist/**
       - name: Lint
         run: make lint
+      - name: Install VidaiMock
+        shell: bash
+        env:
+          VIDAIMOCK_SHA256: ${{ vars.VIDAIMOCK_SHA256 }}
+        run: |
+          set -euo pipefail
+          VIDAIMOCK_VERSION="v0.1.2"
+          VIDAIMOCK_TARBALL="vidaimock-linux-x64.tar.gz"
+          VIDAIMOCK_URL="https://github.com/vidaiUK/VidaiMock/releases/download/${VIDAIMOCK_VERSION}/${VIDAIMOCK_TARBALL}"
+          VIDAIMOCK_SHA256_DEFAULT="0efd1dd07f745465e6af9b122a04e6663ad475dd255e34851ef7e1b751acf8d5"
+
+          mkdir -p "${HOME}/.local/bin"
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          mkdir -p "${HOME}/git"
+          pushd "${HOME}/git"
+          curl -fsSLO "${VIDAIMOCK_URL}"
+          if [[ -z "${VIDAIMOCK_SHA256:-}" ]]; then
+            echo "VIDAIMOCK_SHA256 is not set; using pinned fallback checksum for v0.1.2." >&2
+            VIDAIMOCK_SHA256="${VIDAIMOCK_SHA256_DEFAULT}"
+          fi
+          echo "${VIDAIMOCK_SHA256}  ${VIDAIMOCK_TARBALL}" | sha256sum --check
+          tar -xzf "${VIDAIMOCK_TARBALL}"
+          cp vidaimock/vidaimock "${HOME}/.local/bin"
+          popd
+          chmod +x "${HOME}/.local/bin/vidaimock"
+          if ! "${HOME}/.local/bin/vidaimock" --version >/dev/null; then
+            echo "VidaiMock sanity check failed: --version returned non-zero." >&2
+            exit 1
+          fi
       - name: Test and Measure Coverage
         uses: leynos/shared-actions/.github/actions/generate-coverage@aebb3f5b831102e2a10ef909c83d7d50ea86c332
         with:

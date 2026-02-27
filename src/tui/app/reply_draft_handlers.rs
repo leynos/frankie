@@ -3,12 +3,19 @@
 //! This module implements keyboard-driven template insertion and inline reply
 //! editing while enforcing configured length limits.
 
+use std::any::Any;
+use std::sync::Arc;
+
 use bubbletea_rs::Cmd;
 
+use crate::ai::{
+    CommentRewriteContext, CommentRewriteMode, CommentRewriteOutcome, CommentRewriteRequest,
+    CommentRewriteService, build_side_by_side_diff_preview, rewrite_with_fallback,
+};
 use crate::tui::messages::AppMsg;
 use crate::tui::state::{ReplyDraftState, ReplyTemplateError, render_reply_template};
 
-use super::ReviewApp;
+use super::{ReplyDraftAiPreview, ReviewApp};
 
 impl ReviewApp {
     /// Handles reply-drafting messages.
@@ -16,26 +23,53 @@ impl ReviewApp {
         match msg {
             AppMsg::StartReplyDraft => {
                 self.start_reply_draft();
+                None
             }
             AppMsg::ReplyDraftInsertTemplate { template_index } => {
                 self.insert_reply_template(*template_index);
+                None
             }
             AppMsg::ReplyDraftInsertChar(character) => {
                 self.insert_reply_character(*character);
+                None
             }
             AppMsg::ReplyDraftBackspace => {
                 self.backspace_reply_draft();
+                None
             }
             AppMsg::ReplyDraftRequestSend => {
                 self.request_reply_send();
+                None
             }
             AppMsg::ReplyDraftCancel => {
                 self.cancel_reply_draft();
+                None
             }
-            _ => {}
+            _ => self.handle_reply_draft_ai_msg(msg),
         }
+    }
 
-        None
+    fn handle_reply_draft_ai_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
+        match msg {
+            AppMsg::ReplyDraftRequestAiRewrite { mode } => self.request_ai_rewrite(*mode),
+            AppMsg::ReplyDraftAiRewriteReady {
+                request_id,
+                mode,
+                outcome,
+            } => {
+                self.handle_ai_rewrite_ready(*request_id, *mode, outcome);
+                None
+            }
+            AppMsg::ReplyDraftAiApply => {
+                self.apply_ai_rewrite_preview();
+                None
+            }
+            AppMsg::ReplyDraftAiDiscard => {
+                self.discard_ai_rewrite_preview();
+                None
+            }
+            _ => None,
+        }
     }
 
     fn start_reply_draft(&mut self) {
@@ -48,6 +82,8 @@ impl ReviewApp {
             comment.id,
             self.reply_draft_config.max_length,
         ));
+        self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = None;
         self.error = None;
     }
 
@@ -105,6 +141,8 @@ impl ReviewApp {
             return;
         }
 
+        self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = None;
         self.error = None;
     }
 
@@ -113,15 +151,10 @@ impl ReviewApp {
     }
 
     fn backspace_reply_draft(&mut self) {
-        match self.get_active_draft_for_editing() {
-            Ok(draft) => {
-                draft.backspace();
-                self.error = None;
-            }
-            Err(error) => {
-                self.error = Some(error);
-            }
-        }
+        self.with_active_draft_operation(|draft| {
+            draft.backspace();
+            Ok::<(), String>(())
+        });
     }
 
     fn request_reply_send(&mut self) {
@@ -130,6 +163,8 @@ impl ReviewApp {
 
     fn cancel_reply_draft(&mut self) {
         self.reply_draft = None;
+        self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = None;
         self.error = None;
     }
 
@@ -145,6 +180,8 @@ impl ReviewApp {
                 if let Err(error) = operation(draft) {
                     self.error = Some(error.to_string());
                 } else {
+                    self.reply_draft_ai_preview = None;
+                    self.in_flight_ai_rewrite_request_id = None;
                     self.error = None;
                 }
             }
@@ -185,6 +222,168 @@ impl ReviewApp {
 
         Some(draft)
     }
+
+    fn ensure_active_reply_draft_matches_comment(&mut self, comment_id: u64) -> bool {
+        if self.reply_draft.is_none() {
+            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
+            return false;
+        }
+
+        let is_mismatched = self
+            .reply_draft
+            .as_ref()
+            .is_some_and(|draft| draft.comment_id() != comment_id);
+        if is_mismatched {
+            self.error = Some(
+                "Active reply draft does not match selected comment. Navigate to that comment or discard the draft."
+                    .to_owned(),
+            );
+            return false;
+        }
+
+        true
+    }
+
+    fn request_ai_rewrite(&mut self, mode: CommentRewriteMode) -> Option<Cmd> {
+        let Some(comment) = self.selected_comment().cloned() else {
+            self.error = Some("Reply drafting requires a selected comment".to_owned());
+            return None;
+        };
+
+        if !self.ensure_active_reply_draft_matches_comment(comment.id) {
+            return None;
+        }
+
+        let Some(draft) = self.active_reply_draft_mut(comment.id) else {
+            self.error = Some("No active reply draft. Press 'a' to start drafting.".to_owned());
+            return None;
+        };
+
+        let source_text = draft.text().to_owned();
+        if source_text.trim().is_empty() {
+            self.error = Some("Reply draft is empty; type text before AI rewrite.".to_owned());
+            return None;
+        }
+
+        let request =
+            CommentRewriteRequest::new(mode, source_text, CommentRewriteContext::from(&comment));
+        let request_id = self.next_ai_rewrite_request_id;
+        self.next_ai_rewrite_request_id = self.next_ai_rewrite_request_id.saturating_add(1);
+
+        self.reply_draft_ai_preview = None;
+        self.in_flight_ai_rewrite_request_id = Some(request_id);
+        self.error = None;
+        Some(spawn_ai_rewrite_request(
+            Arc::clone(&self.comment_rewrite_service),
+            request,
+            mode,
+            request_id,
+        ))
+    }
+
+    fn handle_ai_rewrite_ready(
+        &mut self,
+        request_id: u64,
+        mode: CommentRewriteMode,
+        outcome: &CommentRewriteOutcome,
+    ) {
+        if self.in_flight_ai_rewrite_request_id != Some(request_id) {
+            return;
+        }
+        self.in_flight_ai_rewrite_request_id = None;
+
+        match outcome {
+            CommentRewriteOutcome::Generated(generated) => {
+                let Some(comment_id) = self.selected_comment().map(|comment| comment.id) else {
+                    self.error = Some("Reply drafting requires a selected comment".to_owned());
+                    return;
+                };
+
+                if !self.ensure_active_reply_draft_matches_comment(comment_id) {
+                    return;
+                }
+
+                let Some(draft) = self.active_reply_draft_mut(comment_id) else {
+                    self.error =
+                        Some("No active reply draft. Press 'a' to start drafting.".to_owned());
+                    return;
+                };
+
+                let preview = build_side_by_side_diff_preview(
+                    draft.text(),
+                    generated.rewritten_text.as_str(),
+                );
+                self.reply_draft_ai_preview = Some(ReplyDraftAiPreview {
+                    mode,
+                    rewritten_text: generated.rewritten_text.clone(),
+                    origin_label: generated.origin_label.clone(),
+                    side_by_side_preview: preview,
+                });
+                self.error = None;
+            }
+            CommentRewriteOutcome::Fallback(fallback) => {
+                self.reply_draft_ai_preview = None;
+                self.error = Some(fallback.reason.clone());
+            }
+        }
+    }
+
+    fn apply_ai_rewrite_preview(&mut self) {
+        let Some(preview) = self.reply_draft_ai_preview.clone() else {
+            self.error = Some("No AI rewrite preview to apply.".to_owned());
+            return;
+        };
+
+        match self.get_active_draft_for_editing() {
+            Ok(draft) => {
+                if let Err(error) =
+                    draft.replace_text(preview.rewritten_text.as_str(), Some(preview.origin_label))
+                {
+                    self.error = Some(error.to_string());
+                    return;
+                }
+
+                self.reply_draft_ai_preview = None;
+                self.error = None;
+            }
+            Err(error) => {
+                self.error = Some(error);
+            }
+        }
+    }
+
+    fn discard_ai_rewrite_preview(&mut self) {
+        self.reply_draft_ai_preview = None;
+        self.error = None;
+    }
+}
+
+fn spawn_ai_rewrite_request(
+    service: Arc<dyn CommentRewriteService>,
+    request: CommentRewriteRequest,
+    mode: CommentRewriteMode,
+    request_id: u64,
+) -> Cmd {
+    let original_text = request.source_text().to_owned();
+    Box::pin(async move {
+        let outcome = match tokio::task::spawn_blocking(move || {
+            rewrite_with_fallback(service.as_ref(), &request)
+        })
+        .await
+        {
+            Ok(outcome) => outcome,
+            Err(error) => CommentRewriteOutcome::fallback(
+                original_text,
+                format!("AI rewrite task failed: {error}"),
+            ),
+        };
+
+        Some(Box::new(AppMsg::ReplyDraftAiRewriteReady {
+            request_id,
+            mode,
+            outcome,
+        }) as Box<dyn Any + Send>)
+    })
 }
 
 #[cfg(test)]

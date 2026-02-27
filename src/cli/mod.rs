@@ -1,6 +1,7 @@
 //! CLI operation mode handlers.
 //!
 //! This module contains the implementations for different operation modes:
+//! - [`ai_rewrite`]: Non-interactive AI draft expansion/rewording
 //! - [`export_comments`]: Export review comments in structured formats
 //! - [`interactive`]: Local repository discovery and listing
 //! - [`migrations`]: Database schema migrations
@@ -13,6 +14,7 @@
 
 use frankie::{ListPullRequestsParams, PullRequestState};
 
+pub mod ai_rewrite;
 pub mod export;
 pub mod export_comments;
 pub mod interactive;

@@ -109,6 +109,50 @@ fn export_takes_precedence_over_pr_identifier() {
 }
 
 #[rstest]
+fn ai_rewrite_takes_precedence_over_export() {
+    let config = FrankieConfig {
+        ai_rewrite_mode: Some("reword".to_owned()),
+        ai_rewrite_text: Some("hello".to_owned()),
+        export: Some("markdown".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::AiRewrite,
+        "ai rewrite mode should take precedence over export mode"
+    );
+}
+
+#[rstest]
+#[case(
+    Some("expand".to_owned()),
+    Some("hello".to_owned()),
+    OperationMode::AiRewrite,
+    "ai rewrite fields should select AiRewrite mode"
+)]
+#[case(
+    Some("   ".to_owned()),
+    Some("\t".to_owned()),
+    OperationMode::Interactive,
+    "whitespace-only rewrite fields should not enable AiRewrite mode"
+)]
+fn ai_rewrite_mode_selection(
+    #[case] ai_rewrite_mode: Option<String>,
+    #[case] ai_rewrite_text: Option<String>,
+    #[case] expected_mode: OperationMode,
+    #[case] description: &str,
+) {
+    let config = FrankieConfig {
+        ai_rewrite_mode,
+        ai_rewrite_text,
+        ..Default::default()
+    };
+
+    assert_eq!(config.operation_mode(), expected_mode, "{description}");
+}
+
+#[rstest]
 fn pr_identifier_url_triggers_review_tui() {
     let config = FrankieConfig {
         pr_identifier: Some("https://github.com/o/r/pull/1".to_owned()),

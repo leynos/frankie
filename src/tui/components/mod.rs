@@ -16,7 +16,8 @@ pub mod test_utils;
 
 pub use code_highlight::CodeHighlighter;
 pub use comment_detail::{
-    CommentDetailComponent, CommentDetailViewContext, ReplyDraftRenderContext,
+    CommentDetailComponent, CommentDetailViewContext, ReplyDraftAiPreviewRenderContext,
+    ReplyDraftRenderContext,
 };
 pub(crate) use diff_context::{DiffContextComponent, DiffContextViewContext};
 pub use review_list::{ReviewListComponent, ReviewListViewContext};

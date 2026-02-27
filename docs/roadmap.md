@@ -125,7 +125,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   submission, AI rewording, and server-side workflow automation;
   prerequisites/dependencies: approved design mockups, available keyboard
   shortcut service, and a defined length-limit configuration schema.
-- [ ] Add AI-powered comment expansion and rewording; acceptance: generated
+- [x] Add AI-powered comment expansion and rewording; acceptance: generated
   text is labelled as AI-originated, offers side-by-side diff preview, and
   falls back gracefully when the AI call fails; delivery includes reusable
   library APIs and both TUI and CLI access paths.

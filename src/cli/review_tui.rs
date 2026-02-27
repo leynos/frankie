@@ -6,15 +6,18 @@
 use std::io::{self, Write};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use bubbletea_rs::Program;
 
+use frankie::ai::{OpenAiCommentRewriteConfig, OpenAiCommentRewriteService};
 use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
-    ReplyDraftConfig, ReplyDraftMaxLength, ReviewApp, TimeTravelContext, set_git_ops_context,
-    set_initial_reviews, set_initial_terminal_size, set_refresh_context, set_reply_draft_config,
-    set_telemetry_sink, set_time_travel_context,
+    ReplyDraftConfig, ReplyDraftMaxLength, ReviewApp, TimeTravelContext,
+    set_comment_rewrite_service, set_git_ops_context, set_initial_reviews,
+    set_initial_terminal_size, set_refresh_context, set_reply_draft_config, set_telemetry_sink,
+    set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -66,6 +69,13 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
         config.reply_templates.clone(),
     );
     let _ = set_reply_draft_config(reply_draft_config);
+    let rewrite_service = OpenAiCommentRewriteService::new(OpenAiCommentRewriteConfig::new(
+        config.ai_base_url.clone(),
+        config.ai_model.clone(),
+        config.resolve_ai_api_key(),
+        Duration::from_secs(config.ai_timeout_seconds),
+    ));
+    let _ = set_comment_rewrite_service(Arc::new(rewrite_service));
     let _ = set_telemetry_sink(Arc::new(StderrJsonlTelemetrySink));
     run_tui().await.map_err(|error| IntakeError::Api {
         message: format!("TUI error: {error}"),

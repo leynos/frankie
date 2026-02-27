@@ -4,7 +4,10 @@
 //! update function. Messages represent user actions, async command results,
 //! and system events.
 
-use crate::ai::{CodexExecutionOutcome, CodexProgressEvent, SessionState};
+use crate::ai::{
+    CodexExecutionOutcome, CodexProgressEvent, CommentRewriteMode, CommentRewriteOutcome,
+    SessionState,
+};
 use crate::github::error::IntakeError;
 use crate::github::models::ReviewComment;
 
@@ -98,6 +101,24 @@ pub enum AppMsg {
     ReplyDraftRequestSend,
     /// Cancel and discard the active reply draft.
     ReplyDraftCancel,
+    /// Request an AI rewrite for the active reply draft.
+    ReplyDraftRequestAiRewrite {
+        /// Rewrite mode to execute.
+        mode: CommentRewriteMode,
+    },
+    /// AI rewrite request completed with generated or fallback outcome.
+    ReplyDraftAiRewriteReady {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
+        /// Rewrite mode that was requested.
+        mode: CommentRewriteMode,
+        /// Provider outcome used to update preview or errors.
+        outcome: CommentRewriteOutcome,
+    },
+    /// Apply the currently previewed AI rewrite candidate.
+    ReplyDraftAiApply,
+    /// Discard the currently previewed AI rewrite candidate.
+    ReplyDraftAiDiscard,
 
     // Data loading
     /// Request a refresh of review data from the API.
@@ -206,6 +227,10 @@ impl AppMsg {
                 | Self::ReplyDraftBackspace
                 | Self::ReplyDraftRequestSend
                 | Self::ReplyDraftCancel
+                | Self::ReplyDraftRequestAiRewrite { .. }
+                | Self::ReplyDraftAiRewriteReady { .. }
+                | Self::ReplyDraftAiApply
+                | Self::ReplyDraftAiDiscard
         )
     }
 
