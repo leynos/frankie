@@ -2,9 +2,8 @@
 
 use rstest::rstest;
 
-use crate::ai::comment_rewrite::{
-    CommentRewriteContext, CommentRewriteMode, CommentRewriteRequest, CommentRewriteService,
-};
+use crate::ai::comment_rewrite::{CommentRewriteRequest, CommentRewriteService};
+use crate::github::IntakeError;
 
 use super::{ChatContent, OpenAiCommentRewriteService, parse_content_value};
 use rewrite_request_fixture::rewrite_request;
@@ -26,7 +25,12 @@ fn parse_content_value_supports_string_and_array() {
 #[rstest]
 fn rewrite_text_requires_api_key(rewrite_request: CommentRewriteRequest) {
     let service = OpenAiCommentRewriteService::default();
-    let result = service.rewrite_text(&rewrite_request);
+    let error = service
+        .rewrite_text(&rewrite_request)
+        .expect_err("missing key should be rejected");
 
-    assert!(result.is_err(), "missing key should be rejected");
+    assert!(
+        matches!(error, IntakeError::Configuration { .. }),
+        "expected missing API key to map to Configuration error, got {error:?}"
+    );
 }

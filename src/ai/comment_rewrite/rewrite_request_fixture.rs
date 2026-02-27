@@ -2,7 +2,9 @@
 
 use rstest::fixture;
 
-use super::{CommentRewriteContext, CommentRewriteMode, CommentRewriteRequest};
+use crate::ai::comment_rewrite::{
+    CommentRewriteContext, CommentRewriteMode, CommentRewriteRequest,
+};
 
 #[fixture]
 pub(crate) fn rewrite_request() -> CommentRewriteRequest {

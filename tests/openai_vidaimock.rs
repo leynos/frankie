@@ -8,12 +8,17 @@ use std::thread;
 use std::time::Duration;
 
 use frankie::ai::{
-    CommentRewriteContext, CommentRewriteMode, CommentRewriteOutcome, CommentRewriteRequest,
-    CommentRewriteService, OpenAiCommentRewriteConfig, OpenAiCommentRewriteService,
-    rewrite_with_fallback,
+    CommentRewriteOutcome, CommentRewriteRequest, CommentRewriteService,
+    OpenAiCommentRewriteConfig, OpenAiCommentRewriteService, rewrite_with_fallback,
 };
 use rewrite_request_fixture::rewrite_request;
 use rstest::rstest;
+
+mod ai {
+    pub mod comment_rewrite {
+        pub use frankie::ai::{CommentRewriteContext, CommentRewriteMode, CommentRewriteRequest};
+    }
+}
 
 #[path = "../src/ai/comment_rewrite/rewrite_request_fixture.rs"]
 mod rewrite_request_fixture;
@@ -120,7 +125,7 @@ fn vidaimock_available() -> bool {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .is_ok()
+        .is_ok_and(|status| status.success())
 }
 
 fn reserve_port() -> Result<u16, std::io::Error> {
@@ -135,8 +140,19 @@ fn reserve_port() -> Result<u16, std::io::Error> {
 
 fn wait_for_server(base_url: &str) -> TestResult<()> {
     let metrics_url = format!("{base_url}/metrics");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_millis(250))
+        .build()
+        .map_err(|error| {
+            io::Error::other(format!(
+                "failed to build readiness probe HTTP client for vidaimock: {error}"
+            ))
+        })?;
+
     for _ in 0..40 {
-        if reqwest::blocking::get(metrics_url.as_str()).is_ok() {
+        if let Ok(response) = client.get(metrics_url.as_str()).send()
+            && response.status().is_success()
+        {
             return Ok(());
         }
         thread::sleep(Duration::from_millis(100));
