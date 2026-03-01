@@ -388,4 +388,3 @@ make check-fmt 2>&1 | tee /tmp/frankie-check-fmt.log
 make lint 2>&1 | tee /tmp/frankie-lint.log
 make test 2>&1 | tee /tmp/frankie-test.log
 ```
-
