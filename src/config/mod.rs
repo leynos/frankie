@@ -503,6 +503,13 @@ impl FrankieConfig {
     /// `pr_url` are provided, since they are mutually exclusive ways to
     /// specify a pull request.
     pub fn validate(&self) -> Result<(), IntakeError> {
+        self.validate_pr_identifier_exclusivity()?;
+        self.validate_ai_rewrite_completeness()?;
+        self.validate_verify_resolutions_compatibility()?;
+        Ok(())
+    }
+
+    fn validate_pr_identifier_exclusivity(&self) -> Result<(), IntakeError> {
         if self.has_pr_identifier() && self.has_pr_url() {
             return Err(IntakeError::Configuration {
                 message: concat!(
@@ -513,6 +520,10 @@ impl FrankieConfig {
             });
         }
 
+        Ok(())
+    }
+
+    fn validate_ai_rewrite_completeness(&self) -> Result<(), IntakeError> {
         let mode_present = self.rewrite_mode_present();
         let text_present = self.rewrite_text_present();
         let mode_without_text = mode_present && !text_present;
@@ -527,6 +538,10 @@ impl FrankieConfig {
             });
         }
 
+        Ok(())
+    }
+
+    fn validate_verify_resolutions_compatibility(&self) -> Result<(), IntakeError> {
         if self.verify_resolutions && self.should_ai_rewrite() {
             return Err(IntakeError::Configuration {
                 message: concat!(

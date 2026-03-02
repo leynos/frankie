@@ -203,28 +203,36 @@ impl ReviewCommentVerificationCache {
         Ok(connection)
     }
 
+    fn map_diesel_error<F>(
+        connection: &mut SqliteConnection,
+        error: &diesel::result::Error,
+        error_constructor: F,
+    ) -> PersistenceError
+    where
+        F: FnOnce(String) -> PersistenceError,
+    {
+        match Self::cache_table_exists(connection) {
+            Ok(false) => PersistenceError::SchemaNotInitialised,
+            Ok(true) | Err(_) => error_constructor(error.to_string()),
+        }
+    }
+
     fn map_query_error(
         connection: &mut SqliteConnection,
         error: &diesel::result::Error,
     ) -> PersistenceError {
-        match Self::cache_table_exists(connection) {
-            Ok(false) => PersistenceError::SchemaNotInitialised,
-            Ok(true) | Err(_) => PersistenceError::QueryFailed {
-                message: error.to_string(),
-            },
-        }
+        Self::map_diesel_error(connection, error, |message| PersistenceError::QueryFailed {
+            message,
+        })
     }
 
     fn map_write_error(
         connection: &mut SqliteConnection,
         error: &diesel::result::Error,
     ) -> PersistenceError {
-        match Self::cache_table_exists(connection) {
-            Ok(false) => PersistenceError::SchemaNotInitialised,
-            Ok(true) | Err(_) => PersistenceError::WriteFailed {
-                message: error.to_string(),
-            },
-        }
+        Self::map_diesel_error(connection, error, |message| PersistenceError::WriteFailed {
+            message,
+        })
     }
 
     fn cache_table_exists(

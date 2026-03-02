@@ -138,6 +138,53 @@ fn mount_review_comments(
     );
 }
 
+fn setup_test_repository(
+    verify_state: &VerifyResolutionsState,
+    old_content: &str,
+    new_content: &str,
+) -> StepResult {
+    let repo_dir = TempDir::new()?;
+    let repo = Repository::init(repo_dir.path())?;
+
+    let mut config = repo.config()?;
+    config.set_str("user.name", "Test User")?;
+    config.set_str("user.email", "test@example.com")?;
+
+    repo.remote("origin", "https://127.0.0.1/owner/repo.git")?;
+
+    let old = create_commit(&repo, "old", &[("src/main.rs", old_content)])?;
+    let head = create_commit(&repo, "head", &[("src/main.rs", new_content)])?;
+
+    verify_state.old_sha.set(old.to_string());
+    verify_state.head_sha.set(head.to_string());
+    verify_state
+        .repo_path
+        .set(repo_dir.path().to_string_lossy().to_string());
+    verify_state.repo_dir.set(repo_dir);
+    Ok(())
+}
+
+fn assert_verification_output(
+    verify_state: &VerifyResolutionsState,
+    expected_marker: &str,
+) -> StepResult {
+    let output = verify_state
+        .output
+        .get()
+        .ok_or("output should be captured")?;
+    if !output.status.success() {
+        return Err("expected success exit status".into());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !stdout.contains(expected_marker) {
+        return Err(
+            format!("expected stdout to contain '{expected_marker}', got: {stdout}").into(),
+        );
+    }
+    Ok(())
+}
+
 #[given("a migrated database for verification")]
 fn given_migrated_database(verify_state: &VerifyResolutionsState) -> StepResult {
     let temp_dir = TempDir::new()?;
@@ -151,64 +198,20 @@ fn given_migrated_database(verify_state: &VerifyResolutionsState) -> StepResult 
 
 #[given("a local repository where the referenced line changes between commits")]
 fn given_repo_with_changed_line(verify_state: &VerifyResolutionsState) -> StepResult {
-    let repo_dir = TempDir::new()?;
-    let repo = Repository::init(repo_dir.path())?;
-
-    let mut config = repo.config()?;
-    config.set_str("user.name", "Test User")?;
-    config.set_str("user.email", "test@example.com")?;
-
-    repo.remote("origin", "https://127.0.0.1/owner/repo.git")?;
-
-    let old = create_commit(
-        &repo,
-        "old",
-        &[("src/main.rs", "fn main() {\nlet x = 1;\n}\n")],
-    )?;
-    let head = create_commit(
-        &repo,
-        "head",
-        &[("src/main.rs", "fn main() {\nlet x = 2;\n}\n")],
-    )?;
-
-    verify_state.old_sha.set(old.to_string());
-    verify_state.head_sha.set(head.to_string());
-    verify_state
-        .repo_path
-        .set(repo_dir.path().to_string_lossy().to_string());
-    verify_state.repo_dir.set(repo_dir);
-    Ok(())
+    setup_test_repository(
+        verify_state,
+        "fn main() {\nlet x = 1;\n}\n",
+        "fn main() {\nlet x = 2;\n}\n",
+    )
 }
 
 #[given("a local repository where the referenced line is unchanged between commits")]
 fn given_repo_with_unchanged_line(verify_state: &VerifyResolutionsState) -> StepResult {
-    let repo_dir = TempDir::new()?;
-    let repo = Repository::init(repo_dir.path())?;
-
-    let mut config = repo.config()?;
-    config.set_str("user.name", "Test User")?;
-    config.set_str("user.email", "test@example.com")?;
-
-    repo.remote("origin", "https://127.0.0.1/owner/repo.git")?;
-
-    let old = create_commit(
-        &repo,
-        "old",
-        &[("src/main.rs", "fn main() {\nlet x = 1;\n}\n")],
-    )?;
-    let head = create_commit(
-        &repo,
-        "head",
-        &[("src/main.rs", "fn main() {\nlet x = 1;\n}\n")],
-    )?;
-
-    verify_state.old_sha.set(old.to_string());
-    verify_state.head_sha.set(head.to_string());
-    verify_state
-        .repo_path
-        .set(repo_dir.path().to_string_lossy().to_string());
-    verify_state.repo_dir.set(repo_dir);
-    Ok(())
+    setup_test_repository(
+        verify_state,
+        "fn main() {\nlet x = 1;\n}\n",
+        "fn main() {\nlet x = 1;\n}\n",
+    )
 }
 
 #[given("the GitHub API returns a review comment pointing at the old commit")]
@@ -277,34 +280,12 @@ fn when_user_runs_verification(verify_state: &VerifyResolutionsState) -> StepRes
 
 #[then("the CLI output marks the comment as verified")]
 fn then_output_is_verified(verify_state: &VerifyResolutionsState) -> StepResult {
-    let output = verify_state
-        .output
-        .get()
-        .ok_or("output should be captured")?;
-    assert!(output.status.success(), "expected success exit status");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("✓ verified comment 1"),
-        "expected stdout to contain '✓ verified comment 1', got: {stdout}"
-    );
-    Ok(())
+    assert_verification_output(verify_state, "✓ verified comment 1")
 }
 
 #[then("the CLI output marks the comment as unverified")]
 fn then_output_is_unverified(verify_state: &VerifyResolutionsState) -> StepResult {
-    let output = verify_state
-        .output
-        .get()
-        .ok_or("output should be captured")?;
-    assert!(output.status.success(), "expected success exit status");
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("✗ unverified comment 1"),
-        "expected stdout to contain '✗ unverified comment 1', got: {stdout}"
-    );
-    Ok(())
+    assert_verification_output(verify_state, "✗ unverified comment 1")
 }
 
 #[then("the verification status is persisted in the local cache")]

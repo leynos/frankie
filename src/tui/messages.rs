@@ -180,12 +180,59 @@ pub enum AppMsg {
     },
 }
 
+/// Logical categories used for message dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageCategory {
+    /// Cursor and paging navigation actions.
+    Navigation,
+    /// Filtering and filter-cycling actions.
+    Filter,
+    /// Full-screen diff context actions.
+    DiffContext,
+    /// Time-travel loading and navigation actions.
+    TimeTravel,
+    /// Codex execution and session-resume actions.
+    Codex,
+    /// Reply-drafting and AI rewrite actions.
+    ReplyDraft,
+    /// Automated resolution verification actions.
+    Verification,
+    /// Data refresh and background sync actions.
+    Data,
+    /// Lifecycle and miscellaneous actions.
+    Lifecycle,
+}
+
 impl AppMsg {
     /// Creates an error message from an `IntakeError`.
     #[must_use]
     #[doc(hidden)]
     pub fn from_error(error: &IntakeError) -> Self {
         Self::RefreshFailed(error.to_string())
+    }
+
+    /// Returns the dispatch category for this message.
+    #[must_use]
+    pub const fn category(&self) -> MessageCategory {
+        if self.is_navigation() {
+            MessageCategory::Navigation
+        } else if self.is_filter() {
+            MessageCategory::Filter
+        } else if self.is_diff_context() {
+            MessageCategory::DiffContext
+        } else if self.is_time_travel() {
+            MessageCategory::TimeTravel
+        } else if self.is_codex() {
+            MessageCategory::Codex
+        } else if self.is_reply_draft() {
+            MessageCategory::ReplyDraft
+        } else if self.is_verification() {
+            MessageCategory::Verification
+        } else if self.is_data() {
+            MessageCategory::Data
+        } else {
+            MessageCategory::Lifecycle
+        }
     }
 
     /// Returns `true` if this is a navigation message.
