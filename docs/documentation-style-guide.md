@@ -254,9 +254,9 @@ Include these sections as appropriate to the decision's complexity:
 
 ### Formatting guidance
 
-- Use second-level headings (`##`) for major sections.
-- Use third-level headings (`###`) for subsections (e.g. phases, option names).
-- Use tables to compare options when multiple dimensions are relevant. Include
+- Second-level headings (`##`) denote major sections.
+- Third-level headings (`###`) denote subsections (e.g. phases, option names).
+- Tables compare options when multiple dimensions are relevant. Include
   a caption below the table (e.g. “_Table 1: Trade-offs between X and Y._”).
 - Include code snippets with language identifiers when illustrating technical
   approaches. Use `no_run` for illustrative Rust code that should not be
