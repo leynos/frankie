@@ -10,6 +10,7 @@ use crate::ai::{
 };
 use crate::github::error::IntakeError;
 use crate::github::models::ReviewComment;
+use crate::verification::CommentVerificationResult;
 
 use super::state::{ReviewFilter, TimeTravelState};
 
@@ -120,6 +121,28 @@ pub enum AppMsg {
     /// Discard the currently previewed AI rewrite candidate.
     ReplyDraftAiDiscard,
 
+    // Resolution verification
+    /// Verify the currently selected comment against local git state.
+    VerifySelectedComment,
+    /// Verify all comments in the current filtered set against local git state.
+    VerifyFilteredComments,
+    /// Verification completed with results.
+    VerificationReady {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
+        /// Verification results (one per verified comment).
+        results: Vec<CommentVerificationResult>,
+        /// Persistence failure detail, if storing results failed.
+        persistence_error: Option<String>,
+    },
+    /// Verification failed unexpectedly.
+    VerificationFailed {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
+        /// User-readable failure message.
+        message: String,
+    },
+
     // Data loading
     /// Request a refresh of review data from the API.
     RefreshRequested,
@@ -198,6 +221,18 @@ impl AppMsg {
                 | Self::RefreshFailed(_)
                 | Self::SyncTick
                 | Self::SyncComplete { .. }
+        )
+    }
+
+    /// Returns `true` if this is a resolution verification message.
+    #[must_use]
+    pub const fn is_verification(&self) -> bool {
+        matches!(
+            self,
+            Self::VerifySelectedComment
+                | Self::VerifyFilteredComments
+                | Self::VerificationReady { .. }
+                | Self::VerificationFailed { .. }
         )
     }
 

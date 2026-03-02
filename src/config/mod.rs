@@ -33,6 +33,8 @@ pub enum OperationMode {
     ExportComments,
     /// AI-powered draft rewrite mode.
     AiRewrite,
+    /// Verify comment resolutions against local git state.
+    VerifyResolutions,
 }
 
 /// Application configuration supporting CLI, environment, and file sources.
@@ -53,6 +55,7 @@ pub enum OperationMode {
 /// - `FRANKIE_AI_MODEL` or `--ai-model`: AI model identifier
 /// - `FRANKIE_AI_API_KEY`, `OPENAI_API_KEY`, or `--ai-api-key`: AI API key
 /// - `FRANKIE_AI_TIMEOUT_SECONDS` or `--ai-timeout-seconds`: Request timeout
+/// - `--verify-resolutions`: Verify resolutions
 ///
 /// # Example
 ///
@@ -73,6 +76,10 @@ pub enum OperationMode {
         config_file_name = "frankie.toml",
         app_name = "frankie"
     )
+)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Configuration models independent CLI/config switches; refactoring into nested enums would either break the existing CLI surface or require ortho_config macro changes."
 )]
 pub struct FrankieConfig {
     /// GitHub pull request URL to load.
@@ -186,6 +193,26 @@ pub struct FrankieConfig {
     #[ortho_config(cli_short = 'e')]
     pub export: Option<String>,
 
+    /// Runs automated resolution verification and exits.
+    ///
+    /// When set, Frankie loads review comments for the pull request and
+    /// verifies whether the referenced code has changed between the comment's
+    /// commit and the local repository `HEAD`.
+    ///
+    /// Verification requires both a local git repository (`--repo-path` or
+    /// local discovery) and a migrated `SQLite` database (`--database-url`) so
+    /// results can be persisted locally.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--verify-resolutions`
+    /// - Config file: `verify_resolutions = true`
+    ///
+    /// Note: Environment variable `FRANKIE_VERIFY_RESOLUTIONS` is not
+    /// supported because `ortho_config` does not load boolean values from the
+    /// environment.
+    #[ortho_config()]
+    pub verify_resolutions: bool,
+
     /// Output file path for exported comments.
     ///
     /// When set, Frankie writes exported comments to the specified file
@@ -298,6 +325,7 @@ impl Default for FrankieConfig {
             no_local_discovery: false,
             tui: false,
             export: None,
+            verify_resolutions: false,
             output: None,
             template: None,
             repo_path: None,
@@ -439,7 +467,9 @@ impl FrankieConfig {
     /// owner and repo are provided, or `Interactive` otherwise.
     #[must_use]
     pub fn operation_mode(&self) -> OperationMode {
-        if self.should_ai_rewrite() {
+        if self.verify_resolutions {
+            OperationMode::VerifyResolutions
+        } else if self.should_ai_rewrite() {
             OperationMode::AiRewrite
         } else if self.should_export_comments() {
             OperationMode::ExportComments
@@ -494,6 +524,22 @@ impl FrankieConfig {
                     "together"
                 )
                 .to_owned(),
+            });
+        }
+
+        if self.verify_resolutions && self.should_ai_rewrite() {
+            return Err(IntakeError::Configuration {
+                message: concat!(
+                    "--verify-resolutions cannot be combined with AI rewrite ",
+                    "flags; remove --ai-rewrite-mode/--ai-rewrite-text"
+                )
+                .to_owned(),
+            });
+        }
+
+        if self.verify_resolutions && self.should_export_comments() {
+            return Err(IntakeError::Configuration {
+                message: "--verify-resolutions cannot be combined with --export".to_owned(),
             });
         }
 

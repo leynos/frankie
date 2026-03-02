@@ -129,6 +129,9 @@ impl ReviewApp {
         if msg.is_reply_draft() {
             return self.handle_reply_draft_msg(msg);
         }
+        if msg.is_verification() {
+            return self.handle_verification_msg(msg);
+        }
         if msg.is_data() {
             return self.handle_data_msg(msg);
         }

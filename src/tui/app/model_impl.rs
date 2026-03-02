@@ -16,6 +16,7 @@ use crate::tui::components::{
 };
 use crate::tui::input::{InputContext, map_key_to_message_with_context};
 use crate::tui::messages::AppMsg;
+use crate::verification::DiffReplayResolutionVerifier;
 
 impl Model for ReviewApp {
     fn init() -> (Self, Option<Cmd>) {
@@ -25,8 +26,19 @@ impl Model for ReviewApp {
 
         // Wire up git operations for time-travel if available
         if let Some((git_ops, head_sha)) = crate::tui::get_git_ops_context() {
-            model = model.with_git_ops(git_ops, head_sha);
+            let verifier = std::sync::Arc::new(DiffReplayResolutionVerifier::new(
+                std::sync::Arc::clone(&git_ops),
+            ));
+            model = model
+                .with_git_ops(git_ops, head_sha)
+                .with_resolution_verification_service(verifier);
         }
+
+        if let Some(cache) = crate::tui::get_review_comment_verification_cache() {
+            model = model.with_review_comment_verification_cache(cache);
+        }
+
+        model.load_cached_review_comment_verifications();
 
         // Emit an immediate startup message to trigger the first render cycle.
         // The sync timer is armed when `AppMsg::Initialized` is handled.
@@ -96,6 +108,7 @@ impl Model for ReviewApp {
             scroll_offset: self.filter_state.scroll_offset,
             visible_height: list_height,
             max_width: safe_terminal_width,
+            verification_results: Some(&self.review_comment_verifications),
         };
         let list_view = self.review_list.view(&list_ctx);
         output.push_str(&list_view);
@@ -108,12 +121,15 @@ impl Model for ReviewApp {
                 selected_comment.and_then(|comment| self.reply_draft_for_comment(comment.id));
             let reply_draft_ai_preview = selected_comment
                 .and_then(|comment| self.reply_draft_ai_preview_for_comment(comment.id));
+            let verification =
+                selected_comment.and_then(|comment| self.verification_for_comment(comment.id));
             let detail_ctx = CommentDetailViewContext {
                 selected_comment,
                 max_width: safe_terminal_width,
                 max_height: detail_height,
                 reply_draft,
                 reply_draft_ai_preview,
+                verification,
             };
             output.push_str(&self.comment_detail.view(&detail_ctx));
         }

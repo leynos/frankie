@@ -184,7 +184,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
 
 ### 3.3. Automated verification
 
-- [ ] 3.3.1. Implement automated resolution verification by replaying diffs
+- [x] 3.3.1. Implement automated resolution verification by replaying diffs
   and checking comment conditions; acceptance: verification results annotate
   comments as verified or unverified and persist status in the local cache;
   delivery includes reusable library APIs and both TUI and CLI access paths.

@@ -8,6 +8,7 @@
 mod error;
 mod migrator;
 mod pr_metadata_cache;
+mod review_comment_verification_cache;
 
 pub use error::PersistenceError;
 pub use migrator::{
@@ -15,4 +16,8 @@ pub use migrator::{
 };
 pub use pr_metadata_cache::{
     CachedPullRequestMetadata, PullRequestMetadataCache, PullRequestMetadataCacheWrite,
+};
+pub use review_comment_verification_cache::{
+    CachedReviewCommentVerification, ReviewCommentVerificationCache,
+    ReviewCommentVerificationCacheWrite,
 };

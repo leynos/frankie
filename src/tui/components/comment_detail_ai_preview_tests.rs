@@ -21,6 +21,7 @@ fn make_preview_ctx<'a>(
             lines,
             has_changes,
         }),
+        verification: None,
     }
 }
 

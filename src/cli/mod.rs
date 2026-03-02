@@ -23,6 +23,7 @@ pub mod output;
 pub mod repository_listing;
 pub mod review_tui;
 pub mod single_pr;
+pub mod verify_resolutions;
 
 #[cfg(test)]
 pub mod test_utils;

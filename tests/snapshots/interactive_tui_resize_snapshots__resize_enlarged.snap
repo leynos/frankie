@@ -33,4 +33,4 @@ Fixture review 1: adjust layout and confirm visibility
 +    println!("review 1");                                                      
 +}                                                                              
                                                                                 
-q:quit  ?:help  j/k:move  f:filter  a:reply  x:codex
+q:quit  ?:help  j/k:move  f:filter  v:verify  a:reply  x:codex

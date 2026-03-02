@@ -12,12 +12,13 @@ use bubbletea_rs::Program;
 
 use frankie::ai::{OpenAiCommentRewriteConfig, OpenAiCommentRewriteService};
 use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
+use frankie::persistence::ReviewCommentVerificationCache;
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
     ReplyDraftConfig, ReplyDraftMaxLength, ReviewApp, TimeTravelContext,
     set_comment_rewrite_service, set_git_ops_context, set_initial_reviews,
-    set_initial_terminal_size, set_refresh_context, set_reply_draft_config, set_telemetry_sink,
-    set_time_travel_context,
+    set_initial_terminal_size, set_refresh_context, set_reply_draft_config,
+    set_review_comment_verification_cache, set_telemetry_sink, set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -64,6 +65,13 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     });
 
     let _ = set_refresh_context(locator, token);
+
+    if let Some(database_url) = config.database_url.as_deref()
+        && let Ok(cache) = ReviewCommentVerificationCache::new(database_url.to_owned())
+    {
+        let _ = set_review_comment_verification_cache(Arc::new(cache));
+    }
+
     let reply_draft_config = ReplyDraftConfig::new(
         ReplyDraftMaxLength::new(config.reply_max_length),
         config.reply_templates.clone(),

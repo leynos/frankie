@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: DONE (2026-03-02)
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -100,34 +100,54 @@ Success is observable when:
 
 ## Progress
 
-- [ ] (2026-03-01 00:00Z) Draft ExecPlan created.
-- [ ] Stage A: Define verification semantics and library API.
-- [ ] Stage B: Implement git diff replay + condition evaluation.
-- [ ] Stage C: Persist verification results in SQLite cache.
-- [ ] Stage D: Add CLI access path for verification.
-- [ ] Stage E: Add TUI access path and annotations.
-- [ ] Stage F: Add unit + behavioural tests (happy/unhappy/edge).
-- [ ] Stage G: Update docs, mark roadmap done, pass gates.
+- [x] (2026-03-01 00:00Z) Draft ExecPlan created.
+- [x] (2026-03-02) Stage A: Define verification semantics and library API.
+- [x] (2026-03-02) Stage B: Implement git diff replay + condition evaluation.
+- [x] (2026-03-02) Stage C: Persist verification results in SQLite cache.
+- [x] (2026-03-02) Stage D: Add CLI access path for verification.
+- [x] (2026-03-02) Stage E: Add TUI access path and annotations.
+- [x] (2026-03-02) Stage F: Add unit + behavioural tests (happy/unhappy/edge).
+- [x] (2026-03-02) Stage G: Update docs, mark roadmap done, pass gates.
 
 ## Surprises & discoveries
 
-- None recorded yet.
+- `rstest-bdd` v0.5.0 `#[scenario(...)]` attributes use `path = ...` (not
+  `file = ...`), and `Slot::get()` requires `T: Clone` (use `with_ref` /
+  `with_mut` for non-`Clone` values such as `MockServer` or `ReviewApp`).
+- Diesel `sql_query(...).bind(...)` is awkward for dynamically sized `IN (...)`
+  lists because each bind changes the query type; it was simpler and more
+  maintainable to query by `target_sha` and filter by requested comment IDs in
+  memory for this cache.
 
 ## Decision log
 
-- Decision (pending): define a minimal, deterministic meaning for
-  "verified/unverified" that can be derived from repository diffs plus comment
-  fields (`file_path`, `commit_sha`, `line_number`, `diff_hunk`). Rationale:
-  acceptance requires verification without relying on AI calls. Date/Author:
-  pending / plan author.
-- Decision (pending): persist verification status in a dedicated SQLite table
-  keyed by GitHub comment ID and the verification target SHA. Rationale:
-  avoids requiring full review-comment persistence before this step and keeps
-  cache reads simple for adapters. Date/Author: pending / plan author.
+- Decision (2026-03-02): use conservative, deterministic semantics:
+  `verified` means the referenced line is removed or its content changes
+  between the comment commit and target commit (`HEAD` by default); otherwise
+  `unverified`. Rationale: provides stable, testable behaviour without AI or
+  workflow-specific heuristics. Recorded as ADR-007 in `docs/frankie-design.md`.
+- Decision (2026-03-02): persist results keyed by GitHub comment ID and target
+  SHA in the SQLite table review_comment_verifications. Store both verdict and
+  evidence. Rationale: supports re-verification at different targets and
+  preserves why a verdict was chosen.
 
 ## Outcomes & retrospective
 
-- Pending implementation.
+- Delivered:
+  - Shared verification domain APIs (`src/verification/`) and a default diff
+    replay verifier (`DiffReplayResolutionVerifier`).
+  - SQLite cache layer (`ReviewCommentVerificationCache`) with a dedicated
+    migration (`review_comment_verifications`).
+  - CLI surface (`--verify-resolutions`) to run verification and persist
+    results.
+  - TUI surface (`v` / `V`) to verify selected/filtered comments and annotate
+    the review list and detail view.
+  - Unit tests (`rstest`) and behavioural tests (`rstest-bdd` v0.5.0) for both
+    CLI and TUI paths.
+- Documentation updated:
+  - ADR-007 recorded in `docs/frankie-design.md`.
+  - User-facing behaviour documented in `docs/users-guide.md`.
+  - Roadmap entry marked done in `docs/roadmap.md`.
 
 ## Context and orientation
 
@@ -143,7 +163,8 @@ Relevant existing code and patterns:
 - `src/persistence/` currently provides a SQLite-backed PR metadata cache with
   explicit migrations and "thin wrapper around SQL" patterns, plus unit tests.
 - TUI uses MVU message handlers and DI patterns to keep async logic testable
-  (see `src/tui/app/time_travel_handlers/` and `src/tui/app/reply_draft_handlers.rs`).
+  (see `src/tui/app/time_travel_handlers/` and
+  `src/tui/app/reply_draft_handlers.rs`).
 
 Terminology used in this plan:
 

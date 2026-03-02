@@ -28,7 +28,11 @@ use crate::ai::{
 };
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
+use crate::persistence::ReviewCommentVerificationCache;
 use crate::tui::ReplyDraftConfig;
+use crate::verification::{
+    CommentVerificationEvidence, CommentVerificationResult, ResolutionVerificationService,
+};
 
 use super::components::{CommentDetailComponent, DiffContextComponent, ReviewListComponent};
 use super::messages::AppMsg;
@@ -46,6 +50,7 @@ mod reply_draft_handlers;
 mod routing;
 mod sync_handlers;
 mod time_travel_handlers;
+mod verification_handlers;
 mod view_mode;
 
 use routing::MessageRouting;
@@ -112,6 +117,16 @@ pub struct ReviewApp {
     reply_draft_config: ReplyDraftConfig,
     /// Service used to perform AI rewrite requests.
     comment_rewrite_service: Arc<dyn CommentRewriteService>,
+    /// Service used to verify comment resolutions, when a local repo is available.
+    resolution_verification_service: Option<Arc<dyn ResolutionVerificationService>>,
+    /// Cache for persisting verification results, when configured.
+    review_comment_verification_cache: Option<Arc<ReviewCommentVerificationCache>>,
+    /// Cached verification results keyed by GitHub comment ID.
+    review_comment_verifications: std::collections::HashMap<u64, CommentVerificationResult>,
+    /// Monotonic request ID used to ignore stale async verification completions.
+    next_verification_request_id: u64,
+    /// Most recent in-flight verification request ID.
+    in_flight_verification_request_id: Option<u64>,
 }
 
 /// Generated preview state before AI text is applied to a draft.
@@ -182,6 +197,11 @@ impl ReviewApp {
             in_flight_ai_rewrite_request_id: None,
             reply_draft_config: super::get_reply_draft_config(),
             comment_rewrite_service: super::get_comment_rewrite_service(),
+            resolution_verification_service: None,
+            review_comment_verification_cache: None,
+            review_comment_verifications: std::collections::HashMap::new(),
+            next_verification_request_id: 1,
+            in_flight_verification_request_id: None,
         };
         app.set_visible_list_height();
         app
@@ -233,6 +253,71 @@ impl ReviewApp {
     ) -> Self {
         self.comment_rewrite_service = comment_rewrite_service;
         self
+    }
+
+    /// Sets the resolution verification service for this app instance.
+    #[must_use]
+    pub fn with_resolution_verification_service(
+        mut self,
+        service: Arc<dyn ResolutionVerificationService>,
+    ) -> Self {
+        self.resolution_verification_service = Some(service);
+        self
+    }
+
+    /// Sets the verification cache used to load and persist verification results.
+    #[must_use]
+    pub fn with_review_comment_verification_cache(
+        mut self,
+        cache: Arc<ReviewCommentVerificationCache>,
+    ) -> Self {
+        self.review_comment_verification_cache = Some(cache);
+        self
+    }
+
+    /// Loads cached verification results for the current `head_sha`.
+    ///
+    /// This is a best-effort operation intended for startup: failures are
+    /// ignored and leave verification state empty.
+    pub(crate) fn load_cached_review_comment_verifications(&mut self) {
+        let Some(cache) = self.review_comment_verification_cache.as_ref() else {
+            return;
+        };
+        let Some(head_sha) = self.head_sha.as_deref() else {
+            return;
+        };
+
+        let ids: Vec<u64> = self.reviews.iter().map(|comment| comment.id).collect();
+        let Ok(rows) = cache.get_for_comments(&ids, head_sha) else {
+            return;
+        };
+
+        self.review_comment_verifications = rows
+            .into_iter()
+            .map(|(id, row)| {
+                (
+                    id,
+                    CommentVerificationResult::new(
+                        id,
+                        row.target_sha,
+                        row.status,
+                        CommentVerificationEvidence {
+                            kind: row.evidence_kind,
+                            message: row.evidence_message,
+                        },
+                    ),
+                )
+            })
+            .collect();
+    }
+
+    /// Returns cached verification state for a comment, if available.
+    #[must_use]
+    pub(crate) fn verification_for_comment(
+        &self,
+        comment_id: u64,
+    ) -> Option<&CommentVerificationResult> {
+        self.review_comment_verifications.get(&comment_id)
     }
 
     /// Returns whether a Codex execution run is currently active.

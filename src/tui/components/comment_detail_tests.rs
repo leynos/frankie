@@ -18,6 +18,7 @@ fn render_comment_detail(comment: Option<&ReviewComment>) -> String {
         max_height: 0, // unlimited
         reply_draft: None,
         reply_draft_ai_preview: None,
+        verification: None,
     };
     component.view(&ctx)
 }
@@ -48,6 +49,7 @@ fn render_comment_with_reply_draft(
             origin_label,
         }),
         reply_draft_ai_preview: None,
+        verification: None,
     };
     component.view(&ctx)
 }

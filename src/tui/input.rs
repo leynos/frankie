@@ -93,6 +93,8 @@ pub const fn map_key_to_message_with_context(
         InputContext::ReviewList => match key.key {
             KeyCode::Char('x') => Some(AppMsg::StartCodexExecution),
             KeyCode::Char('a') => Some(AppMsg::StartReplyDraft),
+            KeyCode::Char('v') => Some(AppMsg::VerifySelectedComment),
+            KeyCode::Char('V') => Some(AppMsg::VerifyFilteredComments),
             _ => shared_keys(key),
         },
         InputContext::ReplyDraft => match key.key {
@@ -161,6 +163,16 @@ mod tests {
         KeyCode::Char('a'),
         Some(InputContext::ReviewList),
         Some(AppMsg::StartReplyDraft)
+    )]
+    #[case::review_list_v_verify_selected(
+        KeyCode::Char('v'),
+        Some(InputContext::ReviewList),
+        Some(AppMsg::VerifySelectedComment)
+    )]
+    #[case::review_list_shift_v_verify_filtered(
+        KeyCode::Char('V'),
+        Some(InputContext::ReviewList),
+        Some(AppMsg::VerifyFilteredComments)
     )]
     #[case::time_travel_x_unmapped(KeyCode::Char('x'), Some(InputContext::TimeTravel), None)]
     #[case::diff_context_esc_hide(

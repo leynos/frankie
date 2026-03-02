@@ -7,6 +7,7 @@
 
 use crate::ai::{CommentRewriteMode, SideBySideLine};
 use crate::github::models::ReviewComment;
+use crate::verification::CommentVerificationResult;
 
 use super::code_highlight::CodeHighlighter;
 use super::text_truncate::truncate_to_height;
@@ -34,6 +35,8 @@ pub struct CommentDetailViewContext<'a> {
     pub reply_draft: Option<ReplyDraftRenderContext<'a>>,
     /// Pending AI rewrite preview details for the active reply draft, if any.
     pub reply_draft_ai_preview: Option<ReplyDraftAiPreviewRenderContext<'a>>,
+    /// Cached verification result for the selected comment, if available.
+    pub verification: Option<&'a CommentVerificationResult>,
 }
 
 /// Render-only reply-draft context for the comment detail view.
@@ -115,6 +118,11 @@ impl CommentDetailComponent {
         output.push_str(&Self::render_header(comment));
         output.push('\n');
 
+        if let Some(verification) = ctx.verification {
+            output.push_str(&Self::render_verification(verification));
+            output.push('\n');
+        }
+
         // Body text
         output.push_str(&Self::render_body(comment, ctx.max_width));
         output.push('\n');
@@ -161,6 +169,21 @@ impl CommentDetailComponent {
     fn render_body(comment: &ReviewComment, max_width: usize) -> String {
         let body = comment.body.as_deref().unwrap_or("(no comment text)");
         wrap_text(body, max_width)
+    }
+
+    fn render_verification(result: &CommentVerificationResult) -> String {
+        let status = result.status();
+        let evidence = result.evidence();
+        let evidence_suffix = evidence
+            .message
+            .as_deref()
+            .map_or_else(String::new, |message| format!(" - {message}"));
+        format!(
+            "Verification: {} {} ({}){evidence_suffix}",
+            status.symbol(),
+            status.as_db_value(),
+            evidence.kind.as_db_value()
+        )
     }
 
     /// Renders the code context with syntax highlighting.
