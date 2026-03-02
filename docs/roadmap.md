@@ -2,8 +2,8 @@
 
 This roadmap translates the design in `docs/frankie-design.md` into phased,
 measurable delivery slices. It focuses on outcomes, avoids time commitments,
-and keeps tasks small enough to complete within a few weeks. Completion
-criteria emphasize observable behaviours and tests rather than intent.
+and keeps tasks small enough to complete. Completion criteria emphasize
+observable behaviours and tests rather than intent.
 
 ## Scope and principles
 
@@ -19,7 +19,7 @@ criteria emphasize observable behaviours and tests rather than intent.
 
 ## Cross-surface delivery contract
 
-See `docs/frankie-design.md` §ADR-005.
+See `docs/adr-005-cross-surface-library-first-delivery.md`.
 
 - For every roadmap item that is still unchecked, completion requires a stable
   library API in `frankie` and an interactive TUI integration when the feature
@@ -39,10 +39,11 @@ support later workflow features.
 
 ### 1.1. GitHub and repository intake
 
-- [x] 1.1.1. Provide PR URL intake using octocrab with token validation and
-  explicit error surfacing; acceptance: opening a valid PR URL loads metadata
-  and comments, invalid tokens return a user-readable failure message, and
-  integration tests cover success and auth error paths.
+- [x] 1.1.1. Provide pull request (PR) URL intake using octocrab with token
+  validation and explicit error surfacing; acceptance: opening a valid pull
+  request (PR) URL loads metadata and comments, invalid tokens return a
+  user-readable failure message, and integration tests cover success and auth
+  error paths.
 - [x] 1.1.2. Implement command-line parsing with `ortho-config` so flags,
   environment variables, and config files share a single schema; acceptance:
   CLI help documents all options, precedence order is tested, and defaults
@@ -94,17 +95,27 @@ context.
   mapping correctness against git2 diffs.
 - [ ] 2.2.4. Make `TimeTravelParams` part of the public library API, including
   `from_comment` (or equivalent) to derive parameters from comment metadata.
-  See `docs/frankie-design.md` §ADR-005.
+  Acceptance: a public `TimeTravelParams` (or equivalent) is available outwith
+  `crate::tui`, and tests cover both successful extraction and missing metadata
+  failures. See `docs/adr-005-cross-surface-library-first-delivery.md`.
 - [ ] 2.2.5. Make `TimeTravelState` a stable public type (remove
   `#[doc(hidden)]` and publish required getters currently `pub(crate)`).
-  Requires 2.2.4. See `docs/frankie-design.md` §ADR-005.
+  Acceptance: `TimeTravelState` is public (not `#[doc(hidden)]`), provides
+  stable read accessors required by renderers, and is exercised by tests that
+  do not import TUI modules. Requires 2.2.4. See
+  `docs/adr-005-cross-surface-library-first-delivery.md`.
 - [ ] 2.2.6. Replace the fixed internal commit history limit with configurable
   options (for example a `commit_history_limit` setting for time travel).
-  Requires 2.2.4. See `docs/frankie-design.md` §ADR-005.
+  Acceptance: the history limit is configurable (default remains 50) and tests
+  verify both default and overridden limits affect loaded history length.
+  Requires 2.2.4. See `docs/adr-005-cross-surface-library-first-delivery.md`.
 - [ ] 2.2.7. Extract time-travel orchestration out of TUI handlers into pure
   library services, keeping `bubbletea_rs::Cmd`, `spawn_blocking`, and any
   global `OnceLock` context in the TUI adapter layer only. Requires 2.2.5 and
-  2.2.6. See `docs/frankie-design.md` §ADR-005.
+  2.2.6. Acceptance: orchestration is implemented without `bubbletea_rs` types
+  in the library surface, the TUI depends on it as an adapter, and tests cover
+  load and navigation using a mocked `GitOperations`. See
+  `docs/adr-005-cross-surface-library-first-delivery.md`.
 
 ### 2.3. Comment export pipeline
 
@@ -127,8 +138,8 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
 - [x] 3.1.2. Enable session resumption for interrupted Codex runs; acceptance:
   resuming reuses prior transcript and preserves approvals; the resumption code
   path is guarded by regression tests with at least 90% unit and integration
-  coverage; CI demonstrates at least 99% successful resume outcomes for
-  interrupted runs across five end-to-end scenarios.
+  coverage; continuous integration (CI) demonstrates at least 99% successful
+  resume outcomes for interrupted runs across five end-to-end scenarios.
 
 ### 3.2. Template and reply automation
 
@@ -142,25 +153,34 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   submission, AI rewording, and server-side workflow automation; prerequisites
   or dependencies: approved design mockups, available keyboard shortcut
   service, and a defined length-limit configuration schema. See
-  `docs/frankie-design.md` §ADR-004.
+  `docs/adr-004-inline-template-based-reply-drafting.md`.
 - [x] 3.2.2. Add AI-powered comment expansion and rewording; acceptance:
   generated text is labelled as AI-originated, offers side-by-side diff
   preview, and falls back gracefully when the AI call fails; delivery includes
   reusable library APIs and both TUI and CLI access paths. See
-  `docs/frankie-design.md` §ADR-006.
+  `docs/adr-006-ai-rewrite-preview-and-fallback-contract.md`.
 - [ ] 3.2.3. Extract reply templating out of TUI state into a top-level library
   module and re-export it as a public API (currently in `src/tui/state/`). See
-  `docs/frankie-design.md` §ADR-005.
+  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: template
+  rendering moves to a non-TUI module with a public API, and tests cover
+  substitution, escaping, and error reporting.
 - [ ] 3.2.4. Make reply templating input a library data transfer object (DTO)
   (for example `ReplyTemplateContext`) instead of requiring `ReviewComment`
-  directly. Requires 3.2.3. See `docs/frankie-design.md` §ADR-005.
+  directly. Requires 3.2.3. See
+  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: a public
+  DTO is used by the renderer, and adapter tests cover mapping from
+  `ReviewComment` into the DTO without changing rendered output.
 - [ ] 3.2.5. Expose default reply templates as a public library API (they are
-  currently crate-private). Requires 3.2.3. See `docs/frankie-design.md`
-  §ADR-004.
+  currently crate-private). Requires 3.2.3. See
+  `docs/adr-004-inline-template-based-reply-drafting.md`. Acceptance: defaults
+  are publicly available, deterministic, and non-empty, and tests assert the
+  configured defaults remain present.
 - [ ] 3.2.6. Keep TUI-specific pieces as adapters only by updating the TUI and
   CLI surfaces to depend on the library reply templating APIs, not
-  `crate::tui::state`. Requires 3.2.4 and 3.2.5. See `docs/frankie-design.md`
-  §ADR-005.
+  `crate::tui::state`. Requires 3.2.4 and 3.2.5. See
+  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: no call
+  sites outwith `src/tui/` depend on `crate::tui::state` templating symbols,
+  and regression tests verify templates render identically.
 
 ### 3.3. Automated verification
 
@@ -229,7 +249,12 @@ Deliver user-facing refinements, accessibility, documentation, and packaging.
   documents integration expectations for TUI, library, and CLI consumers.
 - [ ] 5.2.3. Re-export extracted core modules from `src/lib.rs` so the crate is
   usable as a library without the TUI runtime. Requires 2.2.7 and 3.2.6. See
-  `docs/frankie-design.md` §ADR-005.
+  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: the
+  `frankie` crate exports the extracted modules, and a library-only build
+  compiles without pulling in TUI runtime dependencies.
 - [ ] 5.2.4. Gate TUI dependencies behind a `tui` feature in `Cargo.toml`,
   ensuring consumers can build and use the library without pulling in the TUI
-  runtime. Requires 5.2.3. See `docs/frankie-design.md` §ADR-005.
+  runtime. Requires 5.2.3. See
+  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance:
+  `cargo build -p frankie --no-default-features` succeeds, and
+  `cargo build -p frankie --features tui` builds the TUI surface.
