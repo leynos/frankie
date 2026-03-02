@@ -222,8 +222,12 @@ Place ADRs in the `docs/` directory.
 Every ADR must include the following sections in order:
 
 - **Status:** One of `Proposed`, `Accepted`, `Superseded`, or `Deprecated`. For
-  `Accepted` status, include the date and a brief summary of what was decided.
+  `Accepted` status, include the acceptance date and a brief summary of what
+  was decided.
 - **Date:** The date the ADR was created or last updated (format: YYYY-MM-DD).
+  The date recorded in **Status** marks when the decision was accepted. The
+  **Date** field tracks the ADR document lifecycle (creation and subsequent
+  updates).
 - **Context and Problem Statement:** Describe the situation, constraints, and
   the problem or question that prompted the decision. Include enough background
   for readers unfamiliar with the history.
