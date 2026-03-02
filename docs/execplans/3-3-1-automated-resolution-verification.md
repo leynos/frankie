@@ -127,10 +127,12 @@ Success is observable when:
   `unverified`. Rationale: provides stable, testable behaviour without AI or
   workflow-specific heuristics. Recorded as Architecture Decision Record
   (ADR-007) in `docs/frankie-design.md`.
-- Decision (2026-03-02): persist results keyed by GitHub comment ID and target
-  SHA in the SQLite table review_comment_verifications. Store both verdict and
-  evidence. Rationale: supports re-verification at different targets and
-  preserves why a verdict was chosen.
+- Decision (2026-03-02): persist results with a composite unique key on
+  `(github_comment_id, target_sha)` in the SQLite table
+  `review_comment_verifications`. Store both verdict and evidence. Rationale:
+  prevents newer verifications from overwriting older target-SHA results for
+  the same comment while still making re-verification for the same target an
+  idempotent upsert.
 
 ## Outcomes & retrospective
 
@@ -294,7 +296,8 @@ annotate comments without recomputation.
    - `evidence_message` (text, nullable)
    - `verified_at_unix` (integer)
    - `updated_at` (timestamp default current timestamp)
-   - unique key: (`github_comment_id`, `target_sha`)
+   - unique key: (`github_comment_id`, `target_sha`) so one comment can keep
+     separate cached outcomes per verified target SHA
 2. Add a persistence wrapper under `src/persistence/`, following the
    `pr_metadata_cache` patterns:
    - `get_for_comments(&[u64], target_sha)` returning a map

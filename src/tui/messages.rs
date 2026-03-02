@@ -214,24 +214,55 @@ impl AppMsg {
     /// Returns the dispatch category for this message.
     #[must_use]
     pub const fn category(&self) -> MessageCategory {
-        if self.is_navigation() {
-            MessageCategory::Navigation
-        } else if self.is_filter() {
-            MessageCategory::Filter
-        } else if self.is_diff_context() {
-            MessageCategory::DiffContext
-        } else if self.is_time_travel() {
-            MessageCategory::TimeTravel
-        } else if self.is_codex() {
-            MessageCategory::Codex
-        } else if self.is_reply_draft() {
-            MessageCategory::ReplyDraft
-        } else if self.is_verification() {
-            MessageCategory::Verification
-        } else if self.is_data() {
-            MessageCategory::Data
-        } else {
-            MessageCategory::Lifecycle
+        match self {
+            Self::CursorUp
+            | Self::CursorDown
+            | Self::PageUp
+            | Self::PageDown
+            | Self::Home
+            | Self::End => MessageCategory::Navigation,
+            Self::SetFilter(_) | Self::ClearFilter | Self::CycleFilter => MessageCategory::Filter,
+            Self::ShowDiffContext | Self::HideDiffContext | Self::NextHunk | Self::PreviousHunk => {
+                MessageCategory::DiffContext
+            }
+            Self::EnterTimeTravel
+            | Self::ExitTimeTravel
+            | Self::TimeTravelLoaded(_)
+            | Self::TimeTravelFailed(_)
+            | Self::NextCommit
+            | Self::PreviousCommit
+            | Self::CommitNavigated(_) => MessageCategory::TimeTravel,
+            Self::StartCodexExecution
+            | Self::CodexPollTick
+            | Self::CodexProgress(_)
+            | Self::CodexFinished(_)
+            | Self::ResumePromptShown(_)
+            | Self::ResumeAccepted
+            | Self::ResumeDeclined => MessageCategory::Codex,
+            Self::StartReplyDraft
+            | Self::ReplyDraftInsertTemplate { .. }
+            | Self::ReplyDraftInsertChar(_)
+            | Self::ReplyDraftBackspace
+            | Self::ReplyDraftRequestSend
+            | Self::ReplyDraftCancel
+            | Self::ReplyDraftRequestAiRewrite { .. }
+            | Self::ReplyDraftAiRewriteReady { .. }
+            | Self::ReplyDraftAiApply
+            | Self::ReplyDraftAiDiscard => MessageCategory::ReplyDraft,
+            Self::VerifySelectedComment
+            | Self::VerifyFilteredComments
+            | Self::VerificationReady { .. }
+            | Self::VerificationFailed { .. } => MessageCategory::Verification,
+            Self::RefreshRequested
+            | Self::RefreshComplete(_)
+            | Self::RefreshFailed(_)
+            | Self::SyncTick
+            | Self::SyncComplete { .. } => MessageCategory::Data,
+            Self::EscapePressed
+            | Self::Initialized
+            | Self::Quit
+            | Self::ToggleHelp
+            | Self::WindowResized { .. } => MessageCategory::Lifecycle,
         }
     }
 

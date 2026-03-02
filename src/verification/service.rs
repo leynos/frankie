@@ -71,23 +71,13 @@ impl DiffReplayResolutionVerifier {
         Self { git_ops }
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "Required helper signature keeps call sites explicit and mirrors requested API shape"
-    )]
     fn result_with_status(
         comment_id: u64,
         target_sha: &str,
         status: CommentVerificationStatus,
-        kind: CommentVerificationEvidenceKind,
-        message: Option<String>,
+        evidence: CommentVerificationEvidence,
     ) -> CommentVerificationResult {
-        Self::result_for(
-            comment_id,
-            target_sha,
-            status,
-            CommentVerificationEvidence { kind, message },
-        )
+        Self::result_for(comment_id, target_sha, status, evidence)
     }
 
     fn result_for(
@@ -109,8 +99,10 @@ impl DiffReplayResolutionVerifier {
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::InsufficientMetadata,
-                Some("missing commit SHA".to_owned()),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::InsufficientMetadata,
+                    message: Some("missing commit SHA".to_owned()),
+                },
             ));
         };
         let Some(file_path) = comment.file_path.as_deref() else {
@@ -118,8 +110,10 @@ impl DiffReplayResolutionVerifier {
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::InsufficientMetadata,
-                Some("missing file path".to_owned()),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::InsufficientMetadata,
+                    message: Some("missing file path".to_owned()),
+                },
             ));
         };
         let old_line = comment
@@ -131,8 +125,10 @@ impl DiffReplayResolutionVerifier {
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::InsufficientMetadata,
-                Some("missing line number".to_owned()),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::InsufficientMetadata,
+                    message: Some("missing line number".to_owned()),
+                },
             ));
         }
 
@@ -161,8 +157,10 @@ impl DiffReplayResolutionVerifier {
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::RepositoryDataUnavailable,
-                Some(error.to_string()),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::RepositoryDataUnavailable,
+                    message: Some(error.to_string()),
+                },
             )
         })
     }
@@ -180,8 +178,10 @@ impl DiffReplayResolutionVerifier {
                     ctx.comment_id,
                     ctx.target_sha,
                     CommentVerificationStatus::Unverified,
-                    CommentVerificationEvidenceKind::RepositoryDataUnavailable,
-                    Some(error.to_string()),
+                    CommentVerificationEvidence {
+                        kind: CommentVerificationEvidenceKind::RepositoryDataUnavailable,
+                        message: Some(error.to_string()),
+                    },
                 )
             })
     }
@@ -214,8 +214,10 @@ impl ResolutionVerificationService for DiffReplayResolutionVerifier {
                     comment_id,
                     target_sha,
                     CommentVerificationStatus::Verified,
-                    CommentVerificationEvidenceKind::LineRemoved,
-                    Some(mapping.display()),
+                    CommentVerificationEvidence {
+                        kind: CommentVerificationEvidenceKind::LineRemoved,
+                        message: Some(mapping.display()),
+                    },
                 );
             }
             LineMappingStatus::Exact | LineMappingStatus::Moved => {}
@@ -252,11 +254,13 @@ impl DiffReplayResolutionVerifier {
                 comparison.comment_id,
                 comparison.target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::LineOutOfBounds,
-                Some(format!(
-                    "old commit line {} is out of bounds",
-                    comparison.old_line_number
-                )),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::LineOutOfBounds,
+                    message: Some(format!(
+                        "old commit line {} is out of bounds",
+                        comparison.old_line_number
+                    )),
+                },
             );
         };
 
@@ -265,8 +269,10 @@ impl DiffReplayResolutionVerifier {
                 comparison.comment_id,
                 comparison.target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::RepositoryDataUnavailable,
-                Some("line mapping did not produce a new line number".to_owned()),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::RepositoryDataUnavailable,
+                    message: Some("line mapping did not produce a new line number".to_owned()),
+                },
             );
         };
 
@@ -275,10 +281,12 @@ impl DiffReplayResolutionVerifier {
                 comparison.comment_id,
                 comparison.target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::LineOutOfBounds,
-                Some(format!(
-                    "new commit line {new_line_number} is out of bounds"
-                )),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::LineOutOfBounds,
+                    message: Some(format!(
+                        "new commit line {new_line_number} is out of bounds"
+                    )),
+                },
             );
         };
 
@@ -287,16 +295,20 @@ impl DiffReplayResolutionVerifier {
                 comparison.comment_id,
                 comparison.target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidenceKind::LineUnchanged,
-                Some(comparison.mapping.display()),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::LineUnchanged,
+                    message: Some(comparison.mapping.display()),
+                },
             )
         } else {
             Self::result_with_status(
                 comparison.comment_id,
                 comparison.target_sha,
                 CommentVerificationStatus::Verified,
-                CommentVerificationEvidenceKind::LineChanged,
-                Some(comparison.mapping.display()),
+                CommentVerificationEvidence {
+                    kind: CommentVerificationEvidenceKind::LineChanged,
+                    message: Some(comparison.mapping.display()),
+                },
             )
         }
     }
