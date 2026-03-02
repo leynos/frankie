@@ -125,7 +125,8 @@ Success is observable when:
   `verified` means the referenced line is removed or its content changes
   between the comment commit and target commit (`HEAD` by default); otherwise
   `unverified`. Rationale: provides stable, testable behaviour without AI or
-  workflow-specific heuristics. Recorded as ADR-007 in `docs/frankie-design.md`.
+  workflow-specific heuristics. Recorded as Architecture Decision Record
+  (ADR-007) in `docs/frankie-design.md`.
 - Decision (2026-03-02): persist results keyed by GitHub comment ID and target
   SHA in the SQLite table review_comment_verifications. Store both verdict and
   evidence. Rationale: supports re-verification at different targets and
@@ -259,6 +260,20 @@ Baseline algorithm (Option A):
 7. If fetching file content fails (missing commit, missing file), classify as
    `Unverified` with evidence `RepositoryDataUnavailable { message }`.
 
+Deterministic anchor rules:
+
+- When both `original_line_number` and `line_number` are present (outdated
+  diff comments), anchor mapping from `comment.commit_sha` using
+  `original_line_number`; use `line_number` only as a fallback when
+  `original_line_number` is absent.
+- When a comment is effectively multi-line (for example, a future model with
+  range metadata), verify each anchored line in the range and classify:
+  `Verified` when at least one anchored line is removed or changed, otherwise
+  `Unverified` when all anchored lines are unchanged.
+- When neither a single anchor nor a range can be derived, return `Unverified`
+  with `InsufficientMetadata` so adapters surface a deterministic result rather
+  than inferring behaviour.
+
 Note: `diff_hunk` is not required for the baseline algorithm, but can be used
 to improve evidence and reduce false positives by comparing a small context
 window around the line. If `diff_hunk` is used, keep parsing logic in the
@@ -272,17 +287,18 @@ annotate comments without recomputation.
 
 1. Add a migration that introduces a dedicated cache table, for example:
    `review_comment_verifications` with columns:
-   - `github_comment_id` (unique key)
+   - `github_comment_id` (integer)
    - `target_sha` (text, the commit SHA verified against)
    - `status` (text: `verified` / `unverified`)
    - `evidence_kind` (text)
    - `evidence_message` (text, nullable)
    - `verified_at_unix` (integer)
    - `updated_at` (timestamp default current timestamp)
+   - unique key: (`github_comment_id`, `target_sha`)
 2. Add a persistence wrapper under `src/persistence/`, following the
    `pr_metadata_cache` patterns:
    - `get_for_comments(&[u64], target_sha)` returning a map
-   - `upsert_result(github_comment_id, result)`
+   - `upsert_result(github_comment_id, target_sha, result)`
 3. Decide how `database_url` is sourced:
    - Preferred: require `database_url` for verification features and surface a
      configuration error when missing.
@@ -390,7 +406,7 @@ Goal: ensure the feature is documented, decisions are captured, and the repo
 passes all required gates.
 
 1. Update `docs/frankie-design.md`:
-   - Add `ADR-007` describing:
+   - Add Architecture Decision Record (`ADR-007`) describing:
      - the chosen semantics for verified/unverified (and why)
      - persistence schema and rationale
      - adapter responsibilities and DI approach
