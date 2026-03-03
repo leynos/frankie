@@ -450,21 +450,23 @@ classDiagram
 
 ### 1.2.6 Architecture decision record index
 
-The canonical ADR set is maintained in
-[Section 5.3.6](#536-architecture-decision-records):
+The canonical set of Architectural Decision Records (ADRs) is maintained as
+standalone `adr-NNN-*.md` files in `docs/`, following
+`docs/documentation-style-guide.md`. Section 5.3.6 provides an ADR index within
+this design document for cross-references.
 
-- [ADR-001](#architecture-decision-record-adr-001-incremental-sync-for-review-comments):
-  Incremental sync for review comments.
-- [ADR-002](#architecture-decision-record-adr-002-codex-execution-stream-and-transcript-model):
-  Codex execution stream and transcript model.
-- [ADR-003](#architecture-decision-record-adr-003-session-resumption-for-interrupted-codex-runs):
-  Session resumption for interrupted Codex runs.
-- [ADR-004](#architecture-decision-record-adr-004-inline-template-based-reply-drafting):
-  Inline template-based reply drafting.
-- [ADR-005](#architecture-decision-record-adr-005-cross-surface-library-first-delivery):
-  Cross-surface, library-first delivery contract.
-- [ADR-006](#architecture-decision-record-adr-006-ai-rewrite-preview-and-fallback-contract):
-  AI rewrite preview and fallback contract.
+- [ADR-001](adr-001-incremental-sync-for-review-comments.md): Incremental sync
+  for review comments.
+- [ADR-002](adr-002-codex-execution-stream-and-transcript-model.md): Codex
+  execution stream and transcript model.
+- [ADR-003](adr-003-session-resumption-for-interrupted-codex-runs.md): Session
+  resumption for interrupted Codex runs.
+- [ADR-004](adr-004-inline-template-based-reply-drafting.md): Inline
+  template-based reply drafting.
+- [ADR-005](adr-005-cross-surface-library-first-delivery.md): Cross-surface,
+  library-first delivery contract.
+- [ADR-006](adr-006-ai-rewrite-preview-and-fallback-contract.md): AI rewrite
+  preview and fallback contract.
 
 ## 1.3 Scope
 
@@ -2797,6 +2799,10 @@ environments.
 
 ### 5.3.6 Architecture Decision Records
 
+Architecture decisions are documented as standalone ADR files in `docs/`,
+following `docs/documentation-style-guide.md`. This section is an index to the
+canonical ADR files for cross-references from the design.
+
 ```mermaid
 flowchart LR
     A["Architecture Decision"]
@@ -2849,238 +2855,33 @@ flowchart LR
 
 #### Architecture decision record (ADR-001): incremental sync for review comments
 
-**Context**: The TUI needs to keep review comments up to date without losing
-the user's current selection or requiring manual refresh.
-
-**Decision**: Implement timer-based background sync (30-second interval) with
-ID-based selection tracking.
-
-**Rationale**:
-
-1. **Timer + Manual Approach**: Using one-shot timers with explicit re-arming
-   prevents timer accumulation. Manual refresh (`r` key) delegates to the same
-   sync logic for consistent behaviour.
-
-2. **ID-Based Merge**: Comments are merged using `ReviewComment.id` as the
-   stable identifier. The algorithm inserts new comments, updates modified
-   ones, and removes deleted ones. Results are sorted by ID for deterministic
-   ordering.
-
-3. **Selection Preservation**: Instead of tracking cursor position (which
-   becomes invalid after data changes), the TUI tracks `selected_comment_id`.
-   After merge, the cursor is restored to the new index of the selected ID, or
-   clamped if the comment was deleted.
-
-4. **Telemetry Integration**: Sync latency is recorded via the
-   `SyncLatencyRecorded` telemetry event, including duration, comment count,
-   and whether the sync was incremental.
-
-**Consequences**:
-
-- Users see fresh data without manual intervention
-- Selection is preserved across syncs unless the selected comment is deleted
-- Latency metrics enable performance monitoring
+Canonical record:
+[docs/adr-001-incremental-sync-for-review-comments.md](adr-001-incremental-sync-for-review-comments.md).
 
 #### Architecture decision record (ADR-002): Codex execution stream and transcript model
 
-**Context**: The review TUI must trigger `codex app-server` directly from
-filtered comments, display live progress, and preserve machine-readable
-execution transcripts for diagnostics.
-
-**Decision**: Integrate Codex execution through a dedicated AI service module
-that runs `codex app-server` via the JSON-RPC protocol, polls progress updates
-in the TUI loop, and writes one JSONL transcript file per run to the local
-state directory.
-
-**Rationale**:
-
-1. **Boundary clarity**: Process execution and stream parsing live in `src/ai/`
-   so TUI state transitions remain in `src/tui/`.
-
-2. **Deterministic persistence**: Transcript files use a deterministic naming
-   pattern `<owner>-<repo>-pr-<number>-<utc-yyyymmddThhmmssZ>.jsonl` under
-   `${XDG_STATE_HOME:-$HOME/.local/state}/frankie/codex-transcripts/`.
-
-3. **Operational visibility**: The TUI status bar shows streamed progress
-   events while runs are active and maps non-zero exits into explicit error
-   messages including exit code and transcript path.
-
-**Consequences**:
-
-- Users can launch Codex with a single key (`x`) from the review list view.
-- Transcripts are retained on disk for both successful and failed runs.
-- Non-zero Codex exits are no longer silent and are surfaced immediately in the
-  interface.
+Canonical record:
+[docs/adr-002-codex-execution-stream-and-transcript-model.md](adr-002-codex-execution-stream-and-transcript-model.md).
 
 #### Architecture decision record (ADR-003): Session resumption for interrupted Codex runs
 
-**Context**: Codex runs can be interrupted by process crashes, signals, or
-server-side interruptions. Users lose progress and must restart from scratch,
-including re-approval of previously accepted actions.
-
-**Decision**: Persist session state in JSON sidecar files alongside transcripts
-and use the native `thread/resume` JSON-RPC method to reconnect to a prior
-server-side thread when an interrupted session is detected.
-
-**Rationale**:
-
-1. **Sidecar file design**: Each Codex run creates a `.session.json` file
-   alongside its `.jsonl` transcript, recording thread ID, PR context, status,
-   and timestamps. Sidecar files are self-contained and do not require database
-   changes.
-
-2. **Native protocol usage**: The `thread/resume` method is part of the Codex
-   `app-server` JSON-RPC protocol. Using it directly avoids re-implementing
-   conversation state management and preserves server-side approvals.
-
-3. **Thread ID capture**: The thread ID from the `thread/start` response is
-   stored in session state as soon as it is received. This ensures resumption
-   is possible even when the interruption occurs during execution.
-
-4. **Resume prompt UX**: The resume prompt is shown inline in the status bar
-   (`y`/`n`/`Esc`) rather than as a modal dialog. This keeps the interaction
-   lightweight and consistent with the existing TUI key-driven workflow.
-
-**Consequences**:
-
-- Interrupted runs can be resumed with preserved approvals and conversation
-  history.
-- Transcript files accumulate content across sessions, separated by
-  `--- session resumed ---` markers.
-- Session discovery scans sidecar files on disk; no additional database schema
-  is required.
-- The most recent interrupted session per PR is offered for resumption; users
-  can decline to start fresh.
+Canonical record:
+[docs/adr-003-session-resumption-for-interrupted-codex-runs.md](adr-003-session-resumption-for-interrupted-codex-runs.md).
 
 #### Architecture decision record (ADR-004): inline template-based reply drafting
 
-**Context**: Review workflows need fast, keyboard-driven reply composition
-without leaving the text user interface (TUI). The roadmap acceptance for this
-step requires inline rendering, edit-before-send behaviour, and configured
-length enforcement.
-
-**Decision**: Add a dedicated reply-draft state slice to the review TUI with
-template insertion (`1` to `9`), free-form editing, and a local send-intent
-action. Templates are rendered with `MiniJinja` using comment-scoped variables
-(`comment_id`, `reviewer`, `file`, `line`, `body`). The first-use flow is
-explicit: press `a` to enter reply-draft mode, use template slots `1` to `9` to
-insert a starter reply, edit inline, then press `Enter` to mark the reply-draft
-ready to send.
-
-**Rationale**:
-
-1. **MVU boundary clarity**: Reply drafting is implemented as its own message
-   group and handlers so navigation, Codex execution, and sync logic remain
-   isolated.
-
-2. **Keyboard-first interaction**: Starting reply-draft mode with `a`, using
-   template slots `1` to `9`, and confirming readiness with `Enter` match the
-   existing terminal-first user experience (UX) and avoid modal forms.
-
-3. **Deterministic validation**: Draft limits are enforced as Unicode scalar
-   counts during both typing and template insertion, producing consistent
-   behaviour across multilingual text.
-
-4. **Scoped delivery**: `Enter` marks a reply-draft as ready to send but does
-   not post to GitHub in this phase, keeping the change focused on drafting UX.
-
-**Consequences**:
-
-- Selected comments now show inline reply-draft content and draft metadata in
-  the detail pane.
-- Users can create and edit templates through config layers
-  (`reply_max_length`, `reply_templates`) without code changes.
-- Over-limit insertions and invalid template slots surface explicit inline
-  errors instead of silently truncating content.
-- Continuous Integration (CI) coverage now includes the first-use reply-draft
-  flow (`a`, template slots `1` to `9`, inline editing, `Enter` readiness).
+Canonical record:
+[docs/adr-004-inline-template-based-reply-drafting.md](adr-004-inline-template-based-reply-drafting.md).
 
 #### Architecture decision record (ADR-005): cross-surface, library-first delivery
 
-**Context**: Frankie capabilities must now be usable both in the interactive
-TUI and as reusable library functions embedded in a larger agent-hosting tool.
-Some workflows also need non-interactive CLI execution for automation and batch
-orchestration.
-
-**Decision**: Implement feature behaviour in shared `frankie` library modules
-first, then expose that behaviour through TUI and CLI adapters. For every
-future roadmap item, completion requires:
-
-1. A documented, test-covered public library API that external hosts can call
-   directly.
-
-2. TUI integration for interactive review workflows.
-
-3. A pure CLI surface for non-interactive workflows, or an explicit documented
-   rationale when CLI is not applicable.
-
-4. Explicitly documented exceptions for:
-   - UX-only TUI polish that does not introduce reusable domain behaviour.
-   - Documentation-only roadmap or design updates.
-
-**Rationale**:
-
-1. **Capability reuse**: Agent hosts should not need to reimplement TUI-only
-   logic to use Frankie features.
-
-2. **Operational consistency**: Shared library behaviour keeps TUI, CLI, and
-   embedded automation aligned on validation, error handling, and outcomes.
-
-3. **Testability**: Library-first boundaries reduce UI-coupled tests and make
-   deterministic behavioural testing easier.
-
-4. **Roadmap durability**: Surface parity prevents future features from
-   becoming inaccessible to non-TUI consumers.
-
-**Consequences**:
-
-- New feature work must avoid storing core business logic only in `src/tui/`.
-- Existing TUI-centric capabilities (for example reply templating and
-  time-travel orchestration) should be progressively extracted into shared
-  library modules with TUI wrappers.
-- Documentation and acceptance criteria now treat library, TUI, and CLI support
-  as part of feature completion.
-- Surface-specific exceptions are allowed only when explicitly documented with
-  rationale and out-of-scope boundaries.
+Canonical record:
+[docs/adr-005-cross-surface-library-first-delivery.md](adr-005-cross-surface-library-first-delivery.md).
 
 #### Architecture decision record (ADR-006): AI rewrite preview and fallback contract
 
-**Context**: Reply drafting now supports AI-assisted expansion and rewording.
-The roadmap acceptance requires explicit AI provenance, preview-before-apply,
-and graceful failure handling across both TUI and CLI surfaces.
-
-**Decision**: Introduce a shared AI rewrite library boundary in
-`src/ai/comment_rewrite/` with:
-
-- `CommentRewriteMode`, `CommentRewriteRequest`, and
-  `CommentRewriteOutcome::{Generated,Fallback}`.
-- A reusable `CommentRewriteService` trait with an OpenAI-compatible adapter.
-- A shared side-by-side preview model used by both TUI and CLI adapters.
-- A mandatory `AI-originated` provenance label on generated candidates.
-
-In the TUI, rewrite requests are asynchronous and always shown in a preview
-before being applied. In CLI mode, generated and fallback outcomes are rendered
-using the same shared outcome contract.
-
-**Rationale**:
-
-1. **Parity across surfaces**: one domain contract keeps TUI and CLI behaviour
-   consistent.
-2. **Safety by default**: preview-before-apply avoids silent draft mutation.
-3. **Failure resilience**: fallback outcomes preserve original text and surface
-   actionable reasons instead of failing the workflow.
-4. **Testability**: dependency-injected service trait enables deterministic
-   unit tests and `rstest-bdd` behavioural scenarios.
-
-**Consequences**:
-
-- Users can request AI expand/reword in reply-draft mode and inspect
-  side-by-side previews before applying.
-- Applied AI text is visibly labelled `AI-originated` until manually edited.
-- CLI users can run non-interactive AI rewrite with generated/fallback output
-  and preview metadata.
-- Operation-mode precedence now includes `AiRewrite` ahead of export and PR
-  loading modes when rewrite flags are set.
+Canonical record:
+[docs/adr-006-ai-rewrite-preview-and-fallback-contract.md](adr-006-ai-rewrite-preview-and-fallback-contract.md).
 
 ## 5.4 Cross-cutting Concerns
 
