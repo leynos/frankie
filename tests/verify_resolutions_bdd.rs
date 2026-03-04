@@ -2,21 +2,25 @@
 
 use std::process::{Command, Output};
 
-use git2::{ErrorCode, Oid, Repository};
+use git2::Repository;
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use tempfile::TempDir;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::MockServer;
 
 use frankie::persistence::{ReviewCommentVerificationCache, migrate_database};
 use frankie::telemetry::NoopTelemetrySink;
 
 #[path = "support/runtime.rs"]
 mod runtime;
+#[path = "support/verify_resolutions_helpers.rs"]
+mod verify_resolutions_helpers;
 
 use runtime::SharedRuntime;
+use verify_resolutions_helpers::{
+    ReviewCommentsMount, count_cache_rows, create_commit, mount_review_comments,
+};
 
 type TestError = Box<dyn std::error::Error>;
 type StepResult = Result<(), TestError>;
@@ -68,74 +72,35 @@ fn run_frankie(args: &[String]) -> Output {
         .unwrap_or_else(|error| panic!("failed to execute binary: {error}"))
 }
 
-fn create_commit(
-    repo: &Repository,
-    message: &str,
-    files: &[(&str, &str)],
-) -> Result<Oid, TestError> {
-    let sig = repo.signature()?;
-    let mut index = repo.index()?;
+fn configure_review_comment_mock(
+    verify_state: &VerifyResolutionsState,
+    commit_id: &str,
+) -> StepResult {
+    let runtime = runtime::ensure_runtime_and_server(&verify_state.runtime, &verify_state.server)?;
+    let server_uri = verify_state
+        .server
+        .with_ref(MockServer::uri)
+        .ok_or("wiremock server should be initialised")?;
 
-    let workdir = repo
-        .workdir()
-        .ok_or("repository has no working directory")?;
-    for (path, content) in files {
-        let full = workdir.join(path);
-        if let Some(parent) = full.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&full, content)?;
-        index.add_path(std::path::Path::new(path))?;
-    }
-
-    let tree_id = index.write_tree()?;
-    let tree = repo.find_tree(tree_id)?;
-
-    let parent: Option<git2::Commit<'_>> = match repo.head() {
-        Ok(head_ref) => Some(head_ref.peel_to_commit()?),
-        Err(e) if e.code() == ErrorCode::UnbornBranch => None,
-        Err(e) => return Err(e.into()),
-    };
-    let parents: Vec<&git2::Commit<'_>> = parent.iter().collect();
-
-    Ok(repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?)
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ReviewCommentsMount<'a> {
-    pr: u64,
-    comment_id: u64,
-    commit_id: &'a str,
-}
-
-fn mount_review_comments(
-    runtime: &SharedRuntime,
-    server: &MockServer,
-    mount: ReviewCommentsMount<'_>,
-) {
-    let comments_path = format!("/api/v3/repos/owner/repo/pulls/{}/comments", mount.pr);
-    let response = ResponseTemplate::new(200).set_body_json(serde_json::json!([
-        {
-            "id": mount.comment_id,
-            "body": "Please update this line",
-            "user": { "login": "alice" },
-            "path": "src/main.rs",
-            "line": 2,
-            "original_line": 2,
-            "diff_hunk": "@@ -1,3 +1,3 @@",
-            "commit_id": mount.commit_id,
-            "in_reply_to_id": null,
-            "created_at": "2026-03-02T00:00:00Z",
-            "updated_at": "2026-03-02T00:00:00Z"
-        }
-    ]));
-
-    runtime.block_on(
-        Mock::given(method("GET"))
-            .and(path(comments_path))
-            .respond_with(response)
-            .mount(server),
-    );
+    let pr_url = format!("{server_uri}/owner/repo/pull/1");
+    verify_state.pr_url.set(pr_url);
+    let comment_id = 1_u64;
+    verify_state.comment_id.set(comment_id);
+    verify_state
+        .server
+        .with_ref(|server| {
+            mount_review_comments(
+                &runtime,
+                server,
+                ReviewCommentsMount {
+                    pr: 1,
+                    comment_id,
+                    commit_id,
+                },
+            );
+        })
+        .ok_or("wiremock server should be initialised")?;
+    Ok(())
 }
 
 fn setup_test_repository(
@@ -214,40 +179,27 @@ fn given_repo_with_unchanged_line(verify_state: &VerifyResolutionsState) -> Step
     )
 }
 
+#[given("a local repository where the referenced line is deleted between commits")]
+fn given_repo_with_deleted_line(verify_state: &VerifyResolutionsState) -> StepResult {
+    setup_test_repository(
+        verify_state,
+        "fn main() {\nlet x = 1;\nlet y = 2;\n}\n",
+        "fn main() {\nlet y = 2;\n}\n",
+    )
+}
+
 #[given("the GitHub API returns a review comment pointing at the old commit")]
 fn given_review_comment_from_api(verify_state: &VerifyResolutionsState) -> StepResult {
-    let runtime = runtime::ensure_runtime_and_server(&verify_state.runtime, &verify_state.server)?;
-    let server_uri = verify_state
-        .server
-        .with_ref(MockServer::uri)
-        .ok_or("wiremock server should be initialised")?;
-
-    let pr_url = format!("{server_uri}/owner/repo/pull/1");
-    verify_state.pr_url.set(pr_url);
-
     let old_sha = verify_state
         .old_sha
         .get()
         .ok_or("old sha should be set before mounting mocks")?;
+    configure_review_comment_mock(verify_state, &old_sha)
+}
 
-    let comment_id = 1_u64;
-    verify_state.comment_id.set(comment_id);
-
-    verify_state
-        .server
-        .with_ref(|server| {
-            mount_review_comments(
-                &runtime,
-                server,
-                ReviewCommentsMount {
-                    pr: 1,
-                    comment_id,
-                    commit_id: &old_sha,
-                },
-            );
-        })
-        .ok_or("wiremock server should be initialised")?;
-    Ok(())
+#[given("the GitHub API returns a review comment pointing at an unknown commit")]
+fn given_review_comment_with_unknown_commit(verify_state: &VerifyResolutionsState) -> StepResult {
+    configure_review_comment_mock(verify_state, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 }
 
 #[when("the user runs resolution verification")]
@@ -278,6 +230,40 @@ fn when_user_runs_verification(verify_state: &VerifyResolutionsState) -> StepRes
     Ok(())
 }
 
+#[when("the user runs resolution verification with a positional PR number")]
+fn when_user_runs_verification_with_positional_pr(
+    verify_state: &VerifyResolutionsState,
+) -> StepResult {
+    let database_url = verify_state
+        .database_url
+        .get()
+        .ok_or("database url should be set")?;
+    let repo_path = verify_state
+        .repo_path
+        .get()
+        .ok_or("repo path should be set")?;
+
+    let args = vec![
+        "1".to_owned(),
+        "--verify-resolutions".to_owned(),
+        "--token".to_owned(),
+        "token".to_owned(),
+        "--database-url".to_owned(),
+        database_url,
+        "--repo-path".to_owned(),
+        repo_path,
+    ];
+    let output = run_frankie(&args);
+    verify_state.output.set(output);
+    Ok(())
+}
+
+#[when("the user runs resolution verification twice")]
+fn when_user_runs_verification_twice(verify_state: &VerifyResolutionsState) -> StepResult {
+    when_user_runs_verification(verify_state)?;
+    when_user_runs_verification(verify_state)
+}
+
 #[then("the CLI output marks the comment as verified")]
 fn then_output_is_verified(verify_state: &VerifyResolutionsState) -> StepResult {
     assert_verification_output(verify_state, "✓ verified comment 1")
@@ -286,6 +272,19 @@ fn then_output_is_verified(verify_state: &VerifyResolutionsState) -> StepResult 
 #[then("the CLI output marks the comment as unverified")]
 fn then_output_is_unverified(verify_state: &VerifyResolutionsState) -> StepResult {
     assert_verification_output(verify_state, "✗ unverified comment 1")
+}
+
+#[then("the CLI output explains repository data is unavailable")]
+fn then_output_mentions_repository_data_issue(verify_state: &VerifyResolutionsState) -> StepResult {
+    let output = verify_state
+        .output
+        .get()
+        .ok_or("output should be captured")?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if stdout.contains("repository data unavailable") || stdout.contains("insufficient metadata") {
+        return Ok(());
+    }
+    Err(format!("expected repository-data explanation in stdout, got: {stdout}").into())
 }
 
 #[then("the verification status is persisted in the local cache")]
@@ -327,6 +326,27 @@ fn then_status_is_persisted(verify_state: &VerifyResolutionsState) -> StepResult
     Ok(())
 }
 
+#[then("the cache contains one verification row for the comment and target")]
+fn then_cache_contains_single_row(verify_state: &VerifyResolutionsState) -> StepResult {
+    let database_url = verify_state
+        .database_url
+        .get()
+        .ok_or("database url should be set")?;
+    let head_sha = verify_state
+        .head_sha
+        .get()
+        .ok_or("head sha should be set")?;
+    let comment_id = verify_state
+        .comment_id
+        .get()
+        .ok_or("comment id should be set")?;
+    let row_count = count_cache_rows(&database_url, comment_id, &head_sha)?;
+    if row_count != 1 {
+        return Err(format!("expected exactly one cache row, got {row_count}").into());
+    }
+    Ok(())
+}
+
 #[scenario(
     path = "tests/features/verify_resolutions.feature",
     name = "Verification marks changed lines as verified and persists results"
@@ -340,5 +360,37 @@ fn verify_marks_changed_lines_as_verified(verify_state: VerifyResolutionsState) 
     name = "Verification marks unchanged lines as unverified and persists results"
 )]
 fn verify_marks_unchanged_lines_as_unverified(verify_state: VerifyResolutionsState) {
+    drop(verify_state);
+}
+
+#[scenario(
+    path = "tests/features/verify_resolutions.feature",
+    name = "Verification marks deleted lines as verified and persists results"
+)]
+fn verify_marks_deleted_lines_as_verified(verify_state: VerifyResolutionsState) {
+    drop(verify_state);
+}
+
+#[scenario(
+    path = "tests/features/verify_resolutions.feature",
+    name = "Verification marks unknown commit mappings as unverified"
+)]
+fn verify_marks_unknown_commit_as_unverified(verify_state: VerifyResolutionsState) {
+    drop(verify_state);
+}
+
+#[scenario(
+    path = "tests/features/verify_resolutions.feature",
+    name = "Verification cache reuse keeps a single row per comment and target"
+)]
+fn verify_cache_reuse_keeps_single_row(verify_state: VerifyResolutionsState) {
+    drop(verify_state);
+}
+
+#[scenario(
+    path = "tests/features/verify_resolutions.feature",
+    name = "Verification accepts a bare PR number when --repo-path is provided"
+)]
+fn verify_bare_pr_identifier_honours_repo_path(verify_state: VerifyResolutionsState) {
     drop(verify_state);
 }

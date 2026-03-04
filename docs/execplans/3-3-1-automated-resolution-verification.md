@@ -43,7 +43,7 @@ Success is observable when:
 
 - Keep core verification logic in shared library modules (new module under
   `src/`); TUI and CLI must remain orchestration/presentation adapters.
-- Preserve TUI MVU separation:
+- Preserve TUI Model-View-Update (MVU) separation:
   - input mapping in `src/tui/input.rs`
   - message definitions in `src/tui/messages.rs`
   - state transitions in `src/tui/app/`
@@ -74,9 +74,9 @@ Success is observable when:
   2,500 net new lines, stop and escalate with a staged alternative.
 - Persistence: if implementing persistence requires adopting Diesel schema code
   generation beyond current patterns in `src/persistence/`, stop and escalate.
-- UX: if the proposed TUI annotation meaningfully degrades list readability on
-  narrow terminals (≤ 80 columns) and cannot be fixed without a larger layout
-  redesign, stop and escalate.
+- User experience (UX): if the proposed TUI annotation meaningfully degrades
+  list readability on narrow terminals (≤ 80 columns) and cannot be fixed
+  without a larger layout redesign, stop and escalate.
 - Iterations: if any stage fails validation after three fix cycles, stop and
   escalate with logs.
 
@@ -165,8 +165,8 @@ Relevant existing code and patterns:
   from an old commit to a new commit.
 - `src/persistence/` currently provides a SQLite-backed PR metadata cache with
   explicit migrations and "thin wrapper around SQL" patterns, plus unit tests.
-- TUI uses MVU message handlers and DI patterns to keep async logic testable
-  (see `src/tui/app/time_travel_handlers/` and
+- TUI uses MVU message handlers and dependency injection (DI) patterns to keep
+  async logic testable (see `src/tui/app/time_travel_handlers/` and
   `src/tui/app/reply_draft_handlers.rs`).
 
 Terminology used in this plan:
@@ -194,7 +194,7 @@ before implementation completes:
 2. Should verification run per selected comment, per current filter set, or
    always for all comments?
 3. How should verification behave when `database_url` is not configured?
-   (require it, or default to an XDG state-path database).
+   (require it, or default to an XDG Base Directory state-path database).
 
 This plan proceeds assuming Option A (conservative, deterministic) as the
 baseline. If the project requires Option C, treat that as a tolerance breach
@@ -305,8 +305,8 @@ annotate comments without recomputation.
 3. Decide how `database_url` is sourced:
    - Preferred: require `database_url` for verification features and surface a
      configuration error when missing.
-   - Alternative: introduce a default database path under XDG state (requires
-     doc updates and careful backward-compatibility analysis).
+   - Alternative: introduce a default database path under XDG Base Directory
+     state (requires doc updates and careful backward-compatibility analysis).
 4. Provide unit tests using a temporary SQLite database:
    - schema missing returns a typed error
    - upsert overwrites older results for same comment/target

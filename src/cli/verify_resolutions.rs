@@ -7,14 +7,14 @@
 
 use std::io::{self, Write};
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
-use frankie::persistence::{ReviewCommentVerificationCache, ReviewCommentVerificationCacheWrite};
+use frankie::persistence::ReviewCommentVerificationCache;
+use frankie::time::unix_now;
 use frankie::verification::{DiffReplayResolutionVerifier, ResolutionVerificationService};
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
-    PullRequestLocator, ReviewCommentGateway,
+    PullRequestLocator, ReviewComment, ReviewCommentGateway,
 };
 
 /// Verifies review comments for a pull request and persists results.
@@ -60,32 +60,28 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     let results = verifier.verify_comments(&reviews, &head_sha);
 
     let now_unix = unix_now();
-    for result in &results {
-        cache
-            .upsert(ReviewCommentVerificationCacheWrite {
-                result,
-                verified_at_unix: now_unix,
-            })
-            .map_err(|error| IntakeError::Api {
-                message: format!("failed to persist verification result: {error}"),
-            })?;
-    }
+    cache
+        .upsert_all(&results, now_unix)
+        .map_err(|error| IntakeError::Api {
+            message: format!("failed to persist verification result: {error}"),
+        })?;
 
-    write_summary(&results)?;
+    write_summary(&results, &reviews)?;
     Ok(())
 }
 
-fn unix_now() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        .try_into()
-        .unwrap_or(i64::MAX)
+fn comment_location(comment: &ReviewComment) -> String {
+    let file = comment.file_path.as_deref().unwrap_or("(no file)");
+    let line_suffix = comment
+        .line_number
+        .or(comment.original_line_number)
+        .map_or_else(String::new, |line| format!(":{line}"));
+    format!("{file}{line_suffix}")
 }
 
 fn write_summary(
     results: &[frankie::verification::CommentVerificationResult],
+    reviews: &[ReviewComment],
 ) -> Result<(), IntakeError> {
     let verified_count = results
         .iter()
@@ -104,14 +100,26 @@ fn write_summary(
         message: format!("failed to write output: {e}"),
     })?;
 
+    let review_by_id: std::collections::HashMap<u64, &ReviewComment> =
+        reviews.iter().map(|review| (review.id, review)).collect();
+
     for result in results {
+        let location = review_by_id.get(&result.github_comment_id()).map_or_else(
+            || "(unknown location)".to_owned(),
+            |review| comment_location(review),
+        );
+        let evidence_suffix = result
+            .evidence()
+            .message
+            .as_deref()
+            .map_or_else(String::new, |message| format!(" - {message}"));
         writeln!(
             writer,
-            "{} {} comment {} ({})",
+            "{} {} comment {} ({location}) {}{evidence_suffix}",
             result.status().symbol(),
-            result.status().as_db_value(),
+            result.status(),
             result.github_comment_id(),
-            result.evidence().kind.as_db_value()
+            result.evidence().kind
         )
         .map_err(|e| IntakeError::Io {
             message: format!("failed to write output: {e}"),
@@ -124,7 +132,11 @@ fn write_summary(
 /// positional `pr_identifier` and falling back to `--pr-url`.
 fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeError> {
     if let Some(identifier) = config.pr_identifier() {
-        return resolve_from_identifier(identifier, config.no_local_discovery);
+        return resolve_from_identifier(
+            identifier,
+            config.no_local_discovery,
+            config.repo_path.as_deref(),
+        );
     }
 
     let pr_url = config.require_pr_url()?;
@@ -134,6 +146,7 @@ fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeE
 fn resolve_from_identifier(
     identifier: &str,
     no_local_discovery: bool,
+    repo_path: Option<&str>,
 ) -> Result<PullRequestLocator, IntakeError> {
     if identifier.contains("://") {
         return PullRequestLocator::parse(identifier);
@@ -150,8 +163,18 @@ fn resolve_from_identifier(
         });
     }
 
-    let local_repo = discover_repository(Path::new(".")).map_err(|error| IntakeError::Api {
-        message: format!("failed to discover local repository: {error}"),
+    let discovery_path =
+        repo_path.map_or_else(|| Path::new(".").to_path_buf(), std::path::PathBuf::from);
+    let local_repo = discover_repository(&discovery_path).map_err(|error| {
+        let message = if repo_path.is_some() {
+            format!(
+                "failed to discover local repository at {}: {error}",
+                discovery_path.display()
+            )
+        } else {
+            format!("failed to discover local repository: {error}")
+        };
+        IntakeError::Api { message }
     })?;
     PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
 }

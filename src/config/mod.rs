@@ -449,12 +449,50 @@ impl FrankieConfig {
         self.rewrite_mode_present() || self.rewrite_text_present()
     }
 
+    const fn is_verify_resolutions_mode(&self) -> bool {
+        self.verify_resolutions
+    }
+
+    fn is_ai_rewrite_mode(&self) -> bool {
+        self.should_ai_rewrite()
+    }
+
+    const fn is_export_comments_mode(&self) -> bool {
+        self.export.is_some()
+    }
+
+    const fn is_review_tui_mode(&self) -> bool {
+        self.has_pr_identifier() || (self.tui && self.has_pr_url())
+    }
+
+    const fn is_single_pull_request_mode(&self) -> bool {
+        self.has_pr_url()
+    }
+
+    const fn is_repository_listing_mode(&self) -> bool {
+        self.has_repo()
+    }
+
     const fn has_pr_identifier(&self) -> bool {
         self.pr_identifier.is_some()
     }
 
-    const fn should_review_tui(&self) -> bool {
-        self.has_pr_identifier() || (self.tui && self.has_pr_url())
+    fn resolve_operation_mode(&self) -> OperationMode {
+        if self.is_verify_resolutions_mode() {
+            OperationMode::VerifyResolutions
+        } else if self.is_ai_rewrite_mode() {
+            OperationMode::AiRewrite
+        } else if self.is_export_comments_mode() {
+            OperationMode::ExportComments
+        } else if self.is_review_tui_mode() {
+            OperationMode::ReviewTui
+        } else if self.is_single_pull_request_mode() {
+            OperationMode::SinglePullRequest
+        } else if self.is_repository_listing_mode() {
+            OperationMode::RepositoryListing
+        } else {
+            OperationMode::Interactive
+        }
     }
 
     /// Determines the operation mode based on provided configuration.
@@ -467,21 +505,7 @@ impl FrankieConfig {
     /// owner and repo are provided, or `Interactive` otherwise.
     #[must_use]
     pub fn operation_mode(&self) -> OperationMode {
-        if self.verify_resolutions {
-            OperationMode::VerifyResolutions
-        } else if self.should_ai_rewrite() {
-            OperationMode::AiRewrite
-        } else if self.should_export_comments() {
-            OperationMode::ExportComments
-        } else if self.should_review_tui() {
-            OperationMode::ReviewTui
-        } else if self.has_pr_url() {
-            OperationMode::SinglePullRequest
-        } else if self.has_repo() {
-            OperationMode::RepositoryListing
-        } else {
-            OperationMode::Interactive
-        }
+        self.resolve_operation_mode()
     }
 
     /// Sets the positional PR identifier extracted from raw CLI arguments.

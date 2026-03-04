@@ -20,22 +20,6 @@ struct CommentAnchor<'a> {
     old_line: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct VerificationContext<'a> {
-    comment_id: u64,
-    target_sha: &'a str,
-}
-
-#[derive(Debug)]
-struct LineComparison<'a> {
-    comment_id: u64,
-    target_sha: &'a str,
-    mapping: &'a LineMappingVerification,
-    old_line_number: u32,
-    old_file: &'a str,
-    new_file: &'a str,
-}
-
 /// Service interface for automated comment resolution verification.
 pub trait ResolutionVerificationService: Send + Sync + std::fmt::Debug {
     /// Verifies a single review comment against `target_sha`.
@@ -71,16 +55,7 @@ impl DiffReplayResolutionVerifier {
         Self { git_ops }
     }
 
-    fn result_with_status(
-        comment_id: u64,
-        target_sha: &str,
-        status: CommentVerificationStatus,
-        evidence: CommentVerificationEvidence,
-    ) -> CommentVerificationResult {
-        Self::result_for(comment_id, target_sha, status, evidence)
-    }
-
-    fn result_for(
+    fn result(
         comment_id: u64,
         target_sha: &str,
         status: CommentVerificationStatus,
@@ -89,31 +64,38 @@ impl DiffReplayResolutionVerifier {
         CommentVerificationResult::new(comment_id, target_sha.to_owned(), status, evidence)
     }
 
+    const fn evidence(
+        kind: CommentVerificationEvidenceKind,
+        message: Option<String>,
+    ) -> CommentVerificationEvidence {
+        CommentVerificationEvidence { kind, message }
+    }
+
     fn anchor_for_comment<'a>(
         comment: &'a ReviewComment,
         target_sha: &str,
     ) -> Result<CommentAnchor<'a>, CommentVerificationResult> {
         let comment_id = comment.id;
         let Some(old_sha) = comment.commit_sha.as_deref() else {
-            return Err(Self::result_with_status(
+            return Err(Self::result(
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::InsufficientMetadata,
-                    message: Some("missing commit SHA".to_owned()),
-                },
+                Self::evidence(
+                    CommentVerificationEvidenceKind::InsufficientMetadata,
+                    Some("missing commit SHA".to_owned()),
+                ),
             ));
         };
         let Some(file_path) = comment.file_path.as_deref() else {
-            return Err(Self::result_with_status(
+            return Err(Self::result(
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::InsufficientMetadata,
-                    message: Some("missing file path".to_owned()),
-                },
+                Self::evidence(
+                    CommentVerificationEvidenceKind::InsufficientMetadata,
+                    Some("missing file path".to_owned()),
+                ),
             ));
         };
         let old_line = comment
@@ -121,14 +103,14 @@ impl DiffReplayResolutionVerifier {
             .or(comment.line_number)
             .unwrap_or(0);
         if old_line == 0 {
-            return Err(Self::result_with_status(
+            return Err(Self::result(
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::InsufficientMetadata,
-                    message: Some("missing line number".to_owned()),
-                },
+                Self::evidence(
+                    CommentVerificationEvidenceKind::InsufficientMetadata,
+                    Some("missing line number".to_owned()),
+                ),
             ));
         }
 
@@ -153,35 +135,36 @@ impl DiffReplayResolutionVerifier {
         );
 
         self.git_ops.verify_line_mapping(&request).map_err(|error| {
-            Self::result_with_status(
+            Self::result(
                 comment_id,
                 target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::RepositoryDataUnavailable,
-                    message: Some(error.to_string()),
-                },
+                Self::evidence(
+                    CommentVerificationEvidenceKind::RepositoryDataUnavailable,
+                    Some(error.to_string()),
+                ),
             )
         })
     }
 
     fn get_file_at_commit(
         &self,
-        ctx: VerificationContext<'_>,
+        comment_ref: (u64, &str),
         commit: &CommitSha,
         path: &RepoFilePath,
     ) -> Result<String, CommentVerificationResult> {
+        let (comment_id, target_sha) = comment_ref;
         self.git_ops
             .get_file_at_commit(commit, path)
             .map_err(|error| {
-                Self::result_with_status(
-                    ctx.comment_id,
-                    ctx.target_sha,
+                Self::result(
+                    comment_id,
+                    target_sha,
                     CommentVerificationStatus::Unverified,
-                    CommentVerificationEvidence {
-                        kind: CommentVerificationEvidenceKind::RepositoryDataUnavailable,
-                        message: Some(error.to_string()),
-                    },
+                    Self::evidence(
+                        CommentVerificationEvidenceKind::RepositoryDataUnavailable,
+                        Some(error.to_string()),
+                    ),
                 )
             })
     }
@@ -194,10 +177,6 @@ impl ResolutionVerificationService for DiffReplayResolutionVerifier {
         target_sha: &str,
     ) -> CommentVerificationResult {
         let comment_id = comment.id;
-        let ctx = VerificationContext {
-            comment_id,
-            target_sha,
-        };
         let anchor = match Self::anchor_for_comment(comment, target_sha) {
             Ok(anchor) => anchor,
             Err(result) => return result,
@@ -210,14 +189,14 @@ impl ResolutionVerificationService for DiffReplayResolutionVerifier {
 
         match mapping.status() {
             LineMappingStatus::Deleted | LineMappingStatus::NotFound => {
-                return Self::result_with_status(
+                return Self::result(
                     comment_id,
                     target_sha,
                     CommentVerificationStatus::Verified,
-                    CommentVerificationEvidence {
-                        kind: CommentVerificationEvidenceKind::LineRemoved,
-                        message: Some(mapping.display()),
-                    },
+                    Self::evidence(
+                        CommentVerificationEvidenceKind::LineRemoved,
+                        Some(mapping.display()),
+                    ),
                 );
             }
             LineMappingStatus::Exact | LineMappingStatus::Moved => {}
@@ -227,88 +206,92 @@ impl ResolutionVerificationService for DiffReplayResolutionVerifier {
         let old_commit = CommitSha::new(anchor.old_sha.to_owned());
         let new_commit = CommitSha::new(target_sha.to_owned());
 
-        let old_file = match self.get_file_at_commit(ctx, &old_commit, &path) {
+        let old_file = match self.get_file_at_commit((comment_id, target_sha), &old_commit, &path) {
             Ok(content) => content,
             Err(result) => return result,
         };
-        let new_file = match self.get_file_at_commit(ctx, &new_commit, &path) {
+        let new_file = match self.get_file_at_commit((comment_id, target_sha), &new_commit, &path) {
             Ok(content) => content,
             Err(result) => return result,
         };
 
-        Self::classify_line_comparison(&LineComparison {
-            comment_id,
-            target_sha,
-            mapping: &mapping,
-            old_line_number: anchor.old_line,
-            old_file: &old_file,
-            new_file: &new_file,
-        })
+        Self::classify_line_comparison(
+            (comment_id, target_sha),
+            &mapping,
+            anchor.old_line,
+            (&old_file, &new_file),
+        )
     }
 }
 
 impl DiffReplayResolutionVerifier {
-    fn classify_line_comparison(comparison: &LineComparison<'_>) -> CommentVerificationResult {
-        let Some(old_line) = line_at(comparison.old_file, comparison.old_line_number) else {
-            return Self::result_with_status(
-                comparison.comment_id,
-                comparison.target_sha,
+    fn classify_line_comparison(
+        comment_ref: (u64, &str),
+        mapping: &LineMappingVerification,
+        old_line_number: u32,
+        files: (&str, &str),
+    ) -> CommentVerificationResult {
+        let (comment_id, target_sha) = comment_ref;
+        let (old_file, new_file) = files;
+        let Some(old_line) = line_at(old_file, old_line_number) else {
+            return Self::result(
+                comment_id,
+                target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::LineOutOfBounds,
-                    message: Some(format!(
-                        "old commit line {} is out of bounds",
-                        comparison.old_line_number
+                Self::evidence(
+                    CommentVerificationEvidenceKind::LineOutOfBounds,
+                    Some(format!(
+                        "old commit line {old_line_number} is out of bounds"
                     )),
-                },
+                ),
             );
         };
 
-        let Some(new_line_number) = comparison.mapping.current_line() else {
-            return Self::result_with_status(
-                comparison.comment_id,
-                comparison.target_sha,
+        let Some(new_line_number) = mapping.current_line() else {
+            return Self::result(
+                comment_id,
+                target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::RepositoryDataUnavailable,
-                    message: Some("line mapping did not produce a new line number".to_owned()),
-                },
+                Self::evidence(
+                    CommentVerificationEvidenceKind::RepositoryDataUnavailable,
+                    Some("line mapping did not produce a new line number".to_owned()),
+                ),
             );
         };
 
-        let Some(new_line) = line_at(comparison.new_file, new_line_number) else {
-            return Self::result_with_status(
-                comparison.comment_id,
-                comparison.target_sha,
+        let Some(new_line) = line_at(new_file, new_line_number) else {
+            return Self::result(
+                comment_id,
+                target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::LineOutOfBounds,
-                    message: Some(format!(
+                Self::evidence(
+                    CommentVerificationEvidenceKind::LineOutOfBounds,
+                    Some(format!(
                         "new commit line {new_line_number} is out of bounds"
                     )),
-                },
+                ),
             );
         };
 
         if normalise_line(old_line) == normalise_line(new_line) {
-            Self::result_with_status(
-                comparison.comment_id,
-                comparison.target_sha,
+            Self::result(
+                comment_id,
+                target_sha,
                 CommentVerificationStatus::Unverified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::LineUnchanged,
-                    message: Some(comparison.mapping.display()),
-                },
+                Self::evidence(
+                    CommentVerificationEvidenceKind::LineUnchanged,
+                    Some(mapping.display()),
+                ),
             )
         } else {
-            Self::result_with_status(
-                comparison.comment_id,
-                comparison.target_sha,
+            Self::result(
+                comment_id,
+                target_sha,
                 CommentVerificationStatus::Verified,
-                CommentVerificationEvidence {
-                    kind: CommentVerificationEvidenceKind::LineChanged,
-                    message: Some(comparison.mapping.display()),
-                },
+                Self::evidence(
+                    CommentVerificationEvidenceKind::LineChanged,
+                    Some(mapping.display()),
+                ),
             )
         }
     }

@@ -5,11 +5,11 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use bubbletea_rs::Cmd;
 
-use crate::persistence::{PersistenceError, ReviewCommentVerificationCacheWrite};
+use crate::persistence::PersistenceError;
+use crate::time::unix_now;
 use crate::tui::messages::AppMsg;
 use crate::verification::CommentVerificationResult;
 
@@ -162,26 +162,11 @@ fn persist_results(
     results: &[CommentVerificationResult],
     now_unix: i64,
 ) -> Result<(), String> {
-    for result in results {
-        cache
-            .upsert(ReviewCommentVerificationCacheWrite {
-                result,
-                verified_at_unix: now_unix,
-            })
-            .map_err(|error| map_persistence_error(&error))?;
-    }
-    Ok(())
+    cache
+        .upsert_all(results, now_unix)
+        .map_err(|error| map_persistence_error(&error))
 }
 
 fn map_persistence_error(error: &PersistenceError) -> String {
     format!("failed to persist verification results: {error}")
-}
-
-fn unix_now() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        .try_into()
-        .unwrap_or(i64::MAX)
 }

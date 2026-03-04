@@ -1,5 +1,7 @@
 //! Domain model for automated comment resolution verification.
 
+use std::fmt::{self, Display, Formatter};
+
 /// Verified/unverified status for a review comment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommentVerificationStatus {
@@ -37,6 +39,21 @@ impl CommentVerificationStatus {
             "unverified" => Some(Self::Unverified),
             _ => None,
         }
+    }
+
+    /// User-facing string representation for display.
+    #[must_use]
+    pub const fn as_display_str(&self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Unverified => "unverified",
+        }
+    }
+}
+
+impl Display for CommentVerificationStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_display_str())
     }
 }
 
@@ -83,6 +100,25 @@ impl CommentVerificationEvidenceKind {
             "line_out_of_bounds" => Some(Self::LineOutOfBounds),
             _ => None,
         }
+    }
+
+    /// User-facing string representation for display.
+    #[must_use]
+    pub const fn as_display_str(&self) -> &'static str {
+        match self {
+            Self::InsufficientMetadata => "insufficient metadata",
+            Self::LineRemoved => "line removed",
+            Self::LineChanged => "line changed",
+            Self::LineUnchanged => "line unchanged",
+            Self::RepositoryDataUnavailable => "repository data unavailable",
+            Self::LineOutOfBounds => "line out of bounds",
+        }
+    }
+}
+
+impl Display for CommentVerificationEvidenceKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_display_str())
     }
 }
 

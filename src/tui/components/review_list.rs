@@ -159,6 +159,10 @@ mod tests {
     use rstest::{fixture, rstest};
     use unicode_width::UnicodeWidthStr;
 
+    use crate::verification::{
+        CommentVerificationEvidence, CommentVerificationEvidenceKind, CommentVerificationStatus,
+    };
+
     use super::*;
 
     /// Builder for creating test review comments with struct initialization syntax.
@@ -223,6 +227,22 @@ mod tests {
         .build()
     }
 
+    fn sample_verification_result(status: CommentVerificationStatus) -> CommentVerificationResult {
+        let evidence_kind = match status {
+            CommentVerificationStatus::Verified => CommentVerificationEvidenceKind::LineChanged,
+            CommentVerificationStatus::Unverified => CommentVerificationEvidenceKind::LineUnchanged,
+        };
+        CommentVerificationResult::new(
+            1,
+            "head".to_owned(),
+            status,
+            CommentVerificationEvidence {
+                kind: evidence_kind,
+                message: Some("example".to_owned()),
+            },
+        )
+    }
+
     #[test]
     fn view_shows_empty_message_when_no_reviews() {
         let component = ReviewListComponent::new();
@@ -271,6 +291,29 @@ mod tests {
         assert!(line.contains("src/main.rs"));
         assert!(line.contains(":42"));
         assert!(line.contains("Consider refactoring"));
+    }
+
+    #[rstest]
+    fn format_review_line_includes_verification_marker(sample_review: ReviewComment) {
+        let verification = sample_verification_result(CommentVerificationStatus::Verified);
+        let line =
+            ReviewListComponent::format_review_line(&sample_review, ">", Some(&verification), 80);
+        assert!(
+            line.starts_with(">✓ "),
+            "expected verification symbol, got: {line}"
+        );
+    }
+
+    #[rstest]
+    fn format_review_line_clamps_width_with_verification_marker(sample_review: ReviewComment) {
+        let verification = sample_verification_result(CommentVerificationStatus::Verified);
+        let line =
+            ReviewListComponent::format_review_line(&sample_review, ">", Some(&verification), 16);
+        assert!(
+            line.starts_with(">✓"),
+            "expected verification symbol, got: {line}"
+        );
+        assert!(line.width() <= 16, "list rows should be clamped to width");
     }
 
     #[test]

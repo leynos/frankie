@@ -186,6 +186,25 @@ impl ReviewCommentVerificationCache {
         .map_err(|error| Self::map_write_error(&mut connection, &error))
     }
 
+    /// Inserts or updates multiple cached verification results.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PersistenceError`] when any write fails.
+    pub fn upsert_all(
+        &self,
+        results: &[CommentVerificationResult],
+        verified_at_unix: i64,
+    ) -> Result<(), PersistenceError> {
+        for result in results {
+            self.upsert(ReviewCommentVerificationCacheWrite {
+                result,
+                verified_at_unix,
+            })?;
+        }
+        Ok(())
+    }
+
     fn establish_connection(&self) -> Result<SqliteConnection, PersistenceError> {
         let mut connection = SqliteConnection::establish(&self.database_url).map_err(|error| {
             PersistenceError::ConnectionFailed {

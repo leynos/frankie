@@ -11,6 +11,7 @@ pub mod github;
 pub mod local;
 pub mod persistence;
 pub mod telemetry;
+pub mod time;
 pub mod tui;
 pub mod verification;
 

@@ -94,6 +94,54 @@ fn cache_returns_empty_map_for_empty_input(
 }
 
 #[rstest]
+fn upsert_overwrites_existing_row_for_same_comment_and_target(
+    migrated_cache: FixtureResult<(TempDir, ReviewCommentVerificationCache)>,
+) -> FixtureResult<()> {
+    let (_temp_dir, cache) = migrated_cache?;
+
+    let target = "head123";
+    let comment_id = 42_u64;
+    let first_result = sample_result(
+        comment_id,
+        target,
+        CommentVerificationStatus::Verified,
+        CommentVerificationEvidence {
+            kind: CommentVerificationEvidenceKind::LineChanged,
+            message: Some("first evidence".to_owned()),
+        },
+    );
+    cache.upsert(ReviewCommentVerificationCacheWrite {
+        result: &first_result,
+        verified_at_unix: 100,
+    })?;
+
+    let second_result = sample_result(
+        comment_id,
+        target,
+        CommentVerificationStatus::Unverified,
+        CommentVerificationEvidence {
+            kind: CommentVerificationEvidenceKind::LineUnchanged,
+            message: Some("second evidence".to_owned()),
+        },
+    );
+    cache.upsert(ReviewCommentVerificationCacheWrite {
+        result: &second_result,
+        verified_at_unix: 200,
+    })?;
+
+    let loaded = cache.get_for_comments(&[comment_id], target)?;
+    let record = loaded.get(&comment_id).expect("record should exist");
+    assert_eq!(record.status, CommentVerificationStatus::Unverified);
+    assert_eq!(
+        record.evidence_kind,
+        CommentVerificationEvidenceKind::LineUnchanged
+    );
+    assert_eq!(record.evidence_message.as_deref(), Some("second evidence"));
+    assert_eq!(record.verified_at_unix, 200);
+    Ok(())
+}
+
+#[rstest]
 fn cache_reports_missing_schema_when_unmigrated(temp_db: FixtureResult<(TempDir, String)>) {
     let (_temp_dir, database_url) = temp_db.expect("fixture should succeed");
     let cache = ReviewCommentVerificationCache::new(database_url).expect("cache should build");
@@ -102,4 +150,13 @@ fn cache_reports_missing_schema_when_unmigrated(temp_db: FixtureResult<(TempDir,
         .get_for_comments(&[1], "head")
         .expect_err("expected schema missing error");
     assert_eq!(error, PersistenceError::SchemaNotInitialised);
+}
+
+#[test]
+fn cache_new_rejects_blank_database_url() {
+    let result = ReviewCommentVerificationCache::new("   ");
+    assert!(
+        matches!(result, Err(PersistenceError::BlankDatabaseUrl)),
+        "expected BlankDatabaseUrl, got {result:?}"
+    );
 }
