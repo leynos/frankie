@@ -104,10 +104,12 @@ fn write_summary(
         reviews.iter().map(|review| (review.id, review)).collect();
 
     for result in results {
-        let location = review_by_id.get(&result.github_comment_id()).map_or_else(
-            || "(unknown location)".to_owned(),
-            |review| comment_location(review),
-        );
+        let location = review_by_id
+            .get(&result.github_comment_id().as_u64())
+            .map_or_else(
+                || "(unknown location)".to_owned(),
+                |review| comment_location(review),
+            );
         let evidence_suffix = result
             .evidence()
             .message
@@ -118,7 +120,7 @@ fn write_summary(
             "{} {} comment {} ({location}) {}{evidence_suffix}",
             result.status().symbol(),
             result.status(),
-            result.github_comment_id(),
+            result.github_comment_id().as_u64(),
             result.evidence().kind
         )
         .map_err(|e| IntakeError::Io {
@@ -152,7 +154,8 @@ fn resolve_from_identifier(
         return PullRequestLocator::parse(identifier);
     }
 
-    if no_local_discovery {
+    let has_repo_path = repo_path.is_some_and(|path| !path.trim().is_empty());
+    if no_local_discovery && !has_repo_path {
         return Err(IntakeError::Configuration {
             message: concat!(
                 "bare PR numbers require local git discovery to determine ",

@@ -64,14 +64,14 @@ impl ReviewApp {
         &mut self,
         comments: Vec<crate::github::models::ReviewComment>,
     ) -> Option<Cmd> {
-        let Some(service) = self.resolution_verification_service.as_ref() else {
+        let Some(service) = self.verification.service.as_ref() else {
             self.error = Some(
                 "Resolution verification requires a local repository (no git operations available)"
                     .to_owned(),
             );
             return None;
         };
-        let Some(cache) = self.review_comment_verification_cache.as_ref() else {
+        let Some(cache) = self.verification.cache.as_ref() else {
             self.error = Some(
                 "Resolution verification requires --database-url to persist results".to_owned(),
             );
@@ -82,9 +82,9 @@ impl ReviewApp {
             return None;
         };
 
-        let request_id = self.next_verification_request_id;
-        self.next_verification_request_id = self.next_verification_request_id.saturating_add(1);
-        self.in_flight_verification_request_id = Some(request_id);
+        let request_id = self.verification.next_request_id;
+        self.verification.next_request_id = self.verification.next_request_id.saturating_add(1);
+        self.verification.in_flight_request_id = Some(request_id);
 
         let verification_service = Arc::clone(service);
         let verification_cache = Arc::clone(cache);
@@ -104,28 +104,31 @@ impl ReviewApp {
         results: &[CommentVerificationResult],
         persistence_error: Option<&str>,
     ) -> Option<Cmd> {
-        if self.in_flight_verification_request_id != Some(request_id) {
+        if self.verification.in_flight_request_id != Some(request_id) {
             return None;
         }
-        self.in_flight_verification_request_id = None;
+        self.verification.in_flight_request_id = None;
 
         for result in results {
-            self.review_comment_verifications
-                .insert(result.github_comment_id(), result.clone());
+            self.verification
+                .results
+                .insert(result.github_comment_id().as_u64(), result.clone());
         }
 
         if let Some(message) = persistence_error {
             self.error = Some(message.to_owned());
+        } else {
+            self.error = None;
         }
 
         None
     }
 
     fn handle_verification_failed(&mut self, request_id: u64, message: &str) -> Option<Cmd> {
-        if self.in_flight_verification_request_id != Some(request_id) {
+        if self.verification.in_flight_request_id != Some(request_id) {
             return None;
         }
-        self.in_flight_verification_request_id = None;
+        self.verification.in_flight_request_id = None;
         self.error = Some(message.to_owned());
         None
     }

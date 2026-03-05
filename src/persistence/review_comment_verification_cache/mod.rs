@@ -17,6 +17,7 @@ use diesel::sqlite::SqliteConnection;
 use crate::persistence::PersistenceError;
 use crate::verification::{
     CommentVerificationEvidenceKind, CommentVerificationResult, CommentVerificationStatus,
+    GithubCommentId,
 };
 
 const REVIEW_COMMENT_VERIFICATIONS_TABLE: &str = "review_comment_verifications";
@@ -102,8 +103,8 @@ impl ReviewCommentVerificationCache {
         }
         let requested_ids: HashSet<i64> = github_comment_ids
             .iter()
-            .filter_map(|id| i64::try_from(*id).ok())
-            .collect();
+            .map(|id| Self::try_query_comment_id((*id).into()))
+            .collect::<Result<_, _>>()?;
 
         let mut connection = self.establish_connection()?;
 
@@ -169,7 +170,13 @@ impl ReviewCommentVerificationCache {
         write: ReviewCommentVerificationCacheWrite<'_>,
     ) -> Result<(), PersistenceError> {
         let mut connection = self.establish_connection()?;
+        Self::upsert_with_connection(&mut connection, write)
+    }
 
+    fn upsert_with_connection(
+        connection: &mut SqliteConnection,
+        write: ReviewCommentVerificationCacheWrite<'_>,
+    ) -> Result<(), PersistenceError> {
         let result = write.result;
         let evidence = result.evidence();
         let github_comment_id = Self::try_github_comment_id(result.github_comment_id())?;
@@ -196,9 +203,9 @@ impl ReviewCommentVerificationCache {
             .bind::<Text, _>(evidence.kind.as_db_value())
             .bind::<Nullable<Text>, _>(evidence.message.as_deref())
             .bind::<BigInt, _>(write.verified_at_unix)
-            .execute(&mut connection)
+            .execute(connection)
             .map(drop)
-            .map_err(|error| Self::map_write_error(&mut connection, &error))
+            .map_err(|error| Self::map_write_error(connection, &error))
     }
 
     /// Inserts or updates multiple cached verification results.
@@ -211,13 +218,48 @@ impl ReviewCommentVerificationCache {
         results: &[CommentVerificationResult],
         verified_at_unix: i64,
     ) -> Result<(), PersistenceError> {
+        let mut connection = self.establish_connection()?;
+        sql_query("BEGIN IMMEDIATE TRANSACTION;")
+            .execute(&mut connection)
+            .map(drop)
+            .map_err(|error| Self::map_write_error(&mut connection, &error))?;
+
         for result in results {
-            self.upsert(ReviewCommentVerificationCacheWrite {
-                result,
-                verified_at_unix,
-            })?;
+            let write_result = Self::upsert_with_connection(
+                &mut connection,
+                ReviewCommentVerificationCacheWrite {
+                    result,
+                    verified_at_unix,
+                },
+            );
+            if let Err(error) = write_result {
+                drop(sql_query("ROLLBACK;").execute(&mut connection));
+                return Err(error);
+            }
         }
-        Ok(())
+
+        sql_query("COMMIT;")
+            .execute(&mut connection)
+            .map(drop)
+            .map_err(|error| Self::map_write_error(&mut connection, &error))
+    }
+
+    fn try_query_comment_id(github_comment_id: GithubCommentId) -> Result<i64, PersistenceError> {
+        i64::try_from(github_comment_id.as_u64()).map_err(|_| PersistenceError::QueryFailed {
+            message: format!(
+                "github_comment_id {} exceeds i64 range",
+                github_comment_id.as_u64()
+            ),
+        })
+    }
+
+    fn try_github_comment_id(github_comment_id: GithubCommentId) -> Result<i64, PersistenceError> {
+        i64::try_from(github_comment_id.as_u64()).map_err(|_| PersistenceError::WriteFailed {
+            message: format!(
+                "github_comment_id {} exceeds i64 range",
+                github_comment_id.as_u64()
+            ),
+        })
     }
 
     fn establish_connection(&self) -> Result<SqliteConnection, PersistenceError> {
@@ -235,12 +277,6 @@ impl ReviewCommentVerificationCache {
             })?;
 
         Ok(connection)
-    }
-
-    fn try_github_comment_id(github_comment_id: u64) -> Result<i64, PersistenceError> {
-        i64::try_from(github_comment_id).map_err(|_| PersistenceError::WriteFailed {
-            message: format!("github_comment_id {github_comment_id} exceeds i64 range"),
-        })
     }
 
     fn map_diesel_error<F>(

@@ -75,17 +75,23 @@ pub enum CommentVerificationEvidenceKind {
 }
 
 impl CommentVerificationEvidenceKind {
+    const fn strings(self) -> (&'static str, &'static str) {
+        match self {
+            Self::InsufficientMetadata => ("insufficient_metadata", "insufficient metadata"),
+            Self::LineRemoved => ("line_removed", "line removed"),
+            Self::LineChanged => ("line_changed", "line changed"),
+            Self::LineUnchanged => ("line_unchanged", "line unchanged"),
+            Self::RepositoryDataUnavailable => {
+                ("repository_data_unavailable", "repository data unavailable")
+            }
+            Self::LineOutOfBounds => ("line_out_of_bounds", "line out of bounds"),
+        }
+    }
+
     /// Stable database representation for persistence.
     #[must_use]
     pub const fn as_db_value(&self) -> &'static str {
-        match self {
-            Self::InsufficientMetadata => "insufficient_metadata",
-            Self::LineRemoved => "line_removed",
-            Self::LineChanged => "line_changed",
-            Self::LineUnchanged => "line_unchanged",
-            Self::RepositoryDataUnavailable => "repository_data_unavailable",
-            Self::LineOutOfBounds => "line_out_of_bounds",
-        }
+        self.strings().0
     }
 
     /// Parses a database value into an evidence kind.
@@ -105,14 +111,7 @@ impl CommentVerificationEvidenceKind {
     /// User-facing string representation for display.
     #[must_use]
     pub const fn as_display_str(&self) -> &'static str {
-        match self {
-            Self::InsufficientMetadata => "insufficient metadata",
-            Self::LineRemoved => "line removed",
-            Self::LineChanged => "line changed",
-            Self::LineUnchanged => "line unchanged",
-            Self::RepositoryDataUnavailable => "repository data unavailable",
-            Self::LineOutOfBounds => "line out of bounds",
-        }
+        self.strings().1
     }
 }
 
@@ -131,10 +130,40 @@ pub struct CommentVerificationEvidence {
     pub message: Option<String>,
 }
 
+/// Strongly-typed identifier for a GitHub review comment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GithubCommentId(u64);
+
+impl GithubCommentId {
+    /// Constructs a new identifier from the raw GitHub integer ID.
+    #[must_use]
+    pub const fn new(id: u64) -> Self {
+        Self(id)
+    }
+
+    /// Returns the raw integer value for I/O boundaries.
+    #[must_use]
+    pub const fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for GithubCommentId {
+    fn from(id: u64) -> Self {
+        Self(id)
+    }
+}
+
+impl From<GithubCommentId> for u64 {
+    fn from(id: GithubCommentId) -> Self {
+        id.0
+    }
+}
+
 /// Verification result for a single GitHub review comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommentVerificationResult {
-    github_comment_id: u64,
+    github_comment_id: GithubCommentId,
     target_sha: String,
     status: CommentVerificationStatus,
     evidence: CommentVerificationEvidence,
@@ -144,7 +173,7 @@ impl CommentVerificationResult {
     /// Creates a new verification result.
     #[must_use]
     pub const fn new(
-        github_comment_id: u64,
+        github_comment_id: GithubCommentId,
         target_sha: String,
         status: CommentVerificationStatus,
         evidence: CommentVerificationEvidence,
@@ -159,7 +188,7 @@ impl CommentVerificationResult {
 
     /// Returns the GitHub review comment ID.
     #[must_use]
-    pub const fn github_comment_id(&self) -> u64 {
+    pub const fn github_comment_id(&self) -> GithubCommentId {
         self.github_comment_id
     }
 

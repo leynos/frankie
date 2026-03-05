@@ -233,7 +233,7 @@ mod tests {
             CommentVerificationStatus::Unverified => CommentVerificationEvidenceKind::LineUnchanged,
         };
         CommentVerificationResult::new(
-            1,
+            1.into(),
             "head".to_owned(),
             status,
             CommentVerificationEvidence {
@@ -241,6 +241,11 @@ mod tests {
                 message: Some("example".to_owned()),
             },
         )
+    }
+
+    fn verified_line(review: &ReviewComment, max_width: usize) -> String {
+        let verification = sample_verification_result(CommentVerificationStatus::Verified);
+        ReviewListComponent::format_review_line(review, ">", Some(&verification), max_width)
     }
 
     #[test]
@@ -295,9 +300,7 @@ mod tests {
 
     #[rstest]
     fn format_review_line_includes_verification_marker(sample_review: ReviewComment) {
-        let verification = sample_verification_result(CommentVerificationStatus::Verified);
-        let line =
-            ReviewListComponent::format_review_line(&sample_review, ">", Some(&verification), 80);
+        let line = verified_line(&sample_review, 80);
         assert!(
             line.starts_with(">✓ "),
             "expected verification symbol, got: {line}"
@@ -306,9 +309,7 @@ mod tests {
 
     #[rstest]
     fn format_review_line_clamps_width_with_verification_marker(sample_review: ReviewComment) {
-        let verification = sample_verification_result(CommentVerificationStatus::Verified);
-        let line =
-            ReviewListComponent::format_review_line(&sample_review, ">", Some(&verification), 16);
+        let line = verified_line(&sample_review, 16);
         assert!(
             line.starts_with(">✓"),
             "expected verification symbol, got: {line}"

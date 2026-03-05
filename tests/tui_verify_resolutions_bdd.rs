@@ -54,7 +54,7 @@ impl ResolutionVerificationService for StubVerifier {
             CommentVerificationStatus::Unverified => CommentVerificationEvidenceKind::LineUnchanged,
         };
         CommentVerificationResult::new(
-            comment.id,
+            comment.id.into(),
             target_sha.to_owned(),
             self.status,
             CommentVerificationEvidence {

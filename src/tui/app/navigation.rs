@@ -10,6 +10,70 @@ use super::ReviewApp;
 use crate::tui::messages::AppMsg;
 
 impl ReviewApp {
+    /// Returns the ID of the currently selected comment, if any.
+    #[must_use]
+    pub fn current_selected_id(&self) -> Option<u64> {
+        self.selected_comment().map(|review| review.id)
+    }
+
+    /// Returns a reference to the currently selected comment, if any.
+    #[must_use]
+    pub fn selected_comment(&self) -> Option<&crate::github::models::ReviewComment> {
+        self.filtered_indices
+            .get(self.filter_state.cursor_position)
+            .and_then(|&idx| self.reviews.get(idx))
+    }
+
+    /// Selects the comment with the given ID by moving the cursor to it.
+    ///
+    /// Returns `true` if the comment was found and selected, or `false`
+    /// if no comment with the given ID exists in the current filtered view.
+    pub fn select_by_id(&mut self, id: u64) -> bool {
+        self.find_filtered_index_by_id(id)
+            .map(|index| self.set_cursor(index))
+            .is_some()
+    }
+
+    /// Finds the position within the filtered list for a comment by its ID.
+    ///
+    /// Returns `Some(index)` if a comment with the given `id` exists in the
+    /// current filtered view, or `None` if not found or filtered out.
+    /// Used to restore cursor position after sync operations.
+    pub(crate) fn find_filtered_index_by_id(&self, id: u64) -> Option<usize> {
+        self.filtered_indices
+            .iter()
+            .position(|&idx| self.reviews.get(idx).is_some_and(|review| review.id == id))
+    }
+
+    /// Updates the tracked `selected_comment_id` from the current cursor position.
+    ///
+    /// Synchronises `selected_comment_id` with whatever comment is currently
+    /// under the cursor. Call this after any cursor movement to maintain
+    /// selection tracking for sync operations.
+    pub(crate) fn update_selected_id(&mut self) {
+        self.selected_comment_id = self.current_selected_id();
+    }
+
+    /// Clamps the cursor to valid bounds and updates the selected comment ID.
+    ///
+    /// This helper centralises the common pattern of clamping the cursor after
+    /// filter changes and then updating the tracked selection.
+    pub(crate) fn clamp_cursor_and_update_selection(&mut self) {
+        self.filter_state.clamp_cursor(self.filtered_count());
+        self.adjust_scroll_to_cursor();
+        self.update_selected_id();
+    }
+
+    /// Sets the cursor position and updates the selected comment ID.
+    ///
+    /// This helper centralises the common pattern of moving the cursor and
+    /// updating viewport/selection state in navigation handlers.
+    pub(crate) fn set_cursor(&mut self, position: usize) {
+        self.filter_state.cursor_position = position;
+        self.adjust_scroll_to_cursor();
+        self.update_selected_id();
+    }
+
     /// Dispatches navigation messages to their handlers.
     pub(super) fn handle_navigation_msg(&mut self, msg: &AppMsg) -> Option<Cmd> {
         match msg {

@@ -14,6 +14,6 @@ mod service;
 
 pub use model::{
     CommentVerificationEvidence, CommentVerificationEvidenceKind, CommentVerificationResult,
-    CommentVerificationStatus,
+    CommentVerificationStatus, GithubCommentId,
 };
 pub use service::{DiffReplayResolutionVerifier, ResolutionVerificationService};

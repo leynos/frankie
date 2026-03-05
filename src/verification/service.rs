@@ -10,7 +10,7 @@ use crate::local::{
 
 use super::model::{
     CommentVerificationEvidence, CommentVerificationEvidenceKind, CommentVerificationResult,
-    CommentVerificationStatus,
+    CommentVerificationStatus, GithubCommentId,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -56,7 +56,7 @@ impl DiffReplayResolutionVerifier {
     }
 
     fn result(
-        comment_id: u64,
+        comment_id: GithubCommentId,
         target_sha: &str,
         status: CommentVerificationStatus,
         evidence: CommentVerificationEvidence,
@@ -75,7 +75,7 @@ impl DiffReplayResolutionVerifier {
         comment: &'a ReviewComment,
         target_sha: &str,
     ) -> Result<CommentAnchor<'a>, CommentVerificationResult> {
-        let comment_id = comment.id;
+        let comment_id = GithubCommentId::new(comment.id);
         let Some(old_sha) = comment.commit_sha.as_deref() else {
             return Err(Self::result(
                 comment_id,
@@ -123,7 +123,7 @@ impl DiffReplayResolutionVerifier {
 
     fn verify_line_mapping(
         &self,
-        comment_id: u64,
+        comment_id: GithubCommentId,
         target_sha: &str,
         anchor: CommentAnchor<'_>,
     ) -> Result<LineMappingVerification, CommentVerificationResult> {
@@ -149,7 +149,7 @@ impl DiffReplayResolutionVerifier {
 
     fn get_file_at_commit(
         &self,
-        comment_ref: (u64, &str),
+        comment_ref: (GithubCommentId, &str),
         commit: &CommitSha,
         path: &RepoFilePath,
     ) -> Result<String, CommentVerificationResult> {
@@ -176,7 +176,7 @@ impl ResolutionVerificationService for DiffReplayResolutionVerifier {
         comment: &ReviewComment,
         target_sha: &str,
     ) -> CommentVerificationResult {
-        let comment_id = comment.id;
+        let comment_id = GithubCommentId::new(comment.id);
         let anchor = match Self::anchor_for_comment(comment, target_sha) {
             Ok(anchor) => anchor,
             Err(result) => return result,
@@ -226,7 +226,7 @@ impl ResolutionVerificationService for DiffReplayResolutionVerifier {
 
 impl DiffReplayResolutionVerifier {
     fn classify_line_comparison(
-        comment_ref: (u64, &str),
+        comment_ref: (GithubCommentId, &str),
         mapping: &LineMappingVerification,
         old_line_number: u32,
         files: (&str, &str),

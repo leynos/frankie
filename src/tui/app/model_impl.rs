@@ -38,7 +38,15 @@ impl Model for ReviewApp {
             model = model.with_review_comment_verification_cache(cache);
         }
 
-        model.load_cached_review_comment_verifications();
+        if let Some(head_sha) = model.head_sha.clone() {
+            let comment_ids: Vec<u64> = model.reviews.iter().map(|comment| comment.id).collect();
+            if let Some(error) = model
+                .verification
+                .load_cached_review_comment_verifications(&comment_ids, &head_sha)
+            {
+                model.error = Some(error);
+            }
+        }
 
         // Emit an immediate startup message to trigger the first render cycle.
         // The sync timer is armed when `AppMsg::Initialized` is handled.
@@ -108,7 +116,7 @@ impl Model for ReviewApp {
             scroll_offset: self.filter_state.scroll_offset,
             visible_height: list_height,
             max_width: safe_terminal_width,
-            verification_results: Some(&self.review_comment_verifications),
+            verification_results: Some(&self.verification.results),
         };
         let list_view = self.review_list.view(&list_ctx);
         output.push_str(&list_view);
@@ -121,8 +129,8 @@ impl Model for ReviewApp {
                 selected_comment.and_then(|comment| self.reply_draft_for_comment(comment.id));
             let reply_draft_ai_preview = selected_comment
                 .and_then(|comment| self.reply_draft_ai_preview_for_comment(comment.id));
-            let verification =
-                selected_comment.and_then(|comment| self.verification_for_comment(comment.id));
+            let verification = selected_comment
+                .and_then(|comment| self.verification.verification_for_comment(comment.id));
             let detail_ctx = CommentDetailViewContext {
                 selected_comment,
                 max_width: safe_terminal_width,

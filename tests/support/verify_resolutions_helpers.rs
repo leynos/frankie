@@ -95,11 +95,12 @@ pub fn count_cache_rows(
     target_sha: &str,
 ) -> Result<i64, Box<dyn Error>> {
     let mut connection = diesel::sqlite::SqliteConnection::establish(database_url)?;
+    let comment_id_i64 = i64::try_from(comment_id)?;
     let row: CountRow = sql_query(
         "SELECT COUNT(*) AS count FROM review_comment_verifications \
          WHERE github_comment_id = ? AND target_sha = ?;",
     )
-    .bind::<BigInt, _>(i64::try_from(comment_id).unwrap_or(i64::MAX))
+    .bind::<BigInt, _>(comment_id_i64)
     .bind::<Text, _>(target_sha)
     .get_result(&mut connection)?;
     Ok(row.count)

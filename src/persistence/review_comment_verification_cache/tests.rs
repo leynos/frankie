@@ -9,7 +9,7 @@ use crate::persistence::{PersistenceError, migrate_database};
 use crate::telemetry::NoopTelemetrySink;
 use crate::verification::{
     CommentVerificationEvidence, CommentVerificationEvidenceKind, CommentVerificationResult,
-    CommentVerificationStatus,
+    CommentVerificationStatus, GithubCommentId,
 };
 
 use super::{ReviewCommentVerificationCache, ReviewCommentVerificationCacheWrite};
@@ -40,7 +40,12 @@ fn sample_result(
     status: CommentVerificationStatus,
     evidence: CommentVerificationEvidence,
 ) -> CommentVerificationResult {
-    CommentVerificationResult::new(comment_id, target_sha.to_owned(), status, evidence)
+    CommentVerificationResult::new(
+        GithubCommentId::new(comment_id),
+        target_sha.to_owned(),
+        status,
+        evidence,
+    )
 }
 
 #[rstest]
@@ -69,7 +74,9 @@ fn cache_round_trips_results(
     })?;
 
     let loaded = cache.get_for_comments(&[10], target)?;
-    let record = loaded.get(&10).expect("record should exist");
+    let record = loaded
+        .get(&10)
+        .ok_or_else(|| std::io::Error::other("record should exist"))?;
     assert_eq!(record.github_comment_id, 10);
     assert_eq!(record.target_sha, target);
     assert_eq!(record.status, CommentVerificationStatus::Verified);
@@ -137,7 +144,9 @@ fn upsert_overwrites_existing_row_for_same_comment_and_target(
     })?;
 
     let loaded = cache.get_for_comments(&[comment_id], target)?;
-    let record = loaded.get(&comment_id).expect("record should exist");
+    let record = loaded
+        .get(&comment_id)
+        .ok_or_else(|| std::io::Error::other("record should exist"))?;
     assert_eq!(record.status, CommentVerificationStatus::Unverified);
     assert_eq!(
         record.evidence_kind,
@@ -156,8 +165,11 @@ fn cache_reports_missing_schema_when_unmigrated(
     let cache = ReviewCommentVerificationCache::new(database_url)?;
 
     let result = cache.get_for_comments(&[1], "head");
-    if !matches!(result, Err(PersistenceError::SchemaNotInitialised)) {
-        return Err(format!("expected SchemaNotInitialised, got {:?}", result.err()).into());
+    let err = result
+        .err()
+        .ok_or("expected get_for_comments to return an error")?;
+    if !matches!(err, PersistenceError::SchemaNotInitialised) {
+        return Err(format!("expected SchemaNotInitialised, got {err:?}").into());
     }
     Ok(())
 }

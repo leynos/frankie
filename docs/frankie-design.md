@@ -467,7 +467,7 @@ this design document for cross-references.
   library-first delivery contract.
 - [ADR-006](adr-006-ai-rewrite-preview-and-fallback-contract.md): AI rewrite
   preview and fallback contract.
-- [ADR-007](#architecture-decision-record-adr-007-automated-resolution-verification-semantics-and-persistence):
+- [ADR-007](adr-007-automated-resolution-verification-semantics-and-persistence.md):
   Automated resolution verification semantics and persistence.
 
 ## 1.3 Scope
@@ -2887,53 +2887,8 @@ Canonical record:
 
 #### Architecture decision record (ADR-007): automated resolution verification semantics and persistence
 
-**Context**: Frankie needs an automated, deterministic way to verify whether a
-review comment has likely been addressed. The roadmap requires that
-verification:
-
-- Replays diffs and checks comment conditions.
-- Annotates comments as verified/unverified in the CLI and TUI.
-- Persists results locally so subsequent sessions can reuse the latest
-  verification status.
-
-**Decision**: Define a conservative, deterministic contract:
-
-- A comment is **verified** when the referenced line is **removed** or its
-  **content changes** between the comment commit and a target commit (typically
-  local `HEAD`).
-- A comment is **unverified** when the referenced line appears unchanged, or
-  when verification cannot be performed deterministically (missing metadata,
-  repository data unavailable, out-of-bounds line numbers).
-
-Verification behaviour is implemented in shared library APIs:
-
-- `verification::ResolutionVerificationService` and
-  `verification::DiffReplayResolutionVerifier` for diff replay and line
-  comparison.
-- `persistence::ReviewCommentVerificationCache` for local persistence.
-
-Verification results are persisted in SQLite in a dedicated table keyed by
-`(github_comment_id, target_sha)` so re-verification overwrites prior outcomes
-for the same target commit while preserving evidence explaining the verdict.
-
-**Rationale**:
-
-1. **Determinism**: A strict “line removed or changed” rule avoids heuristics
-   that require AI or time-based assumptions.
-2. **Conservatism**: When required inputs are missing or the repository cannot
-   be inspected reliably, Frankie prefers `unverified` with explicit evidence.
-3. **Traceability**: Persisting evidence alongside the verdict lets users
-   understand why a comment was marked verified/unverified.
-4. **Surface parity**: Library-first verification logic keeps CLI and TUI
-   behaviour consistent and testable.
-
-**Consequences**:
-
-- CLI gains a `--verify-resolutions` mode that verifies comments and exits.
-- TUI gains `v` (verify selected) and `V` (verify filtered) shortcuts, with
-  verified/unverified markers shown inline in the review list and details.
-- Verification requires both a local repository and a migrated SQLite database
-  (`--database-url` with `--migrate-db` run at least once).
+Canonical record:
+[docs/adr-007-automated-resolution-verification-semantics-and-persistence.md](adr-007-automated-resolution-verification-semantics-and-persistence.md).
 
 ## 5.4 Cross-cutting Concerns
 

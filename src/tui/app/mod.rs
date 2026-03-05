@@ -17,6 +17,7 @@
 //! - `routing`: Mode-aware message routing and category dispatch
 //! - `sync_handlers`: Background sync and refresh handling
 //! - `time_travel_handlers`: Time-travel navigation handlers
+//! - `verification_state`: Verification service/cache/result state
 
 use std::sync::Arc;
 
@@ -30,13 +31,12 @@ use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
 use crate::persistence::ReviewCommentVerificationCache;
 use crate::tui::ReplyDraftConfig;
-use crate::verification::{
-    CommentVerificationEvidence, CommentVerificationResult, ResolutionVerificationService,
-};
+use crate::verification::ResolutionVerificationService;
 
 use super::components::{CommentDetailComponent, DiffContextComponent, ReviewListComponent};
 use super::messages::AppMsg;
 use super::state::{DiffContextState, FilterState, ReplyDraftState, ReviewFilter, TimeTravelState};
+use verification_state::VerificationState;
 
 mod codex_handlers;
 mod diff_context_handlers;
@@ -51,6 +51,7 @@ mod routing;
 mod sync_handlers;
 mod time_travel_handlers;
 mod verification_handlers;
+mod verification_state;
 mod view_mode;
 
 use routing::MessageRouting;
@@ -117,16 +118,8 @@ pub struct ReviewApp {
     reply_draft_config: ReplyDraftConfig,
     /// Service used to perform AI rewrite requests.
     comment_rewrite_service: Arc<dyn CommentRewriteService>,
-    /// Service used to verify comment resolutions, when a local repo is available.
-    resolution_verification_service: Option<Arc<dyn ResolutionVerificationService>>,
-    /// Cache for persisting verification results, when configured.
-    review_comment_verification_cache: Option<Arc<ReviewCommentVerificationCache>>,
-    /// Cached verification results keyed by GitHub comment ID.
-    review_comment_verifications: std::collections::HashMap<u64, CommentVerificationResult>,
-    /// Monotonic request ID used to ignore stale async verification completions.
-    next_verification_request_id: u64,
-    /// Most recent in-flight verification request ID.
-    in_flight_verification_request_id: Option<u64>,
+    /// Verification service, cache, and cached verdict state.
+    verification: VerificationState,
 }
 
 /// Generated preview state before AI text is applied to a draft.
@@ -197,11 +190,7 @@ impl ReviewApp {
             in_flight_ai_rewrite_request_id: None,
             reply_draft_config: super::get_reply_draft_config(),
             comment_rewrite_service: super::get_comment_rewrite_service(),
-            resolution_verification_service: None,
-            review_comment_verification_cache: None,
-            review_comment_verifications: std::collections::HashMap::new(),
-            next_verification_request_id: 1,
-            in_flight_verification_request_id: None,
+            verification: VerificationState::default(),
         };
         app.set_visible_list_height();
         app
@@ -261,7 +250,7 @@ impl ReviewApp {
         mut self,
         service: Arc<dyn ResolutionVerificationService>,
     ) -> Self {
-        self.resolution_verification_service = Some(service);
+        self.verification.service = Some(service);
         self
     }
 
@@ -271,60 +260,8 @@ impl ReviewApp {
         mut self,
         cache: Arc<ReviewCommentVerificationCache>,
     ) -> Self {
-        self.review_comment_verification_cache = Some(cache);
+        self.verification.cache = Some(cache);
         self
-    }
-
-    /// Loads cached verification results for the current `head_sha`.
-    ///
-    /// This is a startup operation: failures set an error message and clear any
-    /// previously loaded verification state.
-    pub(crate) fn load_cached_review_comment_verifications(&mut self) {
-        let Some(cache) = self.review_comment_verification_cache.as_ref() else {
-            return;
-        };
-        let Some(head_sha) = self.head_sha.as_deref() else {
-            return;
-        };
-
-        let ids: Vec<u64> = self.reviews.iter().map(|comment| comment.id).collect();
-        let rows = match cache.get_for_comments(&ids, head_sha) {
-            Ok(rows) => rows,
-            Err(error) => {
-                self.error = Some(format!(
-                    "Failed to load cached verification results: {error}"
-                ));
-                self.review_comment_verifications.clear();
-                return;
-            }
-        };
-
-        self.review_comment_verifications = rows
-            .into_iter()
-            .map(|(id, row)| {
-                (
-                    id,
-                    CommentVerificationResult::new(
-                        id,
-                        row.target_sha,
-                        row.status,
-                        CommentVerificationEvidence {
-                            kind: row.evidence_kind,
-                            message: row.evidence_message,
-                        },
-                    ),
-                )
-            })
-            .collect();
-    }
-
-    /// Returns cached verification state for a comment, if available.
-    #[must_use]
-    pub(crate) fn verification_for_comment(
-        &self,
-        comment_id: u64,
-    ) -> Option<&CommentVerificationResult> {
-        self.review_comment_verifications.get(&comment_id)
     }
 
     /// Returns whether a Codex execution run is currently active.
@@ -402,70 +339,6 @@ impl ReviewApp {
     #[must_use]
     pub fn codex_status_message(&self) -> Option<&str> {
         self.codex_status.as_deref()
-    }
-
-    /// Returns the ID of the currently selected comment, if any.
-    #[must_use]
-    pub fn current_selected_id(&self) -> Option<u64> {
-        self.selected_comment().map(|r| r.id)
-    }
-
-    /// Returns a reference to the currently selected comment, if any.
-    #[must_use]
-    pub fn selected_comment(&self) -> Option<&ReviewComment> {
-        self.filtered_indices
-            .get(self.filter_state.cursor_position)
-            .and_then(|&idx| self.reviews.get(idx))
-    }
-
-    /// Selects the comment with the given ID by moving the cursor to it.
-    ///
-    /// Returns `true` if the comment was found and selected, or `false`
-    /// if no comment with the given ID exists in the current filtered view.
-    pub fn select_by_id(&mut self, id: u64) -> bool {
-        self.find_filtered_index_by_id(id)
-            .map(|index| self.set_cursor(index))
-            .is_some()
-    }
-
-    /// Finds the position within the filtered list for a comment by its ID.
-    ///
-    /// Returns `Some(index)` if a comment with the given `id` exists in the
-    /// current filtered view, or `None` if not found or filtered out.
-    /// Used to restore cursor position after sync operations.
-    pub(crate) fn find_filtered_index_by_id(&self, id: u64) -> Option<usize> {
-        self.filtered_indices
-            .iter()
-            .position(|&idx| self.reviews.get(idx).is_some_and(|r| r.id == id))
-    }
-
-    /// Updates the tracked `selected_comment_id` from the current cursor position.
-    ///
-    /// Synchronises `selected_comment_id` with whatever comment is currently
-    /// under the cursor. Call this after any cursor movement to maintain
-    /// selection tracking for sync operations.
-    pub(crate) fn update_selected_id(&mut self) {
-        self.selected_comment_id = self.current_selected_id();
-    }
-
-    /// Clamps the cursor to valid bounds and updates the selected comment ID.
-    ///
-    /// This helper centralises the common pattern of clamping the cursor after
-    /// filter changes and then updating the tracked selection.
-    fn clamp_cursor_and_update_selection(&mut self) {
-        self.filter_state.clamp_cursor(self.filtered_count());
-        self.adjust_scroll_to_cursor();
-        self.update_selected_id();
-    }
-
-    /// Sets the cursor position and updates the selected comment ID.
-    ///
-    /// This helper centralises the common pattern of moving the cursor and
-    /// updating viewport/selection state in navigation handlers.
-    fn set_cursor(&mut self, position: usize) {
-        self.filter_state.cursor_position = position;
-        self.adjust_scroll_to_cursor();
-        self.update_selected_id();
     }
 
     /// Handles a message and updates state accordingly.
