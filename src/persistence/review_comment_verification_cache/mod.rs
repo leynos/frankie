@@ -100,28 +100,38 @@ impl ReviewCommentVerificationCache {
         if github_comment_ids.is_empty() {
             return Ok(HashMap::new());
         }
-        let requested_ids: HashSet<u64> = github_comment_ids.iter().copied().collect();
+        let requested_ids: HashSet<i64> = github_comment_ids
+            .iter()
+            .filter_map(|id| i64::try_from(*id).ok())
+            .collect();
 
         let mut connection = self.establish_connection()?;
 
         let query = format!(
-            "SELECT github_comment_id, target_sha, status, evidence_kind, evidence_message, \
-             verified_at_unix \
-             FROM {REVIEW_COMMENT_VERIFICATIONS_TABLE} \
-             WHERE target_sha = ?;",
+            concat!(
+                "SELECT github_comment_id, target_sha, status, evidence_kind, ",
+                "evidence_message, verified_at_unix ",
+                "FROM {} ",
+                "WHERE target_sha = ? AND github_comment_id = ?;"
+            ),
+            REVIEW_COMMENT_VERIFICATIONS_TABLE,
         );
 
-        let rows: Vec<VerificationRow> = sql_query(query)
-            .bind::<Text, _>(target_sha)
-            .load(&mut connection)
-            .map_err(|error| Self::map_query_error(&mut connection, &error))?;
+        let mut rows = Vec::with_capacity(requested_ids.len());
+        for github_comment_id in requested_ids {
+            let mut comment_rows: Vec<VerificationRow> = sql_query(&query)
+                .bind::<Text, _>(target_sha)
+                .bind::<BigInt, _>(github_comment_id)
+                .load(&mut connection)
+                .map_err(|error| Self::map_query_error(&mut connection, &error))?;
+            rows.append(&mut comment_rows);
+        }
 
-        let mut out = HashMap::with_capacity(rows.len().min(requested_ids.len()));
+        let mut out = HashMap::with_capacity(rows.len());
         for row in rows {
-            let id_u64 = u64::try_from(row.github_comment_id).unwrap_or(0);
-            if id_u64 == 0 || !requested_ids.contains(&id_u64) {
+            let Ok(id_u64) = u64::try_from(row.github_comment_id) else {
                 continue;
-            }
+            };
 
             let Some(status) = CommentVerificationStatus::from_db_value(&row.status) else {
                 continue;
@@ -162,28 +172,33 @@ impl ReviewCommentVerificationCache {
 
         let result = write.result;
         let evidence = result.evidence();
+        let github_comment_id = Self::try_github_comment_id(result.github_comment_id())?;
+        let query = format!(
+            concat!(
+                "INSERT INTO {} ",
+                "(github_comment_id, target_sha, status, evidence_kind, evidence_message, ",
+                "verified_at_unix) ",
+                "VALUES (?, ?, ?, ?, ?, ?) ",
+                "ON CONFLICT(github_comment_id, target_sha) DO UPDATE SET ",
+                "status = excluded.status, ",
+                "evidence_kind = excluded.evidence_kind, ",
+                "evidence_message = excluded.evidence_message, ",
+                "verified_at_unix = excluded.verified_at_unix, ",
+                "updated_at = CURRENT_TIMESTAMP;"
+            ),
+            REVIEW_COMMENT_VERIFICATIONS_TABLE,
+        );
 
-        sql_query(
-            "INSERT INTO review_comment_verifications \
-             (github_comment_id, target_sha, status, evidence_kind, evidence_message, \
-              verified_at_unix) \
-             VALUES (?, ?, ?, ?, ?, ?) \
-             ON CONFLICT(github_comment_id, target_sha) DO UPDATE SET \
-               status = excluded.status, \
-               evidence_kind = excluded.evidence_kind, \
-               evidence_message = excluded.evidence_message, \
-               verified_at_unix = excluded.verified_at_unix, \
-               updated_at = CURRENT_TIMESTAMP;",
-        )
-        .bind::<BigInt, _>(i64::try_from(result.github_comment_id()).unwrap_or(i64::MAX))
-        .bind::<Text, _>(result.target_sha())
-        .bind::<Text, _>(result.status().as_db_value())
-        .bind::<Text, _>(evidence.kind.as_db_value())
-        .bind::<Nullable<Text>, _>(evidence.message.as_deref())
-        .bind::<BigInt, _>(write.verified_at_unix)
-        .execute(&mut connection)
-        .map(drop)
-        .map_err(|error| Self::map_write_error(&mut connection, &error))
+        sql_query(query)
+            .bind::<BigInt, _>(github_comment_id)
+            .bind::<Text, _>(result.target_sha())
+            .bind::<Text, _>(result.status().as_db_value())
+            .bind::<Text, _>(evidence.kind.as_db_value())
+            .bind::<Nullable<Text>, _>(evidence.message.as_deref())
+            .bind::<BigInt, _>(write.verified_at_unix)
+            .execute(&mut connection)
+            .map(drop)
+            .map_err(|error| Self::map_write_error(&mut connection, &error))
     }
 
     /// Inserts or updates multiple cached verification results.
@@ -220,6 +235,12 @@ impl ReviewCommentVerificationCache {
             })?;
 
         Ok(connection)
+    }
+
+    fn try_github_comment_id(github_comment_id: u64) -> Result<i64, PersistenceError> {
+        i64::try_from(github_comment_id).map_err(|_| PersistenceError::WriteFailed {
+            message: format!("github_comment_id {github_comment_id} exceeds i64 range"),
+        })
     }
 
     fn map_diesel_error<F>(

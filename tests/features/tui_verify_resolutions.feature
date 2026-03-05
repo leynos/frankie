@@ -7,6 +7,6 @@ Feature: TUI resolution verification
     Then the review list shows the comment as verified
 
   Scenario: Verification requires a configured cache
-    Given a review TUI without verification cache returning "verified"
+    Given a review TUI with no verification cache
     When the user requests verification for the selected comment
     Then an error is shown explaining the missing database

@@ -119,7 +119,8 @@ impl CommentDetailComponent {
         output.push('\n');
 
         if let Some(verification) = ctx.verification {
-            output.push_str(&Self::render_verification(verification));
+            let verification_text = Self::render_verification(verification);
+            output.push_str(&wrap_text(&verification_text, ctx.max_width));
             output.push('\n');
         }
 

@@ -255,7 +255,7 @@ Baseline algorithm (Option A):
    - `GitOperations::get_file_at_commit(old_sha, file_path)`
    - `GitOperations::get_file_at_commit(new_sha, file_path)`
 6. Compare the old line content to the new line content at the mapped position:
-   - If the line content differs (after normalising line endings), classify as
+   - If the line content differs (after normalizing line endings), classify as
      `Verified` with evidence `LineChanged`.
    - If the line content is identical, classify as `Unverified` with evidence
      `LineUnchanged`.

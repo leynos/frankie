@@ -1,10 +1,5 @@
 //! Tests for the review comment verification cache.
 
-#![expect(
-    clippy::panic_in_result_fn,
-    reason = "Test fixtures return Result to use ?, assertions are expected to panic on failure."
-)]
-
 use std::collections::HashMap;
 
 use rstest::{fixture, rstest};
@@ -49,6 +44,10 @@ fn sample_result(
 }
 
 #[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Fixture-based test returns Result and still uses assertions for state checks."
+)]
 fn cache_round_trips_results(
     migrated_cache: FixtureResult<(TempDir, ReviewCommentVerificationCache)>,
 ) -> FixtureResult<()> {
@@ -84,6 +83,10 @@ fn cache_round_trips_results(
 }
 
 #[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Fixture-based test returns Result and still uses assertions for state checks."
+)]
 fn cache_returns_empty_map_for_empty_input(
     migrated_cache: FixtureResult<(TempDir, ReviewCommentVerificationCache)>,
 ) -> FixtureResult<()> {
@@ -94,6 +97,10 @@ fn cache_returns_empty_map_for_empty_input(
 }
 
 #[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Fixture-based test returns Result and still uses assertions for state checks."
+)]
 fn upsert_overwrites_existing_row_for_same_comment_and_target(
     migrated_cache: FixtureResult<(TempDir, ReviewCommentVerificationCache)>,
 ) -> FixtureResult<()> {
@@ -142,14 +149,17 @@ fn upsert_overwrites_existing_row_for_same_comment_and_target(
 }
 
 #[rstest]
-fn cache_reports_missing_schema_when_unmigrated(temp_db: FixtureResult<(TempDir, String)>) {
-    let (_temp_dir, database_url) = temp_db.expect("fixture should succeed");
-    let cache = ReviewCommentVerificationCache::new(database_url).expect("cache should build");
+fn cache_reports_missing_schema_when_unmigrated(
+    temp_db: FixtureResult<(TempDir, String)>,
+) -> FixtureResult<()> {
+    let (_temp_dir, database_url) = temp_db?;
+    let cache = ReviewCommentVerificationCache::new(database_url)?;
 
-    let error = cache
-        .get_for_comments(&[1], "head")
-        .expect_err("expected schema missing error");
-    assert_eq!(error, PersistenceError::SchemaNotInitialised);
+    let result = cache.get_for_comments(&[1], "head");
+    if !matches!(result, Err(PersistenceError::SchemaNotInitialised)) {
+        return Err(format!("expected SchemaNotInitialised, got {:?}", result.err()).into());
+    }
+    Ok(())
 }
 
 #[test]

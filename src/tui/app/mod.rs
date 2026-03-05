@@ -277,8 +277,8 @@ impl ReviewApp {
 
     /// Loads cached verification results for the current `head_sha`.
     ///
-    /// This is a best-effort operation intended for startup: failures are
-    /// ignored and leave verification state empty.
+    /// This is a startup operation: failures set an error message and clear any
+    /// previously loaded verification state.
     pub(crate) fn load_cached_review_comment_verifications(&mut self) {
         let Some(cache) = self.review_comment_verification_cache.as_ref() else {
             return;
@@ -288,8 +288,15 @@ impl ReviewApp {
         };
 
         let ids: Vec<u64> = self.reviews.iter().map(|comment| comment.id).collect();
-        let Ok(rows) = cache.get_for_comments(&ids, head_sha) else {
-            return;
+        let rows = match cache.get_for_comments(&ids, head_sha) {
+            Ok(rows) => rows,
+            Err(error) => {
+                self.error = Some(format!(
+                    "Failed to load cached verification results: {error}"
+                ));
+                self.review_comment_verifications.clear();
+                return;
+            }
         };
 
         self.review_comment_verifications = rows

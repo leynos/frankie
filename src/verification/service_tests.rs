@@ -40,7 +40,8 @@ impl GitOperations for StubGitOperations {
         sha: &CommitSha,
         file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError> {
-        let timestamp = chrono::Utc::now();
+        let timestamp = chrono::DateTime::from_timestamp(1_700_000_000, 0)
+            .unwrap_or(chrono::DateTime::UNIX_EPOCH);
         let metadata = CommitMetadata::new(
             sha.to_string(),
             "message".to_owned(),

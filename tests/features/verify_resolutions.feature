@@ -32,6 +32,14 @@ Feature: Automated resolution verification
     Then the CLI output marks the comment as unverified
     And the CLI output explains repository data is unavailable
 
+  Scenario: Verification marks missing metadata as unverified and persists results
+    Given a migrated database for verification
+    And a local repository where the referenced line changes between commits
+    And the GitHub API returns a review comment missing verification metadata
+    When the user runs resolution verification
+    Then the CLI output marks the comment as unverified
+    And the verification status is persisted in the local cache
+
   Scenario: Verification cache reuse keeps a single row per comment and target
     Given a migrated database for verification
     And a local repository where the referenced line changes between commits

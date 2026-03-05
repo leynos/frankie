@@ -174,9 +174,9 @@ Press any key to close this help.
 
     const fn review_list_status_hints(&self) -> &'static str {
         if self.width <= 80 {
-            "q:quit  ?:help  j/k:move  f:filter  v:verify  a:reply  x:codex"
+            "q:quit  ?:help  j/k:move  f:filter  v/V:verify  a:reply  x:codex"
         } else {
-            "j/k:move  f:filter  c:context  t:travel  v:verify  a:reply  x:codex  r:refresh  ?:help  q:quit"
+            "j/k:move  f:filter  c:context  t:travel  v/V:verify  a:reply  x:codex  r:refresh  ?:help  q:quit"
         }
     }
 }

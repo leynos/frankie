@@ -7,7 +7,8 @@ use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
 use tempfile::TempDir;
-use wiremock::MockServer;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use frankie::persistence::{ReviewCommentVerificationCache, migrate_database};
 use frankie::telemetry::NoopTelemetrySink;
@@ -45,17 +46,16 @@ fn verify_state() -> VerifyResolutionsState {
     VerifyResolutionsState::default()
 }
 
-fn binary_path() -> std::path::PathBuf {
-    let mut path = std::env::current_exe()
-        .unwrap_or_else(|error| panic!("failed to get current exe path: {error}"));
+fn binary_path() -> Result<std::path::PathBuf, TestError> {
+    let mut path = std::env::current_exe()?;
     path.pop();
     path.pop();
     path.push("frankie");
-    path
+    Ok(path)
 }
 
-fn run_frankie(args: &[String]) -> Output {
-    let mut command = Command::new(binary_path());
+fn run_frankie(args: &[String]) -> Result<Output, TestError> {
+    let mut command = Command::new(binary_path()?);
     command.args(args);
 
     command
@@ -67,9 +67,7 @@ fn run_frankie(args: &[String]) -> Output {
         .env_remove("FRANKIE_REPO")
         .env_remove("GITHUB_TOKEN");
 
-    command
-        .output()
-        .unwrap_or_else(|error| panic!("failed to execute binary: {error}"))
+    Ok(command.output()?)
 }
 
 fn configure_review_comment_mock(
@@ -202,6 +200,48 @@ fn given_review_comment_with_unknown_commit(verify_state: &VerifyResolutionsStat
     configure_review_comment_mock(verify_state, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 }
 
+#[given("the GitHub API returns a review comment missing verification metadata")]
+fn given_review_comment_missing_metadata(verify_state: &VerifyResolutionsState) -> StepResult {
+    let runtime = runtime::ensure_runtime_and_server(&verify_state.runtime, &verify_state.server)?;
+    let server_uri = verify_state
+        .server
+        .with_ref(MockServer::uri)
+        .ok_or("wiremock server should be initialised")?;
+
+    let pr_url = format!("{server_uri}/owner/repo/pull/1");
+    verify_state.pr_url.set(pr_url);
+    let comment_id = 1_u64;
+    verify_state.comment_id.set(comment_id);
+    verify_state
+        .server
+        .with_ref(|server| {
+            let comments_path = "/api/v3/repos/owner/repo/pulls/1/comments";
+            let response = ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": comment_id,
+                    "body": "Please update this line",
+                    "user": { "login": "alice" },
+                    "path": "src/main.rs",
+                    "line": 2,
+                    "original_line": 2,
+                    "diff_hunk": "@@ -1,3 +1,3 @@",
+                    "commit_id": null,
+                    "in_reply_to_id": null,
+                    "created_at": "2026-03-02T00:00:00Z",
+                    "updated_at": "2026-03-02T00:00:00Z"
+                }
+            ]));
+            runtime.block_on(
+                Mock::given(method("GET"))
+                    .and(path(comments_path))
+                    .respond_with(response)
+                    .mount(server),
+            );
+        })
+        .ok_or("wiremock server should be initialised")?;
+    Ok(())
+}
+
 #[when("the user runs resolution verification")]
 fn when_user_runs_verification(verify_state: &VerifyResolutionsState) -> StepResult {
     let database_url = verify_state
@@ -225,7 +265,7 @@ fn when_user_runs_verification(verify_state: &VerifyResolutionsState) -> StepRes
         "--repo-path".to_owned(),
         repo_path,
     ];
-    let output = run_frankie(&args);
+    let output = run_frankie(&args)?;
     verify_state.output.set(output);
     Ok(())
 }
@@ -253,7 +293,7 @@ fn when_user_runs_verification_with_positional_pr(
         "--repo-path".to_owned(),
         repo_path,
     ];
-    let output = run_frankie(&args);
+    let output = run_frankie(&args)?;
     verify_state.output.set(output);
     Ok(())
 }
@@ -352,7 +392,7 @@ fn then_cache_contains_single_row(verify_state: &VerifyResolutionsState) -> Step
     name = "Verification marks changed lines as verified and persists results"
 )]
 fn verify_marks_changed_lines_as_verified(verify_state: VerifyResolutionsState) {
-    drop(verify_state);
+    let _ = verify_state;
 }
 
 #[scenario(
@@ -360,7 +400,7 @@ fn verify_marks_changed_lines_as_verified(verify_state: VerifyResolutionsState) 
     name = "Verification marks unchanged lines as unverified and persists results"
 )]
 fn verify_marks_unchanged_lines_as_unverified(verify_state: VerifyResolutionsState) {
-    drop(verify_state);
+    let _ = verify_state;
 }
 
 #[scenario(
@@ -368,7 +408,7 @@ fn verify_marks_unchanged_lines_as_unverified(verify_state: VerifyResolutionsSta
     name = "Verification marks deleted lines as verified and persists results"
 )]
 fn verify_marks_deleted_lines_as_verified(verify_state: VerifyResolutionsState) {
-    drop(verify_state);
+    let _ = verify_state;
 }
 
 #[scenario(
@@ -376,7 +416,15 @@ fn verify_marks_deleted_lines_as_verified(verify_state: VerifyResolutionsState) 
     name = "Verification marks unknown commit mappings as unverified"
 )]
 fn verify_marks_unknown_commit_as_unverified(verify_state: VerifyResolutionsState) {
-    drop(verify_state);
+    let _ = verify_state;
+}
+
+#[scenario(
+    path = "tests/features/verify_resolutions.feature",
+    name = "Verification marks missing metadata as unverified and persists results"
+)]
+fn verify_marks_missing_metadata_as_unverified(verify_state: VerifyResolutionsState) {
+    let _ = verify_state;
 }
 
 #[scenario(
@@ -384,7 +432,7 @@ fn verify_marks_unknown_commit_as_unverified(verify_state: VerifyResolutionsStat
     name = "Verification cache reuse keeps a single row per comment and target"
 )]
 fn verify_cache_reuse_keeps_single_row(verify_state: VerifyResolutionsState) {
-    drop(verify_state);
+    let _ = verify_state;
 }
 
 #[scenario(
@@ -392,5 +440,5 @@ fn verify_cache_reuse_keeps_single_row(verify_state: VerifyResolutionsState) {
     name = "Verification accepts a bare PR number when --repo-path is provided"
 )]
 fn verify_bare_pr_identifier_honours_repo_path(verify_state: VerifyResolutionsState) {
-    drop(verify_state);
+    let _ = verify_state;
 }

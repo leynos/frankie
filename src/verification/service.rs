@@ -302,7 +302,7 @@ fn normalise_line(input: &str) -> &str {
 }
 
 fn line_at(content: &str, line: u32) -> Option<&str> {
-    let index = usize::try_from(line).ok()?.saturating_sub(1);
+    let index = usize::try_from(line.checked_sub(1)?).ok()?;
     content.lines().nth(index)
 }
 

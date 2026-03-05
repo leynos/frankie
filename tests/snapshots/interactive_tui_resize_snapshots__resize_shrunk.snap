@@ -1,6 +1,5 @@
 ---
 source: tests/interactive_tui_resize_snapshots.rs
-assertion_line: 385
 expression: frame
 ---
 Frankie - Review Comments                                                       
@@ -16,4 +15,4 @@ Filter: All (18/18)
   [reviewer-8] src/component_04.rs:8: Fixture review 8: adjust layout and co... 
 ─────────────────────────────────────────────────────────────────────────────── 
 ...                                                                             
-q:quit  ?:help  j/k:move  f:filter  v:verify  a:reply  x:codex
+q:quit  ?:help  j/k:move  f:filter  v/V:verify  a:reply  x:codex

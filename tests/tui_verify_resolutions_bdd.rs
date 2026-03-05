@@ -159,9 +159,9 @@ fn given_tui_with_cache(tui_verify_state: &TuiVerifyState, text: String) -> Step
     Ok(())
 }
 
-#[given("a review TUI without verification cache returning {text}")]
-fn given_tui_without_cache(tui_verify_state: &TuiVerifyState, text: String) -> StepResult {
-    let status = parse_status(&text)?;
+#[given("a review TUI with no verification cache")]
+fn given_tui_without_cache(tui_verify_state: &TuiVerifyState) {
+    let status = CommentVerificationStatus::Verified;
 
     let app = ReviewApp::new(vec![sample_comment()])
         .with_git_ops(Arc::new(NoopGitOps), "head".to_owned())
@@ -169,7 +169,6 @@ fn given_tui_without_cache(tui_verify_state: &TuiVerifyState, text: String) -> S
 
     tui_verify_state.app.set(app);
     tui_verify_state.pending_cmd.set(None);
-    Ok(())
 }
 
 #[when("the user requests verification for the selected comment")]
@@ -241,7 +240,7 @@ fn then_error_is_shown(tui_verify_state: &TuiVerifyState) -> StepResult {
     name = "Verifying a selected comment annotates the review list"
 )]
 fn scenario_verify_selected_comment(tui_verify_state: TuiVerifyState) {
-    drop(tui_verify_state);
+    let _ = tui_verify_state;
 }
 
 #[scenario(
@@ -249,5 +248,5 @@ fn scenario_verify_selected_comment(tui_verify_state: TuiVerifyState) {
     name = "Verification requires a configured cache"
 )]
 fn scenario_verify_requires_cache(tui_verify_state: TuiVerifyState) {
-    drop(tui_verify_state);
+    let _ = tui_verify_state;
 }

@@ -412,8 +412,8 @@ Frankie can verify whether a review comment has likely been addressed by
 checking whether the referenced line was removed or changed between the
 comment's commit and the local repository `HEAD`.
 
-Verification results are persisted in the local SQLite cache so future runs can
-annotate comments without recomputing.
+Verification results are persisted in the local SQLite cache, so future runs
+can annotate comments without recomputing.
 
 ### Verification requirements
 
@@ -424,7 +424,7 @@ annotate comments without recomputing.
 
 ### CLI usage
 
-First, initialise or upgrade the database schema:
+First, initialize or upgrade the database schema:
 
 ```bash
 frankie --migrate-db --database-url frankie.sqlite

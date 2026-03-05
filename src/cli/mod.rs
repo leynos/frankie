@@ -8,6 +8,7 @@
 //! - [`repository_listing`]: List PRs for a specified repository
 //! - [`review_tui`]: Interactive TUI for reviewing PR comments
 //! - [`single_pr`]: Load details for a single pull request
+//! - [`verify_resolutions`]: Automated resolution verification for comments
 //!
 //! Output formatting utilities are in [`output`].
 //! Export formatters are in [`export`].
