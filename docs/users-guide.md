@@ -12,7 +12,7 @@ including loading individual pull requests and listing PRs for a repository.
 
 ## Operation modes
 
-Frankie supports six operation modes:
+Frankie supports seven operation modes:
 
 1. **Interactive mode** — Auto-detect repository from local Git directory
 2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
@@ -22,7 +22,10 @@ Frankie supports six operation modes:
    for navigating and filtering review comments using `--tui` with `--pr-url`
 5. **Comment export mode** — Export review comments in structured formats using
    `--export` with `--pr-url`
-6. **Artificial intelligence (AI) rewrite mode** — Expand or reword draft text
+6. **Automated resolution verification mode** — Verify whether referenced
+   lines changed between the comment commit and local `HEAD` using
+   `--verify-resolutions`
+7. **Artificial intelligence (AI) rewrite mode** — Expand or reword draft text
    non-interactively using `--ai-rewrite-mode` and `--ai-rewrite-text`
 
 ## Interactive mode (local discovery)
@@ -190,6 +193,8 @@ Table: Review list keyboard shortcuts.
 | `]`         | Next diff hunk                 |
 | `t`         | Enter time-travel mode         |
 | `a`         | Start inline reply drafting    |
+| `v`         | Verify selected comment        |
+| `V`         | Verify filtered comments       |
 | `x`         | Run Codex on filtered comments |
 | `r`         | Refresh from GitHub            |
 | `?`         | Toggle help overlay            |
@@ -400,6 +405,54 @@ explaining what is missing.
   repository to use time-travel mode."
 - **Commit not found** — Displays "Commit not found in local repository. The
   commit may have been force-pushed away."
+
+## Automated resolution verification
+
+Frankie can verify whether a review comment has likely been addressed by
+checking whether the referenced line was removed or changed between the
+comment's commit and the local repository `HEAD`.
+
+Verification results are persisted in the local SQLite cache, so future runs
+can annotate comments without recomputing.
+
+### Verification requirements
+
+- A local Git repository (run Frankie from within the repository or provide
+  `--repo-path`).
+- A migrated SQLite database (run `--migrate-db` once and reuse the same
+  `--database-url`).
+
+### CLI usage
+
+First, initialize or upgrade the database schema:
+
+```bash
+frankie --migrate-db --database-url frankie.sqlite
+```
+
+Then run verification:
+
+```bash
+frankie \
+  --verify-resolutions \
+  --pr-url https://github.com/owner/repo/pull/123 \
+  --token ghp_example \
+  --database-url frankie.sqlite \
+  --repo-path /path/to/repo
+```
+
+The CLI prints a summary and per-comment results (for example
+`✓ verified comment 123 (line_changed)`), and records them in the local cache.
+
+### TUI usage
+
+In the review list:
+
+- Press `v` to verify the selected comment.
+- Press `V` to verify all comments matching the current filter.
+
+Verified/unverified markers (`✓` / `✗`) appear in the review list, and the
+comment detail pane shows the latest verification status and evidence.
 
 ## Comment export mode
 
@@ -655,6 +708,7 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--no-local-discovery`                      | `-n`  | Disable automatic local Git discovery             |
 | `--tui`                                     | `-T`  | Launch interactive TUI for review comments        |
 | `--export <FORMAT>`                         | `-e`  | Export comments (`markdown`, `jsonl`, `template`) |
+| `--verify-resolutions`                      | —     | Verify comment resolutions and exit               |
 | `--output <PATH>`                           | —     | Output file for export (default: stdout)          |
 | `--template <PATH>`                         | —     | Template file for custom export format            |
 | `--reply-max-length <COUNT>`                | —     | Maximum characters allowed in TUI reply drafts    |

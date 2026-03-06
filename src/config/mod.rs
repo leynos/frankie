@@ -33,6 +33,8 @@ pub enum OperationMode {
     ExportComments,
     /// AI-powered draft rewrite mode.
     AiRewrite,
+    /// Verify comment resolutions against local git state.
+    VerifyResolutions,
 }
 
 /// Application configuration supporting CLI, environment, and file sources.
@@ -53,6 +55,7 @@ pub enum OperationMode {
 /// - `FRANKIE_AI_MODEL` or `--ai-model`: AI model identifier
 /// - `FRANKIE_AI_API_KEY`, `OPENAI_API_KEY`, or `--ai-api-key`: AI API key
 /// - `FRANKIE_AI_TIMEOUT_SECONDS` or `--ai-timeout-seconds`: Request timeout
+/// - `--verify-resolutions`: Verify resolutions
 ///
 /// # Example
 ///
@@ -73,6 +76,10 @@ pub enum OperationMode {
         config_file_name = "frankie.toml",
         app_name = "frankie"
     )
+)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "Configuration models independent CLI/config switches; refactoring into nested enums would either break the existing CLI surface or require ortho_config macro changes."
 )]
 pub struct FrankieConfig {
     /// GitHub pull request URL to load.
@@ -186,6 +193,26 @@ pub struct FrankieConfig {
     #[ortho_config(cli_short = 'e')]
     pub export: Option<String>,
 
+    /// Runs automated resolution verification and exits.
+    ///
+    /// When set, Frankie loads review comments for the pull request and
+    /// verifies whether the referenced code has changed between the comment's
+    /// commit and the local repository `HEAD`.
+    ///
+    /// Verification requires both a local git repository (`--repo-path` or
+    /// local discovery) and a migrated `SQLite` database (`--database-url`) so
+    /// results can be persisted locally.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--verify-resolutions`
+    /// - Config file: `verify_resolutions = true`
+    ///
+    /// Note: Environment variable `FRANKIE_VERIFY_RESOLUTIONS` is not
+    /// supported because `ortho_config` does not load boolean values from the
+    /// environment.
+    #[ortho_config()]
+    pub verify_resolutions: bool,
+
     /// Output file path for exported comments.
     ///
     /// When set, Frankie writes exported comments to the specified file
@@ -298,6 +325,7 @@ impl Default for FrankieConfig {
             no_local_discovery: false,
             tui: false,
             export: None,
+            verify_resolutions: false,
             output: None,
             template: None,
             repo_path: None,
@@ -421,12 +449,50 @@ impl FrankieConfig {
         self.rewrite_mode_present() || self.rewrite_text_present()
     }
 
+    const fn is_verify_resolutions_mode(&self) -> bool {
+        self.verify_resolutions
+    }
+
+    fn is_ai_rewrite_mode(&self) -> bool {
+        self.should_ai_rewrite()
+    }
+
+    const fn is_export_comments_mode(&self) -> bool {
+        self.export.is_some()
+    }
+
+    const fn is_review_tui_mode(&self) -> bool {
+        self.has_pr_identifier() || (self.tui && self.has_pr_url())
+    }
+
+    const fn is_single_pull_request_mode(&self) -> bool {
+        self.has_pr_url()
+    }
+
+    const fn is_repository_listing_mode(&self) -> bool {
+        self.has_repo()
+    }
+
     const fn has_pr_identifier(&self) -> bool {
         self.pr_identifier.is_some()
     }
 
-    const fn should_review_tui(&self) -> bool {
-        self.has_pr_identifier() || (self.tui && self.has_pr_url())
+    fn resolve_operation_mode(&self) -> OperationMode {
+        if self.is_verify_resolutions_mode() {
+            OperationMode::VerifyResolutions
+        } else if self.is_ai_rewrite_mode() {
+            OperationMode::AiRewrite
+        } else if self.is_export_comments_mode() {
+            OperationMode::ExportComments
+        } else if self.is_review_tui_mode() {
+            OperationMode::ReviewTui
+        } else if self.is_single_pull_request_mode() {
+            OperationMode::SinglePullRequest
+        } else if self.is_repository_listing_mode() {
+            OperationMode::RepositoryListing
+        } else {
+            OperationMode::Interactive
+        }
     }
 
     /// Determines the operation mode based on provided configuration.
@@ -439,19 +505,7 @@ impl FrankieConfig {
     /// owner and repo are provided, or `Interactive` otherwise.
     #[must_use]
     pub fn operation_mode(&self) -> OperationMode {
-        if self.should_ai_rewrite() {
-            OperationMode::AiRewrite
-        } else if self.should_export_comments() {
-            OperationMode::ExportComments
-        } else if self.should_review_tui() {
-            OperationMode::ReviewTui
-        } else if self.has_pr_url() {
-            OperationMode::SinglePullRequest
-        } else if self.has_repo() {
-            OperationMode::RepositoryListing
-        } else {
-            OperationMode::Interactive
-        }
+        self.resolve_operation_mode()
     }
 
     /// Sets the positional PR identifier extracted from raw CLI arguments.
@@ -473,6 +527,13 @@ impl FrankieConfig {
     /// `pr_url` are provided, since they are mutually exclusive ways to
     /// specify a pull request.
     pub fn validate(&self) -> Result<(), IntakeError> {
+        self.validate_pr_identifier_exclusivity()?;
+        self.validate_ai_rewrite_completeness()?;
+        self.validate_verify_resolutions_compatibility()?;
+        Ok(())
+    }
+
+    fn validate_pr_identifier_exclusivity(&self) -> Result<(), IntakeError> {
         if self.has_pr_identifier() && self.has_pr_url() {
             return Err(IntakeError::Configuration {
                 message: concat!(
@@ -483,6 +544,10 @@ impl FrankieConfig {
             });
         }
 
+        Ok(())
+    }
+
+    fn validate_ai_rewrite_completeness(&self) -> Result<(), IntakeError> {
         let mode_present = self.rewrite_mode_present();
         let text_present = self.rewrite_text_present();
         let mode_without_text = mode_present && !text_present;
@@ -494,6 +559,26 @@ impl FrankieConfig {
                     "together"
                 )
                 .to_owned(),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn validate_verify_resolutions_compatibility(&self) -> Result<(), IntakeError> {
+        if self.verify_resolutions && self.should_ai_rewrite() {
+            return Err(IntakeError::Configuration {
+                message: concat!(
+                    "--verify-resolutions cannot be combined with AI rewrite ",
+                    "flags; remove --ai-rewrite-mode/--ai-rewrite-text"
+                )
+                .to_owned(),
+            });
+        }
+
+        if self.verify_resolutions && self.should_export_comments() {
+            return Err(IntakeError::Configuration {
+                message: "--verify-resolutions cannot be combined with --export".to_owned(),
             });
         }
 

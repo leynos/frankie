@@ -10,6 +10,7 @@ use crate::ai::{
 };
 use crate::github::error::IntakeError;
 use crate::github::models::ReviewComment;
+use crate::verification::CommentVerificationResult;
 
 use super::state::{ReviewFilter, TimeTravelState};
 
@@ -120,6 +121,28 @@ pub enum AppMsg {
     /// Discard the currently previewed AI rewrite candidate.
     ReplyDraftAiDiscard,
 
+    // Resolution verification
+    /// Verify the currently selected comment against local git state.
+    VerifySelectedComment,
+    /// Verify all comments in the current filtered set against local git state.
+    VerifyFilteredComments,
+    /// Verification completed with results.
+    VerificationReady {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
+        /// Verification results (one per verified comment).
+        results: Vec<CommentVerificationResult>,
+        /// Persistence failure detail, if storing results failed.
+        persistence_error: Option<String>,
+    },
+    /// Verification failed unexpectedly.
+    VerificationFailed {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
+        /// User-readable failure message.
+        message: String,
+    },
+
     // Data loading
     /// Request a refresh of review data from the API.
     RefreshRequested,
@@ -157,12 +180,90 @@ pub enum AppMsg {
     },
 }
 
+/// Logical categories used for message dispatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageCategory {
+    /// Cursor and paging navigation actions.
+    Navigation,
+    /// Filtering and filter-cycling actions.
+    Filter,
+    /// Full-screen diff context actions.
+    DiffContext,
+    /// Time-travel loading and navigation actions.
+    TimeTravel,
+    /// Codex execution and session-resume actions.
+    Codex,
+    /// Reply-drafting and AI rewrite actions.
+    ReplyDraft,
+    /// Automated resolution verification actions.
+    Verification,
+    /// Data refresh and background sync actions.
+    Data,
+    /// Lifecycle and miscellaneous actions.
+    Lifecycle,
+}
+
 impl AppMsg {
     /// Creates an error message from an `IntakeError`.
     #[must_use]
     #[doc(hidden)]
     pub fn from_error(error: &IntakeError) -> Self {
         Self::RefreshFailed(error.to_string())
+    }
+
+    /// Returns the dispatch category for this message.
+    #[must_use]
+    pub const fn category(&self) -> MessageCategory {
+        match self {
+            Self::CursorUp
+            | Self::CursorDown
+            | Self::PageUp
+            | Self::PageDown
+            | Self::Home
+            | Self::End => MessageCategory::Navigation,
+            Self::SetFilter(_) | Self::ClearFilter | Self::CycleFilter => MessageCategory::Filter,
+            Self::ShowDiffContext | Self::HideDiffContext | Self::NextHunk | Self::PreviousHunk => {
+                MessageCategory::DiffContext
+            }
+            Self::EnterTimeTravel
+            | Self::ExitTimeTravel
+            | Self::TimeTravelLoaded(_)
+            | Self::TimeTravelFailed(_)
+            | Self::NextCommit
+            | Self::PreviousCommit
+            | Self::CommitNavigated(_) => MessageCategory::TimeTravel,
+            Self::StartCodexExecution
+            | Self::CodexPollTick
+            | Self::CodexProgress(_)
+            | Self::CodexFinished(_)
+            | Self::ResumePromptShown(_)
+            | Self::ResumeAccepted
+            | Self::ResumeDeclined => MessageCategory::Codex,
+            Self::StartReplyDraft
+            | Self::ReplyDraftInsertTemplate { .. }
+            | Self::ReplyDraftInsertChar(_)
+            | Self::ReplyDraftBackspace
+            | Self::ReplyDraftRequestSend
+            | Self::ReplyDraftCancel
+            | Self::ReplyDraftRequestAiRewrite { .. }
+            | Self::ReplyDraftAiRewriteReady { .. }
+            | Self::ReplyDraftAiApply
+            | Self::ReplyDraftAiDiscard => MessageCategory::ReplyDraft,
+            Self::VerifySelectedComment
+            | Self::VerifyFilteredComments
+            | Self::VerificationReady { .. }
+            | Self::VerificationFailed { .. } => MessageCategory::Verification,
+            Self::RefreshRequested
+            | Self::RefreshComplete(_)
+            | Self::RefreshFailed(_)
+            | Self::SyncTick
+            | Self::SyncComplete { .. } => MessageCategory::Data,
+            Self::EscapePressed
+            | Self::Initialized
+            | Self::Quit
+            | Self::ToggleHelp
+            | Self::WindowResized { .. } => MessageCategory::Lifecycle,
+        }
     }
 
     /// Returns `true` if this is a navigation message.
@@ -198,6 +299,18 @@ impl AppMsg {
                 | Self::RefreshFailed(_)
                 | Self::SyncTick
                 | Self::SyncComplete { .. }
+        )
+    }
+
+    /// Returns `true` if this is a resolution verification message.
+    #[must_use]
+    pub const fn is_verification(&self) -> bool {
+        matches!(
+            self,
+            Self::VerifySelectedComment
+                | Self::VerifyFilteredComments
+                | Self::VerificationReady { .. }
+                | Self::VerificationFailed { .. }
         )
     }
 

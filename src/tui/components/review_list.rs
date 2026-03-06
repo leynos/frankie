@@ -5,6 +5,7 @@
 
 use crate::github::models::ReviewComment;
 use crate::tui::components::text_truncate::truncate_to_display_width_with_ellipsis;
+use crate::verification::{CommentVerificationResult, GithubCommentId};
 
 /// Defensive fallback for visible height when layout has not yet been applied.
 const FALLBACK_VISIBLE_HEIGHT: usize = 5;
@@ -31,6 +32,9 @@ pub struct ReviewListViewContext<'a> {
     ///
     /// Rows longer than this width are truncated.
     pub max_width: usize,
+    /// Optional verification results keyed by GitHub comment ID.
+    pub verification_results:
+        Option<&'a std::collections::HashMap<GithubCommentId, CommentVerificationResult>>,
 }
 
 /// Component for displaying a list of review comments.
@@ -108,7 +112,10 @@ impl ReviewListComponent {
             };
             let is_selected = display_index == ctx.cursor_position;
             let prefix = if is_selected { ">" } else { " " };
-            let line = Self::format_review_line(review, prefix, ctx.max_width);
+            let verification = ctx
+                .verification_results
+                .and_then(|results| results.get(&review.id.into()));
+            let line = Self::format_review_line(review, prefix, verification, ctx.max_width);
             output.push_str(&line);
             output.push('\n');
         }
@@ -117,7 +124,13 @@ impl ReviewListComponent {
     }
 
     /// Formats a single review line for display.
-    fn format_review_line(review: &ReviewComment, prefix: &str, max_width: usize) -> String {
+    fn format_review_line(
+        review: &ReviewComment,
+        prefix: &str,
+        verification: Option<&CommentVerificationResult>,
+        max_width: usize,
+    ) -> String {
+        let verification_symbol = verification.map_or("", |result| result.status().symbol());
         let author = review.author.as_deref().unwrap_or("unknown");
         let file = review.file_path.as_deref().unwrap_or("(no file)");
         let line_num = review
@@ -131,7 +144,8 @@ impl ReviewListComponent {
             .map(|line| truncate_to_display_width_with_ellipsis(line, BODY_PREVIEW_WIDTH))
             .unwrap_or_default();
 
-        let line = format!("{prefix} [{author}] {file}{line_num}: {body_preview}");
+        let line =
+            format!("{prefix}{verification_symbol} [{author}] {file}{line_num}: {body_preview}");
         truncate_to_display_width_with_ellipsis(&line, max_width)
     }
 }
@@ -145,6 +159,10 @@ fn first_trimmed_line(body: &str) -> &str {
 mod tests {
     use rstest::{fixture, rstest};
     use unicode_width::UnicodeWidthStr;
+
+    use crate::verification::{
+        CommentVerificationEvidence, CommentVerificationEvidenceKind, CommentVerificationStatus,
+    };
 
     use super::*;
 
@@ -210,6 +228,27 @@ mod tests {
         .build()
     }
 
+    fn sample_verification_result(status: CommentVerificationStatus) -> CommentVerificationResult {
+        let evidence_kind = match status {
+            CommentVerificationStatus::Verified => CommentVerificationEvidenceKind::LineChanged,
+            CommentVerificationStatus::Unverified => CommentVerificationEvidenceKind::LineUnchanged,
+        };
+        CommentVerificationResult::new(
+            1.into(),
+            "head".to_owned(),
+            status,
+            CommentVerificationEvidence {
+                kind: evidence_kind,
+                message: Some("example".to_owned()),
+            },
+        )
+    }
+
+    fn verified_line(review: &ReviewComment, max_width: usize) -> String {
+        let verification = sample_verification_result(CommentVerificationStatus::Verified);
+        ReviewListComponent::format_review_line(review, ">", Some(&verification), max_width)
+    }
+
     #[test]
     fn view_shows_empty_message_when_no_reviews() {
         let component = ReviewListComponent::new();
@@ -222,6 +261,7 @@ mod tests {
             scroll_offset: 0,
             visible_height: 10,
             max_width: 80,
+            verification_results: None,
         };
         let output = component.view(&ctx);
         assert!(output.contains("No review comments"));
@@ -239,6 +279,7 @@ mod tests {
             scroll_offset: 0,
             visible_height: 10,
             max_width: 80,
+            verification_results: None,
         };
         let output = component.view(&ctx);
 
@@ -250,12 +291,31 @@ mod tests {
 
     #[rstest]
     fn format_review_line_includes_all_fields(sample_review: ReviewComment) {
-        let line = ReviewListComponent::format_review_line(&sample_review, " ", 80);
+        let line = ReviewListComponent::format_review_line(&sample_review, " ", None, 80);
 
         assert!(line.contains("[alice]"));
         assert!(line.contains("src/main.rs"));
         assert!(line.contains(":42"));
         assert!(line.contains("Consider refactoring"));
+    }
+
+    #[rstest]
+    fn format_review_line_includes_verification_marker(sample_review: ReviewComment) {
+        let line = verified_line(&sample_review, 80);
+        assert!(
+            line.starts_with(">✓ "),
+            "expected verification symbol, got: {line}"
+        );
+    }
+
+    #[rstest]
+    fn format_review_line_clamps_width_with_verification_marker(sample_review: ReviewComment) {
+        let line = verified_line(&sample_review, 16);
+        assert!(
+            line.starts_with(">✓"),
+            "expected verification symbol, got: {line}"
+        );
+        assert!(line.width() <= 16, "list rows should be clamped to width");
     }
 
     #[test]
@@ -269,7 +329,7 @@ mod tests {
             ..Default::default()
         };
 
-        let line = ReviewListComponent::format_review_line(&comment, ">", 20);
+        let line = ReviewListComponent::format_review_line(&comment, ">", None, 20);
         assert!(line.width() <= 20, "list rows should be clamped to width");
     }
 
@@ -285,6 +345,7 @@ mod tests {
             scroll_offset: 0,
             visible_height: 10,
             max_width: 16,
+            verification_results: None,
         };
         let output = component.view(&ctx);
         let first_row = output.lines().next().unwrap_or("");
@@ -303,7 +364,7 @@ mod tests {
         let mut review = sample_review;
         review.body = Some("你好世界和平".repeat(10));
 
-        let line = ReviewListComponent::format_review_line(&review, " ", 80);
+        let line = ReviewListComponent::format_review_line(&review, " ", None, 80);
         assert!(line.width() <= 80);
         assert!(line.contains("..."));
     }

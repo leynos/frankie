@@ -9,6 +9,8 @@ use std::process::{Command, Output};
 
 use rstest::rstest;
 
+use frankie::persistence::CURRENT_SCHEMA_VERSION;
+
 use support::create_temp_dir;
 
 /// Returns the path to the built binary.
@@ -127,7 +129,7 @@ fn migrate_db_emits_telemetry_to_stderr() {
         "expected telemetry on stderr, got: {stderr}"
     );
     assert!(
-        stderr.contains("20251220000000"),
+        stderr.contains(CURRENT_SCHEMA_VERSION),
         "expected schema version in telemetry, got: {stderr}"
     );
 }
@@ -254,11 +256,11 @@ fn migrate_db_is_idempotent() {
     let second_stderr = String::from_utf8_lossy(&second.stderr);
 
     assert!(
-        first_stderr.contains("20251220000000"),
+        first_stderr.contains(CURRENT_SCHEMA_VERSION),
         "first run should emit schema version"
     );
     assert!(
-        second_stderr.contains("20251220000000"),
+        second_stderr.contains(CURRENT_SCHEMA_VERSION),
         "second run should emit same schema version"
     );
 }

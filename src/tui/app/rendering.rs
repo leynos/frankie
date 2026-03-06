@@ -113,6 +113,8 @@ Other:
   r          Refresh from GitHub
   c          View full-screen context
   t          Time-travel to comment's commit
+  v          Verify selected comment
+  V          Verify filtered comments
   a          Start inline reply draft
   x          Run Codex using filtered comments
   ?          Toggle this help
@@ -172,9 +174,9 @@ Press any key to close this help.
 
     const fn review_list_status_hints(&self) -> &'static str {
         if self.width <= 80 {
-            "q:quit  ?:help  j/k:move  f:filter  a:reply  x:codex"
+            "q:quit  ?:help  j/k:move  f:filter  v/V:verify  a:reply  x:codex"
         } else {
-            "j/k:move  f:filter  c:context  t:travel  a:reply  x:codex  r:refresh  ?:help  q:quit"
+            "j/k:move  f:filter  c:context  t:travel  v/V:verify  a:reply  x:codex  r:refresh  ?:help  q:quit"
         }
     }
 }

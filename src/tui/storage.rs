@@ -13,6 +13,7 @@ use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
+use crate::persistence::ReviewCommentVerificationCache;
 use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 
 /// Global storage for initial review data.
@@ -53,6 +54,13 @@ static DEFAULT_COMMENT_REWRITE_SERVICE: OnceLock<Arc<dyn CommentRewriteService>>
 /// This is set before the TUI program starts when a valid local repository
 /// is discovered or configured. Enables time-travel navigation in the TUI.
 static GIT_OPS_CONTEXT: OnceLock<GitOpsContext> = OnceLock::new();
+
+/// Global storage for review comment verification cache.
+///
+/// Set before TUI startup when `--database-url` is configured, enabling
+/// annotation of comments with persisted verified/unverified status.
+static REVIEW_COMMENT_VERIFICATION_CACHE: OnceLock<Arc<ReviewCommentVerificationCache>> =
+    OnceLock::new();
 
 /// Global storage for time-travel context (PR info and discovery status).
 ///
@@ -185,6 +193,11 @@ pub fn set_git_ops_context(git_ops: Arc<dyn GitOperations>, head_sha: String) ->
         .is_ok()
 }
 
+/// Sets the verification cache used to persist verified/unverified status.
+pub fn set_review_comment_verification_cache(cache: Arc<ReviewCommentVerificationCache>) -> bool {
+    REVIEW_COMMENT_VERIFICATION_CACHE.set(cache).is_ok()
+}
+
 /// Sets the time-travel context (PR info and discovery status).
 ///
 /// This must be called before starting the bubbletea-rs program. It stores
@@ -206,6 +219,12 @@ pub(crate) fn get_git_ops_context() -> Option<(Arc<dyn GitOperations>, String)> 
     GIT_OPS_CONTEXT
         .get()
         .map(|ctx| (Arc::clone(&ctx.git_ops), ctx.head_sha.clone()))
+}
+
+/// Gets the configured verification cache, if any.
+pub(crate) fn get_review_comment_verification_cache() -> Option<Arc<ReviewCommentVerificationCache>>
+{
+    REVIEW_COMMENT_VERIFICATION_CACHE.get().cloned()
 }
 
 /// Gets the time-travel context, if configured.

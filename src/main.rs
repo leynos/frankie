@@ -36,6 +36,7 @@ async fn run() -> Result<(), IntakeError> {
         OperationMode::ReviewTui => cli::review_tui::run(&config).await,
         OperationMode::ExportComments => cli::export_comments::run(&config).await,
         OperationMode::AiRewrite => cli::ai_rewrite::run(&config),
+        OperationMode::VerifyResolutions => cli::verify_resolutions::run(&config).await,
     }
 }
 

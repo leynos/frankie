@@ -467,6 +467,8 @@ this design document for cross-references.
   library-first delivery contract.
 - [ADR-006](adr-006-ai-rewrite-preview-and-fallback-contract.md): AI rewrite
   preview and fallback contract.
+- [ADR-007](adr-007-automated-resolution-verification-semantics-and-persistence.md):
+  Automated resolution verification semantics and persistence.
 
 ## 1.3 Scope
 
@@ -2883,6 +2885,11 @@ Canonical record:
 Canonical record:
 [docs/adr-006-ai-rewrite-preview-and-fallback-contract.md](adr-006-ai-rewrite-preview-and-fallback-contract.md).
 
+#### Architecture decision record (ADR-007): automated resolution verification semantics and persistence
+
+Canonical record:
+[docs/adr-007-automated-resolution-verification-semantics-and-persistence.md](adr-007-automated-resolution-verification-semantics-and-persistence.md).
+
 ## 5.4 Cross-cutting Concerns
 
 ### 5.4.1 Monitoring And Observability Approach
@@ -4234,7 +4241,7 @@ GitHub cursors, ETags, timestamps, or other sync tokens without schema churn.
 
 When migrations are applied via the application, Frankie reads the latest
 `version` value from Diesel's `__diesel_schema_migrations` table (for example
-`20251220000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
+`20260302000000`) and emits a `TelemetryEvent::SchemaVersionRecorded` event via
 the stderr JSONL telemetry sink.
 
 #### 6.6.3.2 Versioning Strategy

@@ -16,13 +16,15 @@ pub use app::ReviewApp;
 pub use reply_draft_config::{ReplyDraftConfig, ReplyDraftMaxLength, set_reply_draft_config};
 pub use storage::{
     TimeTravelContext, set_comment_rewrite_service, set_git_ops_context, set_initial_reviews,
-    set_initial_terminal_size, set_refresh_context, set_telemetry_sink, set_time_travel_context,
+    set_initial_terminal_size, set_refresh_context, set_review_comment_verification_cache,
+    set_telemetry_sink, set_time_travel_context,
 };
 
 pub(crate) use reply_draft_config::get_reply_draft_config;
 pub(crate) use storage::{
     fetch_reviews, get_comment_rewrite_service, get_git_ops_context, get_initial_reviews,
-    get_initial_terminal_size, get_refresh_locator, get_time_travel_context, record_sync_telemetry,
+    get_initial_terminal_size, get_refresh_locator, get_review_comment_verification_cache,
+    get_time_travel_context, record_sync_telemetry,
 };
 
 #[cfg(test)]

@@ -6,7 +6,7 @@
 
 use bubbletea_rs::Cmd;
 
-use crate::tui::messages::AppMsg;
+use crate::tui::messages::{AppMsg, MessageCategory};
 
 use super::ReviewApp;
 use super::ViewMode;
@@ -111,27 +111,16 @@ impl ReviewApp {
     /// This method handles messages that were not intercepted by mode-specific
     /// routing, dispatching them to the appropriate category handler.
     pub(super) fn dispatch_by_message_category(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        if msg.is_navigation() {
-            return self.handle_navigation_msg(msg);
+        match msg.category() {
+            MessageCategory::Navigation => self.handle_navigation_msg(msg),
+            MessageCategory::Filter => self.handle_filter_msg(msg),
+            MessageCategory::DiffContext => self.handle_diff_context_msg(msg),
+            MessageCategory::TimeTravel => self.handle_time_travel_msg(msg),
+            MessageCategory::Codex => self.handle_codex_msg(msg),
+            MessageCategory::ReplyDraft => self.handle_reply_draft_msg(msg),
+            MessageCategory::Verification => self.handle_verification_msg(msg),
+            MessageCategory::Data => self.handle_data_msg(msg),
+            MessageCategory::Lifecycle => self.handle_lifecycle_msg(msg),
         }
-        if msg.is_filter() {
-            return self.handle_filter_msg(msg);
-        }
-        if msg.is_diff_context() {
-            return self.handle_diff_context_msg(msg);
-        }
-        if msg.is_time_travel() {
-            return self.handle_time_travel_msg(msg);
-        }
-        if msg.is_codex() {
-            return self.handle_codex_msg(msg);
-        }
-        if msg.is_reply_draft() {
-            return self.handle_reply_draft_msg(msg);
-        }
-        if msg.is_data() {
-            return self.handle_data_msg(msg);
-        }
-        self.handle_lifecycle_msg(msg)
     }
 }

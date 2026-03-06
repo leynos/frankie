@@ -20,7 +20,7 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 pub const INITIAL_SCHEMA_VERSION: &str = "20251214000000";
 
 /// Latest schema version recorded by the most recent embedded migration.
-pub const CURRENT_SCHEMA_VERSION: &str = "20251220000000";
+pub const CURRENT_SCHEMA_VERSION: &str = "20260302000000";
 
 /// A Diesel migration version string.
 #[derive(Debug, Clone, PartialEq, Eq)]

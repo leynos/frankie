@@ -12,12 +12,13 @@ use bubbletea_rs::Program;
 
 use frankie::ai::{OpenAiCommentRewriteConfig, OpenAiCommentRewriteService};
 use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
+use frankie::persistence::ReviewCommentVerificationCache;
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
     ReplyDraftConfig, ReplyDraftMaxLength, ReviewApp, TimeTravelContext,
     set_comment_rewrite_service, set_git_ops_context, set_initial_reviews,
-    set_initial_terminal_size, set_refresh_context, set_reply_draft_config, set_telemetry_sink,
-    set_time_travel_context,
+    set_initial_terminal_size, set_refresh_context, set_reply_draft_config,
+    set_review_comment_verification_cache, set_telemetry_sink, set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -64,6 +65,13 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     });
 
     let _ = set_refresh_context(locator, token);
+
+    if let Some(database_url) = config.database_url.as_deref()
+        && let Ok(cache) = ReviewCommentVerificationCache::new(database_url.to_owned())
+    {
+        let _ = set_review_comment_verification_cache(Arc::new(cache));
+    }
+
     let reply_draft_config = ReplyDraftConfig::new(
         ReplyDraftMaxLength::new(config.reply_max_length),
         config.reply_templates.clone(),
@@ -263,131 +271,5 @@ async fn run_tui() -> Result<(), bubbletea_rs::Error> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn review_app_can_be_created_empty() {
-        let app = ReviewApp::empty();
-        assert_eq!(app.filtered_count(), 0);
-    }
-
-    #[test]
-    fn bare_number_rejected_when_local_discovery_disabled() {
-        let result = resolve_from_identifier("42", true);
-
-        assert!(
-            matches!(result, Err(IntakeError::Configuration { .. })),
-            "bare number with no_local_discovery should fail, got {result:?}"
-        );
-    }
-
-    #[test]
-    fn url_identifier_allowed_when_local_discovery_disabled() {
-        let result = resolve_from_identifier("https://github.com/octo/repo/pull/42", true);
-
-        assert!(
-            result.is_ok(),
-            "URL identifier should succeed even with no_local_discovery, got {result:?}"
-        );
-    }
-
-    /// Verifies that `StderrJsonlTelemetrySink` implements `TelemetrySink`
-    /// and can be used with `set_telemetry_sink`, demonstrating the CLI
-    /// telemetry wiring pattern used in the `run` function.
-    ///
-    /// This test covers the CLI side of telemetry wiring. For the full
-    /// end-to-end integration test demonstrating events flowing from TUI
-    /// sync handlers through to the telemetry sink, see the BDD scenario
-    /// "Sync latency is logged to telemetry" in `tests/review_sync_bdd.rs`.
-    #[test]
-    fn cli_telemetry_wiring_pattern_is_valid() {
-        use frankie::telemetry::TelemetrySink;
-
-        // Create the sink exactly as done in run() at line 56
-        let sink: Arc<dyn TelemetrySink> = Arc::new(StderrJsonlTelemetrySink);
-
-        // Verify it implements TelemetrySink and can record events without panic
-        sink.record(frankie::telemetry::TelemetryEvent::SyncLatencyRecorded {
-            latency_ms: 42,
-            comment_count: 5,
-            incremental: true,
-        });
-
-        // Wire it to the TUI module (same call as in run())
-        // The call may fail due to OnceLock if already set by another test,
-        // but we verify the wiring pattern compiles and the sink is usable.
-        let _ = set_telemetry_sink(sink);
-    }
-
-    #[rstest::rstest]
-    #[case::matching_repo(
-        "https://github.com/octocat/hello-world/pull/42",
-        "octocat",
-        "hello-world",
-        true
-    )]
-    #[case::case_insensitive_matching(
-        "https://github.com/OctoCat/Hello-World/pull/1",
-        "octocat",
-        "hello-world",
-        true
-    )]
-    #[case::mismatched_repo(
-        "https://github.com/octocat/hello-world/pull/1",
-        "octocat",
-        "other-repo",
-        false
-    )]
-    #[case::mismatched_owner(
-        "https://github.com/alice/hello-world/pull/1",
-        "bob",
-        "hello-world",
-        false
-    )]
-    fn validate_repo_matches_locator_cases(
-        #[case] locator_url: &str,
-        #[case] origin_owner: &str,
-        #[case] origin_repo: &str,
-        #[case] should_succeed: bool,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let locator = PullRequestLocator::parse(locator_url)?;
-        let origin = GitHubOrigin::GitHubCom {
-            owner: origin_owner.to_owned(),
-            repository: origin_repo.to_owned(),
-        };
-
-        let result = validate_repo_matches_locator(&origin, &locator);
-        if result.is_ok() != should_succeed {
-            return Err(format!("expected is_ok={should_succeed}, got {result:?}").into());
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn validate_repo_rejects_mismatched_enterprise_host() -> Result<(), Box<dyn std::error::Error>>
-    {
-        let locator = PullRequestLocator::parse("https://ghe.corp.com/octocat/hello-world/pull/1")?;
-
-        let origin = GitHubOrigin::Enterprise {
-            host: "ghe.other.com".to_owned(),
-            port: None,
-            owner: "octocat".to_owned(),
-            repository: "hello-world".to_owned(),
-        };
-
-        let result = validate_repo_matches_locator(&origin, &locator);
-        let err = result
-            .err()
-            .ok_or("expected Err for mismatched enterprise host")?;
-        if !err.contains("ghe.other.com") {
-            return Err(format!("error should mention local host: {err}").into());
-        }
-        if !err.contains("ghe.corp.com") {
-            return Err(format!("error should mention PR host: {err}").into());
-        }
-
-        Ok(())
-    }
-}
+#[path = "review_tui_tests.rs"]
+mod tests;
