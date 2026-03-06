@@ -1,6 +1,5 @@
 ---
 source: tests/interactive_tui_resize_snapshots.rs
-assertion_line: 385
 expression: frame
 ---
 Frankie - Review Comments                                                       
@@ -33,4 +32,4 @@ Fixture review 1: adjust layout and confirm visibility
 +    println!("review 1");                                                      
 +}                                                                              
                                                                                 
-q:quit  ?:help  j/k:move  f:filter  v:verify  a:reply  x:codex
+q:quit  ?:help  j/k:move  f:filter  v/V:verify  a:reply  x:codex
