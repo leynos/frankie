@@ -16,6 +16,24 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::runtime::SharedRuntime;
 
+/// Creates a commit in the provided repository for behavioural test setup.
+///
+/// # Parameters
+///
+/// - `repo`: Repository in which to stage and commit changes.
+/// - `message`: Commit message used for the new commit.
+/// - `files`: File updates to stage, expressed as `(path, contents)` tuples.
+///   Paths are relative to the repository workdir.
+///
+/// # Returns
+///
+/// Returns `Ok(Oid)` containing the newly created commit object ID. Returns
+/// `Err(Box<dyn Error>)` when setup fails.
+///
+/// # Errors
+///
+/// Returns an error when the repository has no workdir, when the workdir path
+/// is not valid UTF-8, or when filesystem/index/Git operations fail.
 pub fn create_commit(
     repo: &Repository,
     message: &str,
@@ -53,6 +71,12 @@ pub fn create_commit(
     Ok(repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?)
 }
 
+/// Parameters for mounting a mocked GitHub pull request comments response.
+///
+/// - `pr`: Pull request number used in the mocked route path.
+/// - `comment_id`: GitHub review comment ID returned in the mocked payload.
+/// - `commit_id`: Commit SHA associated with the mocked review comment.
+///   The value is borrowed for the lifetime `'a`.
 #[derive(Debug, Clone, Copy)]
 pub struct ReviewCommentsMount<'a> {
     pub pr: u64,
@@ -60,6 +84,15 @@ pub struct ReviewCommentsMount<'a> {
     pub commit_id: &'a str,
 }
 
+/// Mounts a mocked GitHub review-comments endpoint for behavioural tests.
+///
+/// Uses `mount` to build a mocked `GET` response for pull request review
+/// comments and registers it on `server` via `runtime`.
+///
+/// This helper currently assumes the hardcoded `owner/repo` repository segment
+/// when building `comments_path`. Callers must use that repository identity in
+/// test setup, or update `mount_review_comments`, `comments_path`, and
+/// `ReviewCommentsMount<'_>` together.
 pub fn mount_review_comments(
     runtime: &SharedRuntime,
     server: &MockServer,
