@@ -44,15 +44,14 @@ preserving explainable outcomes across repeated runs.
 
 ## Options Considered
 
-- **Option A: Deterministic diff replay with SQLite persistence**
-  - Replays mappings from comment anchor to target commit state.
-  - Stores outcomes and evidence locally for reuse.
-- **Option B: Heuristic or AI-assisted verification**
-  - Could infer broader intent resolution.
-  - Introduces non-determinism and weaker explainability.
-- **Option C: No persistence, compute on demand only**
-  - Simplifies storage concerns.
-  - Increases repeated verification cost and weakens continuity between runs.
+| Option                                                      | Determinism                                         | Persistence                                         | Explainability                                      | Cost and Repeatability                                     |
+| ----------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| Option A: Deterministic diff replay with SQLite persistence | Strong deterministic replay against commit history. | Local SQLite cache keyed by comment and target SHA. | High, with explicit evidence kind and message.      | Low repeat cost and stable repeated outcomes.              |
+| Option B: Heuristic or AI-assisted verification             | Lower, depends on heuristic or model behaviour.     | Optional and model-dependent.                       | Lower, rationale may be probabilistic or opaque.    | Higher operational variance across runs.                   |
+| Option C: No persistence, compute on demand only            | Deterministic per run if replay is used.            | None.                                               | Medium, but no durable evidence trail between runs. | Higher repeat cost and weaker continuity between sessions. |
+
+_Table: Option comparison for deterministic verification, persistence,
+explainability, and repeated-run cost._
 
 ## Decision Outcome / Proposed Direction
 
@@ -86,7 +85,7 @@ for the same target commit while preserving evidence for each verdict.
 - **Non-Goals**
   - Semantic intent analysis beyond line-level deterministic checks.
   - AI-based confidence scoring.
-  - Cross-repository synchronisation of verification cache state.
+  - Cross-repository synchronization of verification cache state.
 
 ## Migration Plan
 
