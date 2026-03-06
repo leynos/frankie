@@ -10,7 +10,7 @@ use diesel::QueryableByName;
 use diesel::RunQueryDsl;
 use diesel::sql_query;
 use diesel::sql_types::{BigInt, Text};
-use git2::{ErrorCode, Oid, Repository};
+use git2::{ErrorCode, Oid, Repository, Signature, Time};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -39,7 +39,11 @@ pub fn create_commit(
     message: &str,
     files: &[(&str, &str)],
 ) -> Result<Oid, Box<dyn Error>> {
-    let sig = repo.signature()?;
+    let sig = Signature::new(
+        "Frankie Test",
+        "frankie-tests@example.com",
+        &Time::new(1_709_251_200, 0),
+    )?;
     let mut index = repo.index()?;
 
     let workdir = repo
@@ -129,6 +133,28 @@ struct CountRow {
     count: i64,
 }
 
+/// Counts verification-cache rows matching a comment and target commit SHA.
+///
+/// # Parameters
+///
+/// - `database_url`: `SQLite` connection URL for the test database.
+/// - `comment_id`: GitHub review comment identifier to filter on.
+/// - `target_sha`: Commit or target SHA to filter on.
+///
+/// # Returns
+///
+/// Returns `Ok(i64)` with the number of matching rows in
+/// `review_comment_verifications`.
+///
+/// # Errors
+///
+/// Returns `Err(Box<dyn Error>)` when establishing the database connection
+/// fails, when converting `comment_id` to `SQLite` `BIGINT` fails, or when the
+/// query execution fails.
+///
+/// # Panics
+///
+/// This function does not intentionally panic.
 pub fn count_cache_rows(
     database_url: &str,
     comment_id: u64,
