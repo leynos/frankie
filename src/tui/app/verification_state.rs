@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use crate::persistence::ReviewCommentVerificationCache;
 use crate::verification::{
-    CommentVerificationEvidence, CommentVerificationResult, ResolutionVerificationService,
+    CommentVerificationEvidence, CommentVerificationResult, GithubCommentId,
+    ResolutionVerificationService,
 };
 
 /// Verification services, cache handles, and cached results for the app.
@@ -15,7 +16,7 @@ pub(crate) struct VerificationState {
     /// Cache for persisting verification results, when configured.
     pub(crate) cache: Option<Arc<ReviewCommentVerificationCache>>,
     /// Cached verification results keyed by GitHub comment ID.
-    pub(crate) results: std::collections::HashMap<u64, CommentVerificationResult>,
+    pub(crate) results: std::collections::HashMap<GithubCommentId, CommentVerificationResult>,
     /// Monotonic request ID used to ignore stale async verification completions.
     pub(crate) next_request_id: u64,
     /// Most recent in-flight verification request ID.
@@ -59,7 +60,7 @@ impl VerificationState {
             .into_iter()
             .map(|(id, row)| {
                 (
-                    id,
+                    id.into(),
                     CommentVerificationResult::new(
                         id.into(),
                         row.target_sha,
@@ -82,6 +83,6 @@ impl VerificationState {
         &self,
         comment_id: u64,
     ) -> Option<&CommentVerificationResult> {
-        self.results.get(&comment_id)
+        self.results.get(&GithubCommentId::new(comment_id))
     }
 }

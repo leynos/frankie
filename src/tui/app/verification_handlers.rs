@@ -112,7 +112,7 @@ impl ReviewApp {
         for result in results {
             self.verification
                 .results
-                .insert(result.github_comment_id().as_u64(), result.clone());
+                .insert(result.github_comment_id(), result.clone());
         }
 
         if let Some(message) = persistence_error {

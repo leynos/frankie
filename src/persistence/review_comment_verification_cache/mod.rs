@@ -225,16 +225,22 @@ impl ReviewCommentVerificationCache {
             .map_err(|error| Self::map_write_error(&mut connection, &error))?;
 
         for result in results {
-            let write_result = Self::upsert_with_connection(
+            if let Err(write_error) = Self::upsert_with_connection(
                 &mut connection,
                 ReviewCommentVerificationCacheWrite {
                     result,
                     verified_at_unix,
                 },
-            );
-            if let Err(error) = write_result {
-                drop(sql_query("ROLLBACK;").execute(&mut connection));
-                return Err(error);
+            ) {
+                let rollback_result = sql_query("ROLLBACK;").execute(&mut connection);
+                return match rollback_result {
+                    Ok(_) => Err(write_error),
+                    Err(rollback_error) => Err(PersistenceError::WriteFailed {
+                        message: format!(
+                            "failed to roll back transaction after write error ({write_error}): {rollback_error}"
+                        ),
+                    }),
+                };
             }
         }
 

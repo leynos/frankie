@@ -324,8 +324,13 @@ fn then_status_is_persisted(verify_state: &VerifyResolutionsState) -> StepResult
     let stdout = String::from_utf8_lossy(&output.stdout);
     let expected_status = if stdout.contains("✓ verified comment 1") {
         "verified"
-    } else {
+    } else if stdout.contains("✗ unverified comment 1") {
         "unverified"
+    } else {
+        return Err(format!(
+            "expected stdout to contain a verification marker for comment 1, got: {stdout}"
+        )
+        .into());
     };
     let actual_status = record.status.as_db_value();
     if actual_status != expected_status {

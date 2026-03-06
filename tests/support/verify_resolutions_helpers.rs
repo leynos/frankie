@@ -2,6 +2,9 @@
 
 use std::error::Error;
 
+use camino::Utf8Path;
+use cap_std::ambient_authority;
+use cap_std::fs_utf8::Dir;
 use diesel::Connection;
 use diesel::QueryableByName;
 use diesel::RunQueryDsl;
@@ -24,13 +27,17 @@ pub fn create_commit(
     let workdir = repo
         .workdir()
         .ok_or("repository has no working directory")?;
+    let workdir_utf8 = workdir
+        .to_str()
+        .ok_or("repository working directory is not valid UTF-8")?;
+    let workdir_dir = Dir::open_ambient_dir(workdir_utf8, ambient_authority())?;
     for (path, content) in files {
-        let full = workdir.join(path);
-        if let Some(parent) = full.parent() {
-            std::fs::create_dir_all(parent)?;
+        let utf8_path = Utf8Path::new(path);
+        if let Some(parent) = utf8_path.parent() {
+            workdir_dir.create_dir_all(parent)?;
         }
-        std::fs::write(&full, content)?;
-        index.add_path(std::path::Path::new(path))?;
+        workdir_dir.write(utf8_path, content)?;
+        index.add_path(utf8_path.as_std_path())?;
     }
 
     let tree_id = index.write_tree()?;

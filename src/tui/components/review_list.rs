@@ -5,7 +5,7 @@
 
 use crate::github::models::ReviewComment;
 use crate::tui::components::text_truncate::truncate_to_display_width_with_ellipsis;
-use crate::verification::CommentVerificationResult;
+use crate::verification::{CommentVerificationResult, GithubCommentId};
 
 /// Defensive fallback for visible height when layout has not yet been applied.
 const FALLBACK_VISIBLE_HEIGHT: usize = 5;
@@ -33,7 +33,8 @@ pub struct ReviewListViewContext<'a> {
     /// Rows longer than this width are truncated.
     pub max_width: usize,
     /// Optional verification results keyed by GitHub comment ID.
-    pub verification_results: Option<&'a std::collections::HashMap<u64, CommentVerificationResult>>,
+    pub verification_results:
+        Option<&'a std::collections::HashMap<GithubCommentId, CommentVerificationResult>>,
 }
 
 /// Component for displaying a list of review comments.
@@ -113,7 +114,7 @@ impl ReviewListComponent {
             let prefix = if is_selected { ">" } else { " " };
             let verification = ctx
                 .verification_results
-                .and_then(|results| results.get(&review.id));
+                .and_then(|results| results.get(&review.id.into()));
             let line = Self::format_review_line(review, prefix, verification, ctx.max_width);
             output.push_str(&line);
             output.push('\n');
