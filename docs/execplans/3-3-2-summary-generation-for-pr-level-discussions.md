@@ -56,6 +56,9 @@ Success is observable when:
 - Do not push summary logic into `src/tui/state/` or `src/cli/`.
 - Keep the AI-provider boundary dependency-injected so tests can use
   stubs or deterministic local mocks instead of mutating environment state.
+- Use `vidaimock` for end-to-end tests that exercise the real
+  OpenAI-compatible generative summary path. Do not depend on live network
+  providers in local or CI gates.
 - Every new Rust module must begin with a `//!` module comment.
 - Public APIs must have Rustdoc comments. Examples should be included on
   public functions where they materially improve discoverability.
@@ -108,6 +111,10 @@ Success is observable when:
   shortcut hints. Severity: medium. Likelihood: medium. Mitigation: add
   component tests and, if the layout changes materially, snapshot tests for
   small and large terminal sizes.
+- Risk: the summary adapter works with stubs but fails against a real
+  OpenAI-compatible HTTP surface. Severity: high. Likelihood: medium.
+  Mitigation: add `vidaimock`-backed end-to-end coverage for success, malformed
+  JSON, and forced-failure scenarios using explicit per-request chaos headers.
 
 ## Progress
 
@@ -140,6 +147,9 @@ Success is observable when:
 - `rstest-bdd` v0.5.0 is already in use in this repository, and the
   existing verification/AI flows provide workable patterns for splitting CLI
   and TUI behavioural tests.
+- `vidaimock` is available in this environment at `/root/.local/bin/vidaimock`,
+  so the plan can require a local OpenAI-compatible mock server for generative
+  end-to-end scenarios instead of treating it as optional.
 
 ## Decision Log
 
@@ -164,6 +174,10 @@ Success is observable when:
   `docs/` and add it to the ADR index in `docs/frankie-design.md`. Rationale:
   the feature introduces a new public library model, a new severity taxonomy,
   and a new TUI-link contract.
+- Decision (2026-03-07): use `vidaimock` for end-to-end tests that cover the
+  real generative summary adapter, while keeping pure unit tests and TUI-only
+  behavioural tests on injected stubs. Rationale: this gives deterministic
+  provider-level coverage without making UI tests depend on an external process.
 
 ## Outcomes & Retrospective
 
@@ -186,6 +200,9 @@ rather than replace.
 - `src/ai/comment_rewrite/` shows the current repository pattern for an
   AI-backed, library-first feature with a provider adapter, deterministic
   tests, and both CLI and TUI consumers.
+- `tests/openai_vidaimock.rs` shows that the repository already accepts
+  `vidaimock` as the local OpenAI-compatible integration harness for AI-backed
+  behaviour.
 - `src/verification/` and `src/cli/verify_resolutions.rs` show how a
   shared service is exposed as a standalone CLI mode.
 - `src/tui/app/verification_handlers.rs`,
@@ -320,6 +337,18 @@ Unit tests in this stage should cover:
 If useful, mirror the AI rewrite feature by adding a small test-support stub
 provider under `cfg(any(test, feature = "test-support"))`.
 
+In addition to the pure unit tests, reserve a separate end-to-end test file for
+the generative path, for example `tests/pr_discussion_summary_vidaimock.rs`.
+That test should boot `vidaimock`, point the production adapter at its local
+base URL, and verify at least:
+
+- successful structured-summary generation against an OpenAI-compatible
+  endpoint;
+- malformed JSON handling using a deterministic chaos header such as
+  `X-Vidai-Chaos-Malformed`;
+- forced provider failure using a deterministic request-level chaos header
+  rather than random flakiness.
+
 ### Stage C: add the CLI access path
 
 Introduce a dedicated CLI mode for PR discussion summarization. A likely shape
@@ -352,6 +381,11 @@ Scenarios should include:
 - no review comments returned for the PR;
 - comments with replies collapsing into one summary item;
 - comments with no file path grouping into the fallback section.
+
+At least the generative happy path and one unhappy path in the CLI end-to-end
+suite should run against `vidaimock` rather than a stubbed provider so the
+actual HTTP adapter, request payload, and structured-response parsing are all
+covered.
 
 ### Stage D: add the TUI access path and navigation
 
@@ -406,6 +440,8 @@ Implementation tasks:
 
 - add an OpenAI-compatible provider implementation reusing the repo's
   existing AI client/configuration patterns where possible;
+- add `vidaimock`-backed end-to-end tests for the real summary adapter,
+  following the same local-mock pattern already used for AI rewrite;
 - record the final contract in a new
   `docs/adr-008-pr-discussion-summary-contract.md`;
 - add ADR-008 to the index in `docs/frankie-design.md`;
@@ -431,7 +467,18 @@ cargo test pr_discussion_summary
 cargo test tui_pr_discussion_summary
 cargo test --test pr_discussion_summary_bdd
 cargo test --test tui_pr_discussion_summary_bdd
+cargo test --test pr_discussion_summary_vidaimock
 ```
+
+Before running the `vidaimock`-backed tests, confirm the binary is available:
+
+```plaintext
+command -v vidaimock
+```
+
+The `vidaimock` scenarios should use explicit per-request controls instead of
+global randomness so failures are reproducible. Prefer request-local malformed
+JSON, forced-error, and latency headers over ambient server-wide chaos.
 
 Repository completion gates for the final implementation turn:
 
