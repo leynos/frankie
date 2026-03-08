@@ -203,6 +203,9 @@ rather than replace.
 - `tests/openai_vidaimock.rs` shows that the repository already accepts
   `vidaimock` as the local OpenAI-compatible integration harness for AI-backed
   behaviour.
+- `vidaimock`'s `/metrics` endpoint and request-level chaos headers provide a
+  deterministic way to prove the mock server is up before exercising the real
+  summary adapter.
 - `src/verification/` and `src/cli/verify_resolutions.rs` show how a
   shared service is exposed as a standalone CLI mode.
 - `src/tui/app/verification_handlers.rs`,
@@ -349,6 +352,22 @@ base URL, and verify at least:
 - forced provider failure using a deterministic request-level chaos header
   rather than random flakiness.
 
+Keep the VidaiMock harness assets explicit and close to the tests. A workable
+layout is:
+
+- `tests/support/vidaimock.rs` for process startup, teardown, free-port
+  allocation, and readiness polling;
+- `tests/fixtures/vidaimock/pr_discussion_summary/mock-server.toml` for any
+  server-wide defaults kept intentionally minimal;
+- `tests/fixtures/vidaimock/pr_discussion_summary/providers/` for provider
+  routing definitions;
+- `tests/fixtures/vidaimock/pr_discussion_summary/templates/` for the success
+  payload and any malformed/error template variants.
+
+The harness should assert readiness by probing the mock server's `/metrics`
+endpoint before issuing summary requests, so failures are attributed to server
+startup separately from adapter behaviour.
+
 ### Stage C: add the CLI access path
 
 Introduce a dedicated CLI mode for PR discussion summarization. A likely shape
@@ -479,6 +498,15 @@ command -v vidaimock
 The `vidaimock` scenarios should use explicit per-request controls instead of
 global randomness so failures are reproducible. Prefer request-local malformed
 JSON, forced-error, and latency headers over ambient server-wide chaos.
+
+If a manual local check is needed while developing the harness, this is the
+baseline sequence:
+
+```plaintext
+command -v vidaimock
+vidaimock
+curl -sS http://localhost:8100/metrics | head
+```
 
 Repository completion gates for the final implementation turn:
 
