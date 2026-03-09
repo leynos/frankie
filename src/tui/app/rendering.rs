@@ -6,7 +6,8 @@
 
 use super::ReviewApp;
 use crate::tui::components::{
-    DiffContextComponent, DiffContextViewContext, TimeTravelViewComponent, TimeTravelViewContext,
+    DiffContextComponent, DiffContextViewContext, PrDiscussionSummaryComponent,
+    PrDiscussionSummaryViewContext, TimeTravelViewComponent, TimeTravelViewContext,
 };
 
 impl ReviewApp {
@@ -66,6 +67,9 @@ impl ReviewApp {
             super::ViewMode::ReviewList => self.review_list_status_hints(),
             super::ViewMode::DiffContext => "[/]:hunks  Esc:back  ?:help  q:quit",
             super::ViewMode::TimeTravel => "h/l:commits  Esc:back  ?:help  q:quit",
+            super::ViewMode::PrDiscussionSummary => {
+                "j/k:move  Enter:open  Esc:back  ?:help  q:quit"
+            }
         };
         format!("{hints}\n")
     }
@@ -115,6 +119,7 @@ Other:
   t          Time-travel to comment's commit
   v          Verify selected comment
   V          Verify filtered comments
+  s          Generate PR discussion summary
   a          Start inline reply draft
   x          Run Codex using filtered comments
   ?          Toggle this help
@@ -140,6 +145,11 @@ Reply draft:
   Backspace  Delete one character
   Enter      Mark draft ready to send
   Esc        Discard draft and return
+
+PR discussion summary:
+  j, k       Move between summary items
+  Enter      Jump to the linked comment detail view
+  Esc        Return to the review list
 
 Press any key to close this help.
 ";
@@ -172,11 +182,24 @@ Press any key to close this help.
         })
     }
 
+    /// Renders the full-screen PR-discussion summary view.
+    pub(super) fn render_pr_discussion_summary_view(&self) -> String {
+        self.render_chrome_with_body(|body_height| {
+            let ctx = PrDiscussionSummaryViewContext {
+                state: self.pr_discussion_summary.as_ref(),
+                max_width: self.width as usize,
+                max_height: body_height,
+            };
+
+            PrDiscussionSummaryComponent::view(&ctx)
+        })
+    }
+
     const fn review_list_status_hints(&self) -> &'static str {
         if self.width <= 80 {
-            "q:quit  ?:help  j/k:move  f:filter  v/V:verify  a:reply  x:codex"
+            "q:quit  ?:help  j/k:move  s:summary  v/V:verify  a:reply  x:codex"
         } else {
-            "j/k:move  f:filter  c:context  t:travel  v/V:verify  a:reply  x:codex  r:refresh  ?:help  q:quit"
+            "j/k:move  f:filter  s:summary  c:context  t:travel  v/V:verify  a:reply  x:codex  r:refresh  ?:help  q:quit"
         }
     }
 }

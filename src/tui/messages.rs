@@ -6,7 +6,7 @@
 
 use crate::ai::{
     CodexExecutionOutcome, CodexProgressEvent, CommentRewriteMode, CommentRewriteOutcome,
-    SessionState,
+    PrDiscussionSummary, SessionState,
 };
 use crate::github::error::IntakeError;
 use crate::github::models::ReviewComment;
@@ -143,6 +143,28 @@ pub enum AppMsg {
         message: String,
     },
 
+    // PR discussion summary
+    /// Request generation of a PR-level discussion summary.
+    GeneratePrDiscussionSummary,
+    /// PR discussion summary generation completed successfully.
+    PrDiscussionSummaryReady {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
+        /// Generated structured summary.
+        summary: PrDiscussionSummary,
+    },
+    /// PR discussion summary generation failed.
+    PrDiscussionSummaryFailed {
+        /// Request identifier used to ignore stale async completions.
+        request_id: u64,
+        /// User-readable failure message.
+        message: String,
+    },
+    /// Open the currently selected PR discussion summary link.
+    OpenSelectedPrDiscussionSummaryLink,
+    /// Close the PR discussion summary view.
+    HidePrDiscussionSummary,
+
     // Data loading
     /// Request a refresh of review data from the API.
     RefreshRequested,
@@ -197,6 +219,8 @@ pub enum MessageCategory {
     ReplyDraft,
     /// Automated resolution verification actions.
     Verification,
+    /// PR discussion summary actions.
+    PrDiscussionSummary,
     /// Data refresh and background sync actions.
     Data,
     /// Lifecycle and miscellaneous actions.
@@ -253,6 +277,11 @@ impl AppMsg {
             | Self::VerifyFilteredComments
             | Self::VerificationReady { .. }
             | Self::VerificationFailed { .. } => MessageCategory::Verification,
+            Self::GeneratePrDiscussionSummary
+            | Self::PrDiscussionSummaryReady { .. }
+            | Self::PrDiscussionSummaryFailed { .. }
+            | Self::OpenSelectedPrDiscussionSummaryLink
+            | Self::HidePrDiscussionSummary => MessageCategory::PrDiscussionSummary,
             Self::RefreshRequested
             | Self::RefreshComplete(_)
             | Self::RefreshFailed(_)
@@ -311,6 +340,19 @@ impl AppMsg {
                 | Self::VerifyFilteredComments
                 | Self::VerificationReady { .. }
                 | Self::VerificationFailed { .. }
+        )
+    }
+
+    /// Returns `true` if this is a PR discussion summary message.
+    #[must_use]
+    pub const fn is_pr_discussion_summary(&self) -> bool {
+        matches!(
+            self,
+            Self::GeneratePrDiscussionSummary
+                | Self::PrDiscussionSummaryReady { .. }
+                | Self::PrDiscussionSummaryFailed { .. }
+                | Self::OpenSelectedPrDiscussionSummaryLink
+                | Self::HidePrDiscussionSummary
         )
     }
 

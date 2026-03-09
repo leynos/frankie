@@ -153,6 +153,21 @@ fn ai_rewrite_mode_selection(
 }
 
 #[rstest]
+fn summarize_discussions_takes_precedence_over_export() {
+    let config = FrankieConfig {
+        summarize_discussions: true,
+        export: Some("markdown".to_owned()),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        config.operation_mode(),
+        OperationMode::SummarizeDiscussions,
+        "summary mode should take precedence over export mode"
+    );
+}
+
+#[rstest]
 fn pr_identifier_url_triggers_review_tui() {
     let config = FrankieConfig {
         pr_identifier: Some("https://github.com/o/r/pull/1".to_owned()),

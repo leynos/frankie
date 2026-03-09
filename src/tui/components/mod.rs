@@ -6,6 +6,7 @@
 mod code_highlight;
 mod comment_detail;
 mod diff_context;
+mod pr_discussion_summary;
 mod review_list;
 mod text_truncate;
 mod text_wrap;
@@ -20,5 +21,8 @@ pub use comment_detail::{
     ReplyDraftRenderContext,
 };
 pub(crate) use diff_context::{DiffContextComponent, DiffContextViewContext};
+pub(crate) use pr_discussion_summary::{
+    PrDiscussionSummaryComponent, PrDiscussionSummaryViewContext,
+};
 pub use review_list::{ReviewListComponent, ReviewListViewContext};
 pub(crate) use time_travel_view::{TimeTravelViewComponent, TimeTravelViewContext};

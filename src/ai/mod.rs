@@ -6,6 +6,7 @@
 pub mod codex_exec;
 mod codex_process;
 pub mod comment_rewrite;
+pub mod pr_discussion_summary;
 pub mod session;
 pub mod transcript;
 
@@ -19,5 +20,10 @@ pub use comment_rewrite::{
     CommentRewriteModeParseError, CommentRewriteOutcome, CommentRewriteRequest,
     CommentRewriteService, OpenAiCommentRewriteConfig, OpenAiCommentRewriteService,
     SideBySideDiffPreview, SideBySideLine, build_side_by_side_diff_preview, rewrite_with_fallback,
+};
+pub use pr_discussion_summary::{
+    DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary,
+    OpenAiPrDiscussionSummaryConfig, OpenAiPrDiscussionSummaryService, PrDiscussionSummary,
+    PrDiscussionSummaryRequest, PrDiscussionSummaryService, SeverityBucket, TuiView, TuiViewLink,
 };
 pub use session::{SessionState, SessionStatus, find_interrupted_session};

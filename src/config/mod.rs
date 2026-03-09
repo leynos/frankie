@@ -35,6 +35,8 @@ pub enum OperationMode {
     AiRewrite,
     /// Verify comment resolutions against local git state.
     VerifyResolutions,
+    /// Generate an AI summary for PR-level discussions.
+    SummarizeDiscussions,
 }
 
 /// Application configuration supporting CLI, environment, and file sources.
@@ -213,6 +215,22 @@ pub struct FrankieConfig {
     #[ortho_config()]
     pub verify_resolutions: bool,
 
+    /// Runs PR-level discussion summary generation and exits.
+    ///
+    /// When set, Frankie loads review comments for the selected pull request,
+    /// groups them into discussion threads, asks the configured AI provider to
+    /// summarize those threads, and prints file- and severity-grouped output.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--summarize-discussions`
+    /// - Config file: `summarize_discussions = true`
+    ///
+    /// Note: Environment variable `FRANKIE_SUMMARIZE_DISCUSSIONS` is not
+    /// supported because `ortho_config` does not load boolean values from the
+    /// environment.
+    #[ortho_config()]
+    pub summarize_discussions: bool,
+
     /// Output file path for exported comments.
     ///
     /// When set, Frankie writes exported comments to the specified file
@@ -326,6 +344,7 @@ impl Default for FrankieConfig {
             tui: false,
             export: None,
             verify_resolutions: false,
+            summarize_discussions: false,
             output: None,
             template: None,
             repo_path: None,
@@ -453,6 +472,10 @@ impl FrankieConfig {
         self.verify_resolutions
     }
 
+    const fn is_summarize_discussions_mode(&self) -> bool {
+        self.summarize_discussions
+    }
+
     fn is_ai_rewrite_mode(&self) -> bool {
         self.should_ai_rewrite()
     }
@@ -480,6 +503,8 @@ impl FrankieConfig {
     fn resolve_operation_mode(&self) -> OperationMode {
         if self.is_verify_resolutions_mode() {
             OperationMode::VerifyResolutions
+        } else if self.is_summarize_discussions_mode() {
+            OperationMode::SummarizeDiscussions
         } else if self.is_ai_rewrite_mode() {
             OperationMode::AiRewrite
         } else if self.is_export_comments_mode() {
@@ -530,6 +555,7 @@ impl FrankieConfig {
         self.validate_pr_identifier_exclusivity()?;
         self.validate_ai_rewrite_completeness()?;
         self.validate_verify_resolutions_compatibility()?;
+        self.validate_summary_mode_compatibility()?;
         Ok(())
     }
 
@@ -541,6 +567,46 @@ impl FrankieConfig {
                     "exclusive; provide one or the other"
                 )
                 .to_owned(),
+            });
+        }
+
+        Ok(())
+    }
+
+    fn validate_summary_mode_compatibility(&self) -> Result<(), IntakeError> {
+        if !self.summarize_discussions {
+            return Ok(());
+        }
+
+        if self.verify_resolutions {
+            return Err(IntakeError::Configuration {
+                message: concat!(
+                    "--summarize-discussions cannot be combined with ",
+                    "--verify-resolutions"
+                )
+                .to_owned(),
+            });
+        }
+
+        if self.should_ai_rewrite() {
+            return Err(IntakeError::Configuration {
+                message: concat!(
+                    "--summarize-discussions cannot be combined with AI rewrite ",
+                    "flags; remove --ai-rewrite-mode/--ai-rewrite-text"
+                )
+                .to_owned(),
+            });
+        }
+
+        if self.should_export_comments() {
+            return Err(IntakeError::Configuration {
+                message: "--summarize-discussions cannot be combined with --export".to_owned(),
+            });
+        }
+
+        if self.tui {
+            return Err(IntakeError::Configuration {
+                message: "--summarize-discussions cannot be combined with --tui".to_owned(),
             });
         }
 

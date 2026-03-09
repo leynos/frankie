@@ -14,4 +14,5 @@ pub(crate) enum ViewMode {
     ReviewList,
     DiffContext,
     TimeTravel,
+    PrDiscussionSummary,
 }

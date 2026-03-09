@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (2026-03-06)
+Status: COMPLETE (2026-03-09)
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -121,16 +121,20 @@ Success is observable when:
 - [x] (2026-03-06 00:00Z) Read roadmap, adjacent execplans, current
       verification and AI flows, and the referenced testing/design docs.
 - [x] (2026-03-06 00:00Z) Drafted this ExecPlan for roadmap step 3.3.2.
-- [ ] Stage A: lock the summary domain model, severity taxonomy, and TUI
-      link contract.
-- [ ] Stage B: add failing unit and behavioural tests covering library,
-      CLI, and TUI paths.
-- [ ] Stage C: implement shared summary orchestration and provider
-      adapter.
-- [ ] Stage D: wire the CLI access path and output formatter.
-- [ ] Stage E: wire the TUI summary view and jump-back navigation.
-- [ ] Stage F: update design and user documentation, mark roadmap done,
-      and pass all required gates.
+- [x] (2026-03-09 14:10Z) Stage A: locked the shared summary domain model,
+      severity taxonomy, and TUI link contract in `src/ai/pr_discussion_summary/`.
+- [x] (2026-03-09 14:35Z) Stage B: added unit tests plus `rstest-bdd`
+      behavioural tests for CLI and TUI flows.
+- [x] (2026-03-09 14:50Z) Stage C: implemented shared summary orchestration and
+      the OpenAI-compatible provider adapter.
+- [x] (2026-03-09 15:05Z) Stage D: wired the standalone CLI access path via
+      `--summarize-discussions`.
+- [x] (2026-03-09 15:20Z) Stage E: wired the TUI summary view and jump-back
+      navigation into the review list and comment-detail pane.
+- [x] (2026-03-09 15:35Z) Stage F: final validation passed via `make fmt`,
+      `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`,
+      `make nixie`, `make check-fmt`, `make lint`, and `make test`
+      (`803 passed, 1 skipped`).
 
 ## Surprises & Discoveries
 
@@ -150,6 +154,13 @@ Success is observable when:
 - `vidaimock` is available in this environment at `/root/.local/bin/vidaimock`,
   so the plan can require a local OpenAI-compatible mock server for generative
   end-to-end scenarios instead of treating it as optional.
+- The installed `vidaimock` binary honours disk template overrides under
+  `--config-dir`, which made the success-path harness simpler and more aligned
+  with the repository's embedded-provider model than the earlier
+  `--response-file` assumption.
+- The interactive resize snapshot suite can still leave a `.snap.new` sidecar
+  behind after a filtered acceptance run, so the committed `.snap` file must be
+  reconciled explicitly before the full `cargo nextest` gate.
 
 ## Decision Log
 
@@ -178,16 +189,30 @@ Success is observable when:
   real generative summary adapter, while keeping pure unit tests and TUI-only
   behavioural tests on injected stubs. Rationale: this gives deterministic
   provider-level coverage without making UI tests depend on an external process.
+- Decision (2026-03-09): use `vidaimock --config-dir` plus disk template
+  overrides under
+  `tests/fixtures/vidaimock/pr_discussion_summary/templates/openai/` instead of
+  `--response-file`. Rationale: the shipped binary ignored the response-file
+  path for the OpenAI-compatible endpoint, while template overrides are an
+  observed and testable primary-path integration surface.
 
 ## Outcomes & Retrospective
 
-This feature is not implemented yet. When complete, this section should
-describe:
+This feature is implemented.
 
-- the shared summary library API and its final module layout;
-- the CLI and TUI surfaces that consume it;
-- the tests that prove happy, unhappy, and edge-case behaviour; and
-- any follow-up refactors or deferred work discovered during delivery.
+- Shared library APIs now live in `src/ai/pr_discussion_summary/`, with
+  deterministic thread grouping, severity ordering, TUI-link modelling, and an
+  OpenAI-compatible adapter.
+- The CLI now exposes a standalone `--summarize-discussions` mode, and the TUI
+  exposes a dedicated full-screen summary view launched with `s`.
+- Behaviour is covered by `rstest` unit tests, `rstest-bdd` behavioural tests
+  for the CLI and TUI, and `vidaimock` integration coverage for the real
+  adapter's success and malformed-response paths.
+- Documentation now includes ADR-008, refreshed user-guide coverage for the
+  CLI and TUI summary flows, and the roadmap marks step 3.3.2 done.
+- The `vidaimock` harness discovery was worth recording: disk template
+  overrides under `--config-dir` are the effective contract for shaping
+  OpenAI-compatible success responses in this environment.
 
 ## Context and orientation
 

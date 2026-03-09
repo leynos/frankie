@@ -8,7 +8,10 @@ use std::sync::{Arc, OnceLock};
 
 use crossterm::terminal;
 
-use crate::ai::{CommentRewriteService, OpenAiCommentRewriteService};
+use crate::ai::{
+    CommentRewriteService, OpenAiCommentRewriteService, OpenAiPrDiscussionSummaryService,
+    PrDiscussionSummaryService,
+};
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
@@ -48,6 +51,14 @@ static COMMENT_REWRITE_SERVICE: OnceLock<Arc<dyn CommentRewriteService>> = OnceL
 
 /// Static fallback rewrite service for deployments without explicit AI config.
 static DEFAULT_COMMENT_REWRITE_SERVICE: OnceLock<Arc<dyn CommentRewriteService>> = OnceLock::new();
+
+/// Global storage for PR-discussion summary service used by the summary view.
+static PR_DISCUSSION_SUMMARY_SERVICE: OnceLock<Arc<dyn PrDiscussionSummaryService>> =
+    OnceLock::new();
+
+/// Static fallback summary service for deployments without explicit AI config.
+static DEFAULT_PR_DISCUSSION_SUMMARY_SERVICE: OnceLock<Arc<dyn PrDiscussionSummaryService>> =
+    OnceLock::new();
 
 /// Global storage for Git operations context.
 ///
@@ -174,6 +185,11 @@ pub fn set_comment_rewrite_service(service: Arc<dyn CommentRewriteService>) -> b
     COMMENT_REWRITE_SERVICE.set(service).is_ok()
 }
 
+/// Sets the PR-discussion summary service for the TUI application.
+pub fn set_pr_discussion_summary_service(service: Arc<dyn PrDiscussionSummaryService>) -> bool {
+    PR_DISCUSSION_SUMMARY_SERVICE.set(service).is_ok()
+}
+
 /// Sets the Git operations context for time-travel navigation.
 ///
 /// This must be called before starting the bubbletea-rs program. When a
@@ -253,6 +269,19 @@ pub(crate) fn get_comment_rewrite_service() -> Arc<dyn CommentRewriteService> {
                 .get_or_init(|| Arc::new(OpenAiCommentRewriteService::default())),
         )
     })
+}
+
+/// Gets the configured PR-discussion summary service or a fallback implementation.
+pub(crate) fn get_pr_discussion_summary_service() -> Arc<dyn PrDiscussionSummaryService> {
+    PR_DISCUSSION_SUMMARY_SERVICE
+        .get()
+        .cloned()
+        .unwrap_or_else(|| {
+            Arc::clone(
+                DEFAULT_PR_DISCUSSION_SUMMARY_SERVICE
+                    .get_or_init(|| Arc::new(OpenAiPrDiscussionSummaryService::default())),
+            )
+        })
 }
 
 /// Records sync telemetry for a completed sync operation.

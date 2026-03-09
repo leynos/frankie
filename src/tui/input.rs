@@ -20,6 +20,8 @@ pub enum InputContext {
     ResumePrompt,
     /// Inline reply drafting mode.
     ReplyDraft,
+    /// Full-screen PR discussion summary view.
+    PrDiscussionSummary,
 }
 
 /// Maps a key event to an application message.
@@ -92,6 +94,7 @@ pub const fn map_key_to_message_with_context(
         },
         InputContext::ReviewList => match key.key {
             KeyCode::Char('x') => Some(AppMsg::StartCodexExecution),
+            KeyCode::Char('s') => Some(AppMsg::GeneratePrDiscussionSummary),
             KeyCode::Char('a') => Some(AppMsg::StartReplyDraft),
             KeyCode::Char('v') => Some(AppMsg::VerifySelectedComment),
             KeyCode::Char('V') => Some(AppMsg::VerifyFilteredComments),
@@ -114,6 +117,19 @@ pub const fn map_key_to_message_with_context(
                 Some(AppMsg::ReplyDraftInsertTemplate { template_index })
             }
             KeyCode::Char(character) => Some(AppMsg::ReplyDraftInsertChar(character)),
+            _ => None,
+        },
+        InputContext::PrDiscussionSummary => match key.key {
+            KeyCode::Char('q') => Some(AppMsg::Quit),
+            KeyCode::Char('j') | KeyCode::Down => Some(AppMsg::CursorDown),
+            KeyCode::Char('k') | KeyCode::Up => Some(AppMsg::CursorUp),
+            KeyCode::PageDown => Some(AppMsg::PageDown),
+            KeyCode::PageUp => Some(AppMsg::PageUp),
+            KeyCode::Home | KeyCode::Char('g') => Some(AppMsg::Home),
+            KeyCode::End | KeyCode::Char('G') => Some(AppMsg::End),
+            KeyCode::Enter => Some(AppMsg::OpenSelectedPrDiscussionSummaryLink),
+            KeyCode::Esc => Some(AppMsg::HidePrDiscussionSummary),
+            KeyCode::Char('?') => Some(AppMsg::ToggleHelp),
             _ => None,
         },
     }
@@ -163,6 +179,11 @@ mod tests {
         KeyCode::Char('a'),
         Some(InputContext::ReviewList),
         Some(AppMsg::StartReplyDraft)
+    )]
+    #[case::review_list_s_generate_summary(
+        KeyCode::Char('s'),
+        Some(InputContext::ReviewList),
+        Some(AppMsg::GeneratePrDiscussionSummary)
     )]
     #[case::review_list_v_verify_selected(
         KeyCode::Char('v'),
@@ -245,6 +266,21 @@ mod tests {
         KeyCode::Esc,
         Some(InputContext::ReplyDraft),
         Some(AppMsg::ReplyDraftCancel)
+    )]
+    #[case::summary_enter_open(
+        KeyCode::Enter,
+        Some(InputContext::PrDiscussionSummary),
+        Some(AppMsg::OpenSelectedPrDiscussionSummaryLink)
+    )]
+    #[case::summary_esc_close(
+        KeyCode::Esc,
+        Some(InputContext::PrDiscussionSummary),
+        Some(AppMsg::HidePrDiscussionSummary)
+    )]
+    #[case::summary_j_down(
+        KeyCode::Char('j'),
+        Some(InputContext::PrDiscussionSummary),
+        Some(AppMsg::CursorDown)
     )]
     #[case::default_context_j_down(KeyCode::Char('j'), None, Some(AppMsg::CursorDown))]
     fn key_mapping(

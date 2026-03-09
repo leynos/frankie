@@ -8,6 +8,7 @@
 //! - [`repository_listing`]: List PRs for a specified repository
 //! - [`review_tui`]: Interactive TUI for reviewing PR comments
 //! - [`single_pr`]: Load details for a single pull request
+//! - [`summarize_discussions`]: Generate AI summaries for PR discussions
 //! - [`verify_resolutions`]: Automated resolution verification for comments
 //!
 //! Output formatting utilities are in [`output`].
@@ -24,6 +25,7 @@ pub mod output;
 pub mod repository_listing;
 pub mod review_tui;
 pub mod single_pr;
+pub mod summarize_discussions;
 pub mod verify_resolutions;
 
 #[cfg(test)]

@@ -88,6 +88,11 @@ impl ReviewApp {
     /// mode-specific routing, or `MessageRouting::Fallthrough` if the message
     /// should proceed to category-based dispatch.
     pub(super) fn route_by_view_mode(&mut self, msg: &AppMsg) -> MessageRouting {
+        if let MessageRouting::Handled(result) = self.try_handle_in_pr_discussion_summary_mode(msg)
+        {
+            return MessageRouting::Handled(result);
+        }
+
         // Route TimeTravel mode messages first (takes priority)
         if let MessageRouting::Handled(result) = self.try_handle_in_time_travel_mode(msg) {
             return MessageRouting::Handled(result);
@@ -119,8 +124,38 @@ impl ReviewApp {
             MessageCategory::Codex => self.handle_codex_msg(msg),
             MessageCategory::ReplyDraft => self.handle_reply_draft_msg(msg),
             MessageCategory::Verification => self.handle_verification_msg(msg),
+            MessageCategory::PrDiscussionSummary => self.handle_pr_discussion_summary_msg(msg),
             MessageCategory::Data => self.handle_data_msg(msg),
             MessageCategory::Lifecycle => self.handle_lifecycle_msg(msg),
         }
+    }
+
+    /// Routes messages when in `PrDiscussionSummary` mode.
+    pub(super) fn try_handle_in_pr_discussion_summary_mode(
+        &mut self,
+        msg: &AppMsg,
+    ) -> MessageRouting {
+        if self.view_mode != ViewMode::PrDiscussionSummary {
+            return MessageRouting::Fallthrough;
+        }
+
+        if msg.is_pr_discussion_summary() {
+            return MessageRouting::Handled(self.handle_pr_discussion_summary_msg(msg));
+        }
+
+        if msg.is_navigation() {
+            return MessageRouting::Handled(self.handle_pr_discussion_summary_navigation(msg));
+        }
+
+        if msg.is_filter()
+            || msg.is_diff_context()
+            || msg.is_time_travel()
+            || msg.is_reply_draft()
+            || msg.is_verification()
+        {
+            return MessageRouting::Handled(None);
+        }
+
+        MessageRouting::Fallthrough
     }
 }

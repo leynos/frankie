@@ -82,3 +82,54 @@ fn rejects_incomplete_ai_rewrite_configuration(
         "should reject {description}, got {result:?}"
     );
 }
+
+#[rstest]
+#[case(
+    FrankieConfig {
+        summarize_discussions: true,
+        export: Some("markdown".to_owned()),
+        ..Default::default()
+    },
+    "--export"
+)]
+#[case(
+    FrankieConfig {
+        summarize_discussions: true,
+        verify_resolutions: true,
+        ..Default::default()
+    },
+    "--verify-resolutions"
+)]
+#[case(
+    FrankieConfig {
+        summarize_discussions: true,
+        tui: true,
+        ..Default::default()
+    },
+    "--tui"
+)]
+#[case(
+    FrankieConfig {
+        summarize_discussions: true,
+        ai_rewrite_mode: Some("expand".to_owned()),
+        ai_rewrite_text: Some("hello".to_owned()),
+        ..Default::default()
+    },
+    "--ai-rewrite-mode"
+)]
+fn rejects_incompatible_summary_mode_configuration(
+    #[case] config: FrankieConfig,
+    #[case] expected_fragment: &str,
+) {
+    let result = config.validate();
+
+    match result {
+        Err(IntakeError::Configuration { message }) => {
+            assert!(
+                message.contains(expected_fragment),
+                "expected '{message}' to mention {expected_fragment}"
+            );
+        }
+        other => panic!("expected Configuration error, got {other:?}"),
+    }
+}
