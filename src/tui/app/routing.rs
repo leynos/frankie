@@ -58,6 +58,19 @@ impl ReviewApp {
         msg.is_navigation() || msg.is_filter() || msg.is_diff_context()
     }
 
+    /// Checks if a message should be blocked when in PR discussion summary mode.
+    ///
+    /// PR discussion summary mode blocks filter, diff-context, time-travel,
+    /// reply-draft, and verification messages to prevent interference with
+    /// the summary view state.
+    pub(super) const fn is_blocked_in_pr_discussion_summary(msg: &AppMsg) -> bool {
+        msg.is_filter()
+            || msg.is_diff_context()
+            || msg.is_time_travel()
+            || msg.is_reply_draft()
+            || msg.is_verification()
+    }
+
     /// Routes messages when in `TimeTravel` mode.
     ///
     /// Returns `MessageRouting::Handled` if the message was handled in
@@ -147,12 +160,7 @@ impl ReviewApp {
             return MessageRouting::Handled(self.handle_pr_discussion_summary_navigation(msg));
         }
 
-        if msg.is_filter()
-            || msg.is_diff_context()
-            || msg.is_time_travel()
-            || msg.is_reply_draft()
-            || msg.is_verification()
-        {
+        if Self::is_blocked_in_pr_discussion_summary(msg) {
             return MessageRouting::Handled(None);
         }
 
