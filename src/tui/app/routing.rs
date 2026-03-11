@@ -125,37 +125,23 @@ impl ReviewApp {
         MessageRouting::Fallthrough
     }
 
-    /// Dispatches view-state-related message categories.
-    fn dispatch_view_state_category(&mut self, msg: &AppMsg) -> Option<Cmd> {
+    /// Dispatches messages based on their category.
+    ///
+    /// This method handles messages that were not intercepted by mode-specific
+    /// routing, dispatching them to the appropriate category handler.
+    pub(super) fn dispatch_by_message_category(&mut self, msg: &AppMsg) -> Option<Cmd> {
         match msg.category() {
             MessageCategory::Navigation => self.handle_navigation_msg(msg),
             MessageCategory::Filter => self.handle_filter_msg(msg),
             MessageCategory::DiffContext => self.handle_diff_context_msg(msg),
             MessageCategory::TimeTravel => self.handle_time_travel_msg(msg),
             MessageCategory::PrDiscussionSummary => self.handle_pr_discussion_summary_msg(msg),
-            _ => None,
-        }
-    }
-
-    /// Dispatches content and lifecycle message categories.
-    fn dispatch_content_category(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        match msg.category() {
             MessageCategory::Codex => self.handle_codex_msg(msg),
             MessageCategory::ReplyDraft => self.handle_reply_draft_msg(msg),
             MessageCategory::Verification => self.handle_verification_msg(msg),
             MessageCategory::Data => self.handle_data_msg(msg),
             MessageCategory::Lifecycle => self.handle_lifecycle_msg(msg),
-            _ => None,
         }
-    }
-
-    /// Dispatches messages based on their category.
-    ///
-    /// This method handles messages that were not intercepted by mode-specific
-    /// routing, dispatching them to the appropriate category handler.
-    pub(super) fn dispatch_by_message_category(&mut self, msg: &AppMsg) -> Option<Cmd> {
-        self.dispatch_view_state_category(msg)
-            .or_else(|| self.dispatch_content_category(msg))
     }
 
     /// Routes messages when in `PrDiscussionSummary` mode.
