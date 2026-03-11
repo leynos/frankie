@@ -351,6 +351,15 @@ pub(crate) fn get_refresh_pr_title() -> Option<String> {
         .and_then(|context| context.pr_title.clone())
 }
 
+/// Returns the configured refresh locator and token for test assertions.
+#[cfg(feature = "test-support")]
+#[must_use]
+pub fn get_refresh_context_for_tests() -> Option<(PullRequestLocator, String)> {
+    REFRESH_CONTEXT
+        .get()
+        .map(|context| (context.locator.clone(), context.token.value().to_owned()))
+}
+
 /// Fetches fresh review comments from GitHub.
 ///
 /// Uses the refresh context set by [`set_refresh_context`]. Returns an error

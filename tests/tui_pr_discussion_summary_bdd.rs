@@ -151,12 +151,20 @@ fn when_summary_view_is_rendered(
 fn when_user_opens_selected_summary_link(
     tui_pr_discussion_summary_state: &TuiPrDiscussionSummaryState,
 ) -> StepResult {
-    tui_pr_discussion_summary_state
+    let view = tui_pr_discussion_summary_state
         .app
         .with_mut(|app| {
             app.handle_message(&AppMsg::OpenSelectedPrDiscussionSummaryLink);
+            app.view()
         })
         .ok_or("app should be initialised before opening summary link")?;
+    if !view.contains("[alice] src/main.rs:12") {
+        return Err(format!(
+            "expected opening the summary link to show the linked comment detail, got:\n{view}"
+        )
+        .into());
+    }
+    tui_pr_discussion_summary_state.rendered_view.set(view);
     Ok(())
 }
 

@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use frankie::ReviewComment;
 use frankie::ai::{
-    OpenAiPrDiscussionSummaryConfig, OpenAiPrDiscussionSummaryService, PrDiscussionSummaryRequest,
-    PrDiscussionSummaryService,
+    DiscussionSeverity, OpenAiPrDiscussionSummaryConfig, OpenAiPrDiscussionSummaryService,
+    PrDiscussionSummaryRequest, PrDiscussionSummaryService,
 };
 use frankie::github::models::test_support::minimal_review;
 use rstest::rstest;
@@ -62,6 +62,33 @@ fn summarize_reads_structured_response_from_vidaimock() -> TestResult<()> {
     if summary.item_count() != 2 {
         return Err(format!("expected 2 summary items, got {}", summary.item_count()).into());
     }
+    if !summary
+        .files
+        .iter()
+        .any(|file| file.file_path == "src/main.rs")
+    {
+        return Err("expected parsed summary to contain src/main.rs".into());
+    }
+
+    let items: Vec<_> = summary
+        .files
+        .iter()
+        .flat_map(|file| file.severities.iter())
+        .flat_map(|bucket| bucket.items.iter())
+        .collect();
+    if !items
+        .iter()
+        .any(|item| item.severity == DiscussionSeverity::High)
+    {
+        return Err("expected parsed summary to contain a high-severity item".into());
+    }
+    if !items
+        .iter()
+        .any(|item| item.tui_link.to_string() == "frankie://review-comment/1?view=detail")
+    {
+        return Err("expected parsed summary to contain the VidaiMock summary link".into());
+    }
+
     Ok(())
 }
 

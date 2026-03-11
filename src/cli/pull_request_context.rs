@@ -75,7 +75,7 @@ pub(super) fn resolve_from_identifier(
         } else {
             format!("failed to discover local repository: {error}")
         };
-        IntakeError::Api { message }
+        IntakeError::LocalDiscovery { message }
     })?;
     PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
 }

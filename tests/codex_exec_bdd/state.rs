@@ -144,9 +144,25 @@ pub(crate) fn app_with_plan(plan: StubPlan) -> Result<ReviewApp, IntakeError> {
 fn ensure_refresh_context() -> Result<(), IntakeError> {
     let locator = PullRequestLocator::parse("https://github.com/owner/repo/pull/42")?;
     let token = PersonalAccessToken::new("test-token")?;
-    // Returns false when already initialised; safe to ignore in BDD tests
-    // sharing a process-wide OnceLock.
-    let _already_set = frankie::tui::set_refresh_context(locator, token, None);
+    let expected_locator = locator.clone();
+    let expected_token = token.value().to_owned();
+
+    if !frankie::tui::set_refresh_context(locator, token, None) {
+        let (existing_locator, existing_token) = frankie::tui::get_refresh_context_for_tests()
+            .ok_or_else(|| IntakeError::Api {
+                message: "refresh context was already initialised but unavailable for verification"
+                    .to_owned(),
+            })?;
+        if existing_locator != expected_locator || existing_token != expected_token {
+            return Err(IntakeError::Api {
+                message: format!(
+                    "refresh context was already initialised with a different value: \
+expected {expected_locator:?} / {expected_token:?}, got {existing_locator:?} / {existing_token:?}"
+                ),
+            });
+        }
+    }
+
     Ok(())
 }
 

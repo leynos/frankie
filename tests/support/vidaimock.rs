@@ -8,6 +8,8 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
+const MAX_START_ATTEMPTS: usize = 3;
+
 /// Running `VidaiMock` server with automatic teardown on drop.
 pub(crate) struct VidaiServer {
     pub base_url: String,
@@ -30,32 +32,40 @@ pub(crate) fn spawn_vidaimock(config_dir: &Path) -> Result<Option<VidaiServer>, 
         return Ok(None);
     }
 
-    let port = reserve_port()?;
-    let mut command = Command::new("vidaimock");
-    command
-        .arg("--host")
-        .arg("127.0.0.1")
-        .arg("--port")
-        .arg(port.to_string())
-        .arg("--format")
-        .arg("openai")
-        .arg("--config-dir")
-        .arg(config_dir)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+    let mut last_error: Option<Box<dyn Error>> = None;
+    for _ in 0..MAX_START_ATTEMPTS {
+        let port = reserve_port()?;
+        let base_url = format!("http://127.0.0.1:{port}");
+        let mut command = Command::new("vidaimock");
+        command
+            .arg("--host")
+            .arg("127.0.0.1")
+            .arg("--port")
+            .arg(port.to_string())
+            .arg("--format")
+            .arg("openai")
+            .arg("--config-dir")
+            .arg(config_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
 
-    let mut child = command
-        .spawn()
-        .map_err(|error| io::Error::other(format!("failed to spawn vidaimock process: {error}")))?;
-    let base_url = format!("http://127.0.0.1:{port}");
+        let mut child = command.spawn().map_err(|error| {
+            io::Error::other(format!("failed to spawn vidaimock process: {error}"))
+        })?;
 
-    if let Err(error) = wait_for_server(base_url.as_str()) {
-        let _kill_ignored = child.kill();
-        let _wait_ignored = child.wait();
-        return Err(error);
+        match wait_for_server(&mut child, base_url.as_str()) {
+            Ok(()) => return Ok(Some(VidaiServer { base_url, child })),
+            Err(error) => {
+                let _kill_ignored = child.kill();
+                let _wait_ignored = child.wait();
+                last_error = Some(error);
+            }
+        }
     }
 
-    Ok(Some(VidaiServer { base_url, child }))
+    Err(last_error.unwrap_or_else(|| {
+        io::Error::other("vidaimock failed to start for an unknown reason").into()
+    }))
 }
 
 fn vidaimock_available() -> bool {
@@ -74,7 +84,7 @@ fn reserve_port() -> Result<u16, io::Error> {
     Ok(port)
 }
 
-fn wait_for_server(base_url: &str) -> Result<(), Box<dyn Error>> {
+fn wait_for_server(child: &mut Child, base_url: &str) -> Result<(), Box<dyn Error>> {
     let metrics_url = format!("{base_url}/metrics");
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_millis(250))
@@ -86,6 +96,12 @@ fn wait_for_server(base_url: &str) -> Result<(), Box<dyn Error>> {
         })?;
 
     for _ in 0..40 {
+        if let Some(status) = child.try_wait()? {
+            return Err(io::Error::other(format!(
+                "vidaimock process exited before readiness probe completed with status {status}"
+            ))
+            .into());
+        }
         if let Ok(response) = client.get(metrics_url.as_str()).send()
             && response.status().is_success()
         {

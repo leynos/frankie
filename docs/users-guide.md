@@ -726,6 +726,8 @@ Frankie searches for configuration files in this order:
 
 ### Environment variables
 
+Table: Supported environment variables.
+
 | Variable                                | Description                                           |
 | --------------------------------------- | ----------------------------------------------------- |
 | `FRANKIE_PR_URL`                        | Pull request URL (for single PR mode)                 |

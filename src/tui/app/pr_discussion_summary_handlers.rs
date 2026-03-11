@@ -72,14 +72,28 @@ impl ReviewApp {
             return None;
         }
 
+        if self.in_flight_pr_discussion_summary_request_id.is_none()
+            && self.pr_discussion_summary.is_some()
+        {
+            self.view_mode = ViewMode::PrDiscussionSummary;
+            self.error = None;
+            return None;
+        }
+
+        let Some(pr_number) =
+            crate::tui::get_refresh_locator().map(|locator| locator.number().get())
+        else {
+            self.error =
+                Some("PR discussion summary requires an active pull request context".to_owned());
+            return None;
+        };
+
         let request_id = self.next_pr_discussion_summary_request_id;
         self.next_pr_discussion_summary_request_id =
             self.next_pr_discussion_summary_request_id.saturating_add(1);
         self.in_flight_pr_discussion_summary_request_id = Some(request_id);
         self.error = None;
 
-        let pr_number =
-            crate::tui::get_refresh_locator().map_or(0, |locator| locator.number().get());
         let request = PrDiscussionSummaryRequest::new(
             pr_number,
             crate::tui::get_refresh_pr_title(),

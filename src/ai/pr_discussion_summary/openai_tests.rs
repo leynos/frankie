@@ -21,8 +21,11 @@ fn parse_content_value_supports_string_and_array() {
         serde_json::from_value(serde_json::json!([{"text":"first"}, {"content":"second"}]))
             .expect("array content should decode");
 
-    assert_eq!(parse_content_value(&as_string), Some("hello"));
-    assert_eq!(parse_content_value(&as_array), Some("first"));
+    assert_eq!(parse_content_value(&as_string), Some("hello".to_owned()));
+    assert_eq!(
+        parse_content_value(&as_array),
+        Some("firstsecond".to_owned())
+    );
 }
 
 #[rstest]
@@ -57,9 +60,8 @@ fn build_prompt_serializes_thread_context() {
         Some("Title".to_owned()),
         vec![minimal_review(1, "body", "alice")],
     );
-    let threads =
-        crate::ai::pr_discussion_summary::service::summarize_with_provider(&service, &request)
-            .expect_err("without server this path should still build a prompt before transport");
+    crate::ai::pr_discussion_summary::service::summarize_with_provider(&service, &request)
+        .expect_err("without server this path should still build a prompt before transport");
     let prompt = build_prompt(
         &crate::ai::pr_discussion_summary::service::ThreadSummaryProviderRequest {
             pr_number: 42,
@@ -71,5 +73,4 @@ fn build_prompt_serializes_thread_context() {
 
     assert!(prompt.contains("\"pr_number\": 42"));
     assert!(prompt.contains("\"root_comment_id\": 1"));
-    let _ = threads;
 }

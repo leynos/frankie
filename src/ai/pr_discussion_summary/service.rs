@@ -186,23 +186,9 @@ fn group_summary_items(
 
     let mut files: Vec<_> = grouped
         .into_iter()
-        .map(|(file_path, severity_map)| {
-            let mut severities: Vec<_> = severity_map
-                .into_values()
-                .map(|mut items| {
-                    items.sort_by_key(|item| item.root_comment_id.as_u64());
-                    let severity = items
-                        .first()
-                        .map_or(DiscussionSeverity::Low, |item| item.severity);
-                    SeverityBucket { severity, items }
-                })
-                .collect();
-            severities.sort_by_key(|bucket| bucket.severity.sort_rank());
-
-            FileDiscussionSummary {
-                file_path,
-                severities,
-            }
+        .map(|(file_path, severity_map)| FileDiscussionSummary {
+            file_path,
+            severities: build_severity_buckets(severity_map),
         })
         .collect();
 
@@ -211,6 +197,23 @@ fn group_summary_items(
     });
 
     PrDiscussionSummary { files }
+}
+
+fn build_severity_buckets(
+    severity_map: BTreeMap<usize, Vec<DiscussionSummaryItem>>,
+) -> Vec<SeverityBucket> {
+    let mut buckets: Vec<_> = severity_map
+        .into_values()
+        .map(|mut items| {
+            items.sort_by_key(|item| item.root_comment_id.as_u64());
+            let severity = items
+                .first()
+                .map_or(DiscussionSeverity::Low, |item| item.severity);
+            SeverityBucket { severity, items }
+        })
+        .collect();
+    buckets.sort_by_key(|bucket| bucket.severity.sort_rank());
+    buckets
 }
 
 fn compare_file_groups(left: &str, right: &str) -> std::cmp::Ordering {

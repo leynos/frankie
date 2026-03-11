@@ -43,6 +43,10 @@ fn fixture_config_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/vidaimock/pr_discussion_summary")
 }
 
+fn empty_config_path() -> PathBuf {
+    fixture_config_dir().join("empty.frankie.toml")
+}
+
 fn configure_comments(
     pr_discussion_summary_state: &PrDiscussionSummaryState,
     comments: serde_json::Value,
@@ -73,7 +77,12 @@ fn configure_comments(
 
 fn run_frankie(args: &[String]) -> StepResult<Output> {
     let mut command = Command::new(binary_path()?);
-    command.args(args);
+    let mut command_args = args.to_vec();
+    command_args.extend([
+        "--config-path".to_owned(),
+        empty_config_path().display().to_string(),
+    ]);
+    command.args(&command_args);
     command
         .env_remove("FRANKIE_DATABASE_URL")
         .env_remove("FRANKIE_MIGRATE_DB")
@@ -81,6 +90,18 @@ fn run_frankie(args: &[String]) -> StepResult<Output> {
         .env_remove("FRANKIE_TOKEN")
         .env_remove("FRANKIE_OWNER")
         .env_remove("FRANKIE_REPO")
+        .env_remove("FRANKIE_EXPORT")
+        .env_remove("FRANKIE_OUTPUT")
+        .env_remove("FRANKIE_TEMPLATE")
+        .env_remove("FRANKIE_REPO_PATH")
+        .env_remove("FRANKIE_REPLY_MAX_LENGTH")
+        .env_remove("FRANKIE_REPLY_TEMPLATES")
+        .env_remove("FRANKIE_AI_REWRITE_MODE")
+        .env_remove("FRANKIE_AI_REWRITE_TEXT")
+        .env_remove("FRANKIE_AI_BASE_URL")
+        .env_remove("FRANKIE_AI_MODEL")
+        .env_remove("FRANKIE_AI_TIMEOUT_SECONDS")
+        .env_remove("FRANKIE_CONFIG_PATH")
         .env_remove("FRANKIE_AI_API_KEY")
         .env_remove("OPENAI_API_KEY")
         .env_remove("GITHUB_TOKEN");

@@ -120,16 +120,16 @@ fn rejects_incomplete_ai_rewrite_configuration(
 fn rejects_incompatible_summary_mode_configuration(
     #[case] config: FrankieConfig,
     #[case] expected_fragment: &str,
-) {
+) -> Result<(), Box<dyn std::error::Error>> {
     let result = config.validate();
 
     match result {
         Err(IntakeError::Configuration { message }) => {
-            assert!(
-                message.contains(expected_fragment),
-                "expected '{message}' to mention {expected_fragment}"
-            );
+            if !message.contains(expected_fragment) {
+                return Err(format!("expected '{message}' to mention {expected_fragment}").into());
+            }
+            Ok(())
         }
-        other => panic!("expected Configuration error, got {other:?}"),
+        other => Err(format!("expected Configuration error, got {other:?}").into()),
     }
 }

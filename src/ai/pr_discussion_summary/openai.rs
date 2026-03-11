@@ -125,6 +125,11 @@ impl PrDiscussionSummaryService for OpenAiPrDiscussionSummaryService {
 }
 
 impl ThreadSummaryProvider for OpenAiPrDiscussionSummaryService {
+    /// Summarizes threads using blocking HTTP calls.
+    ///
+    /// The blocking duration is bounded by the configured HTTP client timeout,
+    /// which defaults to 20 seconds in `create_http_client`. Adjust that
+    /// timeout there when callers need a different upper bound.
     fn summarize_threads(
         &self,
         request: &ThreadSummaryProviderRequest<'_>,
@@ -240,20 +245,18 @@ impl OpenAiPrDiscussionSummaryService {
         client: &Client,
         request_spec: &SummaryRequestSpec<'_>,
     ) -> Result<ChatCompletionsResponse, IntakeError> {
-        #[cfg(any(test, feature = "test-support"))]
-        let mut request_builder = client
-            .post(request_spec.endpoint.as_str())
-            .bearer_auth(request_spec.api_key)
-            .json(request_spec.payload);
-        #[cfg(not(any(test, feature = "test-support")))]
-        let request_builder = client
-            .post(request_spec.endpoint.as_str())
-            .bearer_auth(request_spec.api_key)
-            .json(request_spec.payload);
-        #[cfg(any(test, feature = "test-support"))]
-        for (name, value) in &self.config.additional_headers {
-            request_builder = request_builder.header(name, value);
-        }
+        let request_builder = {
+            #[cfg_attr(not(any(test, feature = "test-support")), allow(unused_mut))]
+            let mut builder = client
+                .post(request_spec.endpoint.as_str())
+                .bearer_auth(request_spec.api_key)
+                .json(request_spec.payload);
+            #[cfg(any(test, feature = "test-support"))]
+            for (name, value) in &self.config.additional_headers {
+                builder = builder.header(name, value);
+            }
+            builder
+        };
 
         let response = request_builder
             .send()
@@ -334,12 +337,16 @@ fn build_prompt(request: &ThreadSummaryProviderRequest<'_>) -> Result<String, In
     })
 }
 
-fn parse_content_value(content: &ChatContent) -> Option<&str> {
+fn parse_content_value(content: &ChatContent) -> Option<String> {
     match content {
-        ChatContent::Text(text) => Some(text.as_str()),
-        ChatContent::Parts(parts) => parts
-            .iter()
-            .find_map(|part| part.text.as_deref().or(part.content.as_deref())),
+        ChatContent::Text(text) => Some(text.clone()),
+        ChatContent::Parts(parts) => {
+            let combined = parts
+                .iter()
+                .filter_map(|part| part.text.as_deref().or(part.content.as_deref()))
+                .collect::<String>();
+            (!combined.is_empty()).then_some(combined)
+        }
     }
 }
 

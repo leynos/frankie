@@ -1,8 +1,8 @@
 # Implement PR-level discussion summary generation
 
 This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
+`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & discoveries`,
+`Decision log`, and `Outcomes & retrospective` must be kept up to date as work
 proceeds.
 
 Status: COMPLETE (2026-03-09)
@@ -137,7 +137,7 @@ Success is observable when:
       `make nixie`, `make check-fmt`, `make lint`, and `make test`
       (`803 passed, 1 skipped`).
 
-## Surprises & Discoveries
+## Surprises & discoveries
 
 - `ReviewComment` currently carries no severity field, so severity must
   be introduced by this feature's summary domain rather than recovered from
@@ -163,7 +163,7 @@ Success is observable when:
   behind after a filtered acceptance run, so the committed `.snap` file must be
   reconciled explicitly before the full `cargo nextest` gate.
 
-## Decision Log
+## Decision log
 
 - Decision (2026-03-06): summarize review threads, not individual comment
   rows. Rationale: PR-level discussions are easier to reason about when a reply
@@ -197,7 +197,7 @@ Success is observable when:
   path for the OpenAI-compatible endpoint, while template overrides are an
   observed and testable primary-path integration surface.
 
-## Outcomes & Retrospective
+## Outcomes & retrospective
 
 This feature is implemented.
 

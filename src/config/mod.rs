@@ -18,6 +18,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::github::error::IntakeError;
 
+mod summarize_mode;
+
 /// Operation mode determined by CLI arguments.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OperationMode {
@@ -473,7 +475,7 @@ impl FrankieConfig {
     }
 
     const fn is_summarize_discussions_mode(&self) -> bool {
-        self.summarize_discussions
+        summarize_mode::is_summarize_discussions_mode(self)
     }
 
     fn is_ai_rewrite_mode(&self) -> bool {
@@ -574,43 +576,7 @@ impl FrankieConfig {
     }
 
     fn validate_summary_mode_compatibility(&self) -> Result<(), IntakeError> {
-        if !self.summarize_discussions {
-            return Ok(());
-        }
-
-        if self.verify_resolutions {
-            return Err(IntakeError::Configuration {
-                message: concat!(
-                    "--summarize-discussions cannot be combined with ",
-                    "--verify-resolutions"
-                )
-                .to_owned(),
-            });
-        }
-
-        if self.should_ai_rewrite() {
-            return Err(IntakeError::Configuration {
-                message: concat!(
-                    "--summarize-discussions cannot be combined with AI rewrite ",
-                    "flags; remove --ai-rewrite-mode/--ai-rewrite-text"
-                )
-                .to_owned(),
-            });
-        }
-
-        if self.should_export_comments() {
-            return Err(IntakeError::Configuration {
-                message: "--summarize-discussions cannot be combined with --export".to_owned(),
-            });
-        }
-
-        if self.tui {
-            return Err(IntakeError::Configuration {
-                message: "--summarize-discussions cannot be combined with --tui".to_owned(),
-            });
-        }
-
-        Ok(())
+        summarize_mode::validate_summary_mode_compatibility(self)
     }
 
     fn validate_ai_rewrite_completeness(&self) -> Result<(), IntakeError> {
