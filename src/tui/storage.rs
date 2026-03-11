@@ -83,6 +83,7 @@ static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
 struct RefreshContext {
     locator: PullRequestLocator,
     token: PersonalAccessToken,
+    pr_title: Option<String>,
 }
 
 /// Git operations context for time-travel navigation.
@@ -152,13 +153,22 @@ pub fn set_initial_terminal_size(width: u16, height: u16) -> bool {
 ///
 /// * `locator` - The pull request locator for API calls.
 /// * `token` - The personal access token for authentication.
+/// * `pr_title` - Optional pull-request title for summary prompt context.
 ///
 /// # Returns
 ///
 /// `true` if the context was set, `false` if it was already set.
-pub fn set_refresh_context(locator: PullRequestLocator, token: PersonalAccessToken) -> bool {
+pub fn set_refresh_context(
+    locator: PullRequestLocator,
+    token: PersonalAccessToken,
+    pr_title: Option<String>,
+) -> bool {
     REFRESH_CONTEXT
-        .set(RefreshContext { locator, token })
+        .set(RefreshContext {
+            locator,
+            token,
+            pr_title,
+        })
         .is_ok()
 }
 
@@ -331,6 +341,14 @@ pub(crate) fn get_initial_terminal_size() -> (u16, u16) {
 #[must_use]
 pub(crate) fn get_refresh_locator() -> Option<PullRequestLocator> {
     REFRESH_CONTEXT.get().map(|context| context.locator.clone())
+}
+
+/// Returns the configured pull-request title for summary-dependent features.
+#[must_use]
+pub(crate) fn get_refresh_pr_title() -> Option<String> {
+    REFRESH_CONTEXT
+        .get()
+        .and_then(|context| context.pr_title.clone())
 }
 
 /// Fetches fresh review comments from GitHub.

@@ -1,6 +1,7 @@
 //! Full-screen PR-discussion summary view for the review TUI.
 
-use crate::tui::app::{PrDiscussionSummaryRow, PrDiscussionSummaryViewState};
+use crate::ai::PrDiscussionSummary;
+use crate::tui::app::PrDiscussionSummaryViewState;
 use crate::tui::components::text_truncate::truncate_to_display_width_with_ellipsis;
 
 /// Context for rendering the PR-discussion summary view.
@@ -26,22 +27,20 @@ impl PrDiscussionSummaryComponent {
             return "(No PR discussion summary available)\n".to_owned();
         };
 
-        if state.rows().is_empty() {
+        if state.summary().files.is_empty() {
             return "(PR discussion summary is empty)\n".to_owned();
         }
 
+        let lines = render_lines(state.summary(), state.item_cursor());
         let start = state.scroll_offset();
-        let end = (start + ctx.max_height.max(1)).min(state.rows().len());
+        let end = (start + ctx.max_height.max(1)).min(lines.len());
         let mut output = String::new();
 
-        for row_index in start..end {
-            let Some(line) = state
-                .rows()
-                .get(row_index)
-                .and_then(|row| render_row(row, state))
-            else {
-                continue;
-            };
+        let Some(visible_lines) = lines.get(start..end) else {
+            return output;
+        };
+
+        for line in visible_lines {
             output.push_str(&truncate_to_display_width_with_ellipsis(
                 line.as_str(),
                 ctx.max_width,
@@ -53,31 +52,32 @@ impl PrDiscussionSummaryComponent {
     }
 }
 
-fn render_row(
-    row: &PrDiscussionSummaryRow,
-    state: &PrDiscussionSummaryViewState,
-) -> Option<String> {
-    match row {
-        PrDiscussionSummaryRow::FileHeading(file_path) => Some(format!("File: {file_path}")),
-        PrDiscussionSummaryRow::SeverityHeading(severity) => {
-            Some(format!("  Severity: {severity}"))
-        }
-        PrDiscussionSummaryRow::Item { item_index } => {
-            state.summary().item_at(*item_index).map(|item| {
-                format!(
+fn render_lines(summary: &PrDiscussionSummary, selected_item_index: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut item_index = 0_usize;
+
+    for file in &summary.files {
+        lines.push(format!("File: {}", file.file_path));
+        for bucket in &file.severities {
+            lines.push(format!("  Severity: {}", bucket.severity));
+            for item in &bucket.items {
+                lines.push(format!(
                     "{} {} -- {} [{}]",
-                    selected_prefix(state, *item_index),
+                    selected_prefix(item_index, selected_item_index),
                     item.headline,
                     item.rationale,
                     item.tui_link
-                )
-            })
+                ));
+                item_index = item_index.saturating_add(1);
+            }
         }
     }
+
+    lines
 }
 
-const fn selected_prefix(state: &PrDiscussionSummaryViewState, item_index: usize) -> &'static str {
-    if state.item_cursor() == item_index {
+const fn selected_prefix(item_index: usize, selected_item_index: usize) -> &'static str {
+    if item_index == selected_item_index {
         ">"
     } else {
         " "

@@ -87,7 +87,8 @@ template overrides under
 ## Goals and non-goals
 
 - **Goals**
-  - Shared summary DTOs consumed by library, CLI, and TUI code.
+  - Shared summary data transfer objects (DTOs) consumed by library, CLI, and
+    TUI code.
   - Deterministic grouping and navigation semantics.
   - Clear CLI output and direct TUI jump-back behaviour.
   - Real adapter coverage against a local OpenAI-compatible mock.

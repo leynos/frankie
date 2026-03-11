@@ -80,8 +80,12 @@ impl ReviewApp {
 
         let pr_number =
             crate::tui::get_refresh_locator().map_or(0, |locator| locator.number().get());
-        let request = PrDiscussionSummaryRequest::new(pr_number, None, self.reviews.clone())
-            .with_verification_results(self.verification.results.clone());
+        let request = PrDiscussionSummaryRequest::new(
+            pr_number,
+            crate::tui::get_refresh_pr_title(),
+            self.reviews.clone(),
+        )
+        .with_verification_results(self.verification.results.clone());
 
         Some(spawn_pr_discussion_summary(SummaryTaskParams {
             request_id,

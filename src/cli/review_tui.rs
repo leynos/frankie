@@ -4,7 +4,6 @@
 //! interface that allows users to navigate and filter review comments.
 
 use std::io::{self, Write};
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,6 +27,8 @@ use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
     PullRequestLocator, ReviewCommentGateway,
 };
+
+use super::pull_request_context;
 
 /// Runs the TUI mode for reviewing PR comments.
 ///
@@ -68,7 +69,11 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
         discovery_failure,
     });
 
-    let _ = set_refresh_context(locator, token);
+    let pr_title = pull_request_context::fetch_pull_request_title(&locator, &token)
+        .await
+        .ok()
+        .flatten();
+    let _ = set_refresh_context(locator, token, pr_title);
 
     if let Some(database_url) = config.database_url.as_deref()
         && let Ok(cache) = ReviewCommentVerificationCache::new(database_url.to_owned())
@@ -107,12 +112,7 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
 /// Resolves a [`PullRequestLocator`] from the configuration, preferring
 /// the positional `pr_identifier` and falling back to `--pr-url`.
 fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeError> {
-    if let Some(identifier) = config.pr_identifier() {
-        return resolve_from_identifier(identifier, config.no_local_discovery);
-    }
-
-    let pr_url = config.require_pr_url()?;
-    PullRequestLocator::parse(pr_url)
+    pull_request_context::resolve_locator(config)
 }
 
 /// Resolves a locator from a positional PR identifier (URL or bare number).
@@ -120,37 +120,12 @@ fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeE
 /// URL identifiers bypass local discovery. Bare PR numbers require
 /// discovery for owner/repo context; when `no_local_discovery` is `true`
 /// a bare number is rejected with a configuration error.
+#[cfg(test)]
 fn resolve_from_identifier(
     identifier: &str,
     no_local_discovery: bool,
 ) -> Result<PullRequestLocator, IntakeError> {
-    // URL identifiers skip local discovery entirely;
-    // PullRequestLocator::from_identifier also handles URLs (see
-    // locator.rs line ~215) but this early return avoids the unnecessary
-    // discover_repository call below.
-    if identifier.contains("://") {
-        return PullRequestLocator::parse(identifier);
-    }
-
-    if no_local_discovery {
-        return Err(IntakeError::Configuration {
-            message: concat!(
-                "bare PR numbers require local git discovery to determine ",
-                "owner/repo, but --no-local-discovery is set; provide a ",
-                "full PR URL instead"
-            )
-            .to_owned(),
-        });
-    }
-
-    // Bare PR number — discover owner/repo from local git remote
-    let local_repo = frankie::discover_repository(Path::new(".")).map_err(|error| {
-        IntakeError::LocalDiscovery {
-            message: format!("{error}. Provide a full PR URL instead"),
-        }
-    })?;
-
-    PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
+    pull_request_context::resolve_from_identifier(identifier, no_local_discovery, None)
 }
 
 /// Attempts to set up Git operations for time-travel navigation.

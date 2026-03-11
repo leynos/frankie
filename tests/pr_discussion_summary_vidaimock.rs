@@ -87,3 +87,43 @@ fn summarize_rejects_vidaimock_malformed_json() -> TestResult<()> {
     }
     Ok(())
 }
+
+#[rstest]
+fn summarize_surfaces_vidaimock_http_failures() -> TestResult<()> {
+    let Some(server) = vidaimock::spawn_vidaimock(fixture_config_dir().as_path())? else {
+        return Ok(());
+    };
+
+    let config = OpenAiPrDiscussionSummaryConfig::new(
+        format!("{}/v1", server.base_url),
+        "gpt-4",
+        Some("sk-test".to_owned()),
+        Duration::from_secs(2),
+    )
+    .with_additional_header("X-Vidai-Chaos-Drop", "100");
+
+    let service = OpenAiPrDiscussionSummaryService::new(config);
+    let result = service.summarize(&sample_request());
+
+    match result {
+        Err(frankie::IntakeError::Api { message }) => {
+            if !message.contains("status 500") {
+                return Err(
+                    format!("expected HTTP status in error message, got: {message}").into(),
+                );
+            }
+            if !message.contains("Simulated Internal Server Error") {
+                return Err(
+                    format!("expected response body in error message, got: {message}").into(),
+                );
+            }
+        }
+        other => {
+            return Err(
+                format!("expected IntakeError::Api for HTTP failure, got: {other:?}").into(),
+            );
+        }
+    }
+
+    Ok(())
+}

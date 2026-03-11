@@ -56,7 +56,7 @@ fn refresh_context() -> Result<(), IntakeError> {
     let token = PersonalAccessToken::new("test-token")?;
     // Returns false when already initialised; safe to ignore in tests
     // sharing a process-wide OnceLock.
-    let _already_set = crate::tui::set_refresh_context(locator, token);
+    let _already_set = crate::tui::set_refresh_context(locator, token, None);
     Ok(())
 }
 

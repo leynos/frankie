@@ -24,7 +24,8 @@ pub(crate) use reply_draft_config::get_reply_draft_config;
 pub(crate) use storage::{
     fetch_reviews, get_comment_rewrite_service, get_git_ops_context, get_initial_reviews,
     get_initial_terminal_size, get_pr_discussion_summary_service, get_refresh_locator,
-    get_review_comment_verification_cache, get_time_travel_context, record_sync_telemetry,
+    get_refresh_pr_title, get_review_comment_verification_cache, get_time_travel_context,
+    record_sync_telemetry,
 };
 
 #[cfg(test)]

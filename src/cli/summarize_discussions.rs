@@ -1,20 +1,19 @@
 //! CLI operation mode for PR-level discussion summary generation.
 
 use std::io::{self, Write};
-use std::path::Path;
 use std::time::Duration;
 
 use frankie::ai::{
     OpenAiPrDiscussionSummaryConfig, OpenAiPrDiscussionSummaryService, PrDiscussionSummary,
     PrDiscussionSummaryRequest, PrDiscussionSummaryService,
 };
-use frankie::local::discover_repository;
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
-    PullRequestLocator, ReviewCommentGateway,
+    ReviewCommentGateway,
 };
 
 use super::output::io_error;
+use super::pull_request_context::{fetch_pull_request_title, resolve_locator};
 
 /// Generates and prints a PR-level discussion summary.
 ///
@@ -27,7 +26,12 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     let token = PersonalAccessToken::new(config.resolve_token()?)?;
     let gateway = OctocrabReviewCommentGateway::new(&token, locator.api_base().as_str())?;
     let review_comments = gateway.list_review_comments(&locator).await?;
-    let request = PrDiscussionSummaryRequest::new(locator.number().get(), None, review_comments);
+    let pr_title = fetch_pull_request_title(&locator, &token)
+        .await
+        .ok()
+        .flatten();
+    let request =
+        PrDiscussionSummaryRequest::new(locator.number().get(), pr_title, review_comments);
     let service = build_summary_service(config);
     let stdout = io::stdout();
     let mut writer = stdout.lock();
@@ -44,55 +48,6 @@ fn build_summary_service(config: &FrankieConfig) -> OpenAiPrDiscussionSummarySer
         Duration::from_secs(config.ai_timeout_seconds),
     );
     OpenAiPrDiscussionSummaryService::new(service_config)
-}
-
-fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeError> {
-    if let Some(identifier) = config.pr_identifier() {
-        return resolve_from_identifier(
-            identifier,
-            config.no_local_discovery,
-            config.repo_path.as_deref(),
-        );
-    }
-
-    PullRequestLocator::parse(config.require_pr_url()?)
-}
-
-fn resolve_from_identifier(
-    identifier: &str,
-    no_local_discovery: bool,
-    repo_path: Option<&str>,
-) -> Result<PullRequestLocator, IntakeError> {
-    if identifier.contains("://") {
-        return PullRequestLocator::parse(identifier);
-    }
-
-    let has_repo_path = repo_path.is_some_and(|path| !path.trim().is_empty());
-    if no_local_discovery && !has_repo_path {
-        return Err(IntakeError::Configuration {
-            message: concat!(
-                "bare PR numbers require local git discovery to determine ",
-                "owner/repo, but --no-local-discovery is set; provide a ",
-                "full PR URL instead"
-            )
-            .to_owned(),
-        });
-    }
-
-    let discovery_path =
-        repo_path.map_or_else(|| Path::new(".").to_path_buf(), std::path::PathBuf::from);
-    let local_repo = discover_repository(&discovery_path).map_err(|error| {
-        let message = if repo_path.is_some() {
-            format!(
-                "failed to discover local repository at {}: {error}",
-                discovery_path.display()
-            )
-        } else {
-            format!("failed to discover local repository: {error}")
-        };
-        IntakeError::Api { message }
-    })?;
-    PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
 }
 
 fn write_summary<W: Write>(

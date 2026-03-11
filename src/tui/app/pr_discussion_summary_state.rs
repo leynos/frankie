@@ -1,27 +1,11 @@
 //! TUI-local state for the PR-discussion summary view.
 
-use crate::ai::{DiscussionSeverity, PrDiscussionSummary, TuiViewLink};
-
-/// Renderable row in the PR-discussion summary view.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum PrDiscussionSummaryRow {
-    /// File-group heading.
-    FileHeading(String),
-    /// Severity-bucket heading.
-    SeverityHeading(DiscussionSeverity),
-    /// Selectable discussion-summary item.
-    Item {
-        /// Flattened item index in the backing summary.
-        item_index: usize,
-    },
-}
+use crate::ai::{FileDiscussionSummary, PrDiscussionSummary, SeverityBucket, TuiViewLink};
 
 /// Summary view state used only by the TUI adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PrDiscussionSummaryViewState {
     summary: PrDiscussionSummary,
-    rows: Vec<PrDiscussionSummaryRow>,
-    item_row_indices: Vec<usize>,
     item_cursor: usize,
     scroll_offset: usize,
 }
@@ -29,22 +13,9 @@ pub(crate) struct PrDiscussionSummaryViewState {
 impl PrDiscussionSummaryViewState {
     /// Builds render/navigation state from a shared summary DTO.
     #[must_use]
-    pub fn new(summary: PrDiscussionSummary) -> Self {
-        let mut rows = Vec::new();
-        let mut item_row_indices = Vec::new();
-        let mut item_index = 0_usize;
-
-        for file in &summary.files {
-            rows.push(PrDiscussionSummaryRow::FileHeading(file.file_path.clone()));
-            for bucket in &file.severities {
-                add_bucket_rows(bucket, &mut rows, &mut item_row_indices, &mut item_index);
-            }
-        }
-
+    pub const fn new(summary: PrDiscussionSummary) -> Self {
         Self {
             summary,
-            rows,
-            item_row_indices,
             item_cursor: 0,
             scroll_offset: 0,
         }
@@ -54,12 +25,6 @@ impl PrDiscussionSummaryViewState {
     #[must_use]
     pub const fn summary(&self) -> &PrDiscussionSummary {
         &self.summary
-    }
-
-    /// Returns the renderable rows.
-    #[must_use]
-    pub const fn rows(&self) -> &[PrDiscussionSummaryRow] {
-        self.rows.as_slice()
     }
 
     /// Returns the selected item cursor.
@@ -125,7 +90,7 @@ impl PrDiscussionSummaryViewState {
 
     fn adjust_scroll(&mut self, visible_height: usize) {
         let effective_height = visible_height.max(1);
-        let Some(&selected_row) = self.item_row_indices.get(self.item_cursor) else {
+        let Some(selected_row) = self.selected_row_index() else {
             self.scroll_offset = 0;
             return;
         };
@@ -143,22 +108,51 @@ impl PrDiscussionSummaryViewState {
             self.scroll_offset = selected_row.saturating_sub(effective_height.saturating_sub(1));
         }
     }
+
+    fn selected_row_index(&self) -> Option<usize> {
+        row_index_for_item(&self.summary.files, self.item_cursor)
+    }
 }
 
-fn add_bucket_rows(
-    bucket: &crate::ai::SeverityBucket,
-    rows: &mut Vec<PrDiscussionSummaryRow>,
-    item_row_indices: &mut Vec<usize>,
+fn row_index_for_item(files: &[FileDiscussionSummary], target_item_index: usize) -> Option<usize> {
+    let mut row_index = 0_usize;
+    let mut item_index = 0_usize;
+
+    for file in files {
+        row_index = row_index.saturating_add(1);
+        for bucket in &file.severities {
+            let Some(found_index) = row_index_for_item_in_bucket(
+                bucket,
+                target_item_index,
+                &mut row_index,
+                &mut item_index,
+            ) else {
+                continue;
+            };
+            return Some(found_index);
+        }
+    }
+
+    None
+}
+
+fn row_index_for_item_in_bucket(
+    bucket: &SeverityBucket,
+    target_item_index: usize,
+    row_index: &mut usize,
     item_index: &mut usize,
-) {
-    rows.push(PrDiscussionSummaryRow::SeverityHeading(bucket.severity));
+) -> Option<usize> {
+    *row_index = row_index.saturating_add(1);
+
     for _ in &bucket.items {
-        item_row_indices.push(rows.len());
-        rows.push(PrDiscussionSummaryRow::Item {
-            item_index: *item_index,
-        });
+        if *item_index == target_item_index {
+            return Some(*row_index);
+        }
+        *row_index = row_index.saturating_add(1);
         *item_index = item_index.saturating_add(1);
     }
+
+    None
 }
 
 #[cfg(test)]
@@ -204,7 +198,6 @@ mod tests {
     fn state_builds_headings_and_item_rows() {
         let state = PrDiscussionSummaryViewState::new(sample_summary());
 
-        assert_eq!(state.rows().len(), 4);
         assert_eq!(state.item_cursor(), 0);
         assert_eq!(
             state.selected_link().map(ToString::to_string),

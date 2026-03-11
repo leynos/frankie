@@ -19,9 +19,10 @@ with each summary item carrying a stable link back to the TUI comment-detail
 view that anchors the underlying discussion.
 
 This roadmap step must ship library-first. The shared library produces a
-structured summary model. The CLI exposes a non-interactive summary mode. The
-TUI exposes an interactive summary view that can jump back to the review list
-and comment detail for the referenced thread.
+structured summary model. The Command Line Interface (CLI) exposes a
+non-interactive summary mode. The Terminal User Interface (TUI) exposes an
+interactive summary view that can jump back to the review list and comment
+detail for the referenced thread.
 
 Success is observable when:
 
@@ -272,7 +273,8 @@ returns a structured `PrDiscussionSummary`. The request should carry:
   build TUI targets deterministically.
 
 The response model should be entirely library-owned and serializable in tests.
-A workable shape is:
+These data transfer objects (DTOs) should stay library-owned rather than
+adapter-specific. A workable shape is:
 
 - `PrDiscussionSummary { files: Vec<FileDiscussionSummary> }`
 - `FileDiscussionSummary { file_path, severities: Vec<SeverityBucket> }`

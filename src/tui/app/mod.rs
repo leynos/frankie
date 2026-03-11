@@ -56,9 +56,7 @@ mod verification_handlers;
 mod verification_state;
 mod view_mode;
 
-pub(crate) use pr_discussion_summary_state::{
-    PrDiscussionSummaryRow, PrDiscussionSummaryViewState,
-};
+pub(crate) use pr_discussion_summary_state::PrDiscussionSummaryViewState;
 use routing::MessageRouting;
 pub(crate) use view_mode::{CHROME_HEIGHT, MIN_DETAIL_HEIGHT, MIN_LIST_HEIGHT, ViewMode};
 

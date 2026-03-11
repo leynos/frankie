@@ -1,6 +1,6 @@
 //! Deterministic discussion-thread construction for PR summaries.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use crate::github::ReviewComment;
 use crate::verification::{CommentVerificationResult, CommentVerificationStatus, GithubCommentId};
@@ -50,7 +50,14 @@ pub(crate) fn build_discussion_threads(
 
     let mut grouped_ids: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     for comment in request.review_comments() {
-        let root_id = resolve_root_id(comment.id, &comments_by_id);
+        let mut root_id = comment.id;
+        while let Some(parent_id) = comments_by_id
+            .get(&root_id)
+            .and_then(|current| current.in_reply_to_id)
+            .filter(|parent_id| comments_by_id.contains_key(parent_id))
+        {
+            root_id = parent_id;
+        }
         grouped_ids.entry(root_id).or_default().push(comment.id);
     }
 
@@ -91,28 +98,6 @@ pub(crate) fn build_discussion_threads(
             })
         })
         .collect()
-}
-
-fn resolve_root_id(comment_id: u64, comments_by_id: &BTreeMap<u64, &ReviewComment>) -> u64 {
-    let mut current_id = comment_id;
-    let mut visited = HashSet::new();
-
-    loop {
-        if !visited.insert(current_id) {
-            return comment_id;
-        }
-
-        let Some(comment) = comments_by_id.get(&current_id).copied() else {
-            return comment_id;
-        };
-
-        match comment.in_reply_to_id {
-            Some(parent_id) if comments_by_id.contains_key(&parent_id) => {
-                current_id = parent_id;
-            }
-            _ => return current_id,
-        }
-    }
 }
 
 fn normalized_body(comment: &ReviewComment) -> String {
