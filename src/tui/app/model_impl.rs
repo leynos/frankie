@@ -98,6 +98,9 @@ impl Model for ReviewApp {
         if self.view_mode == ViewMode::TimeTravel {
             return self.normalise_viewport(&self.render_time_travel_view());
         }
+        if self.view_mode == ViewMode::PrDiscussionSummary {
+            return self.normalise_viewport(&self.render_pr_discussion_summary_view());
+        }
 
         // Render main ReviewList view
         let mut output = String::new();
@@ -163,6 +166,7 @@ impl ReviewApp {
             }
             ViewMode::DiffContext => InputContext::DiffContext,
             ViewMode::TimeTravel => InputContext::TimeTravel,
+            ViewMode::PrDiscussionSummary => InputContext::PrDiscussionSummary,
         }
     }
 

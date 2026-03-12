@@ -25,7 +25,7 @@ use bubbletea_rs::Cmd;
 
 use crate::ai::{
     CodexExecutionHandle, CodexExecutionService, CommentRewriteMode, CommentRewriteService,
-    SessionState, SideBySideDiffPreview, SystemCodexExecutionService,
+    PrDiscussionSummaryService, SessionState, SideBySideDiffPreview, SystemCodexExecutionService,
 };
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
@@ -45,6 +45,8 @@ mod layout;
 mod lifecycle_handlers;
 mod model_impl;
 mod navigation;
+mod pr_discussion_summary_handlers;
+mod pr_discussion_summary_state;
 mod rendering;
 mod reply_draft_handlers;
 mod routing;
@@ -54,6 +56,7 @@ mod verification_handlers;
 mod verification_state;
 mod view_mode;
 
+pub(crate) use pr_discussion_summary_state::PrDiscussionSummaryViewState;
 use routing::MessageRouting;
 pub(crate) use view_mode::{CHROME_HEIGHT, MIN_DETAIL_HEIGHT, MIN_LIST_HEIGHT, ViewMode};
 
@@ -120,6 +123,14 @@ pub struct ReviewApp {
     comment_rewrite_service: Arc<dyn CommentRewriteService>,
     /// Verification service, cache, and cached verdict state.
     verification: VerificationState,
+    /// Shared service used to generate PR-level discussion summaries.
+    pr_discussion_summary_service: Arc<dyn PrDiscussionSummaryService>,
+    /// Current PR-discussion summary view state, if a summary has been generated.
+    pr_discussion_summary: Option<PrDiscussionSummaryViewState>,
+    /// Monotonic request ID for PR-discussion summary tasks.
+    next_pr_discussion_summary_request_id: u64,
+    /// Most recent in-flight PR-discussion summary request.
+    in_flight_pr_discussion_summary_request_id: Option<u64>,
 }
 
 /// Generated preview state before AI text is applied to a draft.
@@ -191,6 +202,10 @@ impl ReviewApp {
             reply_draft_config: super::get_reply_draft_config(),
             comment_rewrite_service: super::get_comment_rewrite_service(),
             verification: VerificationState::default(),
+            pr_discussion_summary_service: super::get_pr_discussion_summary_service(),
+            pr_discussion_summary: None,
+            next_pr_discussion_summary_request_id: 1,
+            in_flight_pr_discussion_summary_request_id: None,
         };
         app.set_visible_list_height();
         app
@@ -261,6 +276,16 @@ impl ReviewApp {
         cache: Arc<ReviewCommentVerificationCache>,
     ) -> Self {
         self.verification.cache = Some(cache);
+        self
+    }
+
+    /// Sets the PR-discussion summary service for this app instance.
+    #[must_use]
+    pub fn with_pr_discussion_summary_service(
+        mut self,
+        pr_discussion_summary_service: Arc<dyn PrDiscussionSummaryService>,
+    ) -> Self {
+        self.pr_discussion_summary_service = pr_discussion_summary_service;
         self
     }
 

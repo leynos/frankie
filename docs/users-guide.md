@@ -12,7 +12,7 @@ including loading individual pull requests and listing PRs for a repository.
 
 ## Operation modes
 
-Frankie supports seven operation modes:
+Frankie supports eight operation modes:
 
 1. **Interactive mode** — Auto-detect repository from local Git directory
 2. **Single pull request mode** — Load a specific PR by URL using `--pr-url`
@@ -27,6 +27,8 @@ Frankie supports seven operation modes:
    `--verify-resolutions`
 7. **Artificial intelligence (AI) rewrite mode** — Expand or reword draft text
    non-interactively using `--ai-rewrite-mode` and `--ai-rewrite-text`
+8. **PR discussion summary mode** — Generate grouped PR-level discussion
+   summaries using `--summarize-discussions`
 
 ## Interactive mode (local discovery)
 
@@ -162,6 +164,42 @@ The command-line interface (CLI) output includes:
 If `--ai-rewrite-mode` and `--ai-rewrite-text` are not provided together,
 Frankie returns a configuration error.
 
+The same AI transport settings (`--ai-base-url`, `--ai-model`, `--ai-api-key`,
+and `--ai-timeout-seconds`) are also used by PR discussion summary generation.
+
+## PR discussion summary mode
+
+Generate an AI-assisted summary of PR review discussions grouped by file and
+severity:
+
+```bash
+frankie \
+  --summarize-discussions \
+  --pr-url https://github.com/owner/repo/pull/123 \
+  --token ghp_example \
+  --ai-api-key sk_example
+```
+
+The CLI output groups discussion threads by file and severity, and prints a
+stable TUI link token for each summary item:
+
+```text
+PR discussion summary for #123
+
+File: src/main.rs
+  Severity: high
+    - Handle panic path
+      Rationale: Root discussion flagged an unchecked failure path.
+      Link: frankie://review-comment/1?view=detail
+```
+
+Summary generation works at the discussion-thread level. Replies are collapsed
+into the root thread, so a reply does not create a second summary item with its
+own link.
+
+If the selected pull request has no review comments, Frankie returns an
+explicit error instead of printing an empty summary.
+
 ## Review TUI mode
 
 Launch an interactive terminal interface for navigating and filtering review
@@ -192,6 +230,7 @@ Table: Review list keyboard shortcuts.
 | `[`         | Previous diff hunk             |
 | `]`         | Next diff hunk                 |
 | `t`         | Enter time-travel mode         |
+| `s`         | Generate PR discussion summary |
 | `a`         | Start inline reply drafting    |
 | `v`         | Verify selected comment        |
 | `V`         | Verify filtered comments       |
@@ -210,6 +249,23 @@ Table: Time-travel mode keyboard shortcuts.
 | `l`   | Navigate to next (newer) commit     |
 | `Esc` | Exit time-travel mode               |
 | `q`   | Quit                                |
+
+#### PR discussion summary keyboard shortcuts
+
+Table: PR discussion summary mode keyboard shortcuts.
+
+| Key         | Action                                      |
+| ----------- | ------------------------------------------- |
+| `j`, `↓`    | Move to the next summary item               |
+| `k`, `↑`    | Move to the previous summary item           |
+| `PgDn`      | Page down through summary items             |
+| `PgUp`      | Page up through summary items               |
+| `Home`, `g` | Jump to the first summary item              |
+| `End`, `G`  | Jump to the final summary item              |
+| `Enter`     | Jump back to the linked comment detail view |
+| `Esc`       | Return to the review list                   |
+| `?`         | Toggle help overlay                         |
+| `q`         | Quit                                        |
 
 ### Background sync
 
@@ -670,25 +726,27 @@ Frankie searches for configuration files in this order:
 
 ### Environment variables
 
-| Variable                                | Description                                         |
-| --------------------------------------- | --------------------------------------------------- |
-| `FRANKIE_PR_URL`                        | Pull request URL (for single PR mode)               |
-| `FRANKIE_OWNER`                         | Repository owner (for listing mode)                 |
-| `FRANKIE_REPO`                          | Repository name (for listing mode)                  |
-| `FRANKIE_TOKEN`                         | GitHub personal access token                        |
-| `FRANKIE_DATABASE_URL`                  | Local SQLite database path for persistence          |
-| `FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` | PR metadata cache TTL (seconds)                     |
-| `FRANKIE_TEMPLATE`                      | Template file path for custom export format         |
-| `FRANKIE_REPLY_MAX_LENGTH`              | Maximum character count for inline reply drafts     |
-| `FRANKIE_REPLY_TEMPLATES`               | JSON array of reply template strings for TUI insert |
-| `FRANKIE_AI_REWRITE_MODE`               | AI rewrite mode (`expand` or `reword`)              |
-| `FRANKIE_AI_REWRITE_TEXT`               | Source text for non-interactive AI rewrite          |
-| `FRANKIE_AI_BASE_URL`                   | OpenAI-compatible API base URL                      |
-| `FRANKIE_AI_MODEL`                      | Model name for AI rewrite requests                  |
-| `FRANKIE_AI_API_KEY`                    | API key for AI rewrite requests                     |
-| `OPENAI_API_KEY`                        | Fallback API key for AI rewrite requests            |
-| `FRANKIE_AI_TIMEOUT_SECONDS`            | Timeout for AI rewrite requests (seconds)           |
-| `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above) |
+Table: Supported environment variables.
+
+| Variable                                | Description                                           |
+| --------------------------------------- | ----------------------------------------------------- |
+| `FRANKIE_PR_URL`                        | Pull request URL (for single PR mode)                 |
+| `FRANKIE_OWNER`                         | Repository owner (for listing mode)                   |
+| `FRANKIE_REPO`                          | Repository name (for listing mode)                    |
+| `FRANKIE_TOKEN`                         | GitHub personal access token                          |
+| `FRANKIE_DATABASE_URL`                  | Local SQLite database path for persistence            |
+| `FRANKIE_PR_METADATA_CACHE_TTL_SECONDS` | PR metadata cache TTL (seconds)                       |
+| `FRANKIE_TEMPLATE`                      | Template file path for custom export format           |
+| `FRANKIE_REPLY_MAX_LENGTH`              | Maximum character count for inline reply drafts       |
+| `FRANKIE_REPLY_TEMPLATES`               | JSON array of reply template strings for TUI insert   |
+| `FRANKIE_AI_REWRITE_MODE`               | AI rewrite mode (`expand` or `reword`)                |
+| `FRANKIE_AI_REWRITE_TEXT`               | Source text for non-interactive AI rewrite            |
+| `FRANKIE_AI_BASE_URL`                   | OpenAI-compatible API base URL                        |
+| `FRANKIE_AI_MODEL`                      | Model name for AI rewrite and summary requests        |
+| `FRANKIE_AI_API_KEY`                    | API key for AI rewrite and summary requests           |
+| `OPENAI_API_KEY`                        | Fallback API key for AI rewrite and summary requests  |
+| `FRANKIE_AI_TIMEOUT_SECONDS`            | Timeout for AI rewrite and summary requests (seconds) |
+| `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above)   |
 
 The `GITHUB_TOKEN` environment variable is supported for backward
 compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
@@ -709,6 +767,7 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--tui`                                     | `-T`  | Launch interactive TUI for review comments        |
 | `--export <FORMAT>`                         | `-e`  | Export comments (`markdown`, `jsonl`, `template`) |
 | `--verify-resolutions`                      | —     | Verify comment resolutions and exit               |
+| `--summarize-discussions`                   | —     | Generate grouped PR discussion summaries and exit |
 | `--output <PATH>`                           | —     | Output file for export (default: stdout)          |
 | `--template <PATH>`                         | —     | Template file for custom export format            |
 | `--reply-max-length <COUNT>`                | —     | Maximum characters allowed in TUI reply drafts    |
@@ -716,9 +775,9 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--ai-rewrite-mode <MODE>`                  | —     | AI rewrite mode (`expand`, `reword`)              |
 | `--ai-rewrite-text <TEXT>`                  | —     | Source text for non-interactive AI rewrite        |
 | `--ai-base-url <URL>`                       | —     | OpenAI-compatible API base URL                    |
-| `--ai-model <MODEL>`                        | —     | Model name for AI rewrite requests                |
-| `--ai-api-key <KEY>`                        | —     | API key for AI rewrite requests                   |
-| `--ai-timeout-seconds <SECONDS>`            | —     | Timeout for AI rewrite requests                   |
+| `--ai-model <MODEL>`                        | —     | Model name for AI rewrite and summary requests    |
+| `--ai-api-key <KEY>`                        | —     | API key for AI rewrite and summary requests       |
+| `--ai-timeout-seconds <SECONDS>`            | —     | Timeout for AI rewrite and summary requests       |
 | `--help`                                    | `-h`  | Show help information                             |
 
 Run `frankie --help` to see all available options and their descriptions.

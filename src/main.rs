@@ -37,6 +37,7 @@ async fn run() -> Result<(), IntakeError> {
         OperationMode::ExportComments => cli::export_comments::run(&config).await,
         OperationMode::AiRewrite => cli::ai_rewrite::run(&config),
         OperationMode::VerifyResolutions => cli::verify_resolutions::run(&config).await,
+        OperationMode::SummarizeDiscussions => cli::summarize_discussions::run(&config).await,
     }
 }
 

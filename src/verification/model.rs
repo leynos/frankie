@@ -2,6 +2,8 @@
 
 use std::fmt::{self, Display, Formatter};
 
+use serde::{Deserialize, Serialize};
+
 /// Verified/unverified status for a review comment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommentVerificationStatus {
@@ -131,7 +133,7 @@ pub struct CommentVerificationEvidence {
 }
 
 /// Strongly-typed identifier for a GitHub review comment.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GithubCommentId(u64);
 
 impl GithubCommentId {

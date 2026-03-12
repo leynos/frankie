@@ -188,7 +188,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   and checking comment conditions; acceptance: verification results annotate
   comments as verified or unverified and persist status in the local cache;
   delivery includes reusable library APIs and both TUI and CLI access paths.
-- [ ] 3.3.2. Provide summary generation for PR-level discussions; acceptance:
+- [x] 3.3.2. Provide summary generation for PR-level discussions; acceptance:
   summaries group comments by file and severity, and include links back to TUI
   views; delivery includes reusable library APIs and both TUI and CLI access
   paths.

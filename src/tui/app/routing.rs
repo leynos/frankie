@@ -31,13 +31,8 @@ impl ReviewApp {
             return MessageRouting::Fallthrough;
         }
 
-        // EscapePressed in DiffContext mode
-        if matches!(msg, AppMsg::EscapePressed) {
-            return MessageRouting::Handled(self.handle_diff_context_msg(msg));
-        }
-
-        // DiffContext-specific messages
-        if msg.is_diff_context() {
+        // EscapePressed and diff-context messages share the same handler.
+        if matches!(msg, AppMsg::EscapePressed) || msg.is_diff_context() {
             return MessageRouting::Handled(self.handle_diff_context_msg(msg));
         }
 
@@ -56,6 +51,25 @@ impl ReviewApp {
     /// to prevent interference with the time-travel view state.
     pub(super) const fn is_blocked_in_time_travel(msg: &AppMsg) -> bool {
         msg.is_navigation() || msg.is_filter() || msg.is_diff_context()
+    }
+
+    /// Checks if a message should be blocked when in PR discussion summary mode.
+    ///
+    /// PR discussion summary mode blocks filter, diff-context, time-travel,
+    /// reply-draft, and verification messages to prevent interference with
+    /// the summary view state.
+    pub(super) const fn is_blocked_in_pr_discussion_summary(msg: &AppMsg) -> bool {
+        msg.is_filter()
+            || msg.is_diff_context()
+            || msg.is_time_travel()
+            || msg.is_reply_draft()
+            || msg.is_verification()
+    }
+
+    /// Returns `true` when the current view is `ReviewList` and the message is
+    /// `EscapePressed`, indicating a filter-clear should be triggered.
+    pub(super) const fn is_review_list_escape(view_mode: ViewMode, msg: &AppMsg) -> bool {
+        matches!(view_mode, ViewMode::ReviewList) && matches!(msg, AppMsg::EscapePressed)
     }
 
     /// Routes messages when in `TimeTravel` mode.
@@ -88,6 +102,11 @@ impl ReviewApp {
     /// mode-specific routing, or `MessageRouting::Fallthrough` if the message
     /// should proceed to category-based dispatch.
     pub(super) fn route_by_view_mode(&mut self, msg: &AppMsg) -> MessageRouting {
+        if let MessageRouting::Handled(result) = self.try_handle_in_pr_discussion_summary_mode(msg)
+        {
+            return MessageRouting::Handled(result);
+        }
+
         // Route TimeTravel mode messages first (takes priority)
         if let MessageRouting::Handled(result) = self.try_handle_in_time_travel_mode(msg) {
             return MessageRouting::Handled(result);
@@ -99,7 +118,7 @@ impl ReviewApp {
         }
 
         // EscapePressed in ReviewList mode only
-        if self.view_mode == ViewMode::ReviewList && matches!(msg, AppMsg::EscapePressed) {
+        if Self::is_review_list_escape(self.view_mode, msg) {
             return MessageRouting::Handled(self.handle_clear_filter());
         }
 
@@ -116,11 +135,36 @@ impl ReviewApp {
             MessageCategory::Filter => self.handle_filter_msg(msg),
             MessageCategory::DiffContext => self.handle_diff_context_msg(msg),
             MessageCategory::TimeTravel => self.handle_time_travel_msg(msg),
+            MessageCategory::PrDiscussionSummary => self.handle_pr_discussion_summary_msg(msg),
             MessageCategory::Codex => self.handle_codex_msg(msg),
             MessageCategory::ReplyDraft => self.handle_reply_draft_msg(msg),
             MessageCategory::Verification => self.handle_verification_msg(msg),
             MessageCategory::Data => self.handle_data_msg(msg),
             MessageCategory::Lifecycle => self.handle_lifecycle_msg(msg),
         }
+    }
+
+    /// Routes messages when in `PrDiscussionSummary` mode.
+    pub(super) fn try_handle_in_pr_discussion_summary_mode(
+        &mut self,
+        msg: &AppMsg,
+    ) -> MessageRouting {
+        if self.view_mode != ViewMode::PrDiscussionSummary {
+            return MessageRouting::Fallthrough;
+        }
+
+        if msg.is_pr_discussion_summary() {
+            return MessageRouting::Handled(self.handle_pr_discussion_summary_msg(msg));
+        }
+
+        if msg.is_navigation() {
+            return MessageRouting::Handled(self.handle_pr_discussion_summary_navigation(msg));
+        }
+
+        if Self::is_blocked_in_pr_discussion_summary(msg) {
+            return MessageRouting::Handled(None);
+        }
+
+        MessageRouting::Fallthrough
     }
 }

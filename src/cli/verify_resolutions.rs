@@ -6,7 +6,6 @@
 //! `SQLite` cache for reuse across sessions.
 
 use std::io::{self, Write};
-use std::path::Path;
 
 use frankie::local::{GitHubOrigin, create_git_ops, discover_repository};
 use frankie::persistence::ReviewCommentVerificationCache;
@@ -16,6 +15,8 @@ use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
     PullRequestLocator, ReviewComment, ReviewCommentGateway,
 };
+
+use super::pull_request_context::resolve_locator;
 
 /// Verifies review comments for a pull request and persists results.
 ///
@@ -128,58 +129,6 @@ fn write_summary(
         })?;
     }
     Ok(())
-}
-
-/// Resolves a [`PullRequestLocator`] from the configuration, preferring the
-/// positional `pr_identifier` and falling back to `--pr-url`.
-fn resolve_locator(config: &FrankieConfig) -> Result<PullRequestLocator, IntakeError> {
-    if let Some(identifier) = config.pr_identifier() {
-        return resolve_from_identifier(
-            identifier,
-            config.no_local_discovery,
-            config.repo_path.as_deref(),
-        );
-    }
-
-    let pr_url = config.require_pr_url()?;
-    PullRequestLocator::parse(pr_url)
-}
-
-fn resolve_from_identifier(
-    identifier: &str,
-    no_local_discovery: bool,
-    repo_path: Option<&str>,
-) -> Result<PullRequestLocator, IntakeError> {
-    if identifier.contains("://") {
-        return PullRequestLocator::parse(identifier);
-    }
-
-    let has_repo_path = repo_path.is_some_and(|path| !path.trim().is_empty());
-    if no_local_discovery && !has_repo_path {
-        return Err(IntakeError::Configuration {
-            message: concat!(
-                "bare PR numbers require local git discovery to determine ",
-                "owner/repo, but --no-local-discovery is set; provide a ",
-                "full PR URL instead"
-            )
-            .to_owned(),
-        });
-    }
-
-    let discovery_path =
-        repo_path.map_or_else(|| Path::new(".").to_path_buf(), std::path::PathBuf::from);
-    let local_repo = discover_repository(&discovery_path).map_err(|error| {
-        let message = if repo_path.is_some() {
-            format!(
-                "failed to discover local repository at {}: {error}",
-                discovery_path.display()
-            )
-        } else {
-            format!("failed to discover local repository: {error}")
-        };
-        IntakeError::Api { message }
-    })?;
-    PullRequestLocator::from_identifier(identifier, local_repo.github_origin())
 }
 
 /// Discovers a local repository matching the PR's origin.

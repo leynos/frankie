@@ -8,7 +8,10 @@ use std::sync::{Arc, OnceLock};
 
 use crossterm::terminal;
 
-use crate::ai::{CommentRewriteService, OpenAiCommentRewriteService};
+use crate::ai::{
+    CommentRewriteService, OpenAiCommentRewriteService, OpenAiPrDiscussionSummaryService,
+    PrDiscussionSummaryService,
+};
 use crate::github::error::IntakeError;
 use crate::github::locator::{PersonalAccessToken, PullRequestLocator};
 use crate::github::models::ReviewComment;
@@ -49,6 +52,14 @@ static COMMENT_REWRITE_SERVICE: OnceLock<Arc<dyn CommentRewriteService>> = OnceL
 /// Static fallback rewrite service for deployments without explicit AI config.
 static DEFAULT_COMMENT_REWRITE_SERVICE: OnceLock<Arc<dyn CommentRewriteService>> = OnceLock::new();
 
+/// Global storage for PR-discussion summary service used by the summary view.
+static PR_DISCUSSION_SUMMARY_SERVICE: OnceLock<Arc<dyn PrDiscussionSummaryService>> =
+    OnceLock::new();
+
+/// Static fallback summary service for deployments without explicit AI config.
+static DEFAULT_PR_DISCUSSION_SUMMARY_SERVICE: OnceLock<Arc<dyn PrDiscussionSummaryService>> =
+    OnceLock::new();
+
 /// Global storage for Git operations context.
 ///
 /// This is set before the TUI program starts when a valid local repository
@@ -72,6 +83,7 @@ static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
 struct RefreshContext {
     locator: PullRequestLocator,
     token: PersonalAccessToken,
+    pr_title: Option<String>,
 }
 
 /// Git operations context for time-travel navigation.
@@ -141,13 +153,22 @@ pub fn set_initial_terminal_size(width: u16, height: u16) -> bool {
 ///
 /// * `locator` - The pull request locator for API calls.
 /// * `token` - The personal access token for authentication.
+/// * `pr_title` - Optional pull-request title for summary prompt context.
 ///
 /// # Returns
 ///
 /// `true` if the context was set, `false` if it was already set.
-pub fn set_refresh_context(locator: PullRequestLocator, token: PersonalAccessToken) -> bool {
+pub fn set_refresh_context(
+    locator: PullRequestLocator,
+    token: PersonalAccessToken,
+    pr_title: Option<String>,
+) -> bool {
     REFRESH_CONTEXT
-        .set(RefreshContext { locator, token })
+        .set(RefreshContext {
+            locator,
+            token,
+            pr_title,
+        })
         .is_ok()
 }
 
@@ -172,6 +193,11 @@ pub fn set_telemetry_sink(sink: Arc<dyn TelemetrySink>) -> bool {
 /// Returns `true` if the service was set, or `false` when one already exists.
 pub fn set_comment_rewrite_service(service: Arc<dyn CommentRewriteService>) -> bool {
     COMMENT_REWRITE_SERVICE.set(service).is_ok()
+}
+
+/// Sets the PR-discussion summary service for the TUI application.
+pub fn set_pr_discussion_summary_service(service: Arc<dyn PrDiscussionSummaryService>) -> bool {
+    PR_DISCUSSION_SUMMARY_SERVICE.set(service).is_ok()
 }
 
 /// Sets the Git operations context for time-travel navigation.
@@ -255,6 +281,19 @@ pub(crate) fn get_comment_rewrite_service() -> Arc<dyn CommentRewriteService> {
     })
 }
 
+/// Gets the configured PR-discussion summary service or a fallback implementation.
+pub(crate) fn get_pr_discussion_summary_service() -> Arc<dyn PrDiscussionSummaryService> {
+    PR_DISCUSSION_SUMMARY_SERVICE
+        .get()
+        .cloned()
+        .unwrap_or_else(|| {
+            Arc::clone(
+                DEFAULT_PR_DISCUSSION_SUMMARY_SERVICE
+                    .get_or_init(|| Arc::new(OpenAiPrDiscussionSummaryService::default())),
+            )
+        })
+}
+
 /// Records sync telemetry for a completed sync operation.
 ///
 /// Called internally by the app after a successful sync.
@@ -302,6 +341,23 @@ pub(crate) fn get_initial_terminal_size() -> (u16, u16) {
 #[must_use]
 pub(crate) fn get_refresh_locator() -> Option<PullRequestLocator> {
     REFRESH_CONTEXT.get().map(|context| context.locator.clone())
+}
+
+/// Returns the configured pull-request title for summary-dependent features.
+#[must_use]
+pub(crate) fn get_refresh_pr_title() -> Option<String> {
+    REFRESH_CONTEXT
+        .get()
+        .and_then(|context| context.pr_title.clone())
+}
+
+/// Returns the configured refresh locator and token for test assertions.
+#[cfg(feature = "test-support")]
+#[must_use]
+pub fn get_refresh_context_for_tests() -> Option<(PullRequestLocator, String)> {
+    REFRESH_CONTEXT
+        .get()
+        .map(|context| (context.locator.clone(), context.token.value().to_owned()))
 }
 
 /// Fetches fresh review comments from GitHub.

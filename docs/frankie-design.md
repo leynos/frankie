@@ -469,6 +469,8 @@ this design document for cross-references.
   preview and fallback contract.
 - [ADR-007](adr-007-automated-resolution-verification-semantics-and-persistence.md):
   Automated resolution verification semantics and persistence.
+- [ADR-008](adr-008-pr-discussion-summary-contract.md): PR discussion summary
+  contract.
 
 ## 1.3 Scope
 
@@ -2889,6 +2891,11 @@ Canonical record:
 
 Canonical record:
 [docs/adr-007-automated-resolution-verification-semantics-and-persistence.md](adr-007-automated-resolution-verification-semantics-and-persistence.md).
+
+#### Architecture decision record (ADR-008): PR discussion summary contract
+
+Canonical record:
+[docs/adr-008-pr-discussion-summary-contract.md](adr-008-pr-discussion-summary-contract.md).
 
 ## 5.4 Cross-cutting Concerns
 
