@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (2026-03-13)
+Status: COMPLETED (2026-03-14)
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -112,15 +112,22 @@ Success is observable when:
       reply-drafting ExecPlan, the current `src/tui/state/reply_draft.rs`
       implementation, and the referenced testing guidance.
 - [x] (2026-03-13 00:00Z) Drafted this ExecPlan for roadmap step 3.2.3.
-- [ ] Stage A: add failing library-facing tests and behavioural regression
-      scenarios that define the extraction target.
-- [ ] Stage B: extract the renderer and error type into a new top-level module
-      and re-export the public API from `src/lib.rs`.
-- [ ] Stage C: switch the TUI adapter to the shared module and delete the old
-      TUI-local renderer export.
-- [ ] Stage D: update `docs/frankie-design.md`, refresh `docs/users-guide.md`
-      if needed, and mark roadmap step 3.2.3 done after all gates pass.
-- [ ] Stage E: run markdown/documentation gates and required repo gates.
+- [x] (2026-03-14 00:00Z) Stage A: added shared-library tests, a public API
+      integration test, and BDD regression scenarios covering substitution,
+      escaping, and error reporting.
+- [x] (2026-03-14 00:00Z) Stage B: extracted `ReplyTemplateError` and
+      `render_reply_template` into `src/reply_template/` and re-exported them
+      from `src/lib.rs`.
+- [x] (2026-03-14 00:00Z) Stage C: switched the TUI reply-draft handler to the
+      shared module and removed the old renderer export from
+      `src/tui/state/mod.rs`.
+- [x] (2026-03-14 00:00Z) Stage D: updated `docs/frankie-design.md`, marked
+      roadmap step 3.2.3 done, and confirmed no `docs/users-guide.md` change
+      was needed because user-visible behaviour and error strings stayed the
+      same.
+- [x] (2026-03-14 00:00Z) Stage E: passed `make fmt`,
+      `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`,
+      `make nixie`, `make check-fmt`, `make lint`, and `make test`.
 
 ## Surprises & Discoveries
 
@@ -168,9 +175,41 @@ Success is observable when:
 
 ## Outcomes & Retrospective
 
-Not started. Update this section when implementation completes with the final
-public API path, the tests added, any user-visible changes, and the exact gate
-results.
+Completed on 2026-03-14.
+
+- Final public API path:
+  - `frankie::reply_template::render_reply_template`
+  - `frankie::render_reply_template`
+  - `frankie::ReplyTemplateError`
+- Implementation notes:
+  - Moved the shared renderer out of `src/tui/state/reply_draft.rs` into the
+    new top-level `src/reply_template/` module.
+  - Kept `ReplyDraftState` and reply-draft mutation logic in TUI state.
+  - Rewired `src/tui/app/reply_draft_handlers.rs` to import the shared module
+    directly, preserving existing inline error strings.
+- Tests added or extended:
+  - `src/reply_template/tests.rs` for substitution, fallback defaults, literal
+    brace escaping, non-recursive rendering of template-like comment data,
+    parse-time failures, and render-time failures.
+  - `tests/reply_template_public_api.rs` proving the API is reachable from both
+    the crate-root re-export and the public module path.
+  - `tests/template_reply_drafting_bdd.rs` and
+    `tests/features/template_reply_drafting.feature` for adapter regression on
+    invalid syntax and escaped/template-like literal output.
+- User-visible changes:
+  - None intended. Inline reply drafting continues to render templates and
+    report template failures with the same TUI-visible prefix.
+- Gate results:
+  - `make fmt`
+  - `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`
+  - `make nixie`
+  - `make check-fmt`
+  - `make lint`
+  - `make test`
+  - `cargo test --test reply_template_public_api`
+  - `cargo test --test template_reply_drafting_bdd`
+  - `cargo test reply_template --lib`
+  - Final `nextest` summary: `812 passed, 1 skipped`.
 
 ## Context and orientation
 

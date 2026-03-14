@@ -159,7 +159,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   preview, and falls back gracefully when the AI call fails; delivery includes
   reusable library APIs and both TUI and CLI access paths. See
   `docs/adr-006-ai-rewrite-preview-and-fallback-contract.md`.
-- [ ] 3.2.3. Extract reply templating out of TUI state into a top-level library
+- [x] 3.2.3. Extract reply templating out of TUI state into a top-level library
   module and re-export it as a public API (currently in `src/tui/state/`). See
   `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: template
   rendering moves to a non-TUI module with a public API, and tests cover
