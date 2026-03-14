@@ -10,6 +10,7 @@ pub mod export;
 pub mod github;
 pub mod local;
 pub mod persistence;
+pub mod reply_template;
 pub mod telemetry;
 pub mod time;
 pub mod tui;
@@ -28,3 +29,4 @@ pub use github::{
     ReviewComment, ReviewCommentGateway,
 };
 pub use local::{GitHubOrigin, LocalDiscoveryError, LocalRepository, discover_repository};
+pub use reply_template::{ReplyTemplateError, render_reply_template};
