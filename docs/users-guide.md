@@ -448,9 +448,12 @@ The header shows the current position in the commit history (e.g., "Commit 2 of
 
 Time-travel mode requires:
 
+- The selected review comment must carry both a **commit SHA** and a **file
+  path**. Comments without these fields cannot be used for time travel.
 - A local Git repository (Frankie must be run from within the repository or
-  the repository must be discoverable)
-- The commit SHA referenced by the comment must exist in the local repository
+  the repository must be discoverable).
+- The commit SHA referenced by the comment must exist in the local
+  repository.
 
 If these requirements are not met, Frankie displays a clear error message
 explaining what is missing.

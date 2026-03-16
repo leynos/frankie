@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (2026-03-13)
+Status: DONE (2026-03-16)
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -102,14 +102,14 @@ Those concerns belong to roadmap items 2.2.5, 2.2.6, and 2.2.7.
       `pub(crate)` in `src/tui/state/time_travel.rs`, and extraction tests are
       duplicated between TUI state and handler modules.
 - [x] (2026-03-13 00:00Z) Drafted this ExecPlan for roadmap item 2.2.4.
-- [ ] Stage A: introduce a public non-TUI `time_travel` module with
-      `TimeTravelParams` and typed extraction failures.
-- [ ] Stage B: switch TUI state and handlers to consume the shared public type
-      without changing user-visible happy-path behaviour.
-- [ ] Stage C: add unit and behavioural coverage for success, missing-metadata
-      failures, and line-number fallback.
-- [ ] Stage D: update design docs, user guide, and roadmap status after all
-      validation gates pass.
+- [x] (2026-03-16) Stage A: introduce a public non-TUI `time_travel` module
+      with `TimeTravelParams` and typed extraction failures.
+- [x] (2026-03-16) Stage B: switch TUI state and handlers to consume the
+      shared public type without changing user-visible happy-path behaviour.
+- [x] (2026-03-16) Stage C: add unit and behavioural coverage for success,
+      missing-metadata failures, and line-number fallback.
+- [x] (2026-03-16) Stage D: update design docs, user guide, and roadmap
+      status after all validation gates pass.
 
 ## Surprises & Discoveries
 
@@ -152,12 +152,36 @@ Those concerns belong to roadmap items 2.2.5, 2.2.6, and 2.2.7.
 
 ## Outcomes & Retrospective
 
-This plan is drafted but not yet implemented.
+Implementation completed 2026-03-16.
 
-The intended outcome is a small, reusable public API that moves time-travel
-metadata extraction out of TUI internals while leaving the broader time-travel
-state and orchestration work for the next roadmap items. No retrospective is
-available yet because implementation has not started.
+Outcomes:
+
+- `frankie::time_travel::TimeTravelParams` is publicly importable outside
+  `crate::tui`, with `from_comment` returning
+  `Result<Self, TimeTravelParamsError>`.
+- `TimeTravelParamsError` has `MissingCommitSha` and `MissingFilePath`
+  variants, both tested.
+- Five `rstest` unit tests in `src/time_travel/tests.rs` cover success,
+  fallback, both failure modes, and the both-lines-absent edge case.
+- Four `rstest-bdd` behavioural scenarios in
+  `tests/time_travel_params_bdd.rs` prove the public API is usable without
+  importing `frankie::tui`.
+- The TUI handler maps typed extraction errors into the existing
+  user-facing error path, preserving interactive behaviour.
+- Duplicated extraction tests were removed from TUI state and handler
+  modules; the shared module and integration tests now own extraction coverage.
+- `docs/frankie-design.md`, `docs/users-guide.md`, and `docs/roadmap.md`
+  were updated to reflect the final behaviour.
+
+Retrospective:
+
+- The extraction was straightforward because the existing code had a clean
+  `from_comment` method that only needed to be moved and given typed errors.
+- Making the struct fields private with accessors was the right call for a
+  public API; it prevented handler tests from constructing the type via struct
+  literal, which would have been fragile.
+- No tolerance triggers were hit. The change touched 10 files and added
+  approximately 300 net new lines, well within the 12-file / 600-line budget.
 
 ## Context and orientation
 

@@ -13,6 +13,7 @@ pub mod persistence;
 pub mod reply_template;
 pub mod telemetry;
 pub mod time;
+pub mod time_travel;
 pub mod tui;
 pub mod verification;
 

@@ -12,8 +12,9 @@ use std::sync::Arc;
 use bubbletea_rs::Cmd;
 
 use crate::local::{CommitSha, GitOperationError, GitOperations, LineMappingRequest, RepoFilePath};
+use crate::time_travel::TimeTravelParams;
 use crate::tui::messages::AppMsg;
-use crate::tui::state::{TimeTravelInitParams, TimeTravelParams, TimeTravelState};
+use crate::tui::state::{TimeTravelInitParams, TimeTravelState};
 
 use super::ReviewApp;
 
@@ -116,9 +117,12 @@ impl ReviewApp {
             return None;
         };
 
-        let Some(params) = TimeTravelParams::from_comment(comment) else {
-            self.error = Some("Comment lacks commit SHA or file path".to_owned());
-            return None;
+        let params = match TimeTravelParams::from_comment(comment) {
+            Ok(p) => p,
+            Err(e) => {
+                self.error = Some(e.to_string());
+                return None;
+            }
         };
 
         let Some(ref git_ops) = self.git_ops else {
@@ -130,8 +134,8 @@ impl ReviewApp {
         // Note: commit existence is verified asynchronously in load_time_travel_state,
         // which returns CommitNotFound error via TimeTravelFailed message if needed.
         self.time_travel_state = Some(TimeTravelState::loading(
-            params.file_path.clone(),
-            params.line_number,
+            params.file_path().clone(),
+            params.line_number(),
         ));
         self.view_mode = super::ViewMode::TimeTravel;
 
@@ -299,26 +303,26 @@ fn load_time_travel_state(
     head_sha: Option<&CommitSha>,
 ) -> Result<TimeTravelState, GitOperationError> {
     // Get commit snapshot with file content
-    let snapshot = git_ops.get_commit_snapshot(&params.commit_sha, Some(&params.file_path))?;
+    let snapshot = git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path()))?;
 
     // Get commit history
-    let commit_history = git_ops.get_parent_commits(&params.commit_sha, COMMIT_HISTORY_LIMIT)?;
+    let commit_history = git_ops.get_parent_commits(params.commit_sha(), COMMIT_HISTORY_LIMIT)?;
 
     // Verify line mapping if we have a line number and HEAD
     let line_mapping = verify_line_mapping_optional(
         git_ops,
         &LineMappingContext {
-            commit_sha: &params.commit_sha,
-            file_path: &params.file_path,
-            original_line: params.line_number,
+            commit_sha: params.commit_sha(),
+            file_path: params.file_path(),
+            original_line: params.line_number(),
             head_sha,
         },
     );
 
     Ok(TimeTravelState::new(TimeTravelInitParams {
         snapshot,
-        file_path: params.file_path.clone(),
-        original_line: params.line_number,
+        file_path: params.file_path().clone(),
+        original_line: params.line_number(),
         line_mapping,
         commit_history,
         current_index: 0,

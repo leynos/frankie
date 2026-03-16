@@ -75,9 +75,9 @@ fn time_travel_params_from_comment() {
 
     let params = TimeTravelParams::from_comment(&comment)
         .expect("TimeTravelParams should be extractable from comment with full metadata");
-    assert_eq!(params.commit_sha.as_str(), "abc123");
-    assert_eq!(params.file_path.as_str(), "src/main.rs");
-    assert_eq!(params.line_number, Some(42));
+    assert_eq!(params.commit_sha().as_str(), "abc123");
+    assert_eq!(params.file_path().as_str(), "src/main.rs");
+    assert_eq!(params.line_number(), Some(42));
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn time_travel_params_missing_sha() {
         ..minimal_review(1, "Test", "alice")
     };
 
-    assert!(TimeTravelParams::from_comment(&comment).is_none());
+    assert!(TimeTravelParams::from_comment(&comment).is_err());
 }
 
 #[test]
@@ -120,11 +120,14 @@ fn load_time_travel_state_success() {
         .times(1)
         .returning(|request| Ok(LineMappingVerification::exact(request.line)));
 
-    let params = TimeTravelParams {
-        commit_sha: CommitSha::new("abc1234567890".to_owned()),
-        file_path: RepoFilePath::new("src/main.rs".to_owned()),
+    let comment = ReviewComment {
+        commit_sha: Some("abc1234567890".to_owned()),
+        file_path: Some("src/main.rs".to_owned()),
         line_number: Some(10),
+        ..minimal_review(2, "Load test", "bob")
     };
+    let params = TimeTravelParams::from_comment(&comment)
+        .expect("comment has required metadata for TimeTravelParams");
 
     let head_sha = CommitSha::new("HEAD".to_owned());
     let state = load_time_travel_state(&git_ops, &params, Some(&head_sha))
@@ -146,11 +149,14 @@ fn load_time_travel_state_commit_not_found() {
         .times(1)
         .returning(|sha, _file_path| Err(GitOperationError::CommitNotFound { sha: sha.clone() }));
 
-    let params = TimeTravelParams {
-        commit_sha: CommitSha::new("nonexistent".to_owned()),
-        file_path: RepoFilePath::new("src/main.rs".to_owned()),
+    let comment = ReviewComment {
+        commit_sha: Some("nonexistent".to_owned()),
+        file_path: Some("src/main.rs".to_owned()),
         line_number: None,
+        ..minimal_review(3, "Missing commit test", "charlie")
     };
+    let params = TimeTravelParams::from_comment(&comment)
+        .expect("comment has required metadata for TimeTravelParams");
 
     let result = load_time_travel_state(&git_ops, &params, None);
     assert!(matches!(
