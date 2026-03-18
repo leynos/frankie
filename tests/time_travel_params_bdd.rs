@@ -87,6 +87,41 @@ fn when_extract(state: &ParamsState) -> StepResult {
     Ok(())
 }
 
+fn assert_ok_field<T: PartialEq>(
+    state: &ParamsState,
+    extract: impl FnOnce(&TimeTravelParams) -> T,
+    expected: &T,
+    mismatch_msg: &'static str,
+) -> StepResult {
+    let actual = state
+        .result
+        .with_ref(|r| r.as_ref().ok().map(extract))
+        .ok_or("result should be set")?
+        .ok_or("extraction should have succeeded")?;
+    if actual == *expected {
+        Ok(())
+    } else {
+        Err(mismatch_msg)
+    }
+}
+
+fn assert_err_variant(
+    state: &ParamsState,
+    expected: &TimeTravelParamsError,
+    mismatch_msg: &'static str,
+) -> StepResult {
+    let err = state
+        .result
+        .with_ref(|r| r.as_ref().err().cloned())
+        .flatten()
+        .ok_or("extraction should have failed")?;
+    if err == *expected {
+        Ok(())
+    } else {
+        Err(mismatch_msg)
+    }
+}
+
 // -- Then steps --
 
 #[then("extraction succeeds")]
@@ -101,72 +136,50 @@ fn then_succeeds(state: &ParamsState) -> StepResult {
 
 #[then("the commit SHA is {expected}")]
 fn then_commit_sha(state: &ParamsState, expected: String) -> StepResult {
-    let actual = state
-        .result
-        .with_ref(|r| r.as_ref().ok().map(|p| p.commit_sha().as_str().to_owned()))
-        .ok_or("result should be set")?
-        .ok_or("extraction should have succeeded")?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("commit SHA does not match expected value")
-    }
+    assert_ok_field(
+        state,
+        |p| p.commit_sha().as_str().to_owned(),
+        &expected,
+        "commit SHA does not match expected value",
+    )
 }
 
 #[then("the file path is {expected}")]
 fn then_file_path(state: &ParamsState, expected: String) -> StepResult {
-    let actual = state
-        .result
-        .with_ref(|r| r.as_ref().ok().map(|p| p.file_path().as_str().to_owned()))
-        .ok_or("result should be set")?
-        .ok_or("extraction should have succeeded")?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("file path does not match expected value")
-    }
+    assert_ok_field(
+        state,
+        |p| p.file_path().as_str().to_owned(),
+        &expected,
+        "file path does not match expected value",
+    )
 }
 
 #[then("the line number is {expected}")]
 fn then_line_number(state: &ParamsState, expected: u32) -> StepResult {
-    let actual = state
-        .result
-        .with_ref(|r| r.as_ref().ok().map(TimeTravelParams::line_number))
-        .ok_or("result should be set")?
-        .ok_or("extraction should have succeeded")?;
-    if actual == Some(expected) {
-        Ok(())
-    } else {
-        Err("line number does not match expected value")
-    }
+    assert_ok_field(
+        state,
+        TimeTravelParams::line_number,
+        &Some(expected),
+        "line number does not match expected value",
+    )
 }
 
 #[then("extraction fails with a missing commit SHA error")]
 fn then_missing_sha(state: &ParamsState) -> StepResult {
-    let err = state
-        .result
-        .with_ref(|r| r.as_ref().err().cloned())
-        .flatten()
-        .ok_or("extraction should have failed")?;
-    if err == TimeTravelParamsError::MissingCommitSha {
-        Ok(())
-    } else {
-        Err("expected MissingCommitSha error variant")
-    }
+    assert_err_variant(
+        state,
+        &TimeTravelParamsError::MissingCommitSha,
+        "expected MissingCommitSha error variant",
+    )
 }
 
 #[then("extraction fails with a missing file path error")]
 fn then_missing_path(state: &ParamsState) -> StepResult {
-    let err = state
-        .result
-        .with_ref(|r| r.as_ref().err().cloned())
-        .flatten()
-        .ok_or("extraction should have failed")?;
-    if err == TimeTravelParamsError::MissingFilePath {
-        Ok(())
-    } else {
-        Err("expected MissingFilePath error variant")
-    }
+    assert_err_variant(
+        state,
+        &TimeTravelParamsError::MissingFilePath,
+        "expected MissingFilePath error variant",
+    )
 }
 
 // -- Scenario bindings --
