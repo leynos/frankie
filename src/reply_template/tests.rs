@@ -71,12 +71,12 @@ fn render_reply_template_does_not_recurse_into_comment_data() {
     "reply template rendering failed:"
 )]
 fn render_reply_template_reports_errors(
-    sample_comment: ReviewComment,
     #[case] template: &str,
     #[case] expect_err_msg: &str,
     #[case] is_expected_variant: fn(&ReplyTemplateError) -> bool,
     #[case] expected_prefix: &str,
 ) {
+    let sample_comment = sample_review_comment();
     let error = render_reply_template(template, &sample_comment).expect_err(expect_err_msg);
 
     assert!(is_expected_variant(&error));
