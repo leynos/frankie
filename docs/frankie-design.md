@@ -471,6 +471,8 @@ this design document for cross-references.
   Automated resolution verification semantics and persistence.
 - [ADR-008](adr-008-pr-discussion-summary-contract.md): PR discussion summary
   contract.
+- [ADR-009](adr-009-review-banner-translation-contract.md): Review banner
+  translation contract.
 
 ## 1.3 Scope
 
