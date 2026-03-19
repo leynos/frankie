@@ -4,7 +4,7 @@ use bubbletea_rs::Model;
 use bubbletea_rs::event::KeyMsg;
 use crossterm::event::{KeyCode, KeyModifiers};
 use frankie::github::models::ReviewComment;
-use frankie::github::models::test_support::minimal_review;
+use frankie::reply_template::test_support::{review_comment_with_body, sample_review_comment};
 use frankie::tui::app::ReviewApp;
 use frankie::tui::{ReplyDraftConfig, ReplyDraftMaxLength};
 use rstest::fixture;
@@ -38,16 +38,15 @@ fn build_app_with_comments(
 fn sample_comment() -> ReviewComment {
     ReviewComment {
         file_path: Some("src/main.rs".to_owned()),
-        line_number: Some(12),
         body: Some("Please address this".to_owned()),
-        ..minimal_review(1, "Please address this", "alice")
+        ..sample_review_comment()
     }
 }
 
 fn comment_with_body(body: &str) -> ReviewComment {
     ReviewComment {
-        body: Some(body.to_owned()),
-        ..sample_comment()
+        file_path: Some("src/main.rs".to_owned()),
+        ..review_comment_with_body(body)
     }
 }
 

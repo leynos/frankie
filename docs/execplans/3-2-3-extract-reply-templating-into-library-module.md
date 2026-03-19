@@ -14,9 +14,10 @@ plan-governance document applies.
 
 Move reply-template rendering out of `src/tui/state/` into a top-level shared
 library module so external hosts can render reply templates without depending
-on TUI internals. After this change, a library consumer can call a documented
-public API from `frankie`, while the TUI continues to insert reply templates
-with unchanged behaviour and unchanged user-facing error messages.
+on text user interface (TUI) internals. After this change, a library consumer
+can call a documented public API from `frankie`, while the TUI continues to
+insert reply templates with unchanged behaviour and unchanged user-facing error
+messages.
 
 Success is observable when:
 
@@ -41,12 +42,12 @@ Success is observable when:
   renderer must live in a shared library module first, with the TUI reduced to
   an adapter.
 - Keep this step scoped to extraction and publication of the renderer. Do not
-  fold step 3.2.4's DTO migration or step 3.2.5's default-template export into
-  the same change unless a small additive seam is required to avoid duplicate
-  work.
+  fold step 3.2.4's data transfer object (DTO) migration or step 3.2.5's
+  default-template export into the same change unless a small additive seam is
+  required to avoid duplicate work.
 - Preserve current rendered output and current TUI error strings unless a
   change is explicitly documented in `docs/users-guide.md`.
-- Preserve current TUI MVU boundaries:
+- Preserve current TUI model-view-update (MVU) boundaries:
   - `src/tui/input.rs` remains input mapping only.
   - `src/tui/messages/` remains message definitions only.
   - `src/tui/app/` remains state transition and orchestration only.
@@ -58,7 +59,7 @@ Success is observable when:
 - Public functions and public error types must have Rustdoc comments, with a
   compilable example when it materially improves discoverability.
 - Use `rstest` for unit and integration coverage and `rstest-bdd` v0.5.0 for
-  behavioural coverage.
+  behaviour-driven development (BDD) coverage.
 - Shared BDD helpers returning `Result` must not use `assert!`; return
   explicit `Err(...)` values instead.
 - Documentation changes must pass `make fmt`,
@@ -250,7 +251,7 @@ The following reference documents should guide implementation choices:
 - `docs/rust-doctest-dry-guide.md` for public Rustdoc example discipline;
 - `docs/reliable-testing-in-rust-via-dependency-injection.md` and
   `docs/two-tier-testing-strategy-for-an-octocrab-github-client.md` for the
-  library/adaptor test split;
+  library/adapter test split;
 - `docs/complexity-antipatterns-and-refactoring-strategies.md` for avoiding a
   larger mixed-responsibility `reply_draft.rs`; and
 - `docs/users-guide.md` plus `docs/frankie-design.md` for documentation updates.
