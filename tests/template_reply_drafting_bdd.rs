@@ -4,12 +4,16 @@ use bubbletea_rs::Model;
 use bubbletea_rs::event::KeyMsg;
 use crossterm::event::{KeyCode, KeyModifiers};
 use frankie::github::models::ReviewComment;
-use frankie::reply_template::test_support::{review_comment_with_body, sample_review_comment};
 use frankie::tui::app::ReviewApp;
 use frankie::tui::{ReplyDraftConfig, ReplyDraftMaxLength};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
+
+#[path = "support/reply_template.rs"]
+mod reply_template_support;
+
+use reply_template_support::{review_comment_with_body, sample_review_comment};
 
 #[derive(ScenarioState, Default)]
 struct ReplyDraftScenarioState {

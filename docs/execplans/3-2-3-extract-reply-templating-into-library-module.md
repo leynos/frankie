@@ -154,7 +154,7 @@ Success is observable when:
 
 - Decision (2026-03-13): introduce a dedicated top-level module named
   `src/reply_template/` and export it from `src/lib.rs`. Rationale: the module
-  name is explicit, keeps the API independent from `src/tui/`, and gives later
+  name is explicit, keeps the API independent of `src/tui/`, and gives later
   roadmap steps a stable home for `ReplyTemplateContext` and public defaults.
 - Decision (2026-03-13): keep the public render function on
   `&ReviewComment` for this step. Rationale: step 3.2.4 exists specifically to
