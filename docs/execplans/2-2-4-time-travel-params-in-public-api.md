@@ -1,4 +1,4 @@
-# Extract `TimeTravelParams` into the public library API
+# Extract `TimeTravelParams` into the public library application programming interface (API)
 
 This execution plan (ExecPlan) is a living document. The sections
 `Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
@@ -13,10 +13,11 @@ plan-governance document applies.
 ## Purpose / big picture
 
 Roadmap item 2.2.4 is the first extraction step that turns time-travel from a
-TUI-only implementation detail into a reusable library capability. After this
-change, an external caller will be able to derive time-travel inputs directly
-from `frankie::ReviewComment` without importing `crate::tui`, while the TUI
-continues to use the same shared extraction logic when the user presses `t`.
+text user interface (TUI)-only implementation detail into a reusable library
+capability. After this change, an external caller will be able to derive
+time-travel inputs directly from `frankie::ReviewComment` without importing
+`crate::tui`, while the TUI continues to use the same shared extraction logic
+when the user presses `t`.
 
 Success is observable in three ways. First, a library consumer can import a
 public `TimeTravelParams` type from a non-TUI module and call
@@ -27,8 +28,9 @@ required field. Third, the TUI time-travel flow still works and still refuses
 comments that cannot supply the required metadata.
 
 This slice is intentionally narrow. It does not make `TimeTravelState` public,
-it does not extract TUI orchestration, and it does not add a new CLI command.
-Those concerns belong to roadmap items 2.2.5, 2.2.6, and 2.2.7.
+it does not extract TUI orchestration, and it does not add a new command-line
+interface (CLI) command. Those concerns belong to roadmap items 2.2.5, 2.2.6,
+and 2.2.7.
 
 ## Constraints
 
@@ -202,7 +204,8 @@ library surface without prematurely extracting the rest of time-travel.
 
 Recommended target layout:
 
-1. Add `src/time_travel/mod.rs` with the public DTO and its extraction error.
+1. Add `src/time_travel/mod.rs` with the public data transfer object (DTO) and
+   its extraction error.
 2. Export the module from `src/lib.rs` via `pub mod time_travel;`.
 3. Update TUI state and handler code to depend on `crate::time_travel`.
 4. Move extraction-focused tests to the new module and to integration tests in
@@ -395,6 +398,5 @@ Success criteria for close-out:
 
 ## Approval gate
 
-This plan is complete as a draft. Per the ExecPlans workflow, implementation
-should not begin until the user explicitly approves this plan or requests
-revisions.
+This plan has been reviewed and approved; implementation may proceed and the
+plan is considered complete.

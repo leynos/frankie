@@ -42,31 +42,30 @@ fn from_comment_falls_back_to_original_line() {
 }
 
 #[rstest]
-fn from_comment_missing_commit_sha() {
+#[case::missing_commit_sha(None, Some("src/main.rs"), TimeTravelParamsError::MissingCommitSha)]
+#[case::missing_file_path(Some("abc123"), None, TimeTravelParamsError::MissingFilePath)]
+#[case::missing_commit_sha_takes_precedence_when_both_required_fields_are_absent(
+    None,
+    None,
+    TimeTravelParamsError::MissingCommitSha
+)]
+fn from_comment_missing_fields(
+    #[case] commit_sha: Option<&str>,
+    #[case] file_path: Option<&str>,
+    #[case] expected_error: TimeTravelParamsError,
+) {
     let comment = ReviewComment {
-        commit_sha: None,
-        file_path: Some("src/main.rs".to_owned()),
+        commit_sha: commit_sha.map(str::to_owned),
+        file_path: file_path.map(str::to_owned),
+        line_number: Some(42),
+        original_line_number: Some(40),
         ..minimal_review(1, "Test comment", "alice")
     };
 
     let err = TimeTravelParams::from_comment(&comment)
-        .expect_err("should fail when commit SHA is missing");
+        .expect_err("should fail when required time-travel metadata is missing");
 
-    assert_eq!(err, TimeTravelParamsError::MissingCommitSha);
-}
-
-#[rstest]
-fn from_comment_missing_file_path() {
-    let comment = ReviewComment {
-        commit_sha: Some("abc123".to_owned()),
-        file_path: None,
-        ..minimal_review(1, "Test comment", "alice")
-    };
-
-    let err = TimeTravelParams::from_comment(&comment)
-        .expect_err("should fail when file path is missing");
-
-    assert_eq!(err, TimeTravelParamsError::MissingFilePath);
+    assert_eq!(err, expected_error);
 }
 
 #[rstest]

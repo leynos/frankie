@@ -773,7 +773,7 @@ The application operates within the following technical boundaries:
 - **Integration Requirements**: Local Git repository with complete
   history
 
-**Library API (roadmap 2.2.4):**
+##### Library API (roadmap 2.2.4)
 
 `TimeTravelParams` and `TimeTravelParamsError` are public in the
 `frankie::time_travel` module (outside `crate::tui`). External callers derive

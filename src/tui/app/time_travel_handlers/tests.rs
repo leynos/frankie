@@ -9,6 +9,7 @@ use crate::github::models::test_support::minimal_review;
 use crate::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
+use crate::time_travel::TimeTravelParamsError;
 use chrono::Utc;
 use mockall::mock;
 
@@ -88,7 +89,46 @@ fn time_travel_params_missing_sha() {
         ..minimal_review(1, "Test", "alice")
     };
 
-    assert!(TimeTravelParams::from_comment(&comment).is_err());
+    assert_eq!(
+        TimeTravelParams::from_comment(&comment),
+        Err(TimeTravelParamsError::MissingCommitSha)
+    );
+}
+
+#[test]
+fn handle_enter_time_travel_surfaces_missing_sha_error() {
+    let comment = ReviewComment {
+        commit_sha: None,
+        file_path: Some("src/main.rs".to_owned()),
+        ..minimal_review(1, "Test", "alice")
+    };
+    let mut app = ReviewApp::new(vec![comment]);
+
+    let cmd = app.handle_enter_time_travel();
+
+    assert!(cmd.is_none());
+    assert_eq!(
+        app.error.as_deref(),
+        Some("review comment is missing a commit SHA")
+    );
+}
+
+#[test]
+fn handle_enter_time_travel_surfaces_missing_file_path_error() {
+    let comment = ReviewComment {
+        commit_sha: Some("abc123".to_owned()),
+        file_path: None,
+        ..minimal_review(1, "Test", "alice")
+    };
+    let mut app = ReviewApp::new(vec![comment]);
+
+    let cmd = app.handle_enter_time_travel();
+
+    assert!(cmd.is_none());
+    assert_eq!(
+        app.error.as_deref(),
+        Some("review comment is missing a file path")
+    );
 }
 
 #[test]
