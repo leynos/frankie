@@ -56,27 +56,29 @@ fn render_reply_template_does_not_recurse_into_comment_data() {
 }
 
 #[rstest]
-fn render_reply_template_reports_invalid_syntax(sample_comment: ReviewComment) {
-    let error = render_reply_template("{{ reviewer", &sample_comment)
-        .expect_err("invalid syntax should return an error");
+#[case(
+    "{{ reviewer",
+    "invalid syntax should return an error",
+    (|error| matches!(error, ReplyTemplateError::InvalidSyntax { .. }))
+        as fn(&ReplyTemplateError) -> bool,
+    "invalid reply template syntax:"
+)]
+#[case(
+    "{{ reviewer() }}",
+    "calling a string as a function should fail during render",
+    (|error| matches!(error, ReplyTemplateError::RenderFailed { .. }))
+        as fn(&ReplyTemplateError) -> bool,
+    "reply template rendering failed:"
+)]
+fn render_reply_template_reports_errors(
+    sample_comment: ReviewComment,
+    #[case] template: &str,
+    #[case] expect_err_msg: &str,
+    #[case] is_expected_variant: fn(&ReplyTemplateError) -> bool,
+    #[case] expected_prefix: &str,
+) {
+    let error = render_reply_template(template, &sample_comment).expect_err(expect_err_msg);
 
-    assert!(matches!(error, ReplyTemplateError::InvalidSyntax { .. }));
-    assert!(
-        error
-            .to_string()
-            .starts_with("invalid reply template syntax:")
-    );
-}
-
-#[rstest]
-fn render_reply_template_reports_render_failures(sample_comment: ReviewComment) {
-    let error = render_reply_template("{{ reviewer() }}", &sample_comment)
-        .expect_err("calling a string as a function should fail during render");
-
-    assert!(matches!(error, ReplyTemplateError::RenderFailed { .. }));
-    assert!(
-        error
-            .to_string()
-            .starts_with("reply template rendering failed:")
-    );
+    assert!(is_expected_variant(&error));
+    assert!(error.to_string().starts_with(expected_prefix));
 }
