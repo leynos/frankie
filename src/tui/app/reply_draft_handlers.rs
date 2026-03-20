@@ -12,8 +12,9 @@ use crate::ai::{
     CommentRewriteContext, CommentRewriteMode, CommentRewriteOutcome, CommentRewriteRequest,
     CommentRewriteService, build_side_by_side_diff_preview, rewrite_with_fallback,
 };
+use crate::reply_template::{ReplyTemplateError, render_reply_template};
 use crate::tui::messages::AppMsg;
-use crate::tui::state::{ReplyDraftState, ReplyTemplateError, render_reply_template};
+use crate::tui::state::ReplyDraftState;
 
 use super::{ReplyDraftAiPreview, ReviewApp};
 

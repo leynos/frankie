@@ -4,12 +4,16 @@ use bubbletea_rs::Model;
 use bubbletea_rs::event::KeyMsg;
 use crossterm::event::{KeyCode, KeyModifiers};
 use frankie::github::models::ReviewComment;
-use frankie::github::models::test_support::minimal_review;
 use frankie::tui::app::ReviewApp;
 use frankie::tui::{ReplyDraftConfig, ReplyDraftMaxLength};
 use rstest::fixture;
 use rstest_bdd::Slot;
 use rstest_bdd_macros::{ScenarioState, given, scenario, then, when};
+
+#[path = "support/reply_template.rs"]
+mod reply_template_support;
+
+use reply_template_support::{review_comment_with_body, sample_review_comment};
 
 #[derive(ScenarioState, Default)]
 struct ReplyDraftScenarioState {
@@ -38,9 +42,15 @@ fn build_app_with_comments(
 fn sample_comment() -> ReviewComment {
     ReviewComment {
         file_path: Some("src/main.rs".to_owned()),
-        line_number: Some(12),
         body: Some("Please address this".to_owned()),
-        ..minimal_review(1, "Please address this", "alice")
+        ..sample_review_comment()
+    }
+}
+
+fn comment_with_body(body: &str) -> ReviewComment {
+    ReviewComment {
+        file_path: Some("src/main.rs".to_owned()),
+        ..review_comment_with_body(body)
     }
 }
 
@@ -100,6 +110,23 @@ fn given_tui_with_comment(
         max_length,
         template.trim_matches('"'),
         vec![sample_comment()],
+    );
+    reply_state.app.set(app);
+}
+
+#[given(
+    "a review TUI with one comment body {body}, max length {max_length:usize}, and template {template}"
+)]
+fn given_tui_with_comment_body(
+    reply_state: &ReplyDraftScenarioState,
+    body: String,
+    max_length: usize,
+    template: String,
+) {
+    let app = build_app_with_comments(
+        max_length,
+        template.trim_matches('"'),
+        vec![comment_with_body(body.trim_matches('"'))],
     );
     reply_state.app.set(app);
 }
@@ -187,5 +214,15 @@ fn selecting_unconfigured_slot_reports_error(reply_state: ReplyDraftScenarioStat
 
 #[scenario(path = "tests/features/template_reply_drafting.feature", index = 4)]
 fn drafting_requires_selected_comment(reply_state: ReplyDraftScenarioState) {
+    let _ = reply_state;
+}
+
+#[scenario(path = "tests/features/template_reply_drafting.feature", index = 5)]
+fn invalid_template_syntax_surfaces_readable_error(reply_state: ReplyDraftScenarioState) {
+    let _ = reply_state;
+}
+
+#[scenario(path = "tests/features/template_reply_drafting.feature", index = 6)]
+fn escaped_braces_and_template_like_body_remain_literal(reply_state: ReplyDraftScenarioState) {
     let _ = reply_state;
 }

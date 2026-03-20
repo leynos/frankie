@@ -1,13 +1,11 @@
-//! Reply draft state and template rendering helpers for the review TUI.
+//! Reply draft state helpers for the review TUI.
 //!
 //! This module encapsulates editable reply draft state tied to a selected
-//! review comment. It enforces a maximum character count, tracks send-readiness,
-//! and renders configured templates using `MiniJinja`.
+//! review comment. It enforces a maximum character count and tracks
+//! send-readiness for inline replies.
 
-use minijinja::{Environment, context};
 use thiserror::Error;
 
-use crate::github::models::ReviewComment;
 use crate::tui::ReplyDraftMaxLength;
 
 /// Local reply draft state for a selected review comment.
@@ -193,101 +191,12 @@ pub enum ReplyDraftError {
     EmptyDraft,
 }
 
-/// Errors raised while rendering a reply template.
-#[derive(Debug, Clone, Error, PartialEq, Eq)]
-pub enum ReplyTemplateError {
-    /// The template source failed to parse.
-    #[error("invalid reply template syntax: {message}")]
-    InvalidSyntax {
-        /// Human-readable parser message from `MiniJinja`.
-        message: String,
-    },
-    /// Rendering failed after successful parsing.
-    #[error("reply template rendering failed: {message}")]
-    RenderFailed {
-        /// Human-readable rendering failure from `MiniJinja`.
-        message: String,
-    },
-}
-
-/// Renders a reply template with data from a selected review comment.
-///
-/// Templates can use the following variables:
-/// - `comment_id`
-/// - `reviewer`
-/// - `file`
-/// - `line`
-/// - `body`
-///
-/// # Errors
-///
-/// Returns [`ReplyTemplateError::InvalidSyntax`] when `template_source` fails
-/// to parse, or [`ReplyTemplateError::RenderFailed`] when rendering fails.
-pub fn render_reply_template(
-    template_source: &str,
-    comment: &ReviewComment,
-) -> Result<String, ReplyTemplateError> {
-    let mut environment = Environment::new();
-    environment.set_auto_escape_callback(|_| minijinja::AutoEscape::None);
-
-    environment
-        .add_template("reply", template_source)
-        .map_err(|error| ReplyTemplateError::InvalidSyntax {
-            message: error.to_string(),
-        })?;
-
-    let reviewer = comment
-        .author
-        .clone()
-        .unwrap_or_else(|| "reviewer".to_owned());
-    let file = comment
-        .file_path
-        .clone()
-        .unwrap_or_else(|| "(unknown file)".to_owned());
-    let line = comment
-        .line_number
-        .map_or_else(String::new, |value| value.to_string());
-    let body = comment.body.clone().unwrap_or_default();
-
-    let template =
-        environment
-            .get_template("reply")
-            .map_err(|error| ReplyTemplateError::RenderFailed {
-                message: error.to_string(),
-            })?;
-
-    template
-        .render(context! {
-            comment_id => comment.id,
-            reviewer => reviewer,
-            file => file,
-            line => line,
-            body => body,
-        })
-        .map_err(|error| ReplyTemplateError::RenderFailed {
-            message: error.to_string(),
-        })
-}
-
 #[cfg(test)]
 mod tests {
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
 
-    use super::{ReplyDraftError, ReplyDraftState, render_reply_template};
-    use crate::github::models::ReviewComment;
+    use super::{ReplyDraftError, ReplyDraftState};
     use crate::tui::ReplyDraftMaxLength;
-
-    #[fixture]
-    fn sample_comment() -> ReviewComment {
-        ReviewComment {
-            id: 42,
-            author: Some("alice".to_owned()),
-            file_path: Some("src/lib.rs".to_owned()),
-            line_number: Some(12),
-            body: Some("Please split this into smaller functions.".to_owned()),
-            ..ReviewComment::default()
-        }
-    }
 
     #[test]
     fn new_draft_starts_empty_and_not_ready() {
@@ -393,24 +302,5 @@ mod tests {
         assert!(draft.append_text(text).is_ok());
 
         assert_eq!(draft.char_count(), expected);
-    }
-
-    #[rstest]
-    fn render_reply_template_includes_comment_fields(sample_comment: ReviewComment) {
-        let rendered =
-            render_reply_template("{{ reviewer }} {{ file }}:{{ line }}", &sample_comment)
-                .expect("template should render");
-
-        assert_eq!(rendered, "alice src/lib.rs:12");
-    }
-
-    #[rstest]
-    fn render_reply_template_reports_invalid_syntax(sample_comment: ReviewComment) {
-        let result = render_reply_template("{{ reviewer", &sample_comment);
-
-        assert!(
-            matches!(result, Err(super::ReplyTemplateError::InvalidSyntax { .. })),
-            "expected invalid syntax error, got {result:?}"
-        );
     }
 }

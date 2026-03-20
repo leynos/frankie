@@ -38,3 +38,17 @@ Feature: Template-based inline reply drafting
     Given a review TUI with no comments and max length 120
     When the user presses "a"
     Then the TUI error contains "requires a selected comment"
+
+  Scenario: Invalid template syntax surfaces a readable inline error
+    Given a review TUI with one comment, max length 120, and template "{{ reviewer"
+    When the user presses "a"
+    And the user presses "1"
+    Then the TUI error contains "Reply template rendering failed:"
+
+  Scenario: Escaped braces and template-like body text remain literal
+    Given a review TUI with one comment body "Please keep {{ nested }} literal", max length 200, and template "{% raw %}{{ reviewer }}{% endraw %} :: {{ body }}"
+    When the user presses "a"
+    And the user presses "1"
+    And the view is rendered
+    Then the view contains "{{ reviewer }} :: Please keep {{ nested }} literal"
+    And no TUI error is shown

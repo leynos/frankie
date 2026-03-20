@@ -2882,6 +2882,18 @@ Canonical record:
 Canonical record:
 [docs/adr-005-cross-surface-library-first-delivery.md](adr-005-cross-surface-library-first-delivery.md).
 
+The reply-template contract required by ADR-005 now lives in the shared
+`frankie::reply_template` module and is re-exported at the crate root as
+`frankie::render_reply_template` and `frankie::ReplyTemplateError`. TUI reply
+drafting remains an adapter over that library API, preserving the same rendered
+output and user-facing error messages while removing the shared renderer from
+`src/tui/state/`. Verification is auditable through
+`tests/reply_template_public_api.rs`, which proves the re-exported
+`frankie::render_reply_template` and `frankie::ReplyTemplateError` remain
+reachable from `frankie::reply_template`, and
+`tests/template_reply_drafting_bdd.rs`, which proves the adapter still produces
+the same rendered output and user-facing error messages.
+
 #### Architecture decision record (ADR-006): AI rewrite preview and fallback contract
 
 Canonical record:
