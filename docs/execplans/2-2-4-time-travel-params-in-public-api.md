@@ -338,43 +338,43 @@ Expected code and doc touch points:
 
 Run each gate through `tee` so the logs survive truncated terminal output.
 
-1. Format docs and source:
+- Format docs and source:
 
 ```bash
 set -o pipefail && make fmt 2>&1 | tee /tmp/2-2-4-time-travel-params-fmt.log
 ```
 
-1. Validate Markdown:
+- Validate Markdown:
 
 ```bash
 set -o pipefail && MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint 2>&1 | tee /tmp/2-2-4-time-travel-params-markdownlint.log
 ```
 
-1. Validate Mermaid diagrams:
+- Validate Mermaid diagrams:
 
 ```bash
 set -o pipefail && make nixie 2>&1 | tee /tmp/2-2-4-time-travel-params-nixie.log
 ```
 
-1. Verify formatting:
+- Verify formatting:
 
 ```bash
 set -o pipefail && make check-fmt 2>&1 | tee /tmp/2-2-4-time-travel-params-check-fmt.log
 ```
 
-1. Run Clippy and Rustdoc checks:
+- Run Clippy and Rustdoc checks:
 
 ```bash
 set -o pipefail && make lint 2>&1 | tee /tmp/2-2-4-time-travel-params-lint.log
 ```
 
-1. Run the full test suite:
+- Run the full test suite:
 
 ```bash
 set -o pipefail && make test 2>&1 | tee /tmp/2-2-4-time-travel-params-test.log
 ```
 
-1. Confirm the new behavioural suite is part of the green run. A focused spot
+- Confirm the new behavioural suite is part of the green run. A focused spot
    check is useful during development, but it does not replace the full gate:
 
 ```bash

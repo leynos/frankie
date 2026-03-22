@@ -12,6 +12,7 @@ use crate::local::{
 use crate::time_travel::TimeTravelParamsError;
 use chrono::Utc;
 use mockall::mock;
+use rstest::rstest;
 
 // Mock GitOperations using mockall
 mock! {
@@ -95,11 +96,17 @@ fn time_travel_params_missing_sha() {
     );
 }
 
-#[test]
-fn handle_enter_time_travel_surfaces_missing_sha_error() {
+#[rstest]
+#[case(None, Some("src/main.rs".to_owned()), "review comment is missing a commit SHA")]
+#[case(Some("abc123".to_owned()), None, "review comment is missing a file path")]
+fn handle_enter_time_travel_surfaces_metadata_error(
+    #[case] commit_sha: Option<String>,
+    #[case] file_path: Option<String>,
+    #[case] expected_error: &str,
+) {
     let comment = ReviewComment {
-        commit_sha: None,
-        file_path: Some("src/main.rs".to_owned()),
+        file_path,
+        commit_sha,
         ..minimal_review(1, "Test", "alice")
     };
     let mut app = ReviewApp::new(vec![comment]);
@@ -107,28 +114,7 @@ fn handle_enter_time_travel_surfaces_missing_sha_error() {
     let cmd = app.handle_enter_time_travel();
 
     assert!(cmd.is_none());
-    assert_eq!(
-        app.error.as_deref(),
-        Some("review comment is missing a commit SHA")
-    );
-}
-
-#[test]
-fn handle_enter_time_travel_surfaces_missing_file_path_error() {
-    let comment = ReviewComment {
-        commit_sha: Some("abc123".to_owned()),
-        file_path: None,
-        ..minimal_review(1, "Test", "alice")
-    };
-    let mut app = ReviewApp::new(vec![comment]);
-
-    let cmd = app.handle_enter_time_travel();
-
-    assert!(cmd.is_none());
-    assert_eq!(
-        app.error.as_deref(),
-        Some("review comment is missing a file path")
-    );
+    assert_eq!(app.error.as_deref(), Some(expected_error));
 }
 
 #[test]
