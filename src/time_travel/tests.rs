@@ -57,8 +57,8 @@ fn from_comment_missing_fields(
     let comment = ReviewComment {
         commit_sha: commit_sha.map(str::to_owned),
         file_path: file_path.map(str::to_owned),
-        line_number: Some(42),
-        original_line_number: Some(40),
+        line_number: None,
+        original_line_number: None,
         ..minimal_review(1, "Test comment", "alice")
     };
 
