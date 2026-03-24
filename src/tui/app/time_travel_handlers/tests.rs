@@ -87,6 +87,10 @@ fn handle_enter_time_travel_surfaces_metadata_error(
 }
 
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
+)]
 fn load_time_travel_state_success() -> Result<(), Box<dyn std::error::Error>> {
     let mut git_ops = MockGitOps::new();
     let test_snapshot = create_test_snapshot();
@@ -126,23 +130,19 @@ fn load_time_travel_state_success() -> Result<(), Box<dyn std::error::Error>> {
     let head_sha = CommitSha::new("HEAD".to_owned());
     let state = load_time_travel_state(&git_ops, &params, Some(&head_sha))?;
 
-    if state.snapshot().message() != "Test commit" {
-        return Err("expected snapshot message to match test commit".into());
-    }
-    if state.file_path().as_str() != "src/main.rs" {
-        return Err("expected file path to match source file".into());
-    }
-    if state.original_line() != Some(10) {
-        return Err("expected original line to match requested line".into());
-    }
-    if state.commit_count() != 2 {
-        return Err("expected commit count to include current and parent commit".into());
-    }
+    assert_eq!(state.snapshot().message(), "Test commit");
+    assert_eq!(state.file_path().as_str(), "src/main.rs");
+    assert_eq!(state.original_line(), Some(10));
+    assert_eq!(state.commit_count(), 2);
 
     Ok(())
 }
 
 #[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
+)]
 fn load_time_travel_state_commit_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let mut git_ops = MockGitOps::new();
 
@@ -161,9 +161,10 @@ fn load_time_travel_state_commit_not_found() -> Result<(), Box<dyn std::error::E
     let params = TimeTravelParams::from_comment(&comment)?;
 
     let result = load_time_travel_state(&git_ops, &params, None);
-    if !matches!(result, Err(GitOperationError::CommitNotFound { .. })) {
-        return Err("expected missing commit to surface CommitNotFound".into());
-    }
+    assert!(
+        matches!(result, Err(GitOperationError::CommitNotFound { .. })),
+        "expected missing commit to surface CommitNotFound, got {result:?}"
+    );
 
     Ok(())
 }
