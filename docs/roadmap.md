@@ -223,17 +223,20 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   and §7.
 - [ ] 3.4.5. Implement an approval-gated rule discovery engine that proposes
   serializable rule packs, previews extracted findings, and refuses automatic
-  activation until local validation succeeds and the user approves the result.
+  activation until local validation succeeds, and the user approves the result.
   Requires 3.4.2. Acceptance: unknown or drifted banners can produce a proposal
   preview with validation diagnostics, malformed proposals are rejected before
   activation, and tests cover the non-match, drift, and approval-required
   paths. See `docs/review-banner-translation.md` §4.6 and §7.
-- [ ] 3.4.6. Load approved custom rule packs from user configuration and apply
-  them ahead of built-in rules without bypassing validation. Requires 3.4.5.
-  Acceptance: approved custom rules are persisted in a versioned user-visible
-  configuration file, rule loading order is deterministic, and regression tests
-  confirm invalid custom rules are ignored with actionable warnings. See
-  `docs/review-banner-translation.md` §4.7 and
+- [ ] 3.4.6. Load approved custom rule packs from user configuration, applying
+  them after built-in rules so that a custom pack overrides a built-in pack
+  only when it shares the same `provider_key` and has a strictly higher
+  `rule_pack_version`. Requires 3.4.5. Acceptance: approved custom rules are
+  persisted in a versioned user-visible configuration file, rule loading order
+  is deterministic (built-in first, then custom overrides by higher version),
+  custom packs with equal or lower versions are ignored with a logged warning,
+  and regression tests confirm invalid custom rules are rejected with
+  actionable warnings. See `docs/review-banner-translation.md` §4.7 and
   `docs/adr-009-review-banner-translation-contract.md`.
 
 ## 4. Resilience, security, and compliance

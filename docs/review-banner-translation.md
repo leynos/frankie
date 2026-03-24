@@ -225,6 +225,16 @@ If the stable finding key still matches after a provider changes wording, the
 existing decision remains attached. If the location and canonical headline
 change materially, Frankie should treat the result as a new finding.
 
+The canonicalized primary location uses the file path as it appears in the
+banner at the time of extraction. It does not incorporate commit SHAs, git
+rename history, or path tracking across refactors. If a provider emits the same
+finding under a renamed path, the new path produces a different finding key,
+and Frankie treats it as a new finding with a fresh `pending` state. This is an
+intentional simplification: tracking rename history would require cross-commit
+analysis that conflicts with the goal of keeping translation deterministic over
+a single banner body. Consumers should expect finding identity to reset when
+files are renamed or moved.
+
 ### 4.6. Rule discovery engine
 
 The rule discovery engine is separate from deterministic translation. It should
@@ -268,8 +278,12 @@ At runtime, Frankie should load rule packs in this order:
 3. temporary in-memory proposals under active review.
 
 Custom rules may override a built-in rule pack only when their `provider_key`
-matches and their version is higher, and they must still pass the same local
-validation as built-in rules.
+matches and their `rule_pack_version` is strictly higher than the built-in
+version. When a custom pack shares a `provider_key` with a built-in pack but
+has an equal or lower version, the built-in pack takes precedence and the
+custom pack is ignored with a logged warning. This avoids accidental shadowing
+of updated built-in rules by stale or lower-quality custom packs. All custom
+packs must still pass the same local validation as built-in rules.
 
 ### 4.8. Public library, CLI, and TUI surfaces
 

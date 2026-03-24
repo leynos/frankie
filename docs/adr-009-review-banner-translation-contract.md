@@ -61,11 +61,11 @@ format drift over time.
 
 ## Options considered
 
-| Option                                                              | Sharedness | Determinism                | Drift handling                                   | Data model clarity                                         | Delivery cost                                    |
-| ------------------------------------------------------------------- | ---------- | -------------------------- | ------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------ |
-| Option A: Separate intake, deterministic translation, and discovery | Strong     | Strong for known providers | Strong: discovery is isolated and approval-gated | Strong: banner findings stay distinct from `ReviewComment` | Moderate                                         |
-| Option B: Treat banner findings as synthetic `ReviewComment` values | Medium     | Medium                     | Weak: synthetic IDs blur drift and identity      | Weak: semantics leak into existing comment model           | Lower initial cost                               |
-| Option C: Skip deterministic translation and rely on LLM extraction | Weak       | Weak                       | Medium: model can adapt, but outcomes drift      | Medium                                                     | Lower short-term effort, higher operational risk |
+| Option                                                                                     | Sharedness | Determinism                | Drift handling                                   | Data model clarity                                         | Delivery cost                                    |
+| ------------------------------------------------------------------------------------------ | ---------- | -------------------------- | ------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------ |
+| Option A: Separate intake, deterministic translation, and discovery                        | Strong     | Strong for known providers | Strong: discovery is isolated and approval-gated | Strong: banner findings stay distinct from `ReviewComment` | Moderate                                         |
+| Option B: Treat banner findings as synthetic `ReviewComment` values                        | Medium     | Medium                     | Weak: synthetic IDs blur drift and identity      | Weak: semantics leak into existing comment model           | Lower initial cost                               |
+| Option C: Skip deterministic translation and rely on Large Language Model (LLM) extraction | Weak       | Weak                       | Medium: model can adapt, but outcomes drift      | Medium                                                     | Lower short-term effort, higher operational risk |
 
 _Table: Option comparison for composability, determinism, drift handling, data
 model clarity, and delivery cost._
@@ -88,6 +88,10 @@ Adopt **Option A** with the following contract:
   validation and explicit user approval before activation.
 - Approved custom rule packs are stored in a versioned user configuration file
   rather than being hidden solely inside the database.
+- Built-in rule packs are loaded first. A custom pack overrides a built-in pack
+  only when it shares the same `provider_key` and has a strictly higher
+  `rule_pack_version`. Custom packs with an equal or lower version are ignored
+  with a logged warning.
 
 ## Goals and non-goals
 
