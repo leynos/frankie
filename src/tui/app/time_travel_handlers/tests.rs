@@ -11,6 +11,7 @@ use crate::local::{
 };
 use chrono::Utc;
 use mockall::mock;
+use rstest::rstest;
 
 // Mock GitOperations using mockall
 mock! {
@@ -64,35 +65,33 @@ fn create_test_snapshot() -> CommitSnapshot {
     )
 }
 
-#[test]
-fn time_travel_params_from_comment() {
+#[rstest]
+#[case(None, Some("src/main.rs".to_owned()), "review comment is missing a commit SHA")]
+#[case(Some("abc123".to_owned()), None, "review comment is missing a file path")]
+fn handle_enter_time_travel_surfaces_metadata_error(
+    #[case] commit_sha: Option<String>,
+    #[case] file_path: Option<String>,
+    #[case] expected_error: &str,
+) {
     let comment = ReviewComment {
-        commit_sha: Some("abc123".to_owned()),
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: Some(42),
+        file_path,
+        commit_sha,
         ..minimal_review(1, "Test", "alice")
     };
+    let mut app = ReviewApp::new(vec![comment]);
 
-    let params = TimeTravelParams::from_comment(&comment)
-        .expect("TimeTravelParams should be extractable from comment with full metadata");
-    assert_eq!(params.commit_sha.as_str(), "abc123");
-    assert_eq!(params.file_path.as_str(), "src/main.rs");
-    assert_eq!(params.line_number, Some(42));
+    let cmd = app.handle_enter_time_travel();
+
+    assert!(cmd.is_none());
+    assert_eq!(app.error.as_deref(), Some(expected_error));
 }
 
 #[test]
-fn time_travel_params_missing_sha() {
-    let comment = ReviewComment {
-        commit_sha: None,
-        file_path: Some("src/main.rs".to_owned()),
-        ..minimal_review(1, "Test", "alice")
-    };
-
-    assert!(TimeTravelParams::from_comment(&comment).is_none());
-}
-
-#[test]
-fn load_time_travel_state_success() {
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
+)]
+fn load_time_travel_state_success() -> Result<(), Box<dyn std::error::Error>> {
     let mut git_ops = MockGitOps::new();
     let test_snapshot = create_test_snapshot();
     let snapshot_clone = test_snapshot.clone();
@@ -120,24 +119,31 @@ fn load_time_travel_state_success() {
         .times(1)
         .returning(|request| Ok(LineMappingVerification::exact(request.line)));
 
-    let params = TimeTravelParams {
-        commit_sha: CommitSha::new("abc1234567890".to_owned()),
-        file_path: RepoFilePath::new("src/main.rs".to_owned()),
+    let comment = ReviewComment {
+        commit_sha: Some("abc1234567890".to_owned()),
+        file_path: Some("src/main.rs".to_owned()),
         line_number: Some(10),
+        ..minimal_review(2, "Load test", "bob")
     };
+    let params = TimeTravelParams::from_comment(&comment)?;
 
     let head_sha = CommitSha::new("HEAD".to_owned());
-    let state = load_time_travel_state(&git_ops, &params, Some(&head_sha))
-        .expect("load_time_travel_state should succeed with valid mock setup");
+    let state = load_time_travel_state(&git_ops, &params, Some(&head_sha))?;
 
     assert_eq!(state.snapshot().message(), "Test commit");
     assert_eq!(state.file_path().as_str(), "src/main.rs");
     assert_eq!(state.original_line(), Some(10));
     assert_eq!(state.commit_count(), 2);
+
+    Ok(())
 }
 
 #[test]
-fn load_time_travel_state_commit_not_found() {
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
+)]
+fn load_time_travel_state_commit_not_found() -> Result<(), Box<dyn std::error::Error>> {
     let mut git_ops = MockGitOps::new();
 
     // Expect get_commit_snapshot to be called and return CommitNotFound error
@@ -146,15 +152,19 @@ fn load_time_travel_state_commit_not_found() {
         .times(1)
         .returning(|sha, _file_path| Err(GitOperationError::CommitNotFound { sha: sha.clone() }));
 
-    let params = TimeTravelParams {
-        commit_sha: CommitSha::new("nonexistent".to_owned()),
-        file_path: RepoFilePath::new("src/main.rs".to_owned()),
+    let comment = ReviewComment {
+        commit_sha: Some("nonexistent".to_owned()),
+        file_path: Some("src/main.rs".to_owned()),
         line_number: None,
+        ..minimal_review(3, "Missing commit test", "charlie")
     };
+    let params = TimeTravelParams::from_comment(&comment)?;
 
     let result = load_time_travel_state(&git_ops, &params, None);
-    assert!(matches!(
-        result,
-        Err(GitOperationError::CommitNotFound { .. })
-    ));
+    assert!(
+        matches!(result, Err(GitOperationError::CommitNotFound { .. })),
+        "expected missing commit to surface CommitNotFound, got {result:?}"
+    );
+
+    Ok(())
 }

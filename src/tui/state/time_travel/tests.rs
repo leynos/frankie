@@ -1,15 +1,14 @@
 //! Unit tests for time-travel state management.
 //!
 //! These tests verify the `TimeTravelState` struct's navigation logic,
-//! loading/error states, and parameter extraction from review comments.
+//! loading/error states, and index clamping. Parameter extraction from
+//! review comments is tested in `crate::time_travel::tests`.
 
 use chrono::Utc;
 use rstest::{fixture, rstest};
 
 use super::*;
-use crate::github::models::test_support::minimal_review;
 use crate::local::LineMappingStatus;
-// TimeTravelInitParams is already in scope via `use super::*`
 
 /// Expected navigation properties for test assertions.
 #[derive(Debug, Clone)]
@@ -202,62 +201,6 @@ fn update_snapshot_clamps_index(sample_snapshot: CommitSnapshot, sample_history:
     state.update_snapshot(sample_snapshot, None, 100);
 
     assert_eq!(state.current_index(), 2); // Clamped to last index
-}
-
-#[rstest]
-fn params_from_comment_full() {
-    let comment = ReviewComment {
-        commit_sha: Some("abc123".to_owned()),
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: Some(42),
-        original_line_number: Some(40),
-        ..minimal_review(1, "Test comment", "alice")
-    };
-
-    let params = TimeTravelParams::from_comment(&comment)
-        .expect("TimeTravelParams should be extractable from comment with full metadata");
-
-    assert_eq!(params.commit_sha.as_str(), "abc123");
-    assert_eq!(params.file_path.as_str(), "src/main.rs");
-    assert_eq!(params.line_number, Some(42)); // Prefers line_number
-}
-
-#[rstest]
-fn params_from_comment_original_line() {
-    let comment = ReviewComment {
-        commit_sha: Some("abc123".to_owned()),
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: None,
-        original_line_number: Some(40),
-        ..minimal_review(1, "Test comment", "alice")
-    };
-
-    let params = TimeTravelParams::from_comment(&comment)
-        .expect("TimeTravelParams should be extractable from comment with original line");
-
-    assert_eq!(params.line_number, Some(40)); // Falls back to original_line_number
-}
-
-#[rstest]
-fn params_from_comment_missing_sha() {
-    let comment = ReviewComment {
-        commit_sha: None,
-        file_path: Some("src/main.rs".to_owned()),
-        ..minimal_review(1, "Test comment", "alice")
-    };
-
-    assert!(TimeTravelParams::from_comment(&comment).is_none());
-}
-
-#[rstest]
-fn params_from_comment_missing_path() {
-    let comment = ReviewComment {
-        commit_sha: Some("abc123".to_owned()),
-        file_path: None,
-        ..minimal_review(1, "Test comment", "alice")
-    };
-
-    assert!(TimeTravelParams::from_comment(&comment).is_none());
 }
 
 #[rstest]

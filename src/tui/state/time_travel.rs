@@ -4,7 +4,6 @@
 //! allows users to view the exact code state when a comment was made and
 //! verify line mapping correctness against git2 diffs.
 
-use crate::github::models::ReviewComment;
 use crate::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
@@ -214,34 +213,6 @@ impl TimeTravelState {
     #[must_use]
     pub(crate) fn previous_commit_sha(&self) -> Option<&CommitSha> {
         self.commit_history.get(self.current_index + 1)
-    }
-}
-
-/// Parameters for creating a time-travel state from a review comment.
-#[derive(Debug, Clone)]
-pub(crate) struct TimeTravelParams {
-    /// The commit SHA where the comment was made.
-    pub(crate) commit_sha: CommitSha,
-    /// Path to the file.
-    pub(crate) file_path: RepoFilePath,
-    /// Line number in the file.
-    pub(crate) line_number: Option<u32>,
-}
-
-impl TimeTravelParams {
-    /// Extracts time-travel parameters from a review comment.
-    ///
-    /// Returns `None` if the comment doesn't have the required fields.
-    #[must_use]
-    pub(crate) fn from_comment(comment: &ReviewComment) -> Option<Self> {
-        let commit_sha = comment.commit_sha.as_ref()?;
-        let file_path = comment.file_path.as_ref()?;
-
-        Some(Self {
-            commit_sha: CommitSha::new(commit_sha.clone()),
-            file_path: RepoFilePath::new(file_path.clone()),
-            line_number: comment.line_number.or(comment.original_line_number),
-        })
     }
 }
 

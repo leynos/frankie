@@ -93,7 +93,7 @@ context.
 - [x] 2.2.3. Add time-travel navigation across PR history; acceptance:
   selecting a comment replays the relevant commit snapshot and verifies line
   mapping correctness against git2 diffs.
-- [ ] 2.2.4. Make `TimeTravelParams` part of the public library API, including
+- [x] 2.2.4. Make `TimeTravelParams` part of the public library API, including
   `from_comment` (or equivalent) to derive parameters from comment metadata.
   Acceptance: a public `TimeTravelParams` (or equivalent) is available outwith
   `crate::tui`, and tests cover both successful extraction and missing metadata

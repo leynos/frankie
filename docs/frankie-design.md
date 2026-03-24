@@ -773,6 +773,17 @@ The application operates within the following technical boundaries:
 - **Integration Requirements**: Local Git repository with complete
   history
 
+##### Library API (roadmap 2.2.4)
+
+`TimeTravelParams` and `TimeTravelParamsError` are public in the
+`frankie::time_travel` module (outside `crate::tui`). External callers derive
+time-travel inputs from `ReviewComment` metadata via
+`TimeTravelParams::from_comment`, which returns typed failures
+(`MissingCommitSha`, `MissingFilePath`) instead of an undifferentiated `None`.
+The TUI uses this shared extraction as an adapter. No standalone CLI surface
+applies to this extraction slice; full orchestration extraction is tracked by
+roadmap items 2.2.5 to 2.2.7.
+
 ### 2.1.3 Ai Integration Features
 
 | Feature ID | Feature Name            | Category       | Priority | Status   |
