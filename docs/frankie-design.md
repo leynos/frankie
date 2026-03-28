@@ -8,8 +8,9 @@ Frankie Goes to Code Review is a Rust code review platform with three delivery
 surfaces: an interactive Terminal User Interface (TUI), an embeddable library
 API, and a pure command-line interface (CLI) mode for non-interactive
 workflows. It leverages the Model-View-Update pattern for interactive flows and
-shared domain modules for reusable automation, bridging the gap between
-traditional code review workflows and modern AI-assisted development practices.
+shared domain modules for reusable automation, positioning the library surface
+as a GitHub review adapter and context engine that larger workflow owners can
+embed while Frankie continues to ship first-party TUI and CLI experiences.
 
 ### 1.1.2 Core Business Problem Being Solved
 
@@ -85,6 +86,10 @@ The system integrates with established development infrastructure through:
   Codex CLI, an open-source coding agent built in Rust for speed and efficiency
 - **Database Persistence**: SQLite-based storage using Diesel ORM for
   local data management
+- **Embedded Workflow Hosts**: Library-first contracts for larger
+  orchestrators that own canonical task and review workflow state while
+  delegating GitHub review intake, context materialization, verification, and
+  reply actions to Frankie
 
 ### 1.2.2 High-level Description
 
@@ -94,18 +99,23 @@ The application provides comprehensive code review management through:
 
 1. **Multi-Modal Repository Access**: Support for PR URL input,
    owner/repo specification, and automatic repository discovery
-2. **Intelligent Review Management**: Filtering and organization of
-   code reviews by resolution status, files, reviewers, and commit ranges
+2. **Thread-Aware Review Management**: Filtering and organization of
+   code reviews by resolution status, files, reviewers, commit ranges, and
+   stable review-thread roots
 3. **AI-Assisted Resolution**: Integration with OpenAI Codex exec
    command for non-interactive code review resolution and automated workflow
    execution
-4. **Contextual Code Navigation**: Full-screen change context display
-   with time-travel capabilities for tracking code evolution
-5. **Template-Based Communication**: Automated comment generation and
-   PR-level discussion management
+4. **Contextual Code Navigation**: Full-screen change context display,
+   time-travel context materialization, and automated verification for tracking
+   code evolution
+5. **Template-Based Communication**: Automated comment generation,
+   reply drafting, and review-action orchestration over GitHub review threads
 6. **Cross-Surface Capability Parity**: Shared features exposed through TUI,
    library API, and CLI surfaces as applicable, with documented exceptions for
    UX-only TUI polish and docs-only planning items
+7. **Adapter-First Host Integration**: Stable review sync, anchor,
+   verification, and reply contracts for embedding inside workflow-owning
+   systems
 
 #### Major System Components
 
@@ -124,9 +134,9 @@ flowchart LR
 
     subgraph "Core Application Logic"
         G["Template Engine"]
-        D["Review Manager"]
+        D["Review Adapter / Context Engine"]
         E["Repository Discovery"]
-        F["Comment Processing"]
+        F["Thread / Anchor Processing"]
     end
 
     subgraph "Data Layer"
@@ -473,6 +483,8 @@ this design document for cross-references.
   contract.
 - [ADR-009](adr-009-review-banner-translation-contract.md): Review banner
   translation contract.
+- [ADR-010](adr-010-close-review-adapter-capability-gap.md): Close review
+  adapter capability gap.
 
 ## 1.3 Scope
 
@@ -2405,8 +2417,9 @@ specified in the requirements.
 Frankie Goes to Code Review employs the Model-View-Update (MVU) architecture
 pattern with async command support, providing clean separation of state, logic,
 and rendering through the bubbletea-rs framework. The system is designed as a
-terminal-native application that bridges GitHub's web-based code review
-interface with local development workflows through AI-assisted automation.
+terminal-native application and embeddable GitHub review adapter that bridges
+GitHub review data with local development workflows through AI-assisted
+automation.
 
 The architecture follows a layered approach with clear separation of concerns:
 
@@ -2416,27 +2429,31 @@ capabilities through lipgloss-extras. The TUI provides keyboard-driven
 navigation optimized for developer workflows.
 
 **Business Logic Layer**: Core application logic manages repository discovery,
-review filtering, comment processing, and AI integration workflows. This layer
-orchestrates interactions between external services while maintaining
-application state consistency.
+review intake, thread and anchor derivation, time-travel context, verification,
+reply orchestration, and AI integration workflows. This layer orchestrates
+interactions between external services while maintaining application state
+consistency.
 
 **Integration Layer**: High level strongly typed semantic API and lower level
 HTTP API for extending behaviour with strong typing around GitHub's API and
 models that map to GitHub's types through octocrab, alongside local Git
-operations via git2 and AI service integration through OpenAI Codex CLI.
+operations via git2 and AI service integration through OpenAI Codex CLI. The
+review adapter is API-driven rather than browser-automation-driven.
 
 **Data Layer**: High-level ORM that eliminates runtime errors without
 sacrificing performance and takes full advantage of Rust's type system using
-Diesel with SQLite for local persistence and caching.
+Diesel with SQLite for local persistence and caching. Frankie persists adapter
+cache, operational checkpoints, and derived verification state; embedded hosts
+retain canonical task and review workflow state.
 
 ### 5.1.2 Core Components Table
 
-| Component Name         | Primary Responsibility                                        | Key Dependencies                           | Integration Points                 |
-| ---------------------- | ------------------------------------------------------------- | ------------------------------------------ | ---------------------------------- |
-| TUI Controller         | User interface management and event handling                  | bubbletea-rs, bubbletea-widgets, crossterm | All business logic components      |
-| Repository Manager     | GitHub repository discovery and metadata management           | octocrab, git2                             | GitHub API, Local Git repositories |
-| Review Processor       | Code review filtering, comment parsing, and export generation | syntect, diesel                            | Repository Manager, Database Layer |
-| AI Integration Service | OpenAI Codex CLI command execution and response processing    | Process execution, JSON parsing            | Review Processor, File System      |
+| Component Name         | Primary Responsibility                                                                                | Key Dependencies                           | Integration Points                                  |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------- |
+| TUI Controller         | User interface management and event handling                                                          | bubbletea-rs, bubbletea-widgets, crossterm | All business logic components                       |
+| Repository Manager     | GitHub repository discovery and metadata management                                                   | octocrab, git2                             | GitHub API, Local Git repositories                  |
+| Review Processor       | GitHub review intake, thread and anchor synthesis, context generation, and reply/export orchestration | octocrab, git2, syntect, diesel            | Repository Manager, Database Layer, embedding hosts |
+| AI Integration Service | OpenAI Codex CLI command execution and response processing                                            | Process execution, JSON parsing            | Review Processor, File System                       |
 
 ### 5.1.3 Data Flow Description
 
@@ -2444,8 +2461,9 @@ The primary data flow follows a request-response pattern with local caching
 optimization. User interactions trigger commands through the TUI Controller,
 which delegates to appropriate business logic components. The Repository
 Manager handles GitHub API interactions with intelligent caching through the
-Database Layer, while the Review Processor manages comment filtering and export
-generation.
+Database Layer, while the Review Processor manages review intake, thread
+projection, anchor derivation, context generation, verification, and export or
+reply orchestration.
 
 AI integration flows operate asynchronously, with the AI Integration Service
 executing Codex commands and streaming results back to the TUI. Codex streams
@@ -2454,9 +2472,14 @@ stdout, making it easier to pipe codex exec into another tool without extra
 filtering.
 
 Data transformation occurs at integration boundaries: GitHub API responses are
-deserialized into strongly-typed models, review comments are processed into
-structured export formats, and AI responses are parsed from JSON Lines format
-for real-time progress updates.
+deserialized into strongly-typed models, raw review comments are preserved and
+then projected into thread, anchor, summary, and time-travel contracts, and AI
+responses are parsed from JSON Lines format for real-time progress updates.
+
+Historical file snapshots and line mappings are materialized on demand from the
+local Git repository instead of being stored as canonical workflow state.
+Embedded hosts consume these library contracts and maintain their own durable
+task, governance, and review-state projections.
 
 The Database Layer provides persistent storage for GitHub metadata, user
 preferences, and AI interaction history with configurable TTL policies for
@@ -2922,6 +2945,22 @@ Canonical record:
 Canonical record:
 [docs/adr-008-pr-discussion-summary-contract.md](adr-008-pr-discussion-summary-contract.md).
 
+#### Architecture decision record (ADR-009): review banner translation contract
+
+Canonical record:
+[docs/adr-009-review-banner-translation-contract.md](adr-009-review-banner-translation-contract.md).
+
+#### Architecture decision record (ADR-010): close review adapter capability gap
+
+Canonical record:
+[docs/adr-010-close-review-adapter-capability-gap.md](adr-010-close-review-adapter-capability-gap.md).
+
+ADR-010 defines Frankie as an API-driven GitHub review adapter and context
+engine for larger workflow owners. It closes the gap between the current
+TUI-biased public surface and the host-facing contracts required for
+thread-aware synchronization, time-travel context, verification, summary
+references, and review actions.
+
 ## 5.4 Cross-cutting Concerns
 
 ### 5.4.1 Monitoring And Observability Approach
@@ -3204,14 +3243,18 @@ flowchart LR
 
 ### 6.1.3 Review Processor Component
 
-**Component Overview**: The Review Processor manages code review comment
-processing, filtering, and export generation with syntax highlighting
-capabilities. This component bridges the gap between GitHub's review data and
-AI-compatible export formats.
+**Component Overview**: The Review Processor is Frankie’s GitHub review adapter
+and context engine. It manages review intake, filtering, thread and anchor
+derivation, time-travel context materialization, verification, reply drafting,
+and export generation with syntax highlighting capabilities. This component
+bridges the gap between GitHub review data and host-facing review contracts
+consumed by Frankie’s own TUI and CLI or by embedded workflow owners.
 
-**Technical Implementation**: Uses syntect library for syntax highlighting and
-code context rendering, diesel ORM for database operations, and custom template
-engines for comment export formatting.
+**Technical Implementation**: Uses octocrab for API-driven GitHub review
+access, git2 for local historical snapshot and line-mapping operations, syntect
+for syntax highlighting and code context rendering, Diesel for local cache and
+checkpoint persistence, and shared template or summary modules for reply and
+export formatting.
 
 **Processing Pipeline**:
 
@@ -3256,6 +3299,39 @@ flowchart TD
   highlighting
 - **AI Integration**: Template-based formatting for OpenAI Codex CLI
   compatibility
+
+**Host-facing review adapter boundary**:
+
+| Concern                     | Frankie responsibility                                                                                                             | External workflow owner responsibility                                                     |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Review transport            | Fetch GitHub review comments, review bodies, and related metadata through typed API adapters                                       | Route events or polling schedules and decide when synchronization should occur             |
+| Thread and anchor synthesis | Preserve raw comment payloads, derive stable thread roots, order replies, and expose actionable anchors when metadata is available | Persist canonical review-state projections, message linkage, and task-level workflow state |
+| Historical context          | Materialize commit snapshots, line mappings, and surrounding code context on demand from local Git                                 | Decide when context is needed and how downstream workflow state should react               |
+| Review actions              | Render reply drafts, submit replies, and expose queue or backoff metadata for review mutations                                     | Apply governance, approvals, retry policy, and audit handling                              |
+
+_Table: Review adapter responsibilities split between Frankie and an embedding
+workflow owner._
+
+Frankie does not own canonical task or review workflow state outwith its local
+adapter cache, sync checkpoints, verification results, and queued write
+intents. A host such as Corbusier persists durable review-state projections and
+governance decisions separately.
+
+**Target shared review contracts**:
+
+- `ReviewComment` remains the lossless raw GitHub review payload.
+- `ReviewThread` groups a stable thread root with ordered replies and derived
+  thread status.
+- `ReviewAnchor` captures actionable location metadata such as commit SHA, file
+  path, original line, and diff hunk when present.
+- `ReviewSyncCheckpoint` and `ReviewSyncDelta` provide host-safe, idempotent
+  incremental synchronization semantics.
+- `TimeTravelService`, `ResolutionVerificationService`, and
+  `ReviewReplyService` expose on-demand context, verification, and review
+  action capabilities without requiring TUI orchestration types.
+- Shared summary and navigation models use host-neutral review references, with
+  TUI deep links rendered as one adapter-specific projection rather than the
+  canonical contract.
 
 **Template Export Invocation Sequence**:
 
@@ -3964,15 +4040,36 @@ erDiagram
         id integer PK
         pull_request_id integer FK
         github_comment_id integer
+        thread_root_github_comment_id integer
         body text
         file_path text
         line_number integer
         original_line_number integer
         diff_hunk text
+        commit_sha text
+        in_reply_to_id integer
         resolution_status text
         reviewer_id integer
         created_at timestamp
         updated_at timestamp
+    }
+    REVIEW_THREADS {
+        id integer PK
+        pull_request_id integer FK
+        thread_root_github_comment_id integer
+        file_path text
+        commit_sha text
+        original_line_number integer
+        is_resolved boolean
+        last_comment_at timestamp
+        last_synced_at timestamp
+    }
+    SYNC_CHECKPOINTS {
+        id integer PK
+        repository_id integer FK
+        resource_kind text
+        opaque_checkpoint text
+        last_synced_at timestamp
     }
     USERS {
         id integer PK
@@ -4008,19 +4105,23 @@ erDiagram
     }
     REPOSITORIES ||--o{ PULL_REQUESTS : contains
     PULL_REQUESTS ||--o{ REVIEW_COMMENTS : has
+    PULL_REQUESTS ||--o{ REVIEW_THREADS : projects
     USERS ||--o{ PULL_REQUESTS : creates
     USERS ||--o{ REVIEW_COMMENTS : reviews
     PULL_REQUESTS ||--o{ AI_SESSIONS : processes
+    REPOSITORIES ||--o{ SYNC_CHECKPOINTS : tracks
 ```
 
 #### 6.6.1.2 Core Entity Specifications
 
-| Entity          | Primary Purpose                                     | Key Relationships                                               | Data Retention                          |
-| --------------- | --------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------- |
-| REPOSITORIES    | GitHub repository metadata and configuration        | One-to-many with PULL_REQUESTS                                  | 30-day cleanup for inactive             |
-| PULL_REQUESTS   | Pull request data with review status tracking       | Many-to-one with REPOSITORIES, one-to-many with REVIEW_COMMENTS | User-configurable retention             |
-| REVIEW_COMMENTS | Individual review comments with resolution tracking | Many-to-one with PULL_REQUESTS and USERS                        | Session-based with optional persistence |
-| USERS           | GitHub user information for reviewers and authors   | One-to-many with PULL_REQUESTS and REVIEW_COMMENTS              | Persistent with periodic updates        |
+| Entity           | Primary Purpose                                         | Key Relationships                                                                  | Data Retention                          |
+| ---------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------- |
+| REPOSITORIES     | GitHub repository metadata and configuration            | One-to-many with PULL_REQUESTS and SYNC_CHECKPOINTS                                | 30-day cleanup for inactive             |
+| PULL_REQUESTS    | Pull request data with review status tracking           | Many-to-one with REPOSITORIES, one-to-many with REVIEW_COMMENTS and REVIEW_THREADS | User-configurable retention             |
+| REVIEW_COMMENTS  | Raw GitHub review comment cache with transport fidelity | Many-to-one with PULL_REQUESTS and USERS                                           | Session-based with optional persistence |
+| REVIEW_THREADS   | Derived thread-root projection for orchestration        | Many-to-one with PULL_REQUESTS                                                     | Rebuildable from comments and sync data |
+| SYNC_CHECKPOINTS | Incremental review synchronization cursors              | Many-to-one with REPOSITORIES                                                      | Persistent until superseded             |
+| USERS            | GitHub user information for reviewers and authors       | One-to-many with PULL_REQUESTS and REVIEW_COMMENTS                                 | Persistent with periodic updates        |
 
 #### 6.6.1.3 Data Model Structures
 
@@ -4071,17 +4172,61 @@ pub struct ReviewComment {
     pub id: i32,
     pub pull_request_id: i32,
     pub github_comment_id: i64,
-    pub body: String,
-    pub file_path: String,
+    pub thread_root_github_comment_id: i64,
+    pub body: Option<String>,
+    pub file_path: Option<String>,
     pub line_number: Option<i32>,
     pub original_line_number: Option<i32>,
     pub diff_hunk: Option<String>,
+    pub commit_sha: Option<String>,
+    pub in_reply_to_id: Option<i64>,
     pub resolution_status: String,
-    pub reviewer_id: i32,
+    pub reviewer_id: Option<i32>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }
 ```
+
+The review comment cache preserves the raw GitHub payload as closely as
+possible. Thread topology and actionable anchors are derived on top of this raw
+record rather than flattened away during intake.
+
+**Review thread projection model**:
+
+```rust
+#[derive(Queryable, Selectable, Debug)]
+#[diesel(table_name = review_threads)]
+pub struct ReviewThreadProjection {
+    pub id: i32,
+    pub pull_request_id: i32,
+    pub thread_root_github_comment_id: i64,
+    pub file_path: Option<String>,
+    pub commit_sha: Option<String>,
+    pub original_line_number: Option<i32>,
+    pub is_resolved: bool,
+    pub last_comment_at: chrono::NaiveDateTime,
+    pub last_synced_at: chrono::NaiveDateTime,
+}
+```
+
+**Review sync checkpoint model**:
+
+```rust
+#[derive(Queryable, Selectable, Debug)]
+#[diesel(table_name = sync_checkpoints)]
+pub struct ReviewSyncCheckpoint {
+    pub id: i32,
+    pub repository_id: i32,
+    pub resource_kind: String,
+    pub opaque_checkpoint: String,
+    pub last_synced_at: chrono::NaiveDateTime,
+}
+```
+
+Frankie persists adapter cache, thread projections, sync checkpoints,
+verification results, and queued write intents locally. Embedded workflow
+owners persist canonical task state, review-state projections, and
+cross-message governance metadata separately.
 
 ### 6.6.2 Indexing Strategy
 
