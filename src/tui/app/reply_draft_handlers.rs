@@ -12,7 +12,7 @@ use crate::ai::{
     CommentRewriteContext, CommentRewriteMode, CommentRewriteOutcome, CommentRewriteRequest,
     CommentRewriteService, build_side_by_side_diff_preview, rewrite_with_fallback,
 };
-use crate::reply_template::{ReplyTemplateError, render_reply_template};
+use crate::reply_template::{ReplyTemplateContext, ReplyTemplateError, render_reply_template};
 use crate::tui::messages::AppMsg;
 use crate::tui::state::ReplyDraftState;
 
@@ -118,7 +118,8 @@ impl ReviewApp {
             return;
         }
 
-        let rendered = match render_reply_template(template_source_owned.as_str(), &comment) {
+        let reply_context = ReplyTemplateContext::from(&comment);
+        let rendered = match render_reply_template(template_source_owned.as_str(), &reply_context) {
             Ok(rendered) => rendered,
             Err(
                 ReplyTemplateError::InvalidSyntax { message }

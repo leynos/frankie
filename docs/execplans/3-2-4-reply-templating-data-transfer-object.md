@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (2026-03-22)
+Status: IMPLEMENTED (2026-03-28)
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -125,15 +125,15 @@ Success is observable when:
       3.2.3 ExecPlan, the current `src/reply_template/` implementation, the
       TUI reply-draft adapter, and the referenced testing guidance.
 - [x] (2026-03-22 00:00Z) Drafted this ExecPlan for roadmap step 3.2.4.
-- [ ] Stage A: add red-phase tests that define the DTO contract, the
+- [x] Stage A: add red-phase tests that define the DTO contract, the
       `ReviewComment` to DTO mapping expectations, and TUI adapter-regression
       coverage.
-- [ ] Stage B: introduce the public DTO and convert the renderer to consume it.
-- [ ] Stage C: rewire TUI and other in-repo call sites to construct the DTO
+- [x] Stage B: introduce the public DTO and convert the renderer to consume it.
+- [x] Stage C: rewire TUI and other in-repo call sites to construct the DTO
       before rendering, without changing output or error text.
-- [ ] Stage D: update design documentation, update the user guide if behaviour
+- [x] Stage D: update design documentation, update the user guide if behaviour
       changed, and mark roadmap step `3.2.4` done only after all gates pass.
-- [ ] Stage E: run `make fmt`,
+- [x] Stage E: run `make fmt`,
       `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`,
       `make nixie`, `make check-fmt`, `make lint`, and `make test`.
 
@@ -155,6 +155,9 @@ Success is observable when:
 - `docs/users-guide.md` describes keyboard-driven reply drafting and template
   insertion, but not the library API. That means this step should update the
   user guide only if observable TUI behaviour or wording changes.
+- The existing BDD scenarios already covered the required happy, unhappy, and
+  edge adapter paths, so no new Gherkin steps were needed for this DTO-only
+  migration.
 
 ## Decision Log
 
@@ -186,13 +189,25 @@ Success is observable when:
 
 ## Outcomes & Retrospective
 
-To be completed during implementation.
-
-- Record the final public API path for `ReplyTemplateContext`.
-- Record whether a crate-root re-export was added for the DTO.
-- Record whether `docs/users-guide.md` changed or remained unchanged, and why.
-- Record the final gate results and any targeted test commands used during the
-  red/green cycle.
+- `ReplyTemplateContext` now lives in `src/reply_template/mod.rs` and is
+  re-exported at the crate root as `frankie::ReplyTemplateContext`.
+- `render_reply_template` now renders from `&ReplyTemplateContext`, and
+  `impl From<&ReviewComment> for ReplyTemplateContext` keeps the
+  `ReviewComment` adapter path explicit and testable.
+- TUI reply drafting still owns the transport-model adaptation and preserves
+  the same inline error prefix, so `docs/users-guide.md` did not need an update
+  for this internal contract change.
+- Targeted red/green checks passed during implementation:
+  - `cargo test --lib reply_template_context_from_review_comment_normalizes_fields`
+  - `cargo test --test reply_template_public_api`
+  - `cargo test --test template_reply_drafting_bdd`
+- Final validation completed successfully:
+  - `make fmt`
+  - `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`
+  - `make nixie`
+  - `make check-fmt`
+  - `make lint`
+  - `make test` (`816` passed, `1` skipped)
 
 ## Context and orientation
 

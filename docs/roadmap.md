@@ -164,7 +164,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: template
   rendering moves to a non-TUI module with a public API, and tests cover
   substitution, escaping, and error reporting.
-- [ ] 3.2.4. Make reply templating input a library data transfer object (DTO)
+- [x] 3.2.4. Make reply templating input a library data transfer object (DTO)
   (for example `ReplyTemplateContext`) instead of requiring `ReviewComment`
   directly. Requires 3.2.3. See
   `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: a public
