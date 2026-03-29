@@ -30,7 +30,71 @@ pub enum ReplyTemplateError {
     },
 }
 
-/// Renders a reply template with data from a selected review comment.
+/// Normalized reply-template variables used by the shared renderer.
+///
+/// This type owns the stable library contract for reply-template rendering.
+/// Adapters translate transport-specific inputs, such as [`ReviewComment`],
+/// into these ready-to-render fields before calling
+/// [`render_reply_template`].
+///
+/// # Examples
+///
+/// ```
+/// use frankie::{ReplyTemplateContext, render_reply_template};
+///
+/// # fn main() -> Result<(), frankie::ReplyTemplateError> {
+/// let context = ReplyTemplateContext {
+///     comment_id: 42,
+///     reviewer: "alice".to_owned(),
+///     file: "src/lib.rs".to_owned(),
+///     line: "12".to_owned(),
+///     body: "Please split this into smaller functions.".to_owned(),
+/// };
+///
+/// let rendered = render_reply_template(
+///     "Thanks {{ reviewer }} for reviewing {{ file }}:{{ line }}",
+///     &context,
+/// )?;
+///
+/// assert_eq!(rendered, "Thanks alice for reviewing src/lib.rs:12");
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyTemplateContext {
+    /// The review comment identifier exposed as `comment_id`.
+    pub comment_id: u64,
+    /// The reviewer login exposed as `reviewer`.
+    pub reviewer: String,
+    /// The file path exposed as `file`.
+    pub file: String,
+    /// The line number exposed as `line`.
+    pub line: String,
+    /// The comment body exposed as `body`.
+    pub body: String,
+}
+
+impl From<&ReviewComment> for ReplyTemplateContext {
+    fn from(comment: &ReviewComment) -> Self {
+        Self {
+            comment_id: comment.id,
+            reviewer: comment
+                .author
+                .clone()
+                .unwrap_or_else(|| "reviewer".to_owned()),
+            file: comment
+                .file_path
+                .clone()
+                .unwrap_or_else(|| "(unknown file)".to_owned()),
+            line: comment
+                .line_number
+                .map_or_else(String::new, |value| value.to_string()),
+            body: comment.body.clone().unwrap_or_default(),
+        }
+    }
+}
+
+/// Renders a reply template with data from a reply-template context.
 ///
 /// Templates can use the following variables:
 /// - `comment_id`
@@ -39,9 +103,10 @@ pub enum ReplyTemplateError {
 /// - `line`
 /// - `body`
 ///
-/// Missing comment fields fall back to the same defaults used by the TUI:
-/// `"reviewer"` for `reviewer`, `"(unknown file)"` for `file`, and empty
-/// strings for `line` and `body`.
+/// When the context is built from [`ReviewComment`] via
+/// [`ReplyTemplateContext::from`], missing comment fields fall back to the
+/// same defaults used by the TUI: `"reviewer"` for `reviewer`,
+/// `"(unknown file)"` for `file`, and empty strings for `line` and `body`.
 ///
 /// This function creates a fresh `MiniJinja` environment per call so the
 /// public API stays stateless for on-demand adapter usage.
@@ -54,21 +119,20 @@ pub enum ReplyTemplateError {
 /// # Examples
 ///
 /// ```
-/// use frankie::{ReviewComment, render_reply_template};
+/// use frankie::{ReplyTemplateContext, render_reply_template};
 ///
 /// # fn main() -> Result<(), frankie::ReplyTemplateError> {
-/// let comment = ReviewComment {
-///     id: 42,
-///     author: Some("alice".to_owned()),
-///     file_path: Some("src/lib.rs".to_owned()),
-///     line_number: Some(12),
-///     body: Some("Please split this into smaller functions.".to_owned()),
-///     ..ReviewComment::default()
+/// let context = ReplyTemplateContext {
+///     comment_id: 42,
+///     reviewer: "alice".to_owned(),
+///     file: "src/lib.rs".to_owned(),
+///     line: "12".to_owned(),
+///     body: "Please split this into smaller functions.".to_owned(),
 /// };
 ///
 /// let rendered = render_reply_template(
 ///     "Thanks {{ reviewer }} for reviewing {{ file }}:{{ line }}",
-///     &comment,
+///     &context,
 /// )?;
 ///
 /// assert_eq!(rendered, "Thanks alice for reviewing src/lib.rs:12");
@@ -77,7 +141,7 @@ pub enum ReplyTemplateError {
 /// ```
 pub fn render_reply_template(
     template_source: &str,
-    comment: &ReviewComment,
+    reply_context: &ReplyTemplateContext,
 ) -> Result<String, ReplyTemplateError> {
     let mut environment = Environment::new();
     environment.set_auto_escape_callback(|_| minijinja::AutoEscape::None);
@@ -88,19 +152,6 @@ pub fn render_reply_template(
             message: error.to_string(),
         })?;
 
-    let reviewer = comment
-        .author
-        .clone()
-        .unwrap_or_else(|| "reviewer".to_owned());
-    let file = comment
-        .file_path
-        .clone()
-        .unwrap_or_else(|| "(unknown file)".to_owned());
-    let line = comment
-        .line_number
-        .map_or_else(String::new, |value| value.to_string());
-    let body = comment.body.clone().unwrap_or_default();
-
     let template =
         environment
             .get_template("reply")
@@ -110,11 +161,11 @@ pub fn render_reply_template(
 
     template
         .render(context! {
-            comment_id => comment.id,
-            reviewer => reviewer,
-            file => file,
-            line => line,
-            body => body,
+            comment_id => reply_context.comment_id,
+            reviewer => reply_context.reviewer.as_str(),
+            file => reply_context.file.as_str(),
+            line => reply_context.line.as_str(),
+            body => reply_context.body.as_str(),
         })
         .map_err(|error| ReplyTemplateError::RenderFailed {
             message: error.to_string(),

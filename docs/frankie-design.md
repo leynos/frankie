@@ -2897,13 +2897,18 @@ Canonical record:
 
 The reply-template contract required by ADR-005 now lives in the shared
 `frankie::reply_template` module and is re-exported at the crate root as
-`frankie::render_reply_template` and `frankie::ReplyTemplateError`. TUI reply
-drafting remains an adapter over that library API, preserving the same rendered
-output and user-facing error messages while removing the shared renderer from
-`src/tui/state/`. Verification is auditable through
-`tests/reply_template_public_api.rs`, which proves the re-exported
-`frankie::render_reply_template` and `frankie::ReplyTemplateError` remain
-reachable from `frankie::reply_template`, and
+`frankie::render_reply_template`, `frankie::ReplyTemplateContext`, and
+`frankie::ReplyTemplateError`. The shared renderer now consumes the DTO-based
+`ReplyTemplateContext`, while TUI reply drafting remains an adapter that maps
+`ReviewComment` into that DTO before rendering. This keeps the reusable library
+contract decoupled from GitHub transport models without changing rendered
+output or user-facing error messages. No standalone CLI mode was added for this
+narrow step because the work only refines the shared library contract rather
+than introducing a distinct non-interactive workflow. Verification is auditable
+through `tests/reply_template_public_api.rs`, which proves the crate-root DTO
+and renderer remain reachable from `frankie::reply_template`,
+`src/reply_template/tests.rs`, which proves `ReviewComment` to DTO
+normalization preserves existing defaults, and
 `tests/template_reply_drafting_bdd.rs`, which proves the adapter still produces
 the same rendered output and user-facing error messages.
 
