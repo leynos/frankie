@@ -32,8 +32,8 @@ within the crate.
 
 This slice is intentionally narrow. It does not extract time-travel
 orchestration out of TUI handlers, it does not add configurable history limits,
-and it does not introduce a new CLI command. Those concerns belong to roadmap
-items 2.2.6 and 2.2.7 respectively.
+and it does not introduce a new command-line interface (CLI) command. Those
+concerns belong to roadmap items 2.2.6 and 2.2.7 respectively.
 
 ## Constraints
 
@@ -124,7 +124,7 @@ items 2.2.6 and 2.2.7 respectively.
 
 ## Progress
 
-- [x] Read and internalise current codebase state, roadmap, and referenced
+- [x] Read and internalize current codebase state, roadmap, and referenced
       architecture decision records.
 - [x] Draft this ExecPlan.
 - [x] Stage A: move `TimeTravelState` and `TimeTravelInitParams` to
@@ -499,7 +499,7 @@ Success criteria for close-out:
   `frankie::time_travel::TimeTravelInitParams` outside `crate::tui`.
 - `TimeTravelState` is not `#[doc(hidden)]`.
 - All thirteen read accessors are `pub` and documented with Rustdoc.
-- Mutation methods (`update_snapshot`, `set_loading`, `set_error`) and
+- `update_snapshot` is public, while `set_loading`, `set_error`, and the
   TUI-only factories (`loading`, `error`) remain `pub(crate)`.
 - The TUI still enters time travel for valid comments, navigates history, and
   fails gracefully for invalid ones.
@@ -520,7 +520,7 @@ persistent state (database, configuration files, user data) is affected.
 The `git stash` or `git checkout -- <file>` commands provide a safe rollback
 path for any individual file.
 
-## Artifacts and notes
+## Artefacts and notes
 
 The following files are created by this plan:
 
@@ -617,5 +617,5 @@ pub use state::{TimeTravelInitParams, TimeTravelState};
 
 ## Approval gate
 
-This plan is in DRAFT status and awaits explicit approval before implementation
-begins.
+This plan is COMPLETE and its implementation has finished with validation
+passing.

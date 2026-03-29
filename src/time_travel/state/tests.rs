@@ -131,6 +131,30 @@ fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<Co
 }
 
 #[rstest]
+fn new_state_clamps_out_of_bounds_index(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) {
+    let state = TimeTravelState::new(TimeTravelInitParams {
+        snapshot: sample_snapshot,
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+        original_line: Some(42),
+        line_mapping: None,
+        commit_history: sample_history,
+        current_index: 99,
+    });
+
+    assert_eq!(state.current_index(), 2);
+    assert!(!state.can_go_previous());
+    assert!(state.can_go_next());
+    assert!(state.previous_commit_sha().is_none());
+    assert_eq!(
+        state.next_commit_sha().map(CommitSha::as_str),
+        Some("def5678901234")
+    );
+}
+
+#[rstest]
 fn loading_state() {
     let state = TimeTravelState::loading(RepoFilePath::new("src/main.rs".to_owned()), Some(10));
 

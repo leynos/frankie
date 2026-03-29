@@ -8,7 +8,7 @@ use crate::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
 
-/// Parameters for initialising a time-travel state.
+/// Parameters for initializing a time-travel state.
 #[derive(Debug, Clone)]
 pub struct TimeTravelInitParams {
     /// The commit snapshot to display.
@@ -83,16 +83,18 @@ pub struct TimeTravelState {
 }
 
 impl TimeTravelState {
-    /// Creates a new time-travel state from initialisation parameters.
+    /// Creates a new time-travel state from initialization parameters.
     #[must_use]
     pub fn new(params: TimeTravelInitParams) -> Self {
+        let commit_history = params.commit_history;
+        let current_index = clamp_index(params.current_index, commit_history.len());
         Self {
             snapshot: params.snapshot,
             file_path: params.file_path,
             original_line: params.original_line,
             line_mapping: params.line_mapping,
-            commit_history: params.commit_history,
-            current_index: params.current_index,
+            commit_history,
+            current_index,
             loading: false,
             error_message: None,
         }

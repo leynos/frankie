@@ -221,31 +221,20 @@ fn then_public_file_path(state: &TimeTravelStateWorld, expected: String) -> Step
 #[then("the public original line is {expected}")]
 fn then_public_original_line(state: &TimeTravelStateWorld, expected: u32) -> StepResult {
     let actual = with_state(state, TimeTravelState::original_line)?;
-    if actual == Some(expected) {
-        Ok(())
-    } else {
-        Err("original line does not match")
-    }
+    let expected_line = Some(expected);
+    check_eq(&actual, &expected_line, "original line does not match")
 }
 
 #[then("the state reports {expected} commits in history")]
 fn then_commit_count(state: &TimeTravelStateWorld, expected: usize) -> StepResult {
     let actual = with_state(state, TimeTravelState::commit_count)?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("commit count does not match")
-    }
+    check_eq(&actual, &expected, "commit count does not match")
 }
 
 #[then("the current index is {expected}")]
 fn then_current_index(state: &TimeTravelStateWorld, expected: usize) -> StepResult {
     let actual = with_state(state, TimeTravelState::current_index)?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("current index does not match")
-    }
+    check_eq(&actual, &expected, "current index does not match")
 }
 
 #[then("previous navigation is available")]
