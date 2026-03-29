@@ -7,7 +7,7 @@ use super::*;
 use crate::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
-use crate::tui::state::TimeTravelInitParams;
+use crate::time_travel::{TimeTravelInitParams, TimeTravelState};
 
 /// Creates a standard context with common settings.
 fn create_test_context(state: &TimeTravelState) -> TimeTravelViewContext<'_> {

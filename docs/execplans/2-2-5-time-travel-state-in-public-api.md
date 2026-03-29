@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: COMPLETE
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -124,30 +124,69 @@ items 2.2.6 and 2.2.7 respectively.
 
 ## Progress
 
-- [ ] Read and internalise current codebase state, roadmap, and referenced
+- [x] Read and internalise current codebase state, roadmap, and referenced
       architecture decision records.
-- [ ] Draft this ExecPlan.
-- [ ] Stage A: move `TimeTravelState` and `TimeTravelInitParams` to
+- [x] Draft this ExecPlan.
+- [x] Stage A: move `TimeTravelState` and `TimeTravelInitParams` to
       `src/time_travel/`, remove `#[doc(hidden)]`, promote read accessors to
       `pub`.
-- [ ] Stage B: update TUI state module to re-export from `crate::time_travel`
+- [x] Stage B: update TUI state module to re-export from `crate::time_travel`
       and adapt all TUI handler and component imports.
-- [ ] Stage C: add integration-level BDD tests under `tests/` proving the
+- [x] Stage C: add integration-level BDD tests under `tests/` proving the
       public API is usable without `frankie::tui`.
-- [ ] Stage D: update `docs/frankie-design.md`, `docs/users-guide.md`,
+- [x] Stage D: update `docs/frankie-design.md`, `docs/users-guide.md`,
       `docs/roadmap.md`, and run all validation gates.
 
 ## Surprises & discoveries
 
-(No surprises yet; this section will be updated during implementation.)
+- The first `cargo test --test time_travel_state_bdd` run failed on an
+  ambiguous Gherkin step (`the next commit SHA is absent`) because it
+  overlapped with the parameterized `the next commit SHA is {expected}` step.
+  Renaming the absent-state step removed the ambiguity cleanly.
+- `clippy` flagged three issues in the new BDD helper code
+  (`semicolon_if_nothing_returned`, `if_not_else`, and
+  `redundant_closure_for_method_calls`). Fixing them required only local test
+  cleanup; no production API changes were necessary.
+- Background `cargo check` work triggered by `leta` competed for the target
+  lock during validation. Rerunning `make lint` after the full test suite had
+  finished produced the real result cleanly.
 
 ## Decision log
 
-(Decisions will be recorded here as implementation proceeds.)
+- `TimeTravelState` and `TimeTravelInitParams` were moved into a dedicated
+  `src/time_travel/state.rs` submodule rather than folded into
+  `src/time_travel/mod.rs`, preserving space for later roadmap items without
+  growing `mod.rs` into a mixed-responsibility file.
+- The TUI compatibility path was preserved by re-exporting
+  `crate::time_travel::{TimeTravelInitParams, TimeTravelState}` from
+  `src/tui/state/mod.rs`, while internal TUI modules were updated to import the
+  public library module directly.
+- The new public behavioural coverage focuses on three observable contracts:
+  constructor/accessor usability, middle-of-history navigation inspection, and
+  `update_snapshot` index clamping. That kept the suite library-facing without
+  exposing TUI-only mutation helpers.
 
 ## Outcomes & retrospective
 
-(To be completed after implementation.)
+- `TimeTravelState` is now a documented public type under
+  `frankie::time_travel`, and `TimeTravelInitParams` moved with it so the
+  public constructor no longer depends on `crate::tui`.
+- Existing TUI behaviour was preserved. The adapter layer still owns loading
+  and error mutation helpers, while renderers and tests read the stable public
+  accessors from the shared library module.
+- Added `tests/time_travel_state_bdd.rs` and
+  `tests/features/time_travel_state.feature` to prove the state API can be
+  constructed and inspected without importing `frankie::tui`.
+- Updated `docs/frankie-design.md` and marked roadmap item 2.2.5 complete in
+  `docs/roadmap.md`. `docs/users-guide.md` required no change because
+  user-visible behaviour stayed the same.
+- Validation completed successfully:
+  - `make fmt`
+  - `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`
+  - `make nixie`
+  - `make check-fmt`
+  - `make lint`
+  - `make test`
 
 ## Context and orientation
 

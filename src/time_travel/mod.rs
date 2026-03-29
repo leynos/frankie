@@ -1,9 +1,8 @@
-//! Library-facing types for deriving time-travel inputs from review comments.
+//! Library-facing types for time-travel state and comment-derived inputs.
 //!
-//! This module provides the public API for extracting time-travel parameters
-//! from [`ReviewComment`] metadata. It allows callers outside `crate::tui` to
-//! derive the commit SHA, file path, and optional line number needed to
-//! initiate a time-travel view.
+//! This module provides the public API for working with time-travel outside
+//! `crate::tui`. It exposes both parameter extraction from [`ReviewComment`]
+//! metadata and the runtime state container used by renderers and hosts.
 //!
 //! # Example
 //!
@@ -29,6 +28,10 @@ use thiserror::Error;
 
 use crate::github::models::ReviewComment;
 use crate::local::{CommitSha, RepoFilePath};
+
+mod state;
+
+pub use state::{TimeTravelInitParams, TimeTravelState};
 
 /// Typed failures for time-travel parameter extraction.
 ///

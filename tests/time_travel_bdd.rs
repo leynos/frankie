@@ -9,10 +9,10 @@ use bubbletea_rs::Model;
 use frankie::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
+use frankie::time_travel::{TimeTravelInitParams, TimeTravelState};
 use frankie::tui::app::ReviewApp;
 use frankie::tui::components::test_utils::strip_ansi_codes;
 use frankie::tui::messages::AppMsg;
-use frankie::tui::state::{TimeTravelInitParams, TimeTravelState};
 use rstest::fixture;
 use rstest_bdd_macros::{given, scenario, then, when};
 use time_travel_support::{MockGitOperations, TimeTravelTestState};

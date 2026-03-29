@@ -30,12 +30,13 @@ use crate::ai::{
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
 use crate::persistence::ReviewCommentVerificationCache;
+use crate::time_travel::TimeTravelState;
 use crate::tui::ReplyDraftConfig;
 use crate::verification::ResolutionVerificationService;
 
 use super::components::{CommentDetailComponent, DiffContextComponent, ReviewListComponent};
 use super::messages::AppMsg;
-use super::state::{DiffContextState, FilterState, ReplyDraftState, ReviewFilter, TimeTravelState};
+use super::state::{DiffContextState, FilterState, ReplyDraftState, ReviewFilter};
 use verification_state::VerificationState;
 
 mod codex_handlers;

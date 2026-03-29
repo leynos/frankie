@@ -155,7 +155,6 @@ fn error_state() {
 fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let state = state_at_index(sample_snapshot, sample_history, 0);
 
-    // At index 0 (most recent): can go previous, cannot go next
     assert_navigation(&state, &ExpectedNavigation::at_newest("def5678901234"));
 }
 
@@ -163,7 +162,6 @@ fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<Com
 fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let state = state_at_index(sample_snapshot, sample_history, 1);
 
-    // At index 1 (middle): can go both ways
     assert_navigation(
         &state,
         &ExpectedNavigation::at_middle("abc1234567890", "ghi9012345678"),
@@ -174,7 +172,6 @@ fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<Com
 fn navigation_at_oldest(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
     let state = state_at_index(sample_snapshot, sample_history, 2);
 
-    // At index 2 (oldest): cannot go previous, can go next
     assert_navigation(&state, &ExpectedNavigation::at_oldest("def5678901234"));
 }
 
@@ -197,10 +194,9 @@ fn update_snapshot_clamps_index(sample_snapshot: CommitSnapshot, sample_history:
         current_index: 0,
     });
 
-    // Try to update with an out-of-bounds index
     state.update_snapshot(sample_snapshot, None, 100);
 
-    assert_eq!(state.current_index(), 2); // Clamped to last index
+    assert_eq!(state.current_index(), 2);
 }
 
 #[rstest]

@@ -12,9 +12,8 @@ use std::sync::Arc;
 use bubbletea_rs::Cmd;
 
 use crate::local::{CommitSha, GitOperationError, GitOperations, LineMappingRequest, RepoFilePath};
-use crate::time_travel::TimeTravelParams;
+use crate::time_travel::{TimeTravelInitParams, TimeTravelParams, TimeTravelState};
 use crate::tui::messages::AppMsg;
-use crate::tui::state::{TimeTravelInitParams, TimeTravelState};
 
 use super::ReviewApp;
 
