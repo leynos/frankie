@@ -16,10 +16,10 @@ Roadmap step 3.2.4 exists to stop the public reply-template renderer from
 depending on `frankie::ReviewComment` directly. After this change, library
 consumers will render templates from a stable public DTO such as
 `ReplyTemplateContext`, while TUI reply drafting will remain an adapter that
-maps the selected `ReviewComment` into that DTO before rendering. The user
-visible behaviour must stay the same: the same template variables render the
-same text, the same defaults are applied for missing comment fields, and the
-same inline TUI error prefix is shown when rendering fails.
+maps the selected `ReviewComment` into that DTO before rendering. The
+user-visible behaviour must stay the same: the same template variables render
+the same text, the same defaults are applied for missing comment fields, and
+the same inline TUI error prefix is shown when rendering fails.
 
 Success is observable when:
 

@@ -111,6 +111,21 @@ fn render_reply_template_reports_errors(
         body: String::new(),
     }
 )]
+#[case(
+    ReviewComment {
+        id: 100,
+        file_path: Some("src/main.rs".to_owned()),
+        body: Some("Needs a follow-up".to_owned()),
+        ..ReviewComment::default()
+    },
+    ReplyTemplateContext {
+        comment_id: 100,
+        reviewer: "reviewer".to_owned(),
+        file: "src/main.rs".to_owned(),
+        line: String::new(),
+        body: "Needs a follow-up".to_owned(),
+    }
+)]
 fn reply_template_context_from_review_comment_normalizes_fields(
     #[case] comment: ReviewComment,
     #[case] expected: ReplyTemplateContext,

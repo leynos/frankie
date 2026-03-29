@@ -103,9 +103,10 @@ impl From<&ReviewComment> for ReplyTemplateContext {
 /// - `line`
 /// - `body`
 ///
-/// Missing comment fields fall back to the same defaults used by the TUI:
-/// `"reviewer"` for `reviewer`, `"(unknown file)"` for `file`, and empty
-/// strings for `line` and `body`.
+/// When the context is built from [`ReviewComment`] via
+/// [`ReplyTemplateContext::from`], missing comment fields fall back to the
+/// same defaults used by the TUI: `"reviewer"` for `reviewer`,
+/// `"(unknown file)"` for `file`, and empty strings for `line` and `body`.
 ///
 /// This function creates a fresh `MiniJinja` environment per call so the
 /// public API stays stateless for on-demand adapter usage.
