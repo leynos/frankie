@@ -98,7 +98,7 @@ context.
   Acceptance: a public `TimeTravelParams` (or equivalent) is available outwith
   `crate::tui`, and tests cover both successful extraction and missing metadata
   failures. See `docs/adr-005-cross-surface-library-first-delivery.md`.
-- [ ] 2.2.5. Make `TimeTravelState` a stable public type (remove
+- [x] 2.2.5. Make `TimeTravelState` a stable public type (remove
   `#[doc(hidden)]` and publish required getters currently `pub(crate)`).
   Acceptance: `TimeTravelState` is public (not `#[doc(hidden)]`), provides
   stable read accessors required by renderers, and is exercised by tests that

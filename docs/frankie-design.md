@@ -786,6 +786,23 @@ The TUI uses this shared extraction as an adapter. No standalone CLI surface
 applies to this extraction slice; full orchestration extraction is tracked by
 roadmap items 2.2.5 to 2.2.7.
 
+##### Library API (roadmap 2.2.5)
+
+`TimeTravelState` and `TimeTravelInitParams` now also live in the public
+`frankie::time_travel` module, making the time-travel runtime state available
+to callers outside `crate::tui`. The stable public contract is the read side:
+snapshot metadata, file path, original line, line-mapping verification, commit
+history, navigation affordances, and commit-sha accessors are all public so
+renderers and embedding hosts can inspect state without depending on the TUI
+adapter. Consumers import these types as
+`frankie::time_travel::{TimeTravelInitParams, TimeTravelState}` and read state
+through documented getters such as `snapshot()`, `file_path()`,
+`line_mapping()`, `current_index()`, and the commit-sha accessors. Mutation
+helpers such as loading/error factories and setter methods remain
+crate-internal because roadmap item 2.2.7 still owns orchestration extraction.
+No standalone CLI surface is added for this slice; the work is a library-first
+visibility promotion supporting the existing interactive feature.
+
 ### 2.1.3 Ai Integration Features
 
 | Feature ID | Feature Name            | Category       | Priority | Status   |

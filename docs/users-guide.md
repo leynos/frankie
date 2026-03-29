@@ -200,6 +200,45 @@ own link.
 If the selected pull request has no review comments, Frankie returns an
 explicit error instead of printing an empty summary.
 
+## Library API: time-travel state
+
+Frankie also exposes a stable library-facing time-travel state API under
+`frankie::time_travel`. Embedding hosts and alternative front ends can import
+`TimeTravelInitParams` and `TimeTravelState` directly, construct state without
+depending on `crate::tui`, and read the documented getter surface.
+
+```rust
+use chrono::Utc;
+use frankie::local::{CommitMetadata, CommitSha, CommitSnapshot, RepoFilePath};
+use frankie::time_travel::{TimeTravelInitParams, TimeTravelState};
+
+let metadata = CommitMetadata::new(
+    "abc1234567890".to_owned(),
+    "Fix login validation".to_owned(),
+    "Alice".to_owned(),
+    Utc::now(),
+);
+let snapshot = CommitSnapshot::with_file_content(
+    metadata,
+    "src/auth.rs".to_owned(),
+    "fn login() {}".to_owned(),
+);
+
+let state = TimeTravelState::new(TimeTravelInitParams {
+    snapshot,
+    file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+    original_line: Some(42),
+    line_mapping: None,
+    commit_history: vec![CommitSha::new("abc1234567890".to_owned())],
+    current_index: 0,
+});
+
+assert_eq!(state.file_path().as_str(), "src/auth.rs");
+assert_eq!(state.original_line(), Some(42));
+assert_eq!(state.commit_count(), 1);
+assert_eq!(state.snapshot().message(), "Fix login validation");
+```
+
 ## Review TUI mode
 
 Launch an interactive terminal interface for navigating and filtering review

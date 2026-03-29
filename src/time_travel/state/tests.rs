@@ -63,13 +63,35 @@ impl ExpectedNavigation {
 
 /// Creates a `TimeTravelState` at the specified commit index.
 fn state_at_index(
-    snapshot: CommitSnapshot,
+    snapshot: &CommitSnapshot,
     history: Vec<CommitSha>,
     index: usize,
 ) -> TimeTravelState {
+    let file_path = snapshot
+        .file_path()
+        .expect("test snapshots should include a file path")
+        .to_owned();
+    let file_content = snapshot
+        .file_content()
+        .expect("test snapshots should include file content")
+        .to_owned();
+    let snapshot_sha = history
+        .get(index)
+        .expect("test index should be within commit history bounds")
+        .as_str()
+        .to_owned();
+    let metadata = CommitMetadata::new(
+        snapshot_sha,
+        format!("Commit {index}"),
+        "Alice".to_owned(),
+        Utc::now(),
+    );
+    let indexed_snapshot =
+        CommitSnapshot::with_file_content(metadata, file_path.clone(), file_content);
+
     TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+        snapshot: indexed_snapshot,
+        file_path: RepoFilePath::new(file_path),
         original_line: None,
         line_mapping: None,
         commit_history: history,
@@ -110,13 +132,16 @@ fn sample_history() -> Vec<CommitSha> {
 }
 
 #[rstest]
-fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
+fn new_state_stores_snapshot_metadata(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) {
     let state = TimeTravelState::new(TimeTravelInitParams {
         snapshot: sample_snapshot.clone(),
         file_path: RepoFilePath::new("src/auth.rs".to_owned()),
         original_line: Some(42),
         line_mapping: None,
-        commit_history: sample_history.clone(),
+        commit_history: sample_history,
         current_index: 0,
     });
 
@@ -124,10 +149,57 @@ fn new_state_initialised(sample_snapshot: CommitSnapshot, sample_history: Vec<Co
     assert_eq!(state.file_path().as_str(), "src/auth.rs");
     assert_eq!(state.original_line(), Some(42));
     assert!(state.line_mapping().is_none());
+}
+
+#[rstest]
+fn new_state_stores_history_index(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
+    let state = TimeTravelState::new(TimeTravelInitParams {
+        snapshot: sample_snapshot,
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+        original_line: None,
+        line_mapping: None,
+        commit_history: sample_history,
+        current_index: 0,
+    });
+
     assert_eq!(state.commit_count(), 3);
     assert_eq!(state.current_index(), 0);
+}
+
+#[rstest]
+fn new_state_is_not_loading_or_error(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) {
+    let state = TimeTravelState::new(TimeTravelInitParams {
+        snapshot: sample_snapshot,
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+        original_line: None,
+        line_mapping: None,
+        commit_history: sample_history,
+        current_index: 0,
+    });
+
     assert!(!state.is_loading());
     assert!(state.error_message().is_none());
+}
+
+#[rstest]
+fn new_state_aligns_index_with_snapshot_sha(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) {
+    let state = TimeTravelState::new(TimeTravelInitParams {
+        snapshot: sample_snapshot,
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+        original_line: Some(42),
+        line_mapping: None,
+        commit_history: sample_history,
+        current_index: 99,
+    });
+
+    assert_eq!(state.current_index(), 0);
+    assert_navigation(&state, &ExpectedNavigation::at_newest("def5678901234"));
 }
 
 #[rstest]
@@ -153,17 +225,15 @@ fn error_state() {
 
 #[rstest]
 fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let state = state_at_index(sample_snapshot, sample_history, 0);
+    let state = state_at_index(&sample_snapshot, sample_history, 0);
 
-    // At index 0 (most recent): can go previous, cannot go next
     assert_navigation(&state, &ExpectedNavigation::at_newest("def5678901234"));
 }
 
 #[rstest]
 fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let state = state_at_index(sample_snapshot, sample_history, 1);
+    let state = state_at_index(&sample_snapshot, sample_history, 1);
 
-    // At index 1 (middle): can go both ways
     assert_navigation(
         &state,
         &ExpectedNavigation::at_middle("abc1234567890", "ghi9012345678"),
@@ -172,15 +242,14 @@ fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<Com
 
 #[rstest]
 fn navigation_at_oldest(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let state = state_at_index(sample_snapshot, sample_history, 2);
+    let state = state_at_index(&sample_snapshot, sample_history, 2);
 
-    // At index 2 (oldest): cannot go previous, can go next
     assert_navigation(&state, &ExpectedNavigation::at_oldest("def5678901234"));
 }
 
 #[rstest]
 fn loading_blocks_navigation(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let mut state = state_at_index(sample_snapshot, sample_history, 0);
+    let mut state = state_at_index(&sample_snapshot, sample_history, 0);
     state.set_loading(true);
 
     assert_navigation(&state, &ExpectedNavigation::blocked(Some("def5678901234")));
@@ -197,10 +266,52 @@ fn update_snapshot_clamps_index(sample_snapshot: CommitSnapshot, sample_history:
         current_index: 0,
     });
 
-    // Try to update with an out-of-bounds index
-    state.update_snapshot(sample_snapshot, None, 100);
+    let metadata = CommitMetadata::new(
+        "ghi9012345678".to_owned(),
+        "Initial implementation".to_owned(),
+        "Alice".to_owned(),
+        Utc::now(),
+    );
+    let updated_snapshot = CommitSnapshot::with_file_content(
+        metadata,
+        "src/auth.rs".to_owned(),
+        "fn login() {}".to_owned(),
+    );
 
-    assert_eq!(state.current_index(), 2); // Clamped to last index
+    state.update_snapshot(updated_snapshot, None, 100);
+
+    assert_eq!(state.current_index(), 2);
+}
+
+#[rstest]
+fn new_state_sets_error_for_snapshot_sha_missing_from_history(sample_history: Vec<CommitSha>) {
+    let metadata = CommitMetadata::new(
+        "zzz9999999999".to_owned(),
+        "Detached snapshot".to_owned(),
+        "Alice".to_owned(),
+        Utc::now(),
+    );
+    let snapshot = CommitSnapshot::with_file_content(
+        metadata,
+        "src/auth.rs".to_owned(),
+        "fn login() {}".to_owned(),
+    );
+    let state = TimeTravelState::new(TimeTravelInitParams {
+        snapshot,
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+        original_line: None,
+        line_mapping: None,
+        commit_history: sample_history,
+        current_index: 1,
+    });
+
+    assert_eq!(state.current_index(), 1);
+    assert_eq!(
+        state.error_message(),
+        Some(
+            "snapshot SHA zzz9999999999 does not match commit history entry def5678901234 at index 1"
+        )
+    );
 }
 
 #[rstest]
@@ -215,9 +326,9 @@ fn line_mapping_stored(sample_snapshot: CommitSnapshot, sample_history: Vec<Comm
         current_index: 0,
     });
 
-    let stored = state
-        .line_mapping()
-        .expect("Line mapping should be stored in state");
+    let Some(stored) = state.line_mapping() else {
+        panic!("line mapping should be stored in state");
+    };
     assert_eq!(stored.status(), LineMappingStatus::Moved);
     assert_eq!(stored.original_line(), 42);
     assert_eq!(stored.current_line(), Some(50));

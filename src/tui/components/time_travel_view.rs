@@ -5,7 +5,7 @@
 
 use std::fmt::Write;
 
-use crate::tui::state::TimeTravelState;
+use crate::time_travel::TimeTravelState;
 
 use super::text_truncate::truncate_to_height;
 use super::text_wrap::wrap_code_block;

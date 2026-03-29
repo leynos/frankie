@@ -11,9 +11,10 @@ use crate::ai::{
     PrDiscussionSummary, SessionState,
 };
 use crate::github::models::ReviewComment;
+use crate::time_travel::TimeTravelState;
 use crate::verification::CommentVerificationResult;
 
-use super::state::{ReviewFilter, TimeTravelState};
+use super::state::ReviewFilter;
 
 pub use self::classification::MessageCategory;
 
