@@ -194,42 +194,28 @@ fn with_state<T>(
         .ok_or("time-travel state should be available")
 }
 
+fn check_eq<T: PartialEq>(actual: T, expected: T, msg: &'static str) -> StepResult {
+    if actual == expected { Ok(()) } else { Err(msg) }
+}
+
 // -- Then steps --
 
 #[then("the snapshot SHA is {expected}")]
 fn then_snapshot_sha(state: &TimeTravelStateWorld, expected: String) -> StepResult {
-    let actual = with_state(state, |time_travel_state| {
-        time_travel_state.snapshot().sha().to_owned()
-    })?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("snapshot SHA does not match")
-    }
+    let actual = with_state(state, |s| s.snapshot().sha().to_owned())?;
+    check_eq(actual, expected, "snapshot SHA does not match")
 }
 
 #[then("the snapshot message is {expected}")]
 fn then_snapshot_message(state: &TimeTravelStateWorld, expected: String) -> StepResult {
-    let actual = with_state(state, |time_travel_state| {
-        time_travel_state.snapshot().message().to_owned()
-    })?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("snapshot message does not match")
-    }
+    let actual = with_state(state, |s| s.snapshot().message().to_owned())?;
+    check_eq(actual, expected, "snapshot message does not match")
 }
 
 #[then("the public file path is {expected}")]
 fn then_public_file_path(state: &TimeTravelStateWorld, expected: String) -> StepResult {
-    let actual = with_state(state, |time_travel_state| {
-        time_travel_state.file_path().as_str().to_owned()
-    })?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("file path does not match")
-    }
+    let actual = with_state(state, |s| s.file_path().as_str().to_owned())?;
+    check_eq(actual, expected, "file path does not match")
 }
 
 #[then("the public original line is {expected}")]
@@ -284,30 +270,18 @@ fn then_next_navigation_unavailable(state: &TimeTravelStateWorld) -> StepResult 
 
 #[then("the previous commit SHA is {expected}")]
 fn then_previous_commit_sha(state: &TimeTravelStateWorld, expected: String) -> StepResult {
-    let actual = with_state(state, |time_travel_state| {
-        time_travel_state
-            .previous_commit_sha()
-            .map(|sha| sha.as_str().to_owned())
+    let actual = with_state(state, |s| {
+        s.previous_commit_sha().map(|sha| sha.as_str().to_owned())
     })?;
-    if actual == Some(expected) {
-        Ok(())
-    } else {
-        Err("previous commit SHA does not match")
-    }
+    check_eq(actual, Some(expected), "previous commit SHA does not match")
 }
 
 #[then("the next commit SHA is {expected}")]
 fn then_next_commit_sha(state: &TimeTravelStateWorld, expected: String) -> StepResult {
-    let actual = with_state(state, |time_travel_state| {
-        time_travel_state
-            .next_commit_sha()
-            .map(|sha| sha.as_str().to_owned())
+    let actual = with_state(state, |s| {
+        s.next_commit_sha().map(|sha| sha.as_str().to_owned())
     })?;
-    if actual == Some(expected) {
-        Ok(())
-    } else {
-        Err("next commit SHA does not match")
-    }
+    check_eq(actual, Some(expected), "next commit SHA does not match")
 }
 
 #[then("no next commit SHA is available")]
@@ -325,16 +299,10 @@ fn then_next_commit_sha_absent(state: &TimeTravelStateWorld) -> StepResult {
 
 #[then("the state exposes an exact line mapping for line {expected}")]
 fn then_exact_line_mapping(state: &TimeTravelStateWorld, expected: u32) -> StepResult {
-    let actual = with_state(state, |time_travel_state| {
-        time_travel_state
-            .line_mapping()
-            .map(LineMappingVerification::original_line)
+    let actual = with_state(state, |s| {
+        s.line_mapping().map(LineMappingVerification::original_line)
     })?;
-    if actual == Some(expected) {
-        Ok(())
-    } else {
-        Err("line mapping does not match")
-    }
+    check_eq(actual, Some(expected), "line mapping does not match")
 }
 
 // -- Scenario bindings --
