@@ -163,13 +163,13 @@ concerns belong to roadmap items 2.2.6 and 2.2.7 respectively.
   public library module directly.
 - The new public behavioural coverage focuses on three observable contracts:
   constructor/accessor usability, middle-of-history navigation inspection, and
-  `update_snapshot` index clamping. That kept the suite library-facing without
-  exposing TUI-only mutation helpers.
+  `update_snapshot` index derivation from the snapshot SHA. That kept the suite
+  library-facing without exposing TUI-only mutation helpers.
 
 ## Outcomes & retrospective
 
 - `TimeTravelState` is now a documented public type under
-  `frankie::time_travel`, and `TimeTravelInitParams` moved with it so the
+  `frankie::time_travel`, and `TimeTravelInitParams` moved with it, so the
   public constructor no longer depends on `crate::tui`.
 - Existing TUI behaviour was preserved. The adapter layer still owns loading
   and error mutation helpers, while renderers and tests read the stable public
@@ -306,9 +306,9 @@ Move the existing unit tests from `src/tui/state/time_travel/tests.rs` to
 referenced `crate::tui::state` to use `super::*` or `crate::time_travel` as
 appropriate.
 
-Delete `src/tui/state/time_travel.rs` entirely since its only remaining content
-would be the now-moved types. Delete `src/tui/state/time_travel/tests.rs` since
-the tests have moved.
+Delete `src/tui/state/time_travel.rs` entirely, since its only remaining
+content would be the now-moved types. Delete
+`src/tui/state/time_travel/tests.rs` since the tests have moved.
 
 No changes to `src/lib.rs` are needed because `pub mod time_travel` already
 exists.
@@ -379,9 +379,12 @@ Create `tests/features/time_travel_state.feature` with three scenarios:
    state built with absent optional fields still exposes commit count, current
    index, and both next/previous commit SHAs for middle-of-history navigation.
 
-3. "Update a snapshot and clamp the requested index" — verifies that calling
-   `update_snapshot` with a new snapshot and an out-of-bounds index updates the
-   snapshot metadata while clamping the index to the last valid history entry.
+3. "Update a snapshot and derive the index from the snapshot SHA" — verifies
+   that calling `update_snapshot` with a new snapshot and an out-of-bounds
+   index updates the snapshot metadata while setting the index from the
+   snapshot SHA's position in commit history. Only the edge case where the new
+   snapshot SHA is absent from history falls back to clamping the requested
+   index to the last valid entry.
 
 Create `tests/time_travel_state_bdd.rs` with step definitions following the
 pattern established in `tests/time_travel_params_bdd.rs`. The BDD state struct
@@ -535,7 +538,7 @@ The following files are deleted:
   `src/time_travel/state/tests.rs`.
 
 Expected net change: approximately 200 new lines (BDD tests and Rustdoc) plus
-the relocated lines. Well within the 15-file / 700-line tolerance.
+the relocated lines, well within the 15-file / 700-line tolerance.
 
 ## Interfaces and dependencies
 

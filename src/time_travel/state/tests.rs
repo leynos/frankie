@@ -99,6 +99,23 @@ fn state_at_index(
     })
 }
 
+/// Constructs a `TimeTravelState` from `sample_snapshot` with standard test
+/// defaults (`file_path = "src/auth.rs"`, no original line, no line mapping).
+fn default_state(
+    snapshot: CommitSnapshot,
+    history: Vec<CommitSha>,
+    index: usize,
+) -> TimeTravelState {
+    TimeTravelState::new(TimeTravelInitParams {
+        snapshot,
+        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+        original_line: None,
+        line_mapping: None,
+        commit_history: history,
+        current_index: index,
+    })
+}
+
 /// Asserts all navigation-related properties of a `TimeTravelState`.
 fn assert_navigation(state: &TimeTravelState, expected: &ExpectedNavigation) {
     assert_eq!(state.can_go_previous(), expected.can_previous);
@@ -153,14 +170,7 @@ fn new_state_stores_snapshot_metadata(
 
 #[rstest]
 fn new_state_stores_history_index(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let state = TimeTravelState::new(TimeTravelInitParams {
-        snapshot: sample_snapshot,
-        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
-        original_line: None,
-        line_mapping: None,
-        commit_history: sample_history,
-        current_index: 0,
-    });
+    let state = default_state(sample_snapshot, sample_history, 0);
 
     assert_eq!(state.commit_count(), 3);
     assert_eq!(state.current_index(), 0);
@@ -171,14 +181,7 @@ fn new_state_is_not_loading_or_error(
     sample_snapshot: CommitSnapshot,
     sample_history: Vec<CommitSha>,
 ) {
-    let state = TimeTravelState::new(TimeTravelInitParams {
-        snapshot: sample_snapshot,
-        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
-        original_line: None,
-        line_mapping: None,
-        commit_history: sample_history,
-        current_index: 0,
-    });
+    let state = default_state(sample_snapshot, sample_history, 0);
 
     assert!(!state.is_loading());
     assert!(state.error_message().is_none());
@@ -189,14 +192,7 @@ fn new_state_aligns_index_with_snapshot_sha(
     sample_snapshot: CommitSnapshot,
     sample_history: Vec<CommitSha>,
 ) {
-    let state = TimeTravelState::new(TimeTravelInitParams {
-        snapshot: sample_snapshot,
-        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
-        original_line: Some(42),
-        line_mapping: None,
-        commit_history: sample_history,
-        current_index: 99,
-    });
+    let state = default_state(sample_snapshot, sample_history, 99);
 
     assert_eq!(state.current_index(), 0);
     assert_navigation(&state, &ExpectedNavigation::at_newest("def5678901234"));
@@ -326,9 +322,9 @@ fn line_mapping_stored(sample_snapshot: CommitSnapshot, sample_history: Vec<Comm
         current_index: 0,
     });
 
-    let Some(stored) = state.line_mapping() else {
-        panic!("line mapping should be stored in state");
-    };
+    let stored = state
+        .line_mapping()
+        .expect("line mapping should be stored in state");
     assert_eq!(stored.status(), LineMappingStatus::Moved);
     assert_eq!(stored.original_line(), 42);
     assert_eq!(stored.current_line(), Some(50));

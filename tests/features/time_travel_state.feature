@@ -35,7 +35,7 @@ Feature: Public time-travel state API
     And the next commit SHA is "abc1234567890"
     And the previous commit SHA is "ghi9012345678"
 
-  Scenario: Update a snapshot and clamp the requested index
+  Scenario: Update a snapshot and derive the index from the snapshot SHA
     Given a snapshot for commit SHA "abc1234567890" with message "Fix login validation"
     And the snapshot contains file content "fn login() {\n    validate();\n}"
     And the file path is "src/auth.rs"

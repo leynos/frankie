@@ -198,6 +198,16 @@ fn check_eq<T: PartialEq>(actual: &T, expected: &T, msg: &'static str) -> StepRe
     if actual == expected { Ok(()) } else { Err(msg) }
 }
 
+fn check_bool_step(
+    state: &TimeTravelStateWorld,
+    actual_fn: impl FnOnce(&TimeTravelState) -> bool,
+    expected: bool,
+    msg: &'static str,
+) -> StepResult {
+    let actual = with_state(state, actual_fn)?;
+    check_eq(&actual, &expected, msg)
+}
+
 // -- Then steps --
 
 #[then("the snapshot SHA is {expected}")]
@@ -239,22 +249,22 @@ fn then_current_index(state: &TimeTravelStateWorld, expected: usize) -> StepResu
 
 #[then("previous navigation is available")]
 fn then_previous_navigation_available(state: &TimeTravelStateWorld) -> StepResult {
-    let actual = with_state(state, TimeTravelState::can_go_previous)?;
-    if actual {
-        Ok(())
-    } else {
-        Err("previous navigation should be available")
-    }
+    check_bool_step(
+        state,
+        TimeTravelState::can_go_previous,
+        true,
+        "previous navigation should be available",
+    )
 }
 
 #[then("next navigation is unavailable")]
 fn then_next_navigation_unavailable(state: &TimeTravelStateWorld) -> StepResult {
-    let actual = with_state(state, TimeTravelState::can_go_next)?;
-    if actual {
-        Err("next navigation should be unavailable")
-    } else {
-        Ok(())
-    }
+    check_bool_step(
+        state,
+        TimeTravelState::can_go_next,
+        false,
+        "next navigation should be unavailable",
+    )
 }
 
 #[then("the previous commit SHA is {expected}")]
@@ -315,7 +325,7 @@ fn inspect_middle_navigation(state: TimeTravelStateWorld) {
 
 #[scenario(
     path = "tests/features/time_travel_state.feature",
-    name = "Update a snapshot and clamp the requested index"
+    name = "Update a snapshot and derive the index from the snapshot SHA"
 )]
 fn update_snapshot_and_clamp(state: TimeTravelStateWorld) {
     let _ = state;
