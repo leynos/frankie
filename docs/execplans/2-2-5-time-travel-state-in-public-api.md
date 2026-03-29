@@ -178,8 +178,9 @@ concerns belong to roadmap items 2.2.6 and 2.2.7 respectively.
   `tests/features/time_travel_state.feature` to prove the state API can be
   constructed and inspected without importing `frankie::tui`.
 - Updated `docs/frankie-design.md` and marked roadmap item 2.2.5 complete in
-  `docs/roadmap.md`. `docs/users-guide.md` required no change because
-  user-visible behaviour stayed the same.
+  `docs/roadmap.md`. `docs/users-guide.md` now includes a library-facing note
+  showing the stable `frankie::time_travel` import path and the documented
+  getter surface for embedders.
 - Validation completed successfully:
   - `make fmt`
   - `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`
@@ -367,26 +368,20 @@ step definitions should import the state types from `frankie::time_travel` and
 the domain types from `frankie::local` — not from `frankie::tui` — to prove the
 public library surface is usable by an external caller.
 
-Create `tests/features/time_travel_state.feature` with five scenarios:
+Create `tests/features/time_travel_state.feature` with three scenarios:
 
-1. "Construct a time-travel state and read its accessors" — verifies that a
+1. "Construct a time-travel state and read public accessors" — verifies that a
    state built from valid `TimeTravelInitParams` exposes snapshot metadata,
-   file path, line number, line mapping, commit count, index, loading status,
-   and error message through public read accessors.
+   file path, line number, exact line mapping, commit count, current index, and
+   commit-sha navigation accessors through the public read surface.
 
-2. "Update snapshot and verify navigation state" — verifies that calling
-   `update_snapshot` with a new snapshot and index changes the current index
-   and navigation availability.
+2. "Inspect navigation from the middle of commit history" — verifies that a
+   state built with absent optional fields still exposes commit count, current
+   index, and both next/previous commit SHAs for middle-of-history navigation.
 
-3. "Navigation blocked at the oldest commit" — verifies that at the last
-   index `can_go_previous()` returns false and `can_go_next()` returns true.
-
-4. "Index clamping on out-of-bounds update" — verifies that
-   `update_snapshot` with an out-of-bounds index clamps to the last valid index.
-
-5. "State with absent optional fields" — verifies that a state built with
-   `original_line: None` and `line_mapping: None` returns `None` from the
-   corresponding accessors.
+3. "Update a snapshot and clamp the requested index" — verifies that calling
+   `update_snapshot` with a new snapshot and an out-of-bounds index updates the
+   snapshot metadata while clamping the index to the last valid history entry.
 
 Create `tests/time_travel_state_bdd.rs` with step definitions following the
 pattern established in `tests/time_travel_params_bdd.rs`. The BDD state struct
@@ -412,10 +407,12 @@ crate-internal pending orchestration extraction in 2.2.7, and that no CLI
 surface is added for this slice because the work is a type visibility promotion
 underpinning an existing interactive feature.
 
-Update `docs/users-guide.md` only if users need to understand behaviour that is
-observable from the tool. For this slice, no user-facing behaviour changes. The
-time-travel mode works exactly as before. Based on the current guide content,
-no update is expected to be necessary — verify during implementation.
+Update `docs/users-guide.md` with a short library-facing note showing the
+stable `frankie::time_travel` import path and a minimal `TimeTravelState`
+construction example that reads documented getters such as `file_path`,
+`original_line`, and `commit_count`. The interactive time-travel mode works
+exactly as before, but embedders now have a supported library surface that
+should be called out explicitly in the guide.
 
 After implementation and validation are complete, update `docs/roadmap.md` to
 mark item 2.2.5 as done (change `- [ ]` to `- [x]`). Do not change the roadmap

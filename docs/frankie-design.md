@@ -792,10 +792,14 @@ to callers outside `crate::tui`. The stable public contract is the read side:
 snapshot metadata, file path, original line, line-mapping verification, commit
 history, navigation affordances, and commit-sha accessors are all public so
 renderers and embedding hosts can inspect state without depending on the TUI
-adapter. Mutation helpers such as loading/error factories and setter methods
-remain crate-internal because roadmap item 2.2.7 still owns orchestration
-extraction. No standalone CLI surface is added for this slice; the work is a
-library-first visibility promotion supporting the existing interactive feature.
+adapter. Consumers import these types as
+`frankie::time_travel::{TimeTravelInitParams, TimeTravelState}` and read state
+through documented getters such as `snapshot()`, `file_path()`,
+`line_mapping()`, `current_index()`, and the commit-sha accessors. Mutation
+helpers such as loading/error factories and setter methods remain
+crate-internal because roadmap item 2.2.7 still owns orchestration extraction.
+No standalone CLI surface is added for this slice; the work is a library-first
+visibility promotion supporting the existing interactive feature.
 
 ### 2.1.3 Ai Integration Features
 

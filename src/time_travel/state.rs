@@ -87,7 +87,11 @@ impl TimeTravelState {
     #[must_use]
     pub fn new(params: TimeTravelInitParams) -> Self {
         let commit_history = params.commit_history;
-        let current_index = clamp_index(params.current_index, commit_history.len());
+        let (current_index, error_message) = synchronize_snapshot_index(
+            params.snapshot.sha(),
+            &commit_history,
+            params.current_index,
+        );
         Self {
             snapshot: params.snapshot,
             file_path: params.file_path,
@@ -96,7 +100,7 @@ impl TimeTravelState {
             commit_history,
             current_index,
             loading: false,
-            error_message: None,
+            error_message,
         }
     }
 
@@ -216,11 +220,13 @@ impl TimeTravelState {
         line_mapping: Option<LineMappingVerification>,
         new_index: usize,
     ) {
+        let (current_index, error_message) =
+            synchronize_snapshot_index(snapshot.sha(), &self.commit_history, new_index);
         self.snapshot = snapshot;
         self.line_mapping = line_mapping;
-        self.current_index = clamp_index(new_index, self.commit_history.len());
+        self.current_index = current_index;
         self.loading = false;
-        self.error_message = None;
+        self.error_message = error_message;
     }
 
     /// Sets the loading state during in-crate orchestration.
@@ -259,6 +265,31 @@ fn clamp_index(index: usize, len: usize) -> usize {
     } else {
         index.min(len.saturating_sub(1))
     }
+}
+
+/// Keeps the snapshot SHA and history index aligned for public callers.
+#[must_use]
+fn synchronize_snapshot_index(
+    snapshot_sha: &str,
+    commit_history: &[CommitSha],
+    requested_index: usize,
+) -> (usize, Option<String>) {
+    commit_history
+        .iter()
+        .position(|commit_sha| commit_sha.as_str() == snapshot_sha)
+        .map_or_else(
+            || {
+                let current_index = clamp_index(requested_index, commit_history.len());
+                let error_message = commit_history.get(current_index).map(|expected_sha| {
+                    format!(
+                        "snapshot SHA {snapshot_sha} does not match commit history entry {} at index {current_index}",
+                        expected_sha.as_str()
+                    )
+                });
+                (current_index, error_message)
+            },
+            |index| (index, None),
+        )
 }
 
 #[cfg(test)]

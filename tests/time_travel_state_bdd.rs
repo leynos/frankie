@@ -290,11 +290,9 @@ fn then_next_commit_sha_absent(state: &TimeTravelStateWorld) -> StepResult {
 
 #[then("the state exposes an exact line mapping for line {expected}")]
 fn then_exact_line_mapping(state: &TimeTravelStateWorld, expected: u32) -> StepResult {
-    let actual = with_state(state, |s| {
-        s.line_mapping().map(LineMappingVerification::original_line)
-    })?;
-    let expected_line = Some(expected);
-    check_eq(&actual, &expected_line, "line mapping does not match")
+    let actual = with_state(state, |s| s.line_mapping().cloned())?;
+    let expected_mapping = Some(LineMappingVerification::exact(expected));
+    check_eq(&actual, &expected_mapping, "line mapping does not match")
 }
 
 // -- Scenario bindings --
