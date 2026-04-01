@@ -3380,7 +3380,7 @@ owns each step.
 
 **Template Export Invocation Sequence**:
 
-Caption: Sequence diagram showing template export flow through the shared
+Figure: Sequence diagram showing template export flow through the shared
 library path and the CLI adapter path using concrete code symbols from
 `src/cli/export_comments.rs`, `src/lib.rs`, and `src/export/template.rs`. The
 canonical library call signature is
@@ -3425,7 +3425,7 @@ sequenceDiagram
 
 **Template Export Type Relationships**:
 
-Caption: Class diagram showing configuration, export formats, comment models,
+Figure: Class diagram showing configuration, export formats, comment models,
 and template rendering dependencies with names aligned to code paths.
 
 ```mermaid
@@ -4157,7 +4157,25 @@ erDiagram
     REPOSITORIES ||--o{ SYNC_CHECKPOINTS : tracks
 ```
 
+Figure: Entity-relationship diagram of the target data model showing
+repository, pull request, review comment, review thread, sync checkpoint, user,
+AI session, user preference, and cache metadata entities.
+
 Unique key on `SYNC_CHECKPOINTS`: `(repository_id, resource)`.
+
+Schema alignment note: this ER diagram represents the **target data model**.
+The current persisted schema
+(`migrations/2025-12-14-000000_initial_schema/up.sql`) covers `repositories`,
+`pull_requests`, `review_comments`, and `sync_checkpoints`. The
+`REVIEW_COMMENTS` table in the current migration does not yet include
+`thread_root_github_comment_id`, `commit_sha`, `in_reply_to_id`, or
+`reviewer_id` — these columns are target additions that will be introduced by
+future migrations. The `REVIEW_THREADS`, `USERS`, `AI_SESSIONS`,
+`USER_PREFERENCES`, and `CACHE_METADATA` entities are also target-only and do
+not have corresponding migration tables yet. Frankie's in-memory
+`ReviewComment` struct (`src/github/models/mod.rs`) already carries
+`commit_sha` and `in_reply_to_id` as fields populated from the GitHub API
+response; these are not yet persisted to the local adapter cache.
 
 #### 6.6.1.2 Core Entity Specifications
 
@@ -4240,19 +4258,27 @@ The review comment cache preserves the raw GitHub payload as closely as
 possible. Thread topology and actionable anchors are derived on top of this raw
 record rather than flattened away during intake.
 
-**`ReviewComment` `Option<>` field invariants**:
+Target persistence note: the struct above is the **target** Diesel projection.
+The current `review_comments` migration does not yet include
+`thread_root_github_comment_id`, `commit_sha`, `in_reply_to_id`, or
+`reviewer_id`. Frankie's in-memory `ReviewComment` (`src/github/models/mod.rs`)
+already carries `commit_sha` and `in_reply_to_id` as API-populated fields. A
+future migration will add the remaining columns to the persisted table, at
+which point this struct becomes the live Diesel projection.
 
-| Field                           | When present                                                                                                     | When absent                                                                                                                        |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `body`                          | Always present for well-formed GitHub review comments.                                                           | `None` if the API returns a deleted or redacted comment.                                                                           |
-| `file_path`                     | Present for line-level (diff) review comments.                                                                   | `None` for PR-level general review comments that are not attached to a specific file.                                              |
-| `line_number`                   | Present when GitHub reports a current diff position.                                                             | `None` when the diff position is outdated or the comment is PR-level.                                                              |
-| `original_line_number`          | Present when the comment was made against a specific line in the original diff.                                  | `None` for PR-level comments or when the API omits the original position.                                                          |
-| `diff_hunk`                     | Present for line-level review comments; contains the surrounding diff context.                                   | `None` for PR-level comments or when the hunk has been truncated or is unavailable.                                                |
-| `commit_sha`                    | Present when the comment is anchored to a specific commit.                                                       | `None` when the API omits the original commit reference.                                                                           |
-| `in_reply_to_id`                | Present when this comment is a reply within a review thread; the value is the `github_comment_id` of the parent. | `None` for thread-root comments. Thread roots are identified by `in_reply_to_id.is_none()`.                                        |
-| `reviewer_id`                   | Present when the reviewer can be resolved to a persisted `USERS` row.                                            | `None` when the reviewer is a bot, a deleted account, or has not yet been synced to the local user cache.                          |
-| `thread_root_github_comment_id` | Derived field: equals `in_reply_to_id` when the comment is a reply, or `github_comment_id` when it is a root.    | Always populated during intake — never `None` at the persistence layer. Hosts may rely on this value for stable thread grouping.   |
+**`ReviewComment` field invariants and optionality**:
+
+| Field                           | When present                                                                                                     | When absent                                                                                                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `body`                          | Always present for well-formed GitHub review comments.                                                           | `None` if the API returns a deleted or redacted comment.                                                                                                            |
+| `file_path`                     | Present for line-level (diff) review comments.                                                                   | `None` for pull request-level general review comments that are not attached to a specific file.                                                                     |
+| `line_number`                   | Present when GitHub reports a current diff position.                                                             | `None` when the diff position is outdated or the comment is pull request-level.                                                                                     |
+| `original_line_number`          | Present when the comment was made against a specific line in the original diff.                                  | `None` for pull request-level comments or when the API omits the original position.                                                                                 |
+| `diff_hunk`                     | Present for line-level review comments; contains the surrounding diff context.                                   | `None` for pull request-level comments or when the hunk has been truncated or is unavailable.                                                                       |
+| `commit_sha`                    | Present when the comment is anchored to a specific commit.                                                       | `None` when the API omits the original commit reference.                                                                                                            |
+| `in_reply_to_id`                | Present when this comment is a reply within a review thread; the value is the `github_comment_id` of the parent. | `None` for thread-root comments. Thread roots are identified by `in_reply_to_id.is_none()`.                                                                         |
+| `reviewer_id`                   | Present when the reviewer can be resolved to a persisted `USERS` row.                                            | `None` when the reviewer is a bot, a deleted account, or has not yet been synced to the local user cache.                                                           |
+| `thread_root_github_comment_id` | Derived field: equals `in_reply_to_id` when the comment is a reply, or `github_comment_id` when it is a root.    | Always populated during intake — never `None` at the persistence layer. Hosts may rely on this value for stable thread grouping. This is not an `Option<>` field.   |
 
 When `file_path`, `line_number`, `original_line_number`, `diff_hunk`, and
 `commit_sha` are all present, the comment carries enough anchor metadata to

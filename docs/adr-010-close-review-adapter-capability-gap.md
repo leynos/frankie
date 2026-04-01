@@ -59,8 +59,19 @@ review workflow state.
   on demand for library, CLI, TUI, and embedded-host consumers.
 - Support reply rendering and review-action submission without forcing hosts to
   depend on TUI state or invent their own queue protocol.
-- Keep Frankie’s local persistence focused on cache, checkpoints, verification,
+- Keep Frankie's local persistence focused on cache, checkpoints, verification,
   and queued write intents rather than canonical workflow state.
+- Maintain a clear boundary between persistence-layer projections and public
+  contracts:
+  - Internal persistence structures (Diesel-derived row projections such as the
+    persisted `ReviewComment`, `ReviewThreadProjection`, and
+    `ReviewSyncCheckpoint`) are implementation details and must not appear in
+    Frankie's public API surface.
+  - Host-facing contracts (`ReviewThread`, `ReviewAnchor`, `ReviewSyncDelta`,
+    `ReplyTemplateContext`) form the public adapter interface.
+  - Explicit adapter or mapping functions must translate between the two
+    namespaces so that persistence schema changes do not propagate to
+    consumers.
 
 ### Technical requirements
 
@@ -108,8 +119,62 @@ Adopt **Option A** with the following contract:
     queued write intent plus retry or backoff metadata.
 - Shared summary and navigation contracts use host-neutral review references.
   TUI deep links are rendered from those references as an adapter concern.
-- Frankie’s design language and integration assumptions use GitHub API and
+- Frankie's design language and integration assumptions use GitHub API and
   local Git terminology, not browser-automation terminology.
+
+### Contract invariants
+
+The following invariants apply to shared review contracts. See
+`docs/frankie-design.md` § 6.6.1.3 for the full field-level invariant table.
+
+**`ReviewComment`**:
+
+- `github_comment_id` is always present and globally unique within a
+  pull request.
+- `thread_root_github_comment_id` is always populated during intake. For root
+  comments it equals `github_comment_id`; for replies it equals the root's
+  `github_comment_id`. Hosts may rely on this value for stable thread grouping.
+- `in_reply_to_id` is `None` for thread roots and `Some(parent_id)` for
+  replies. Thread-root identification uses `in_reply_to_id.is_none()`.
+- Anchor fields (`file_path`, `line_number`, `original_line_number`,
+  `diff_hunk`, `commit_sha`) are individually optional. A `ReviewAnchor` can
+  only be constructed when all five are present; otherwise the comment degrades
+  to a raw-only entry.
+- `body` may be `None` for deleted or redacted comments.
+- `reviewer_id` may be `None` when the reviewer is a bot, a deleted account,
+  or has not been synced to the local user cache.
+
+**`ReviewThread`**:
+
+- A thread is considered stable once its root comment has been ingested. The
+  root is identified by `in_reply_to_id.is_none()` on the earliest comment in
+  the thread.
+- `is_resolved` reflects the last known resolution status from sync data. It
+  does not track GitHub's explicit "Resolve conversation" state unless
+  additional API data has been fetched.
+- Replies are ordered by `created_at` within the thread.
+
+**`ReviewAnchor`**:
+
+- Constructed only when all required anchor fields are present on the source
+  `ReviewComment`. When any field is absent, no `ReviewAnchor` is produced and
+  the host must handle the missing context explicitly.
+- `commit_sha` anchors the comment to a specific commit. If the referenced
+  commit is no longer reachable in the local repository, time-travel context
+  materialization returns an explicit "unknown commit" status rather than
+  failing silently.
+
+**`ReviewSyncCheckpoint` and `ReviewSyncDelta`**:
+
+- `ReviewSyncCheckpoint` carries an opaque `checkpoint` string whose format is
+  internal to Frankie's sync implementation. Hosts must treat it as an opaque
+  cursor and pass it back unchanged on the next sync call.
+- `checkpoint` may be `None` for newly created sync entries that have not yet
+  completed a full cycle.
+- `ReviewSyncDelta` fields `added`, `updated`, and `removed` contain fully
+  populated `ReviewComment` values — partial metadata is not returned in
+  deltas. A comment appearing in `removed` carries only its identifying fields
+  (`id`, `github_comment_id`).
 
 ## Goals and non-goals
 
@@ -164,13 +229,26 @@ Adopt **Option A** with the following contract:
 
 ## References
 
-- `docs/adr-001-incremental-sync-for-review-comments.md`
-- `docs/adr-004-inline-template-based-reply-drafting.md`
-- `docs/adr-005-cross-surface-library-first-delivery.md`
-- `docs/adr-008-pr-discussion-summary-contract.md`
-- `docs/roadmap.md`
-- `docs/frankie-design.md`
-- `src/lib.rs`
-- `src/github/models/mod.rs`
-- `src/time_travel/mod.rs`
-- `src/tui/state/time_travel.rs`
+- [ADR-001: Incremental sync for review comments][^1]
+- [ADR-004: Inline template-based reply drafting][^2]
+- [ADR-005: Cross-surface library-first delivery][^3]
+- [ADR-008: Pull request discussion summary contract][^4]
+- [Roadmap][^5]
+- [Frankie design document][^6]
+- [`src/lib.rs`][^7] — crate root and public re-exports
+- [`src/github/models/mod.rs`][^8] — GitHub domain models including
+  `ReviewComment`
+- [`src/time_travel/mod.rs`][^9] — time-travel extraction module
+- [`src/tui/state/time_travel.rs`][^10] — TUI time-travel state (to be
+  promoted)
+
+[^1]: <docs/adr-001-incremental-sync-for-review-comments.md>
+[^2]: <docs/adr-004-inline-template-based-reply-drafting.md>
+[^3]: <docs/adr-005-cross-surface-library-first-delivery.md>
+[^4]: <docs/adr-008-pr-discussion-summary-contract.md>
+[^5]: <docs/roadmap.md>
+[^6]: <docs/frankie-design.md>
+[^7]: <src/lib.rs>
+[^8]: <src/github/models/mod.rs>
+[^9]: <src/time_travel/mod.rs>
+[^10]: <src/tui/state/time_travel.rs>
