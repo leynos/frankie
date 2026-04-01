@@ -1,4 +1,4 @@
-# ADR-010: close review adapter capability gap
+# ADR-010: Close review adapter capability gap
 
 ## Status
 
@@ -103,7 +103,7 @@ Adopt **Option A** with the following contract:
 - Time-travel orchestration is exposed as a host-safe library service that does
   not require TUI command wrappers or global context.
 - Reply handling is split into:
-  - library-grade rendering over stable DTO input;
+  - library-grade rendering over stable data transfer object (DTO) input;
   - review-action submission that can either post immediately or return a
     queued write intent plus retry or backoff metadata.
 - Shared summary and navigation contracts use host-neutral review references.

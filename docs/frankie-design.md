@@ -3333,6 +3333,51 @@ governance decisions separately.
   TUI deep links rendered as one adapter-specific projection rather than the
   canonical contract.
 
+**End-to-end ownership walkthrough — new review comment lifecycle**:
+
+The following example traces a single new review comment from GitHub through
+Frankie's adapter layer and into a workflow-owning host, identifying which side
+owns each step.
+
+1. **Sync trigger** (host): the workflow owner (e.g. Corbusier) decides when
+   to poll or receives a webhook event indicating new review activity. It calls
+   Frankie's incremental sync API, passing the last `ReviewSyncCheckpoint` it
+   received.
+2. **Review intake** (Frankie): Frankie calls the GitHub API via `octocrab`,
+   fetches new and updated review comments since the checkpoint, and persists
+   raw `ReviewComment` rows in its local adapter cache.
+3. **Thread aggregation** (Frankie): Frankie derives thread topology from
+   `in_reply_to_id`, groups comments under stable thread roots
+   (`thread_root_github_comment_id`), and builds `ReviewThread` aggregates with
+   ordered replies and derived thread status.
+4. **Anchor derivation** (Frankie): for comments where `file_path`,
+   `commit_sha`, and line metadata are present, Frankie constructs a
+   `ReviewAnchor` capturing the actionable location. Comments missing anchor
+   metadata are flagged as raw-only.
+5. **Delta return** (Frankie): Frankie returns a `ReviewSyncDelta` containing
+   the added, updated, and removed comment sets plus an updated
+   `ReviewSyncCheckpoint`. The host stores this checkpoint for the next sync
+   cycle.
+6. **Canonical state update** (host): the workflow owner persists its own
+   review-state projections, links the new thread to its internal task model,
+   and applies governance rules (e.g. auto-assignment, SLA tracking).
+7. **Time-travel context** (Frankie, on demand): when the host or a user
+   requests historical context for the anchored comment, Frankie materializes
+   the file content at the relevant commit via `git2` and returns surrounding
+   code context. Frankie does not persist these snapshots — they are derived on
+   demand.
+8. **Reply drafting** (Frankie): the host requests a reply draft by passing
+   a data transfer object to Frankie's reply templating API. Frankie renders
+   the draft using the configured template engine and returns the formatted
+   body.
+9. **Reply submission** (Frankie): the host calls Frankie's review-action
+   submission API. Frankie either posts the reply to GitHub immediately or
+   returns a queued write intent with retry and backoff metadata if the request
+   cannot be fulfilled at once.
+10. **Governance and audit** (host): the workflow owner records the reply
+    outcome, updates its canonical review state, and applies any downstream
+    policies (approvals, notifications, audit logging).
+
 **Template Export Invocation Sequence**:
 
 Caption: Sequence diagram showing template export flow through the shared
@@ -4067,9 +4112,9 @@ erDiagram
     SYNC_CHECKPOINTS {
         id integer PK
         repository_id integer FK
-        resource_kind text
-        opaque_checkpoint text
-        last_synced_at timestamp
+        resource text
+        checkpoint text
+        updated_at timestamp
     }
     USERS {
         id integer PK
@@ -4112,7 +4157,11 @@ erDiagram
     REPOSITORIES ||--o{ SYNC_CHECKPOINTS : tracks
 ```
 
+Unique key on `SYNC_CHECKPOINTS`: `(repository_id, resource)`.
+
 #### 6.6.1.2 Core Entity Specifications
+
+Table: Data model entities and retention policies.
 
 | Entity           | Primary Purpose                                         | Key Relationships                                                                  | Data Retention                          |
 | ---------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------- |
@@ -4191,6 +4240,26 @@ The review comment cache preserves the raw GitHub payload as closely as
 possible. Thread topology and actionable anchors are derived on top of this raw
 record rather than flattened away during intake.
 
+**`ReviewComment` `Option<>` field invariants**:
+
+| Field                           | When present                                                                                                     | When absent                                                                                                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `body`                          | Always present for well-formed GitHub review comments.                                                           | `None` if the API returns a deleted or redacted comment.                                                                           |
+| `file_path`                     | Present for line-level (diff) review comments.                                                                   | `None` for PR-level general review comments that are not attached to a specific file.                                              |
+| `line_number`                   | Present when GitHub reports a current diff position.                                                             | `None` when the diff position is outdated or the comment is PR-level.                                                              |
+| `original_line_number`          | Present when the comment was made against a specific line in the original diff.                                  | `None` for PR-level comments or when the API omits the original position.                                                          |
+| `diff_hunk`                     | Present for line-level review comments; contains the surrounding diff context.                                   | `None` for PR-level comments or when the hunk has been truncated or is unavailable.                                                |
+| `commit_sha`                    | Present when the comment is anchored to a specific commit.                                                       | `None` when the API omits the original commit reference.                                                                           |
+| `in_reply_to_id`                | Present when this comment is a reply within a review thread; the value is the `github_comment_id` of the parent. | `None` for thread-root comments. Thread roots are identified by `in_reply_to_id.is_none()`.                                        |
+| `reviewer_id`                   | Present when the reviewer can be resolved to a persisted `USERS` row.                                            | `None` when the reviewer is a bot, a deleted account, or has not yet been synced to the local user cache.                          |
+| `thread_root_github_comment_id` | Derived field: equals `in_reply_to_id` when the comment is a reply, or `github_comment_id` when it is a root.    | Always populated during intake — never `None` at the persistence layer. Hosts may rely on this value for stable thread grouping.   |
+
+When `file_path`, `line_number`, `original_line_number`, `diff_hunk`, and
+`commit_sha` are all present, the comment carries enough anchor metadata to
+construct a `ReviewAnchor`. When any of these fields is absent, the comment
+degrades to a raw-only entry and hosts must handle the missing context
+explicitly.
+
 **Review thread projection model**:
 
 ```rust
@@ -4217,16 +4286,45 @@ pub struct ReviewThreadProjection {
 pub struct ReviewSyncCheckpoint {
     pub id: i32,
     pub repository_id: i32,
-    pub resource_kind: String,
-    pub opaque_checkpoint: String,
-    pub last_synced_at: chrono::NaiveDateTime,
+    pub resource: String,
+    pub checkpoint: Option<String>,
+    pub updated_at: chrono::NaiveDateTime,
 }
 ```
+
+Unique key: `(repository_id, resource)`.
+
+Compatibility note: earlier drafts used `resource_kind` / `opaque_checkpoint` /
+`last_synced_at`; these map to `resource` / `checkpoint` / `updated_at`
+respectively. Hosts should use the latter as canonical.
 
 Frankie persists adapter cache, thread projections, sync checkpoints,
 verification results, and queued write intents locally. Embedded workflow
 owners persist canonical task state, review-state projections, and
 cross-message governance metadata separately.
+
+**Persistence-layer structs vs public API contracts**:
+
+The Diesel-derived structs in this section (`Repository`, `PullRequest`,
+`ReviewComment`, `ReviewThreadProjection`, `ReviewSyncCheckpoint`) are
+persistence-layer projections — they mirror SQLite column layout and carry
+`#[diesel(table_name = …)]` annotations. They are **not** the host-facing API
+contracts described in § 5.2 and § 5.3.
+
+Table: Namespace boundary between persistence projections and public contracts.
+
+| Struct name              | Namespace            | Purpose                                                                                     |
+| ------------------------ | -------------------- | ------------------------------------------------------------------------------------------- |
+| `ReviewComment`          | Persistence (Diesel) | Row-level cache of raw GitHub review comment data; maps 1:1 to the `review_comments` table  |
+| `ReviewThreadProjection` | Persistence (Diesel) | Derived thread-root projection for local orchestration; maps to the `review_threads` table  |
+| `ReviewSyncCheckpoint`   | Persistence (Diesel) | Incremental sync cursor; maps to the `sync_checkpoints` table                               |
+| `ReviewThread`           | Public API contract  | Host-facing thread aggregate grouping a root comment with ordered replies and thread status |
+| `ReviewAnchor`           | Public API contract  | Host-facing actionable location metadata derived from raw comment fields                    |
+| `ReviewSyncDelta`        | Public API contract  | Host-facing delta payload returned by incremental sync operations                           |
+
+Hosts should depend on the public API contracts. The persistence structs are
+internal to Frankie's adapter cache and may evolve independently of the public
+surface.
 
 ### 6.6.2 Indexing Strategy
 
