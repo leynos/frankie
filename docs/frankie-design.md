@@ -3347,7 +3347,7 @@ owns each step.
    received.
 2. **Review intake** (Frankie): Frankie calls the GitHub API via `octocrab`,
    fetches new and updated review comments since the checkpoint, and persists
-   raw `ReviewComment` rows in its local adapter cache.
+   raw `ReviewCommentRow` records in its local adapter cache.
 3. **Thread aggregation** (Frankie): Frankie derives thread topology from
    `in_reply_to_id`, groups comments under stable thread roots
    (`thread_root_github_comment_id`), and builds `ReviewThread` aggregates with
@@ -4237,7 +4237,7 @@ pub struct PullRequest {
 ```rust
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = review_comments)]
-pub struct ReviewComment {
+pub struct ReviewCommentRow {
     pub id: i32,
     pub pull_request_id: i32,
     pub github_comment_id: i64,
@@ -4260,27 +4260,32 @@ The review comment cache preserves the raw GitHub payload as closely as
 possible. Thread topology and actionable anchors are derived on top of this raw
 record rather than flattened away during intake.
 
-Target persistence note: the struct above is the **target** Diesel projection.
-The current `review_comments` migration does not yet include
-`thread_root_github_comment_id`, `commit_sha`, `in_reply_to_id`, or
-`reviewer_id`. Frankie's in-memory `ReviewComment` (`src/github/models/mod.rs`)
-already carries `commit_sha` and `in_reply_to_id` as API-populated fields. A
-future migration will add the remaining columns to the persisted table, at
-which point this struct becomes the live Diesel projection.
+Target persistence note: the struct above is the **target** Diesel row
+projection (`ReviewCommentRow`). The current `review_comments` migration does
+not yet include `thread_root_github_comment_id`, `commit_sha`,
+`in_reply_to_id`, or `reviewer_id`. Additionally, the current migration defines
+`body` as `TEXT NOT NULL`, whereas the target projection declares `body` as
+`Option<String>` (nullable) to accommodate deleted or redacted comments whose
+body the GitHub API returns as `null`. The future migration that adds the
+missing columns will also relax the `body` column to `TEXT` (nullable).
+Frankie's in-memory `ReviewComment` (`src/github/models/mod.rs`) already
+carries `commit_sha`, `in_reply_to_id`, and `body` as `Option<String>` fields
+populated from the GitHub API response. A future migration will align the
+persisted table with this target projection.
 
-**`ReviewComment` field invariants and optionality**:
+**`ReviewCommentRow` field invariants and optionality**:
 
-| Field                           | When present                                                                                                     | When absent                                                                                                                                                         |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `body`                          | Always present for well-formed GitHub review comments.                                                           | `None` if the API returns a deleted or redacted comment.                                                                                                            |
-| `file_path`                     | Present for line-level (diff) review comments.                                                                   | `None` for pull request-level general review comments that are not attached to a specific file.                                                                     |
-| `line_number`                   | Present when GitHub reports a current diff position.                                                             | `None` when the diff position is outdated or the comment is pull request-level.                                                                                     |
-| `original_line_number`          | Present when the comment was made against a specific line in the original diff.                                  | `None` for pull request-level comments or when the API omits the original position.                                                                                 |
-| `diff_hunk`                     | Present for line-level review comments; contains the surrounding diff context.                                   | `None` for pull request-level comments or when the hunk has been truncated or is unavailable.                                                                       |
-| `commit_sha`                    | Present when the comment is anchored to a specific commit.                                                       | `None` when the API omits the original commit reference.                                                                                                            |
-| `in_reply_to_id`                | Present when this comment is a reply within a review thread; the value is the `github_comment_id` of the parent. | `None` for thread-root comments. Thread roots are identified by `in_reply_to_id.is_none()`.                                                                         |
-| `reviewer_id`                   | Present when the reviewer can be resolved to a persisted `USERS` row.                                            | `None` when the reviewer is a bot, a deleted account, or has not yet been synced to the local user cache.                                                           |
-| `thread_root_github_comment_id` | Derived field: equals `in_reply_to_id` when the comment is a reply, or `github_comment_id` when it is a root.    | Always populated during intake — never `None` at the persistence layer. Hosts may rely on this value for stable thread grouping. This is not an `Option<>` field.   |
+| Field                           | When present                                                                                                                   | When absent                                                                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `body`                          | Present (`Some`) for well-formed GitHub review comments. The field is `Option<String>` at both the API and persistence layers. | `None` when the GitHub API returns a deleted or redacted comment. Callers that require a displayable body should fall back to a sentinel such as `"[deleted]"` rather than treating `None` as an empty string. |
+| `file_path`                     | Present for line-level (diff) review comments.                                                                                 | `None` for pull request-level general review comments that are not attached to a specific file.                                                                                                                |
+| `line_number`                   | Present when GitHub reports a current diff position.                                                                           | `None` when the diff position is outdated or the comment is pull request-level.                                                                                                                                |
+| `original_line_number`          | Present when the comment was made against a specific line in the original diff.                                                | `None` for pull request-level comments or when the API omits the original position.                                                                                                                            |
+| `diff_hunk`                     | Present for line-level review comments; contains the surrounding diff context.                                                 | `None` for pull request-level comments or when the hunk has been truncated or is unavailable.                                                                                                                  |
+| `commit_sha`                    | Present when the comment is anchored to a specific commit.                                                                     | `None` when the API omits the original commit reference.                                                                                                                                                       |
+| `in_reply_to_id`                | Present when this comment is a reply within a review thread; the value is the `github_comment_id` of the parent.               | `None` for thread-root comments. Thread roots are identified by `in_reply_to_id.is_none()`.                                                                                                                    |
+| `reviewer_id`                   | Present when the reviewer can be resolved to a persisted `USERS` row.                                                          | `None` when the reviewer is a bot, a deleted account, or has not yet been synced to the local user cache.                                                                                                      |
+| `thread_root_github_comment_id` | Derived field: equals `in_reply_to_id` when the comment is a reply, or `github_comment_id` when it is a root.                  | Always populated during intake — never `None` at the persistence layer. Hosts may rely on this value for stable thread grouping. This is not an `Option<>` field.                                              |
 
 When `file_path`, `line_number`, `original_line_number`, `diff_hunk`, and
 `commit_sha` are all present, the comment carries enough anchor metadata to
@@ -4293,7 +4298,7 @@ explicitly.
 ```rust
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = review_threads)]
-pub struct ReviewThreadProjection {
+pub struct ReviewThreadProjectionRow {
     pub id: i32,
     pub pull_request_id: i32,
     pub thread_root_github_comment_id: i64,
@@ -4311,7 +4316,7 @@ pub struct ReviewThreadProjection {
 ```rust
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = sync_checkpoints)]
-pub struct ReviewSyncCheckpoint {
+pub struct ReviewSyncCheckpointRow {
     pub id: i32,
     pub repository_id: i32,
     pub resource: String,
@@ -4334,25 +4339,25 @@ cross-message governance metadata separately.
 **Persistence-layer structs vs public API contracts**:
 
 The Diesel-derived structs in this section (`Repository`, `PullRequest`,
-`ReviewComment`, `ReviewThreadProjection`, `ReviewSyncCheckpoint`) are
-persistence-layer projections — they mirror SQLite column layout and carry
-`#[diesel(table_name = …)]` annotations. They are **not** the host-facing API
-contracts described in § 5.2 and § 5.3.
+`ReviewCommentRow`, `ReviewThreadProjectionRow`, `ReviewSyncCheckpointRow`) are
+persistence-layer row projections — they mirror SQLite column layout and carry
+`#[diesel(table_name = …)]` annotations. The `Row` suffix distinguishes them
+from the public API contracts described in § 5.2 and § 5.3.
 
 Table: Namespace boundary between persistence projections and public contracts.
 
-| Struct name              | Namespace            | Purpose                                                                                     |
-| ------------------------ | -------------------- | ------------------------------------------------------------------------------------------- |
-| `ReviewComment`          | Persistence (Diesel) | Row-level cache of raw GitHub review comment data; maps 1:1 to the `review_comments` table  |
-| `ReviewThreadProjection` | Persistence (Diesel) | Derived thread-root projection for local orchestration; maps to the `review_threads` table  |
-| `ReviewSyncCheckpoint`   | Persistence (Diesel) | Incremental sync cursor; maps to the `sync_checkpoints` table                               |
-| `ReviewThread`           | Public API contract  | Host-facing thread aggregate grouping a root comment with ordered replies and thread status |
-| `ReviewAnchor`           | Public API contract  | Host-facing actionable location metadata derived from raw comment fields                    |
-| `ReviewSyncDelta`        | Public API contract  | Host-facing delta payload returned by incremental sync operations                           |
+| Struct name                 | Namespace            | Purpose                                                                                     |
+| --------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
+| `ReviewCommentRow`          | Persistence (Diesel) | Row-level cache of raw GitHub review comment data; maps 1:1 to the `review_comments` table  |
+| `ReviewThreadProjectionRow` | Persistence (Diesel) | Derived thread-root projection for local orchestration; maps to the `review_threads` table  |
+| `ReviewSyncCheckpointRow`   | Persistence (Diesel) | Incremental sync cursor; maps to the `sync_checkpoints` table                               |
+| `ReviewThread`              | Public API contract  | Host-facing thread aggregate grouping a root comment with ordered replies and thread status |
+| `ReviewAnchor`              | Public API contract  | Host-facing actionable location metadata derived from raw comment fields                    |
+| `ReviewSyncDelta`           | Public API contract  | Host-facing delta payload returned by incremental sync operations                           |
 
-Hosts should depend on the public API contracts. The persistence structs are
-internal to Frankie's adapter cache and may evolve independently of the public
-surface.
+Hosts should depend on the public API contracts. The persistence row structs
+are internal to Frankie's adapter cache and may evolve independently of the
+public surface.
 
 ### 6.6.2 Indexing Strategy
 

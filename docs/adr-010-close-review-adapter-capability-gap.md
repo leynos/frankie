@@ -63,10 +63,10 @@ review workflow state.
   and queued write intents rather than canonical workflow state.
 - Maintain a clear boundary between persistence-layer projections and public
   contracts:
-  - Internal persistence structures (Diesel-derived row projections such as the
-    persisted `ReviewComment`, `ReviewThreadProjection`, and
-    `ReviewSyncCheckpoint`) are implementation details and must not appear in
-    Frankie's public API surface.
+  - Internal persistence structures (Diesel-derived row projections such as
+    `ReviewCommentRow`, `ReviewThreadProjectionRow`, and
+    `ReviewSyncCheckpointRow`) are implementation details and must not appear
+    in Frankie's public API surface.
   - Host-facing contracts (`ReviewThread`, `ReviewAnchor`, `ReviewSyncDelta`,
     `ReplyTemplateContext`) form the public adapter interface.
   - Explicit adapter or mapping functions must translate between the two
@@ -91,8 +91,8 @@ review workflow state.
 | Option B: Frankie owns canonical review workflow state       | Weak: duplicates orchestration concerns already handled by hosts                    | Medium: more features in Frankie, but blurred responsibility                  | Medium: harder to integrate with external task governance         | Weak: overlaps with embedding hosts         |
 | Option C: Keep the current mixed, partly TUI-centric surface | Weak: ownership remains ambiguous                                                   | Weak: hosts must reconstruct missing semantics                                | Weak: each host reinvents retries, links, and thread models       | Weak: capability drift grows over time      |
 
-_Table: Option comparison for ownership boundary, shared contract quality,
-operational fit, and long-term maintenance._
+Table: Option comparison for ownership boundary, shared contract quality,
+operational fit, and long-term maintenance.
 
 ## Decision outcome / proposed direction
 
@@ -121,6 +121,50 @@ Adopt **Option A** with the following contract:
   TUI deep links are rendered from those references as an adapter concern.
 - Frankie's design language and integration assumptions use GitHub API and
   local Git terminology, not browser-automation terminology.
+
+### End-to-end walkthrough — sync to reply
+
+The following traces a single new GitHub review comment through the adapter
+pipeline to reply submission, annotating ownership and listing the artefacts
+produced at each step.
+
+1. **Intake and normalisation** (Frankie): Frankie fetches the new comment via
+   `octocrab`, normalises it into a `ReviewCommentRow` persistence record, and
+   persists it in the local adapter cache. A `ReviewSyncDelta` with the comment
+   in its `added` set and an updated `ReviewSyncCheckpoint` are prepared.
+   Artefacts: `ReviewCommentRow` (persisted), initial `ReviewSyncDelta`
+   (added), `ReviewSyncCheckpoint`.
+2. **Thread aggregation** (Frankie): Frankie derives thread topology from the
+   `in_reply_to_id` chain, groups comments under stable thread roots
+   (`thread_root_github_comment_id`), and builds a `ReviewThread` aggregate
+   with ordered replies and derived thread status (open, resolved). Artefacts:
+   `ReviewThread`, derived thread status.
+3. **Anchor derivation** (Frankie): when the source comment carries `file_path`,
+   `line_number`, `original_line_number`, `diff_hunk`, and `commit_sha`,
+   Frankie constructs a `ReviewAnchor` capturing the actionable location.
+   Comments missing any anchor field degrade to raw-only entries. Artefacts:
+   `ReviewAnchor` (if locatable).
+4. **Time-travel and context materialisation** (Frankie, host-safe library):
+   the host or user requests historical file content at the anchor's
+   `commit_sha`. Frankie materialises the surrounding code context via `git2`
+   on demand and returns context data transfer objects. Snapshots are not
+   persisted. Artefacts: materialised context DTOs.
+5. **Summary, preparation, and render** (Frankie): the host passes a
+   `ReplyTemplateContext` data transfer object to Frankie's reply templating
+   API. Frankie renders the reply body using the configured template engine and
+   returns a reply DTO together with a queued write intent if immediate
+   submission is not possible. Artefacts: reply DTO, queued write intent.
+6. **Review-state projection and governance** (host): the embedding workflow
+   owner persists its own review-state projections, links the new thread to its
+   canonical task model, and applies governance rules (auto-assignment, SLA
+   tracking, approval policies). Artefacts: canonical task state (host-owned).
+7. **Final submission** (Frankie or host): either Frankie posts the
+   review-action to GitHub directly and returns a `ReviewSyncDelta` (updated)
+   reflecting the posted reply, or the host consumes the queued write intent
+   and posts itself. In either case the resulting reply produces follow-up
+   `ReviewThread` updates and a fresh `ReviewSyncCheckpoint`. Artefacts:
+   `ReviewSyncDelta` (updated), follow-up `ReviewThread` updates,
+   `ReviewSyncCheckpoint`.
 
 ### Contract invariants
 
