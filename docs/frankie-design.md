@@ -4346,14 +4346,14 @@ from the public API contracts described in § 5.2 and § 5.3.
 
 Table: Namespace boundary between persistence projections and public contracts.
 
-| Struct name                 | Namespace            | Purpose                                                                                     |
-| --------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
-| `ReviewCommentRow`          | Persistence (Diesel) | Row-level cache of raw GitHub review comment data; maps 1:1 to the `review_comments` table  |
-| `ReviewThreadProjectionRow` | Persistence (Diesel) | Derived thread-root projection for local orchestration; maps to the `review_threads` table  |
-| `ReviewSyncCheckpointRow`   | Persistence (Diesel) | Incremental sync cursor; maps to the `sync_checkpoints` table                               |
-| `ReviewThread`              | Public API contract  | Host-facing thread aggregate grouping a root comment with ordered replies and thread status |
-| `ReviewAnchor`              | Public API contract  | Host-facing actionable location metadata derived from raw comment fields                    |
-| `ReviewSyncDelta`           | Public API contract  | Host-facing delta payload returned by incremental sync operations                           |
+| Struct name                 | Namespace            | Purpose                                                                                                                         |
+| --------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ReviewCommentRow`          | Persistence (Diesel) | Row-level cache of raw GitHub review comment data; will map 1:1 to the `review_comments` table once target columns are migrated |
+| `ReviewThreadProjectionRow` | Persistence (Diesel) | Derived thread-root projection for local orchestration; will map to the `review_threads` table once the migration is applied    |
+| `ReviewSyncCheckpointRow`   | Persistence (Diesel) | Incremental sync cursor; maps to the existing `sync_checkpoints` table                                                          |
+| `ReviewThread`              | Public API contract  | Host-facing thread aggregate grouping a root comment with ordered replies and thread status                                     |
+| `ReviewAnchor`              | Public API contract  | Host-facing actionable location metadata derived from raw comment fields                                                        |
+| `ReviewSyncDelta`           | Public API contract  | Host-facing delta payload returned by incremental sync operations                                                               |
 
 Hosts should depend on the public API contracts. The persistence row structs
 are internal to Frankie's adapter cache and may evolve independently of the

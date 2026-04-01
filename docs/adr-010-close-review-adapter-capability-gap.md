@@ -156,8 +156,9 @@ produced at each step.
    submission is not possible. Artefacts: reply DTO, queued write intent.
 6. **Review-state projection and governance** (host): the embedding workflow
    owner persists its own review-state projections, links the new thread to its
-   canonical task model, and applies governance rules (auto-assignment, SLA
-   tracking, approval policies). Artefacts: canonical task state (host-owned).
+   canonical task model, and applies governance rules (auto-assignment,
+   service-level agreement (SLA) tracking, approval policies). Artefacts:
+   canonical task state (host-owned).
 7. **Final submission** (Frankie or host): either Frankie posts the
    review-action to GitHub directly and returns a `ReviewSyncDelta` (updated)
    reflecting the posted reply, or the host consumes the queued write intent
@@ -168,8 +169,29 @@ produced at each step.
 
 ### Contract invariants
 
-The following invariants apply to shared review contracts. See
-`docs/frankie-design.md` § 6.6.1.3 for the full field-level invariant table.
+The following invariants apply to the **target** shared review contracts
+described by this ADR. These types and fields do not all exist in the current
+codebase — they represent the contract surface that Frankie will expose once
+the roadmap items in § Migration plan are complete.
+
+Current deviations from the target contract:
+
+- `ReviewComment` in `src/github/models/mod.rs` uses `id: u64` (the GitHub
+  comment identifier) and `author: Option<String>` (the reviewer login). The
+  target contract renames these to `github_comment_id` and `reviewer_id`
+  respectively and adds `thread_root_github_comment_id` for stable thread
+  grouping. Until the migration lands, callers should treat `id` as the
+  equivalent of `github_comment_id` and `author` as the equivalent of
+  `reviewer_id`.
+- `ReviewThread`, `ReviewAnchor`, `ReviewSyncDelta`, and
+  `ReviewSyncCheckpoint` do not yet exist as runtime types. Their invariants
+  are documented here so that implementations conform to a single contract when
+  they are introduced.
+- The `removed` tombstone semantics on `ReviewSyncDelta` (identifier-only
+  entries carrying `id` and `github_comment_id`) will be enforced once the
+  delta type is implemented.
+
+See `docs/frankie-design.md` § 6.6.1.3 for the full field-level invariant table.
 
 **`ReviewComment`**:
 
