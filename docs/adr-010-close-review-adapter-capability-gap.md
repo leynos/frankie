@@ -162,7 +162,7 @@ produced at each step.
 7. **Final submission** (Frankie or host): either Frankie posts the
    review-action to GitHub directly and returns a `ReviewSyncDelta` (updated)
    reflecting the posted reply, or the host consumes the queued write intent
-   and posts itself. In either case the resulting reply produces follow-up
+   and posts itself. In either case, the resulting reply produces follow-up
    `ReviewThread` updates and a fresh `ReviewSyncCheckpoint`. Artefacts:
    `ReviewSyncDelta` (updated), follow-up `ReviewThread` updates,
    `ReviewSyncCheckpoint`.

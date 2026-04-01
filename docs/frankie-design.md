@@ -4275,6 +4275,9 @@ persisted table with this target projection.
 
 **`ReviewCommentRow` field invariants and optionality**:
 
+Table: `ReviewCommentRow` field invariants — presence and absence semantics for
+each `Option<>` field and the derived `thread_root_github_comment_id`.
+
 | Field                           | When present                                                                                                                                                                                                                                                 | When absent                                                                                                                                                                                                    |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `body`                          | Present (`Some`) for well-formed GitHub review comments. The field is `Option<String>` at both the API and persistence layers.                                                                                                                               | `None` when the GitHub API returns a deleted or redacted comment. Callers that require a displayable body should fall back to a sentinel such as `"[deleted]"` rather than treating `None` as an empty string. |
