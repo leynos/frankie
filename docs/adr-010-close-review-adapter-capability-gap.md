@@ -128,8 +128,8 @@ The following traces a single new GitHub review comment through the adapter
 pipeline to reply submission, annotating ownership and listing the artefacts
 produced at each step.
 
-1. **Intake and normalisation** (Frankie): Frankie fetches the new comment via
-   `octocrab`, normalises it into a `ReviewCommentRow` persistence record, and
+1. **Intake and normalization** (Frankie): Frankie fetches the new comment via
+   `octocrab`, normalizes it into a `ReviewCommentRow` persistence record, and
    persists it in the local adapter cache. A `ReviewSyncDelta` with the comment
    in its `added` set and an updated `ReviewSyncCheckpoint` are prepared.
    Artefacts: `ReviewCommentRow` (persisted), initial `ReviewSyncDelta`
@@ -144,11 +144,11 @@ produced at each step.
    Frankie constructs a `ReviewAnchor` capturing the actionable location.
    Comments missing any anchor field degrade to raw-only entries. Artefacts:
    `ReviewAnchor` (if locatable).
-4. **Time-travel and context materialisation** (Frankie, host-safe library):
+4. **Time-travel and context materialization** (Frankie, host-safe library):
    the host or user requests historical file content at the anchor's
-   `commit_sha`. Frankie materialises the surrounding code context via `git2`
+   `commit_sha`. Frankie materializes the surrounding code context via `git2`
    on demand and returns context data transfer objects. Snapshots are not
-   persisted. Artefacts: materialised context DTOs.
+   persisted. Artefacts: materialized context DTOs.
 5. **Summary, preparation, and render** (Frankie): the host passes a
    `ReplyTemplateContext` data transfer object to Frankie's reply templating
    API. Frankie renders the reply body using the configured template engine and
@@ -176,10 +176,13 @@ The following invariants apply to shared review contracts. See
 - `github_comment_id` is always present and globally unique within a
   pull request.
 - `thread_root_github_comment_id` is always populated during intake. For root
-  comments it equals `github_comment_id`; for replies it equals the root's
-  `github_comment_id`. Hosts may rely on this value for stable thread grouping.
+  comments it equals `github_comment_id`; for replies (including nested
+  replies) it equals the top-most root's `github_comment_id`, not the immediate
+  parent. All comments in the same thread share the same value, making it a
+  stable thread grouping key.
 - `in_reply_to_id` is `None` for thread roots and `Some(parent_id)` for
-  replies. Thread-root identification uses `in_reply_to_id.is_none()`.
+  replies, where `parent_id` is the direct parent's `github_comment_id`.
+  Thread-root identification uses `in_reply_to_id.is_none()`.
 - Anchor fields (`file_path`, `line_number`, `original_line_number`,
   `diff_hunk`, `commit_sha`) are individually optional. A `ReviewAnchor` can
   only be constructed when all five are present; otherwise the comment degrades
