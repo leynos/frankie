@@ -171,10 +171,11 @@ The following invariants apply to shared review contracts. See
   cursor and pass it back unchanged on the next sync call.
 - `checkpoint` may be `None` for newly created sync entries that have not yet
   completed a full cycle.
-- `ReviewSyncDelta` fields `added`, `updated`, and `removed` contain fully
-  populated `ReviewComment` values — partial metadata is not returned in
-  deltas. A comment appearing in `removed` carries only its identifying fields
-  (`id`, `github_comment_id`).
+- `ReviewSyncDelta` fields `added` and `updated` contain fully populated
+  `ReviewComment` values — partial metadata is not returned in these sets. The
+  `removed` field contains identifier-only tombstones carrying only `id` and
+  `github_comment_id`; hosts must not expect full comment metadata for removed
+  entries.
 
 ## Goals and non-goals
 

@@ -2448,6 +2448,8 @@ retain canonical task and review workflow state.
 
 ### 5.1.2 Core Components Table
 
+Table: Component responsibilities and integrations.
+
 | Component Name         | Primary Responsibility                                                                                | Key Dependencies                           | Integration Points                                  |
 | ---------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------- |
 | TUI Controller         | User interface management and event handling                                                          | bubbletea-rs, bubbletea-widgets, crossterm | All business logic components                       |
@@ -3309,8 +3311,8 @@ flowchart TD
 | Historical context          | Materialize commit snapshots, line mappings, and surrounding code context on demand from local Git                                 | Decide when context is needed and how downstream workflow state should react               |
 | Review actions              | Render reply drafts, submit replies, and expose queue or backoff metadata for review mutations                                     | Apply governance, approvals, retry policy, and audit handling                              |
 
-_Table: Review adapter responsibilities split between Frankie and an embedding
-workflow owner._
+Table: Review adapter responsibilities split between Frankie and an embedding
+workflow owner.
 
 Frankie does not own canonical task or review workflow state outwith its local
 adapter cache, sync checkpoints, verification results, and queued write
