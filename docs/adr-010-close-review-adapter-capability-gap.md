@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted (2026-03-28): Define Frankie as an API-driven GitHub review adapter
-and context engine, with host-neutral contracts for thread sync, anchors, time
-travel, verification, summary references, and reply actions.
+Accepted (2026-03-28): Define Frankie as an application programming interface
+(API)-driven GitHub review adapter and context engine, with host-neutral
+contracts for thread sync, anchors, time travel, verification, summary
+references, and reply actions.
 
 ## Date
 
