@@ -1,0 +1,325 @@
+# ADR-010: Close review adapter capability gap
+
+## Status
+
+Accepted (2026-03-28): Define Frankie as an application programming interface
+(API)-driven GitHub review adapter and context engine, with host-neutral
+contracts for thread sync, anchors, time travel, verification, summary
+references, and reply actions.
+
+## Date
+
+2026-03-28
+
+## Context and problem statement
+
+Frankie is already positioned as a GitHub pull request adapter with a
+library-first delivery model, but parts of the current design and roadmap still
+leave an architectural gap between that positioning and the capabilities an
+embedding workflow owner needs.
+
+The current public surface exposes raw `ReviewComment` values and some
+library-first slices, but important review capabilities remain uneven:
+
+- time-travel extraction is public, while `TimeTravelState` and orchestration
+  remain partly TUI-scoped;
+- reply drafting exists, but live review submission and queue-safe write
+  semantics are not yet part of the shared contract;
+- incremental sync is described primarily as TUI merge behaviour rather than a
+  host-safe checkpoint and delta protocol;
+- summary contracts currently expose `TuiViewLink`, which bakes one delivery
+  surface into the shared model;
+- review comments are still exposed mostly as flat raw payloads, leaving hosts
+  to reconstruct thread and anchor semantics themselves.
+
+At the same time, Frankie’s actual implementation direction is API-driven:
+GitHub review intake flows through `octocrab`, historical context comes from
+local Git operations via `git2`, and the library is intended to be embedded in
+larger hosts. Workflow-owning systems such as Corbusier need Frankie to act as
+the review adapter and context engine, while they retain canonical task and
+review workflow state.
+
+## Decision drivers
+
+- Clear ownership boundaries between Frankie and workflow-owning hosts.
+- Lossless preservation of GitHub review metadata.
+- First-class modelling of review threads and actionable anchors.
+- On-demand historical context from local Git instead of persisted snapshots.
+- Host-neutral shared contracts that do not depend on TUI-specific types.
+- Safe operational semantics for review writes, retries, and backoff.
+
+## Requirements
+
+### Functional requirements
+
+- Expose raw review payloads, thread aggregates, and actionable anchors as
+  shared library contracts.
+- Support incremental synchronization through durable checkpoints and explicit
+  deltas.
+- Materialize time-travel context, verification inputs, and summary references
+  on demand for library, CLI, TUI, and embedded-host consumers.
+- Support reply rendering and review-action submission without forcing hosts to
+  depend on TUI state or invent their own queue protocol.
+- Keep Frankie's local persistence focused on cache, checkpoints, verification,
+  and queued write intents rather than canonical workflow state.
+- Maintain a clear boundary between persistence-layer projections and public
+  contracts:
+  - Internal persistence structures (Diesel-derived row projections such as
+    `ReviewCommentRow`, `ReviewThreadProjectionRow`, and
+    `ReviewSyncCheckpointRow`) are implementation details and must not appear
+    in Frankie's public API surface.
+  - Host-facing contracts (`ReviewThread`, `ReviewAnchor`, `ReviewSyncDelta`,
+    `ReplyTemplateContext`) form the public adapter interface.
+  - Explicit adapter or mapping functions must translate between the two
+    namespaces so that persistence schema changes do not propagate to
+    consumers.
+
+### Technical requirements
+
+- Use API-driven GitHub review access through `octocrab`, not browser
+  automation.
+- Use local Git context through `git2` for time-travel and verification.
+- Keep TUI orchestration types such as `bubbletea_rs::Cmd`, `OnceLock`, and
+  TUI deep-link renderings out of shared review contracts.
+- Expose durable retry or backoff metadata for review writes when immediate
+  submission is not possible.
+
+## Options considered
+
+| Option                                                       | Ownership boundary                                                                  | Shared contract quality                                                       | Operational fit                                                   | Long-term maintenance                       |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------- |
+| Option A: Frankie as review adapter and context engine       | Strong: Frankie owns review transport and derived context; host owns workflow state | Strong: thread, anchor, sync, verification, and action contracts are explicit | Strong: queue or backoff metadata can be surfaced once and reused | Strong: aligns with library-first direction |
+| Option B: Frankie owns canonical review workflow state       | Weak: duplicates orchestration concerns already handled by hosts                    | Medium: more features in Frankie, but blurred responsibility                  | Medium: harder to integrate with external task governance         | Weak: overlaps with embedding hosts         |
+| Option C: Keep the current mixed, partly TUI-centric surface | Weak: ownership remains ambiguous                                                   | Weak: hosts must reconstruct missing semantics                                | Weak: each host reinvents retries, links, and thread models       | Weak: capability drift grows over time      |
+
+Table: Option comparison for ownership boundary, shared contract quality,
+operational fit, and long-term maintenance.
+
+## Decision outcome / proposed direction
+
+Adopt **Option A** with the following contract:
+
+- Frankie owns GitHub review intake, normalization, thread aggregation, anchor
+  derivation, time-travel context materialization, automated verification,
+  summary preparation, reply rendering, and GitHub review-action transport.
+- Embedded workflow owners own canonical task state, review-state projections,
+  governance, message linkage, and merge or approval policies.
+- Shared review modelling is layered:
+  - `ReviewComment` remains the raw, lossless GitHub review payload.
+  - `ReviewThread` groups a stable root comment with ordered replies and
+    derived thread status.
+  - `ReviewAnchor` captures actionable location metadata when the source
+    comment includes enough information.
+- Incremental intake uses opaque `ReviewSyncCheckpoint` values and explicit
+  `ReviewSyncDelta { added, updated, removed, checkpoint }` results.
+- Time-travel orchestration is exposed as a host-safe library service that does
+  not require TUI command wrappers or global context.
+- Reply handling is split into:
+  - library-grade rendering over stable data transfer object (DTO) input;
+  - review-action submission that can either post immediately or return a
+    queued write intent plus retry or backoff metadata.
+- Shared summary and navigation contracts use host-neutral review references.
+  TUI deep links are rendered from those references as an adapter concern.
+- Frankie's design language and integration assumptions use GitHub API and
+  local Git terminology, not browser-automation terminology.
+
+### End-to-end walkthrough — sync to reply
+
+The following traces a single new GitHub review comment through the adapter
+pipeline to reply submission, annotating ownership and listing the artefacts
+produced at each step.
+
+1. **Intake and normalization** (Frankie): Frankie fetches the new comment via
+   `octocrab`, normalizes it into a `ReviewCommentRow` persistence record, and
+   persists it in the local adapter cache. A `ReviewSyncDelta` with the comment
+   in its `added` set and an updated `ReviewSyncCheckpoint` are prepared.
+   Artefacts: `ReviewCommentRow` (persisted), initial `ReviewSyncDelta`
+   (added), `ReviewSyncCheckpoint`.
+2. **Thread aggregation** (Frankie): Frankie derives thread topology from the
+   `in_reply_to_id` chain, groups comments under stable thread roots
+   (`thread_root_github_comment_id`), and builds a `ReviewThread` aggregate
+   with ordered replies and derived thread status (open, resolved). Artefacts:
+   `ReviewThread`, derived thread status.
+3. **Anchor derivation** (Frankie): when the source comment carries `file_path`,
+   `line_number`, `original_line_number`, `diff_hunk`, and `commit_sha`,
+   Frankie constructs a `ReviewAnchor` capturing the actionable location.
+   Comments missing any anchor field degrade to raw-only entries. Artefacts:
+   `ReviewAnchor` (if locatable).
+4. **Time-travel and context materialization** (Frankie, host-safe library):
+   the host or user requests historical file content at the anchor's
+   `commit_sha`. Frankie materializes the surrounding code context via `git2`
+   on demand and returns context data transfer objects. Snapshots are not
+   persisted. Artefacts: materialized context DTOs.
+5. **Summary, preparation, and render** (Frankie): the host passes a
+   `ReplyTemplateContext` data transfer object to Frankie's reply templating
+   API. Frankie renders the reply body using the configured template engine and
+   returns a reply DTO together with a queued write intent if immediate
+   submission is not possible. Artefacts: reply DTO, queued write intent.
+6. **Review-state projection and governance** (host): the embedding workflow
+   owner persists its own review-state projections, links the new thread to its
+   canonical task model, and applies governance rules (auto-assignment,
+   service-level agreement (SLA) tracking, approval policies). Artefacts:
+   canonical task state (host-owned).
+7. **Final submission** (Frankie or host): either Frankie posts the
+   review-action to GitHub directly and returns a `ReviewSyncDelta` (updated)
+   reflecting the posted reply, or the host consumes the queued write intent
+   and posts itself. In either case, the resulting reply produces follow-up
+   `ReviewThread` updates and a fresh `ReviewSyncCheckpoint`. Artefacts:
+   `ReviewSyncDelta` (updated), follow-up `ReviewThread` updates,
+   `ReviewSyncCheckpoint`.
+
+### Contract invariants
+
+The following invariants apply to the **target** shared review contracts
+described by this ADR. These types and fields do not all exist in the current
+codebase — they represent the contract surface that Frankie will expose once
+the roadmap items in § Migration plan are complete.
+
+Current deviations from the target contract:
+
+- `ReviewComment` in `src/github/models/mod.rs` uses `id: u64` (the GitHub
+  comment identifier) and `author: Option<String>` (the reviewer login). The
+  target contract renames these to `github_comment_id` and `reviewer_id`
+  respectively and adds `thread_root_github_comment_id` for stable thread
+  grouping. Until the migration lands, callers should treat `id` as the
+  equivalent of `github_comment_id` and `author` as the equivalent of
+  `reviewer_id`.
+- `ReviewThread`, `ReviewAnchor`, `ReviewSyncDelta`, and
+  `ReviewSyncCheckpoint` do not yet exist as runtime types. Their invariants
+  are documented here so that implementations conform to a single contract when
+  they are introduced.
+- The `removed` tombstone semantics on `ReviewSyncDelta` (identifier-only
+  entries carrying `id` and `github_comment_id`) will be enforced once the
+  delta type is implemented.
+
+See `docs/frankie-design.md` § 6.6.1.3 for the full field-level invariant table.
+
+**`ReviewComment`**:
+
+- `github_comment_id` is always present and globally unique within a
+  pull request.
+- `thread_root_github_comment_id` is always populated during intake. For root
+  comments it equals `github_comment_id`; for replies (including nested
+  replies) it equals the top-most root's `github_comment_id`, not the immediate
+  parent. All comments in the same thread share the same value, making it a
+  stable thread grouping key.
+- `in_reply_to_id` is `None` for thread roots and `Some(parent_id)` for
+  replies, where `parent_id` is the direct parent's `github_comment_id`.
+  Thread-root identification uses `in_reply_to_id.is_none()`.
+- Anchor fields (`file_path`, `line_number`, `original_line_number`,
+  `diff_hunk`, `commit_sha`) are individually optional. A `ReviewAnchor` can
+  only be constructed when all five are present; otherwise the comment degrades
+  to a raw-only entry.
+- `body` may be `None` for deleted or redacted comments.
+- `reviewer_id` may be `None` when the reviewer is a bot, a deleted account,
+  or has not been synced to the local user cache.
+
+**`ReviewThread`**:
+
+- A thread is considered stable once its root comment has been ingested. The
+  root is identified by `in_reply_to_id.is_none()` on the earliest comment in
+  the thread.
+- `is_resolved` reflects the last known resolution status from sync data. It
+  does not track GitHub's explicit "Resolve conversation" state unless
+  additional API data has been fetched.
+- Replies are ordered by `created_at` within the thread.
+
+**`ReviewAnchor`**:
+
+- Constructed only when all required anchor fields are present on the source
+  `ReviewComment`. When any field is absent, no `ReviewAnchor` is produced and
+  the host must handle the missing context explicitly.
+- `commit_sha` anchors the comment to a specific commit. If the referenced
+  commit is no longer reachable in the local repository, time-travel context
+  materialization returns an explicit "unknown commit" status rather than
+  failing silently.
+
+**`ReviewSyncCheckpoint` and `ReviewSyncDelta`**:
+
+- `ReviewSyncCheckpoint` carries an opaque `checkpoint` string whose format is
+  internal to Frankie's sync implementation. Hosts must treat it as an opaque
+  cursor and pass it back unchanged on the next sync call.
+- `checkpoint` may be `None` for newly created sync entries that have not yet
+  completed a full cycle.
+- `ReviewSyncDelta` fields `added` and `updated` contain fully populated
+  `ReviewComment` values — partial metadata is not returned in these sets. The
+  `removed` field contains identifier-only tombstones carrying only `id` and
+  `github_comment_id`; hosts must not expect full comment metadata for removed
+  entries.
+
+## Goals and non-goals
+
+- **Goals**
+  - Make Frankie a cleanly embeddable review adapter for workflow-owning hosts.
+  - Preserve GitHub review metadata and expose richer derived review contracts.
+  - Finish the library-first extraction of time travel, reply drafting, and
+    review actions.
+  - Provide one operational contract for retries, rate limits, and queued
+    writes.
+- **Non-goals**
+  - Moving canonical task or review workflow ownership into Frankie.
+  - Persisting full historical file snapshots as canonical review state.
+  - Making TUI deep links the canonical shared navigation format.
+
+## Migration plan
+
+1. Publish thread-aware review contracts, actionable anchors, and host-safe
+   incremental sync checkpoints and deltas.
+2. Finish public time-travel extraction by promoting state and orchestration
+   into host-safe library services with configurable history limits.
+3. Finish reply templating extraction with DTO-based rendering, public default
+   templates, and host-neutral summary or navigation references.
+4. Add review-action submission with queued write intents, retry metadata, and
+   rate-limit backoff hints.
+5. Continue reducing library dependence on TUI runtime concerns so embedded
+   consumers can use Frankie without pulling in TUI-only behaviour.
+
+## Known risks and limitations
+
+- GitHub review APIs can still omit metadata needed for actionable anchors, so
+  some comments will remain raw-only and context must degrade explicitly.
+- Thread-root derivation from `in_reply_to_id.unwrap_or(id)` is stable for the
+  current adapter shape, but native thread identifiers should replace it when a
+  richer upstream API becomes available.
+- Queue-safe write submission adds operational surface area, including
+  idempotency, persistence, and replay semantics that must remain well tested.
+
+## Architectural rationale
+
+1. **Adapter-first ownership** keeps Frankie aligned with its embeddable
+   library direction and avoids duplicating workflow engines in multiple
+   repositories.
+2. **Layered review contracts** separate raw transport fidelity from actionable
+   review semantics.
+3. **On-demand context materialization** keeps Frankie reproducible without
+   bloating persistence with historical snapshots.
+4. **Host-neutral references** prevent TUI navigation choices from leaking into
+   every consumer.
+5. **Shared operational semantics** for queued writes and backoff reduce
+   duplicated retry logic across hosts.
+
+## References
+
+- [ADR-001: Incremental sync for review comments][^1]
+- [ADR-004: Inline template-based reply drafting][^2]
+- [ADR-005: Cross-surface library-first delivery][^3]
+- [ADR-008: Pull request discussion summary contract][^4]
+- [Roadmap][^5]
+- [Frankie design document][^6]
+- [`src/lib.rs`][^7] — crate root and public re-exports
+- [`src/github/models/mod.rs`][^8] — GitHub domain models including
+  `ReviewComment`
+- [`src/time_travel/mod.rs`][^9] — time-travel extraction module
+- [`src/tui/state/time_travel.rs`][^10] — TUI time-travel state (to be
+  promoted)
+
+[^1]: <docs/adr-001-incremental-sync-for-review-comments.md>
+[^2]: <docs/adr-004-inline-template-based-reply-drafting.md>
+[^3]: <docs/adr-005-cross-surface-library-first-delivery.md>
+[^4]: <docs/adr-008-pr-discussion-summary-contract.md>
+[^5]: <docs/roadmap.md>
+[^6]: <docs/frankie-design.md>
+[^7]: <src/lib.rs>
+[^8]: <src/github/models/mod.rs>
+[^9]: <src/time_travel/mod.rs>
+[^10]: <src/tui/state/time_travel.rs>

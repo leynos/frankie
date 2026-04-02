@@ -9,6 +9,10 @@ observable behaviours and tests rather than intent.
 
 - Anchor delivery on GitHub pull request workflows, local-first execution, and
   AI-assisted resolution, as defined in the design.
+- Treat Frankie as the GitHub review adapter and context engine for larger
+  workflow owners. Canonical review workflow state belongs in the embedding
+  host; Frankie keeps only the local cache, sync checkpoints, and derived
+  context needed to serve review operations.
 - Sequence work to reduce risk: establish data and access layers before
   experience and automation layers.
 - Keep each task independently testable, avoiding hidden coupling between
@@ -29,6 +33,9 @@ See `docs/adr-005-cross-surface-library-first-delivery.md`.
   rationale for why CLI is not applicable.
 - New features must keep behavioural logic in shared library modules; TUI and
   CLI layers must remain thin orchestration and presentation adapters.
+- Shared review contracts must remain host-neutral. Do not bake TUI-only link
+  types or workflow state into library models; delivery surfaces render or
+  project those contracts for their own navigation needs.
 - Acceptance and regression testing for unchecked items must verify library
   behaviour and each exposed user surface.
 
@@ -81,6 +88,25 @@ context.
 - [x] 2.1.2. Implement incremental sync to keep review lists up to date;
   acceptance: background refresh merges new comments without losing selection
   state and logs sync latency metrics locally.
+- [ ] 2.1.3. Add a public `ReviewThread` aggregate with stable thread-root
+  identity above raw `ReviewComment` payloads. Acceptance: the library exposes
+  thread roots, ordered replies, and thread status without TUI-specific types,
+  treats `in_reply_to_id.unwrap_or(id)` as the stable root when native thread
+  metadata is unavailable, and tests cover root, reply, and orphaned-reply
+  fixtures. See `docs/adr-010-close-review-adapter-capability-gap.md`.
+- [ ] 2.1.4. Publish host-safe incremental review sync contracts using
+  `ReviewSyncCheckpoint` and
+  `ReviewSyncDelta { added, updated, removed, checkpoint }`. Requires 2.1.3.
+  Acceptance: repeated sync calls are idempotent, deletions are explicit, and
+  tests cover added, updated, and removed comment paths without losing
+  selection state. See `docs/adr-001-incremental-sync-for-review-comments.md`
+  and `docs/adr-010-close-review-adapter-capability-gap.md`.
+- [ ] 2.1.5. Separate raw review payloads from derived actionable anchors.
+  Requires 2.1.3. Acceptance: Frankie preserves raw GitHub comment metadata
+  losslessly while exposing an optional `ReviewAnchor` with `commit_sha`,
+  `file_path`, `original_line`, and `diff_hunk`; tests cover comments with
+  insufficient anchor metadata without dropping raw fields. See
+  `docs/adr-010-close-review-adapter-capability-gap.md`.
 
 ### 2.2. Contextual comment exploration
 
@@ -112,10 +138,10 @@ context.
 - [ ] 2.2.7. Extract time-travel orchestration out of TUI handlers into pure
   library services, keeping `bubbletea_rs::Cmd`, `spawn_blocking`, and any
   global `OnceLock` context in the TUI adapter layer only. Requires 2.2.5 and
-  2.2.6. Acceptance: orchestration is implemented without `bubbletea_rs` types
-  in the library surface, the TUI depends on it as an adapter, and tests cover
-  load and navigation using a mocked `GitOperations`. See
-  `docs/adr-005-cross-surface-library-first-delivery.md`.
+  2.2.6. Acceptance: orchestration is implemented as a host-safe library
+  service without `bubbletea_rs` types in the shared surface, the TUI depends
+  on it as an adapter, and tests cover load and navigation using a mocked
+  `GitOperations`. See `docs/adr-005-cross-surface-library-first-delivery.md`.
 
 ### 2.3. Comment export pipeline
 
@@ -181,6 +207,14 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: no call
   sites outwith `src/tui/` depend on `crate::tui::state` templating symbols,
   and regression tests verify templates render identically.
+- [ ] 3.2.7. Add a host-facing review reply action API that can submit a
+  rendered draft or return a queued write intent for later submission. Requires
+  3.2.4, 3.2.5, 3.2.6, 4.1.1, and 4.1.2. Acceptance: the library exposes a
+  stable reply submission contract, GitHub adapter tests cover success and
+  duplicate-safe retry behaviour, and offline or rate-limited writes return
+  queue or backoff metadata instead of forcing each host to invent its own
+  protocol. See `docs/adr-004-inline-template-based-reply-drafting.md` and
+  `docs/adr-010-close-review-adapter-capability-gap.md`.
 
 ### 3.3. Automated verification
 
@@ -192,6 +226,13 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   summaries group comments by file and severity, and include links back to TUI
   views; delivery includes reusable library APIs and both TUI and CLI access
   paths.
+- [ ] 3.3.3. Replace shared `TuiViewLink` references with host-neutral review
+  view references. Requires 2.1.3 and 3.3.2. Acceptance: summary DTOs expose a
+  host-neutral `ReviewViewRef` (or equivalent), the TUI renders current
+  `frankie://review-comment/<id>?view=detail` links from that reference, and
+  CLI and library tests prove serialization does not depend on TUI-only types.
+  See `docs/adr-008-pr-discussion-summary-contract.md` and
+  `docs/adr-010-close-review-adapter-capability-gap.md`.
 
 ### 3.4. Review banner translation
 
@@ -247,13 +288,19 @@ handling.
 ### 4.1. Offline and rate-limit resilience
 
 - [ ] 4.1.1. Add offline mode with queued operations; acceptance: read-only
-  features remain usable without network, and queued writes replay once
+  features remain usable without network, queued review writes replay once
   connectivity returns, confirmed by integration tests with simulated outages;
   delivery includes reusable library APIs and both TUI and CLI access paths.
 - [ ] 4.1.2. Implement GitHub rate-limit awareness and backoff; acceptance:
-  requests respect `Retry-After` headers, backoff is logged, and unit tests
-  cover limit exhaustion scenarios; delivery includes reusable library APIs and
-  both TUI and CLI access paths.
+  requests respect `Retry-After` headers, backoff is logged and exposed as
+  host-consumable metadata, and unit tests cover limit exhaustion scenarios;
+  delivery includes reusable library APIs and both TUI and CLI access paths.
+- [ ] 4.1.3. Expose idempotent review write intents with retry and backoff
+  hints for external orchestration. Requires 4.1.1 and 4.1.2. Acceptance: reply
+  and future review-mutation APIs can return a durable write intent identifier,
+  surfaced `Retry-After` or computed backoff hints, and tests cover enqueue,
+  replay, and safe deduplication across process restarts. See
+  `docs/adr-010-close-review-adapter-capability-gap.md`.
 
 ### 4.2. Security and privacy controls
 
