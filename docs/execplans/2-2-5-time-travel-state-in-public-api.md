@@ -483,7 +483,7 @@ Quality criteria (what "done" means):
   for `TimeTravelState` and `TimeTravelInitParams` under `frankie::time_travel`
   (not hidden).
 
-Quality method (how we check):
+Quality method (how to verify):
 
 - Run the commands listed in "Concrete steps" above and compare exit codes
   against zero.

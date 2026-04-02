@@ -10,6 +10,17 @@ use rstest::{fixture, rstest};
 use super::*;
 use crate::local::LineMappingStatus;
 
+/// Structured error for fallible test helpers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StepError(String);
+
+impl StepError {
+    /// Creates a new helper error with the given message.
+    fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
 /// Expected navigation properties for test assertions.
 #[derive(Debug, Clone)]
 struct ExpectedNavigation {
@@ -66,18 +77,18 @@ fn state_at_index(
     snapshot: &CommitSnapshot,
     history: Vec<CommitSha>,
     index: usize,
-) -> TimeTravelState {
+) -> Result<TimeTravelState, StepError> {
     let file_path = snapshot
         .file_path()
-        .expect("test snapshots should include a file path")
+        .ok_or_else(|| StepError::new("test snapshots should include a file path"))?
         .to_owned();
     let file_content = snapshot
         .file_content()
-        .expect("test snapshots should include file content")
+        .ok_or_else(|| StepError::new("test snapshots should include file content"))?
         .to_owned();
     let snapshot_sha = history
         .get(index)
-        .expect("test index should be within commit history bounds")
+        .ok_or_else(|| StepError::new("test index should be within commit history bounds"))?
         .as_str()
         .to_owned();
     let metadata = CommitMetadata::new(
@@ -89,14 +100,14 @@ fn state_at_index(
     let indexed_snapshot =
         CommitSnapshot::with_file_content(metadata, file_path.clone(), file_content);
 
-    TimeTravelState::new(TimeTravelInitParams {
+    Ok(TimeTravelState::new(TimeTravelInitParams {
         snapshot: indexed_snapshot,
         file_path: RepoFilePath::new(file_path),
         original_line: None,
         line_mapping: None,
         commit_history: history,
         current_index: index,
-    })
+    }))
 }
 
 /// Constructs a `TimeTravelState` from `sample_snapshot` with standard test
@@ -220,35 +231,51 @@ fn error_state() {
 }
 
 #[rstest]
-fn navigation_available(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let state = state_at_index(&sample_snapshot, sample_history, 0);
+fn navigation_available(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) -> Result<(), StepError> {
+    let state = state_at_index(&sample_snapshot, sample_history, 0)?;
 
     assert_navigation(&state, &ExpectedNavigation::at_newest("def5678901234"));
+    Ok(())
 }
 
 #[rstest]
-fn navigation_at_middle(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let state = state_at_index(&sample_snapshot, sample_history, 1);
+fn navigation_at_middle(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) -> Result<(), StepError> {
+    let state = state_at_index(&sample_snapshot, sample_history, 1)?;
 
     assert_navigation(
         &state,
         &ExpectedNavigation::at_middle("abc1234567890", "ghi9012345678"),
     );
+    Ok(())
 }
 
 #[rstest]
-fn navigation_at_oldest(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let state = state_at_index(&sample_snapshot, sample_history, 2);
+fn navigation_at_oldest(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) -> Result<(), StepError> {
+    let state = state_at_index(&sample_snapshot, sample_history, 2)?;
 
     assert_navigation(&state, &ExpectedNavigation::at_oldest("def5678901234"));
+    Ok(())
 }
 
 #[rstest]
-fn loading_blocks_navigation(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
-    let mut state = state_at_index(&sample_snapshot, sample_history, 0);
+fn loading_blocks_navigation(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) -> Result<(), StepError> {
+    let mut state = state_at_index(&sample_snapshot, sample_history, 0)?;
     state.set_loading(true);
 
     assert_navigation(&state, &ExpectedNavigation::blocked(Some("def5678901234")));
+    Ok(())
 }
 
 #[rstest]
