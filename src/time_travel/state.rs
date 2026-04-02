@@ -1,14 +1,14 @@
-//! Time-travel state for navigating PR history.
+//! Public runtime state for time-travel navigation.
 //!
-//! This module provides state management for the time-travel feature, which
-//! allows users to view the exact code state when a comment was made and
-//! verify line mapping correctness against git2 diffs.
+//! This module exposes the state container used to inspect a historical file
+//! snapshot and navigate through related commit history without depending on
+//! `crate::tui`.
 
 use crate::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
 
-/// Parameters for initialising a time-travel state.
+/// Parameters for initializing a time-travel state.
 #[derive(Debug, Clone)]
 pub struct TimeTravelInitParams {
     /// The commit snapshot to display.
@@ -26,8 +26,43 @@ pub struct TimeTravelInitParams {
 }
 
 /// State container for time-travel navigation.
+///
+/// This type captures the current historical snapshot, the commit history used
+/// for navigation, and the line-mapping metadata needed by renderers.
+///
+/// # Example
+///
+/// ```
+/// use chrono::Utc;
+/// use frankie::local::{CommitMetadata, CommitSha, CommitSnapshot, RepoFilePath};
+/// use frankie::time_travel::{TimeTravelInitParams, TimeTravelState};
+///
+/// let metadata = CommitMetadata::new(
+///     "abc1234567890".to_owned(),
+///     "Fix login validation".to_owned(),
+///     "Alice".to_owned(),
+///     Utc::now(),
+/// );
+/// let snapshot = CommitSnapshot::with_file_content(
+///     metadata,
+///     "src/auth.rs".to_owned(),
+///     "fn login() {}".to_owned(),
+/// );
+///
+/// let state = TimeTravelState::new(TimeTravelInitParams {
+///     snapshot,
+///     file_path: RepoFilePath::new("src/auth.rs".to_owned()),
+///     original_line: Some(42),
+///     line_mapping: None,
+///     commit_history: vec![CommitSha::new("abc1234567890".to_owned())],
+///     current_index: 0,
+/// });
+///
+/// assert_eq!(state.file_path().as_str(), "src/auth.rs");
+/// assert_eq!(state.original_line(), Some(42));
+/// assert_eq!(state.commit_count(), 1);
+/// ```
 #[derive(Debug, Clone)]
-#[doc(hidden)]
 pub struct TimeTravelState {
     /// The commit snapshot being viewed.
     snapshot: CommitSnapshot,
@@ -48,19 +83,24 @@ pub struct TimeTravelState {
 }
 
 impl TimeTravelState {
-    /// Creates a new time-travel state from initialisation parameters.
+    /// Creates a new time-travel state from initialization parameters.
     #[must_use]
-    #[doc(hidden)]
     pub fn new(params: TimeTravelInitParams) -> Self {
+        let commit_history = params.commit_history;
+        let (current_index, error_message) = synchronize_snapshot_index(
+            params.snapshot.sha(),
+            &commit_history,
+            params.current_index,
+        );
         Self {
             snapshot: params.snapshot,
             file_path: params.file_path,
             original_line: params.original_line,
             line_mapping: params.line_mapping,
-            commit_history: params.commit_history,
-            current_index: params.current_index,
+            commit_history,
+            current_index,
             loading: false,
-            error_message: None,
+            error_message,
         }
     }
 
@@ -85,7 +125,7 @@ impl TimeTravelState {
         }
     }
 
-    /// Creates an error state.
+    /// Creates an error state for in-crate tests.
     #[must_use]
     #[cfg(test)]
     pub(crate) fn error(message: String, file_path: RepoFilePath) -> Self {
@@ -109,91 +149,92 @@ impl TimeTravelState {
 
     /// Returns the current commit snapshot.
     #[must_use]
-    pub(crate) const fn snapshot(&self) -> &CommitSnapshot {
+    pub const fn snapshot(&self) -> &CommitSnapshot {
         &self.snapshot
     }
 
     /// Returns the file path being viewed.
     #[must_use]
-    pub(crate) const fn file_path(&self) -> &RepoFilePath {
+    pub const fn file_path(&self) -> &RepoFilePath {
         &self.file_path
     }
 
     /// Returns the original line number from the comment.
     #[must_use]
-    pub(crate) const fn original_line(&self) -> Option<u32> {
+    pub const fn original_line(&self) -> Option<u32> {
         self.original_line
     }
 
     /// Returns the line mapping verification, if available.
     #[must_use]
-    pub(crate) const fn line_mapping(&self) -> Option<&LineMappingVerification> {
+    pub const fn line_mapping(&self) -> Option<&LineMappingVerification> {
         self.line_mapping.as_ref()
     }
 
-    /// Returns the commit history.
+    /// Returns the commit history ordered from most recent to oldest.
     #[must_use]
-    pub(crate) fn commit_history(&self) -> &[CommitSha] {
+    pub fn commit_history(&self) -> &[CommitSha] {
         &self.commit_history
     }
 
     /// Returns the current index in the commit history.
     #[must_use]
-    pub(crate) const fn current_index(&self) -> usize {
+    pub const fn current_index(&self) -> usize {
         self.current_index
     }
 
     /// Returns whether the state is currently loading.
     #[must_use]
-    pub(crate) const fn is_loading(&self) -> bool {
+    pub const fn is_loading(&self) -> bool {
         self.loading
     }
 
     /// Returns the error message, if any.
     #[must_use]
-    pub(crate) fn error_message(&self) -> Option<&str> {
+    pub fn error_message(&self) -> Option<&str> {
         self.error_message.as_deref()
     }
 
     /// Returns the total number of commits in history.
     #[must_use]
-    pub(crate) const fn commit_count(&self) -> usize {
+    pub const fn commit_count(&self) -> usize {
         self.commit_history.len()
     }
 
     /// Returns whether navigation to the previous commit is possible.
     #[must_use]
-    pub(crate) const fn can_go_previous(&self) -> bool {
+    pub const fn can_go_previous(&self) -> bool {
         !self.loading && self.current_index + 1 < self.commit_history.len()
     }
 
     /// Returns whether navigation to the next (more recent) commit is possible.
     #[must_use]
-    pub(crate) const fn can_go_next(&self) -> bool {
+    pub const fn can_go_next(&self) -> bool {
         !self.loading && self.current_index > 0
     }
 
     /// Updates the state with a new snapshot after navigation.
-    #[doc(hidden)]
     pub fn update_snapshot(
         &mut self,
         snapshot: CommitSnapshot,
         line_mapping: Option<LineMappingVerification>,
         new_index: usize,
     ) {
+        let (current_index, error_message) =
+            synchronize_snapshot_index(snapshot.sha(), &self.commit_history, new_index);
         self.snapshot = snapshot;
         self.line_mapping = line_mapping;
-        self.current_index = clamp_index(new_index, self.commit_history.len());
+        self.current_index = current_index;
         self.loading = false;
-        self.error_message = None;
+        self.error_message = error_message;
     }
 
-    /// Sets the loading state.
+    /// Sets the loading state during in-crate orchestration.
     pub(crate) const fn set_loading(&mut self, loading: bool) {
         self.loading = loading;
     }
 
-    /// Sets an error message.
+    /// Sets an error message during in-crate orchestration.
     pub(crate) fn set_error(&mut self, message: String) {
         self.error_message = Some(message);
         self.loading = false;
@@ -201,7 +242,7 @@ impl TimeTravelState {
 
     /// Returns the SHA of the next (more recent) commit, if available.
     #[must_use]
-    pub(crate) fn next_commit_sha(&self) -> Option<&CommitSha> {
+    pub fn next_commit_sha(&self) -> Option<&CommitSha> {
         if self.current_index > 0 {
             self.commit_history.get(self.current_index - 1)
         } else {
@@ -211,7 +252,7 @@ impl TimeTravelState {
 
     /// Returns the SHA of the previous (older) commit, if available.
     #[must_use]
-    pub(crate) fn previous_commit_sha(&self) -> Option<&CommitSha> {
+    pub fn previous_commit_sha(&self) -> Option<&CommitSha> {
         self.commit_history.get(self.current_index + 1)
     }
 }
@@ -226,6 +267,31 @@ fn clamp_index(index: usize, len: usize) -> usize {
     }
 }
 
+/// Keeps the snapshot SHA and history index aligned for public callers.
+#[must_use]
+fn synchronize_snapshot_index(
+    snapshot_sha: &str,
+    commit_history: &[CommitSha],
+    requested_index: usize,
+) -> (usize, Option<String>) {
+    commit_history
+        .iter()
+        .position(|commit_sha| commit_sha.as_str() == snapshot_sha)
+        .map_or_else(
+            || {
+                let current_index = clamp_index(requested_index, commit_history.len());
+                let error_message = commit_history.get(current_index).map(|expected_sha| {
+                    format!(
+                        "snapshot SHA {snapshot_sha} does not match commit history entry {} at index {current_index}",
+                        expected_sha.as_str()
+                    )
+                });
+                (current_index, error_message)
+            },
+            |index| (index, None),
+        )
+}
+
 #[cfg(test)]
-#[path = "time_travel/tests.rs"]
+#[path = "state/tests.rs"]
 mod tests;
