@@ -231,38 +231,18 @@ fn error_state() {
 }
 
 #[rstest]
-fn navigation_available(
+#[case(0, ExpectedNavigation::at_newest("def5678901234"))]
+#[case(1, ExpectedNavigation::at_middle("abc1234567890", "ghi9012345678"))]
+#[case(2, ExpectedNavigation::at_oldest("def5678901234"))]
+fn navigation_states(
     sample_snapshot: CommitSnapshot,
     sample_history: Vec<CommitSha>,
+    #[case] index: usize,
+    #[case] expected_navigation: ExpectedNavigation,
 ) -> Result<(), StepError> {
-    let state = state_at_index(&sample_snapshot, sample_history, 0)?;
+    let state = state_at_index(&sample_snapshot, sample_history, index)?;
 
-    assert_navigation(&state, &ExpectedNavigation::at_newest("def5678901234"));
-    Ok(())
-}
-
-#[rstest]
-fn navigation_at_middle(
-    sample_snapshot: CommitSnapshot,
-    sample_history: Vec<CommitSha>,
-) -> Result<(), StepError> {
-    let state = state_at_index(&sample_snapshot, sample_history, 1)?;
-
-    assert_navigation(
-        &state,
-        &ExpectedNavigation::at_middle("abc1234567890", "ghi9012345678"),
-    );
-    Ok(())
-}
-
-#[rstest]
-fn navigation_at_oldest(
-    sample_snapshot: CommitSnapshot,
-    sample_history: Vec<CommitSha>,
-) -> Result<(), StepError> {
-    let state = state_at_index(&sample_snapshot, sample_history, 2)?;
-
-    assert_navigation(&state, &ExpectedNavigation::at_oldest("def5678901234"));
+    assert_navigation(&state, &expected_navigation);
     Ok(())
 }
 
@@ -279,7 +259,10 @@ fn loading_blocks_navigation(
 }
 
 #[rstest]
-fn update_snapshot_clamps_index(sample_snapshot: CommitSnapshot, sample_history: Vec<CommitSha>) {
+fn update_snapshot_syncs_index_to_snapshot_sha(
+    sample_snapshot: CommitSnapshot,
+    sample_history: Vec<CommitSha>,
+) {
     let mut state = TimeTravelState::new(TimeTravelInitParams {
         snapshot: sample_snapshot.clone(),
         file_path: RepoFilePath::new("src/auth.rs".to_owned()),
