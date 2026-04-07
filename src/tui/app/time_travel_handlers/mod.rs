@@ -17,9 +17,6 @@ use crate::tui::messages::AppMsg;
 
 use super::ReviewApp;
 
-/// Maximum number of commits to load in history.
-const COMMIT_HISTORY_LIMIT: usize = 50;
-
 /// Context for verifying line mapping between commits.
 #[derive(Debug, Clone)]
 struct LineMappingContext<'a> {
@@ -141,8 +138,14 @@ impl ReviewApp {
         // Spawn async task to load time-travel data
         let git_ops_clone = Arc::clone(git_ops);
         let head_sha = self.head_commit_sha();
+        let commit_history_limit = self.commit_history_limit;
 
-        Some(spawn_time_travel_load(git_ops_clone, params, head_sha))
+        Some(spawn_time_travel_load(
+            git_ops_clone,
+            params,
+            head_sha,
+            commit_history_limit,
+        ))
     }
 
     /// Handles the `ExitTimeTravel` message.
@@ -257,10 +260,13 @@ fn spawn_time_travel_load(
     git_ops: Arc<dyn GitOperations>,
     params: TimeTravelParams,
     head_sha: Option<CommitSha>,
+    commit_history_limit: usize,
 ) -> Cmd {
     spawn_load_task(
         git_ops,
-        move |ops| load_time_travel_state(ops, &params, head_sha.as_ref()),
+        move |ops| {
+            load_time_travel_state(ops, &params, head_sha.as_ref(), commit_history_limit)
+        },
         |state| AppMsg::TimeTravelLoaded(Box::new(state)),
     )
 }
@@ -300,12 +306,13 @@ fn load_time_travel_state(
     git_ops: &dyn GitOperations,
     params: &TimeTravelParams,
     head_sha: Option<&CommitSha>,
+    commit_history_limit: usize,
 ) -> Result<TimeTravelState, GitOperationError> {
     // Get commit snapshot with file content
     let snapshot = git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path()))?;
 
     // Get commit history
-    let commit_history = git_ops.get_parent_commits(params.commit_sha(), COMMIT_HISTORY_LIMIT)?;
+    let commit_history = git_ops.get_parent_commits(params.commit_sha(), commit_history_limit)?;
 
     // Verify line mapping if we have a line number and HEAD
     let line_mapping = verify_line_mapping_optional(

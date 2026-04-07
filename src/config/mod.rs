@@ -319,6 +319,20 @@ pub struct FrankieConfig {
     #[ortho_config()]
     pub ai_timeout_seconds: u64,
 
+    /// Maximum number of commits to load in time-travel history.
+    ///
+    /// Controls how many parent commits are retrieved when entering
+    /// time-travel mode. Larger values provide more navigation depth
+    /// at the cost of increased load time for repositories with long
+    /// histories.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--commit-history-limit <COUNT>`
+    /// - Environment: `FRANKIE_COMMIT_HISTORY_LIMIT`
+    /// - Config file: `commit_history_limit = 50`
+    #[ortho_config()]
+    pub commit_history_limit: usize,
+
     /// Positional PR identifier (bare number or full URL) extracted from
     /// command-line arguments before ortho-config processes the remaining
     /// flags. When set, the TUI is launched without requiring `-T`.
@@ -331,6 +345,9 @@ pub(crate) const DEFAULT_REPLY_MAX_LENGTH: usize = 500;
 pub(crate) const DEFAULT_AI_BASE_URL: &str = "https://api.openai.com/v1";
 pub(crate) const DEFAULT_AI_MODEL: &str = "gpt-4o-mini";
 pub(crate) const DEFAULT_AI_TIMEOUT_SECONDS: u64 = 20;
+
+/// Default maximum number of commits to load in time-travel history.
+pub const DEFAULT_COMMIT_HISTORY_LIMIT: usize = 50;
 
 impl Default for FrankieConfig {
     fn default() -> Self {
@@ -358,6 +375,7 @@ impl Default for FrankieConfig {
             ai_model: DEFAULT_AI_MODEL.to_owned(),
             ai_api_key: None,
             ai_timeout_seconds: DEFAULT_AI_TIMEOUT_SECONDS,
+            commit_history_limit: DEFAULT_COMMIT_HISTORY_LIMIT,
             pr_identifier: None,
         }
     }
@@ -402,6 +420,7 @@ impl FrankieConfig {
         "--ai-model",
         "--ai-api-key",
         "--ai-timeout-seconds",
+        "--commit-history-limit",
         "--config-path",
     ];
 

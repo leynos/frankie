@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.

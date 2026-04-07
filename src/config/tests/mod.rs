@@ -6,9 +6,11 @@
 //! - `operation_mode`: Operation mode determination tests
 //! - `field_resolution`: Token, PR URL, and repository info resolution tests
 //! - `ttl_loading`: `pr_metadata_cache_ttl_seconds` loading tests
+//! - `commit_history_limit`: `commit_history_limit` loading tests
 //! - `local_discovery_config`: `no_local_discovery` configuration tests
 //! - `validation`: Configuration consistency validation tests
 
+mod commit_history_limit;
 mod field_resolution;
 mod helpers;
 mod local_discovery_config;

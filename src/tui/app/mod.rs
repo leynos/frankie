@@ -27,6 +27,7 @@ use crate::ai::{
     CodexExecutionHandle, CodexExecutionService, CommentRewriteMode, CommentRewriteService,
     PrDiscussionSummaryService, SessionState, SideBySideDiffPreview, SystemCodexExecutionService,
 };
+use crate::config::DEFAULT_COMMIT_HISTORY_LIMIT;
 use crate::github::models::ReviewComment;
 use crate::local::GitOperations;
 use crate::persistence::ReviewCommentVerificationCache;
@@ -98,6 +99,8 @@ pub struct ReviewApp {
     git_ops: Option<Arc<dyn GitOperations>>,
     /// HEAD commit SHA for line mapping verification.
     head_sha: Option<String>,
+    /// Maximum number of commits to load in time-travel history.
+    commit_history_limit: usize,
     /// Service used to execute Codex runs.
     codex_service: Arc<dyn CodexExecutionService>,
     /// Active Codex execution handle while a run is in progress.
@@ -190,6 +193,7 @@ impl ReviewApp {
             time_travel_state: None,
             git_ops: None,
             head_sha: None,
+            commit_history_limit: DEFAULT_COMMIT_HISTORY_LIMIT,
             codex_service: Arc::new(SystemCodexExecutionService::new()),
             codex_handle: None,
             codex_status: None,
@@ -226,6 +230,13 @@ impl ReviewApp {
     pub fn with_git_ops(mut self, git_ops: Arc<dyn GitOperations>, head_sha: String) -> Self {
         self.git_ops = Some(git_ops);
         self.head_sha = Some(head_sha);
+        self
+    }
+
+    /// Sets the maximum number of commits to load in time-travel history.
+    #[must_use]
+    pub const fn with_commit_history_limit(mut self, limit: usize) -> Self {
+        self.commit_history_limit = limit;
         self
     }
 
