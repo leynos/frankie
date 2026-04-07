@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: IN PROGRESS
+Status: DONE
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -116,29 +116,45 @@ limit, and proves the change with tests.
 
 ## Progress
 
-- [ ] Read and internalise current codebase state, roadmap, and referenced
+- [x] Read and internalise current codebase state, roadmap, and referenced
       architecture decision records.
-- [ ] Draft this ExecPlan.
-- [ ] Stage A: add `commit_history_limit` field to `FrankieConfig` with
+- [x] Draft this ExecPlan.
+- [x] Stage A: add `commit_history_limit` field to `FrankieConfig` with
       default `50`, update `Default` impl, and update `VALUE_FLAGS`.
-- [ ] Stage B: thread the limit through TUI storage and `ReviewApp` to the
+- [x] Stage B: thread the limit through TUI storage and `ReviewApp` to the
       time-travel handler, removing the hardcoded constant.
-- [ ] Stage C: add unit tests for the new config field and the limit threading.
-- [ ] Stage D: add BDD tests proving default and overridden limits.
-- [ ] Stage E: update `docs/frankie-design.md`, `docs/users-guide.md`,
+- [x] Stage C: add unit tests for the new config field and the limit threading.
+- [x] Stage D: add BDD tests proving default and overridden limits.
+- [x] Stage E: update `docs/frankie-design.md`, `docs/users-guide.md`,
       `docs/roadmap.md`, and run all validation gates.
 
 ## Surprises & discoveries
 
-(None yet.)
+- The `OnceLock` storage pattern for threading the commit history limit worked
+  cleanly with a dedicated `OnceLock<usize>` in `src/tui/storage.rs`, matching
+  the existing pattern for other config values.
+- No changes to `GitOperations`, `TimeTravelState`, `TimeTravelInitParams`, or
+  `TimeTravelParams` were needed, as anticipated.
 
 ## Decision log
 
-(None yet.)
+- Used a dedicated `OnceLock<usize>` in `src/tui/storage.rs` rather than
+  bundling the limit into `GIT_OPS_CONTEXT`, keeping the change minimal and
+  consistent with the existing per-value storage pattern.
+- Added the `commit_history_limit` field directly to `ReviewApp` via a builder
+  method (`.with_commit_history_limit()`), following the established pattern
+  for `reply_draft_config`, `codex_poll_interval`, etc.
 
 ## Outcomes & retrospective
 
-(Not yet started.)
+- All stages (A–E) completed successfully.
+- The hardcoded `COMMIT_HISTORY_LIMIT` constant has been removed.
+- The limit is configurable via `.frankie.toml`, `FRANKIE_COMMIT_HISTORY_LIMIT`,
+  and `--commit-history-limit`, with default `50`.
+- Unit tests (7 config tests + 1 handler test) and BDD tests (3 scenarios)
+  verify both default and overridden limits.
+- Documentation updated in `frankie-design.md`, `users-guide.md`, and
+  `roadmap.md`.
 
 ## Context and orientation
 

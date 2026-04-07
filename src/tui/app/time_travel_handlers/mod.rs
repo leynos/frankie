@@ -264,9 +264,7 @@ fn spawn_time_travel_load(
 ) -> Cmd {
     spawn_load_task(
         git_ops,
-        move |ops| {
-            load_time_travel_state(ops, &params, head_sha.as_ref(), commit_history_limit)
-        },
+        move |ops| load_time_travel_state(ops, &params, head_sha.as_ref(), commit_history_limit),
         |state| AppMsg::TimeTravelLoaded(Box::new(state)),
     )
 }

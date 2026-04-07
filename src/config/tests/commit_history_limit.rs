@@ -5,8 +5,8 @@ use rstest::rstest;
 use serde_json::json;
 
 use super::helpers::build_config_from_layers;
-use crate::config::DEFAULT_COMMIT_HISTORY_LIMIT;
 use crate::FrankieConfig;
+use crate::config::DEFAULT_COMMIT_HISTORY_LIMIT;
 
 /// Helper to test `commit_history_limit` loading from environment and/or CLI.
 fn test_commit_history_limit_loading(

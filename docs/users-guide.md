@@ -495,9 +495,9 @@ Time-travel mode requires:
   repository.
 
 The number of commits loaded into the history is controlled by the
-`commit_history_limit` configuration option (default `50`). It can be set
-via `.frankie.toml`, the `FRANKIE_COMMIT_HISTORY_LIMIT` environment variable,
-or the `--commit-history-limit` CLI flag. Lower values speed up loading in
+`commit_history_limit` configuration option (default `50`). It can be set via
+`.frankie.toml`, the `FRANKIE_COMMIT_HISTORY_LIMIT` environment variable, or
+the `--commit-history-limit` CLI flag. Lower values speed up loading in
 repositories with long histories; higher values provide more navigation depth.
 
 If these requirements are not met, Frankie displays a clear error message
