@@ -309,8 +309,11 @@ fn load_time_travel_state(
     // Get commit snapshot with file content
     let snapshot = git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path()))?;
 
+    // Normalize limit to at least 1 for defensive safety
+    let effective_limit = commit_history_limit.max(1);
+
     // Get commit history
-    let commit_history = git_ops.get_parent_commits(params.commit_sha(), commit_history_limit)?;
+    let commit_history = git_ops.get_parent_commits(params.commit_sha(), effective_limit)?;
 
     // Verify line mapping if we have a line number and HEAD
     let line_mapping = verify_line_mapping_optional(

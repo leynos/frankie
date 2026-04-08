@@ -326,6 +326,9 @@ pub struct FrankieConfig {
     /// at the cost of increased load time for repositories with long
     /// histories.
     ///
+    /// Must be at least 1; a value of 0 is clamped to 1 during config
+    /// validation to ensure time-travel mode remains functional.
+    ///
     /// Can be provided via:
     /// - CLI: `--commit-history-limit <COUNT>`
     /// - Environment: `FRANKIE_COMMIT_HISTORY_LIMIT`
@@ -572,12 +575,23 @@ impl FrankieConfig {
     /// Returns [`IntakeError::Configuration`] when both `pr_identifier` and
     /// `pr_url` are provided, since they are mutually exclusive ways to
     /// specify a pull request.
-    pub fn validate(&self) -> Result<(), IntakeError> {
+    pub fn validate(&mut self) -> Result<(), IntakeError> {
         self.validate_pr_identifier_exclusivity()?;
         self.validate_ai_rewrite_completeness()?;
         self.validate_verify_resolutions_compatibility()?;
         self.validate_summary_mode_compatibility()?;
+        self.normalize_commit_history_limit();
         Ok(())
+    }
+
+    /// Normalizes the commit history limit to ensure it is at least 1.
+    ///
+    /// A limit of 0 would result in an empty history, rendering time-travel
+    /// mode non-functional. This method clamps the limit to a minimum of 1.
+    const fn normalize_commit_history_limit(&mut self) {
+        if self.commit_history_limit == 0 {
+            self.commit_history_limit = 1;
+        }
     }
 
     fn validate_pr_identifier_exclusivity(&self) -> Result<(), IntakeError> {

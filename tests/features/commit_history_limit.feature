@@ -17,3 +17,9 @@ Feature: Configurable commit history limit
     And a comment with SHA "abc1234567890" and file "src/main.rs"
     When the time-travel state is loaded with a limit of 1
     Then the loaded history contains 1 commits
+
+  Scenario: Commit history limit of 0 is clamped to 1
+    Given a git operations mock expecting a commit history limit of 1
+    And a comment with SHA "abc1234567890" and file "src/main.rs"
+    When the time-travel state is loaded with a limit of 0
+    Then the loaded history contains 1 commits

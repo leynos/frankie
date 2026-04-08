@@ -269,3 +269,11 @@ fn overridden_limit(state: CommitHistoryLimitWorld) {
 fn minimum_limit(state: CommitHistoryLimitWorld) {
     let _ = state;
 }
+
+#[scenario(
+    path = "tests/features/commit_history_limit.feature",
+    name = "Commit history limit of 0 is clamped to 1"
+)]
+fn zero_limit_clamped_to_one(state: CommitHistoryLimitWorld) {
+    let _ = state;
+}

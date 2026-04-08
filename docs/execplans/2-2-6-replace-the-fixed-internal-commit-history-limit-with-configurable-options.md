@@ -90,8 +90,8 @@ limit, and proves the change with tests.
   lightweight `OnceLock<usize>`. Both approaches keep the blast radius small.
   The preferred approach is to add the limit to the existing `GIT_OPS_CONTEXT`
   tuple or store it alongside `ReviewApp`'s existing builder-pattern fields so
-  it flows naturally to the handler. Alternatively, we can store the
-  `commit_history_limit` directly on `ReviewApp` via a new
+  it flows naturally to the handler. Alternatively, the `commit_history_limit`
+  can be stored directly on `ReviewApp` via a new
   `.with_commit_history_limit()` builder method, consistent with the existing
   pattern for `reply_draft_config`, `codex_poll_interval`, etc.
 
@@ -103,8 +103,8 @@ limit, and proves the change with tests.
 
 - Risk: existing BDD tests in `tests/time_travel_bdd.rs` use
   `MockGitOperations` with `get_parent_commits` expectations that return a
-  fixed vector. The tests do not assert on the `limit` argument. If we change
-  the call site to pass a different limit, these tests will still pass, which
+  fixed vector. The tests do not assert on the `limit` argument. If the call
+  site is changed to pass a different limit, these tests will still pass, which
   is correct — but they do not prove the limit flows correctly. Severity: low.
   Likelihood: high. Mitigation: add dedicated tests that verify the limit
   parameter reaches the `get_parent_commits` call.
@@ -116,7 +116,7 @@ limit, and proves the change with tests.
 
 ## Progress
 
-- [x] Read and internalise current codebase state, roadmap, and referenced
+- [x] Read and internalize current codebase state, roadmap, and referenced
       architecture decision records.
 - [x] Draft this ExecPlan.
 - [x] Stage A: add `commit_history_limit` field to `FrankieConfig` with
