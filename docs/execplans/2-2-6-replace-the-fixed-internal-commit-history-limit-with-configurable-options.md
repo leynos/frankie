@@ -14,7 +14,7 @@ plan-governance document applies.
 
 Roadmap item 2.2.6 replaces the hardcoded `COMMIT_HISTORY_LIMIT` constant
 (currently `50`, defined at `src/tui/app/time_travel_handlers/mod.rs` line 21)
-with a user-configurable setting. After this change a caller can control how
+with a user-configurable setting. After this change, a caller can control how
 many commits the time-travel feature loads by setting `commit_history_limit`
 via the configuration file (`.frankie.toml`), the
 `FRANKIE_COMMIT_HISTORY_LIMIT` environment variable, or the
@@ -536,5 +536,4 @@ fn load_time_travel_state(
 
 ## Approval gate
 
-This plan is in DRAFT status and awaits explicit approval before implementation
-begins.
+This plan was approved and has been fully implemented.

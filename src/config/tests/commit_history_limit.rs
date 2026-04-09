@@ -188,7 +188,10 @@ fn commit_history_limit_large_values_are_accepted() {
     let home = temp_dir.path().to_string_lossy().to_string();
 
     let _guard = env_lock::lock_env([
-        ("FRANKIE_COMMIT_HISTORY_LIMIT", Some(large_limit_str.as_str())),
+        (
+            "FRANKIE_COMMIT_HISTORY_LIMIT",
+            Some(large_limit_str.as_str()),
+        ),
         ("HOME", Some(home.as_str())),
         ("XDG_CONFIG_HOME", Some(home.as_str())),
     ]);

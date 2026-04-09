@@ -580,18 +580,8 @@ impl FrankieConfig {
         self.validate_ai_rewrite_completeness()?;
         self.validate_verify_resolutions_compatibility()?;
         self.validate_summary_mode_compatibility()?;
-        self.normalize_commit_history_limit();
+        self.commit_history_limit = self.commit_history_limit.max(1);
         Ok(())
-    }
-
-    /// Normalizes the commit history limit to ensure it is at least 1.
-    ///
-    /// A limit of 0 would result in an empty history, rendering time-travel
-    /// mode non-functional. This method clamps the limit to a minimum of 1.
-    const fn normalize_commit_history_limit(&mut self) {
-        if self.commit_history_limit == 0 {
-            self.commit_history_limit = 1;
-        }
     }
 
     fn validate_pr_identifier_exclusivity(&self) -> Result<(), IntakeError> {
