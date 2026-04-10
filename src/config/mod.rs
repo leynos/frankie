@@ -568,10 +568,6 @@ impl FrankieConfig {
         self.pr_identifier.as_deref()
     }
 
-    /// Validates that the configuration is internally consistent.
-    ///
-    /// # Errors
-    ///
     /// Normalizes configuration values to ensure valid ranges.
     ///
     /// Should be called immediately after loading configuration and before
@@ -582,13 +578,21 @@ impl FrankieConfig {
         self.commit_history_limit = self.commit_history_limit.max(1);
     }
 
-    /// Validates configuration consistency.
+    /// Validates that the configuration is internally consistent.
+    ///
+    /// Checks that:
+    /// - Positional PR identifier and `--pr-url` are not both provided
+    /// - AI rewrite mode and text are both present when either is specified
+    /// - Verify resolutions mode has compatible configuration
+    /// - Summary mode has compatible configuration
     ///
     /// # Errors
     ///
-    /// Returns [`IntakeError::Configuration`] when both `pr_identifier` and
-    /// `pr_url` are provided, since they are mutually exclusive ways to
-    /// specify a pull request.
+    /// Returns [`IntakeError::Configuration`] when:
+    /// - Both `pr_identifier` and `pr_url` are provided (mutually exclusive)
+    /// - AI rewrite mode is specified without text, or vice versa
+    /// - Verify resolutions mode is incompatible with current configuration
+    /// - Summary mode is incompatible with current configuration
     pub fn validate(&self) -> Result<(), IntakeError> {
         self.validate_pr_identifier_exclusivity()?;
         self.validate_ai_rewrite_completeness()?;

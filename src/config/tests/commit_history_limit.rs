@@ -1,5 +1,10 @@
 //! Tests for `commit_history_limit` loading and precedence.
 
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions are expected to panic on failure"
+)]
+
 use ortho_config::OrthoConfig;
 use rstest::rstest;
 use serde_json::json;
@@ -10,8 +15,11 @@ use crate::config::DEFAULT_COMMIT_HISTORY_LIMIT;
 
 /// Infrastructure helper: locks the environment, constructs argv, and loads
 /// a `FrankieConfig`.  Callers own all assertions.
-fn load_config_under_test(env_limit: Option<&str>, cli_args: &[&str]) -> FrankieConfig {
-    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
+fn load_config_under_test(
+    env_limit: Option<&str>,
+    cli_args: &[&str],
+) -> Result<FrankieConfig, Box<dyn std::error::Error>> {
+    let temp_dir = tempfile::TempDir::new()?;
     let home = temp_dir.path().to_string_lossy().to_string();
 
     let _guard = env_lock::lock_env([
@@ -23,7 +31,7 @@ fn load_config_under_test(env_limit: Option<&str>, cli_args: &[&str]) -> Frankie
     let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
     args.extend(cli_args.iter().map(std::ffi::OsString::from));
 
-    FrankieConfig::load_from_iter(args).expect("config should load")
+    Ok(FrankieConfig::load_from_iter(args)?)
 }
 
 #[rstest]
@@ -36,30 +44,34 @@ fn commit_history_limit_defaults_to_50() {
 }
 
 #[rstest]
-fn commit_history_limit_loads_from_environment_variable() {
-    let config = load_config_under_test(Some("10"), &[]);
+fn commit_history_limit_loads_from_environment_variable() -> Result<(), Box<dyn std::error::Error>>
+{
+    let config = load_config_under_test(Some("10"), &[])?;
     assert_eq!(
         config.commit_history_limit, 10,
         "expected FRANKIE_COMMIT_HISTORY_LIMIT to set limit"
     );
+    Ok(())
 }
 
 #[rstest]
-fn commit_history_limit_loads_from_cli_flag() {
-    let config = load_config_under_test(None, &["--commit-history-limit", "25"]);
+fn commit_history_limit_loads_from_cli_flag() -> Result<(), Box<dyn std::error::Error>> {
+    let config = load_config_under_test(None, &["--commit-history-limit", "25"])?;
     assert_eq!(
         config.commit_history_limit, 25,
         "expected --commit-history-limit to set limit"
     );
+    Ok(())
 }
 
 #[rstest]
-fn commit_history_limit_cli_overrides_environment() {
-    let config = load_config_under_test(Some("10"), &["--commit-history-limit", "25"]);
+fn commit_history_limit_cli_overrides_environment() -> Result<(), Box<dyn std::error::Error>> {
+    let config = load_config_under_test(Some("10"), &["--commit-history-limit", "25"])?;
     assert_eq!(
         config.commit_history_limit, 25,
         "CLI should override environment for commit_history_limit"
     );
+    Ok(())
 }
 
 #[rstest]
@@ -124,14 +136,15 @@ fn commit_history_limit_zero_is_clamped_to_one(
     #[case] env_limit: Option<&str>,
     #[case] cli_args: &[&str],
     #[case] description: &str,
-) {
-    let mut config = load_config_under_test(env_limit, cli_args);
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config = load_config_under_test(env_limit, cli_args)?;
     config.normalize();
     assert_eq!(config.commit_history_limit, 1, "{description}");
+    Ok(())
 }
 
 #[rstest]
-fn commit_history_limit_large_values_are_accepted() {
+fn commit_history_limit_large_values_are_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let large_limit = 10_000usize;
     let large_limit_str = large_limit.to_string();
 
@@ -145,7 +158,7 @@ fn commit_history_limit_large_values_are_accepted() {
     );
 
     // Env layer
-    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
+    let temp_dir = tempfile::TempDir::new()?;
     let home = temp_dir.path().to_string_lossy().to_string();
 
     let _guard = env_lock::lock_env([
@@ -158,7 +171,7 @@ fn commit_history_limit_large_values_are_accepted() {
     ]);
 
     let args_env: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
-    let mut config_from_env = FrankieConfig::load_from_iter(args_env).expect("config should load");
+    let mut config_from_env = FrankieConfig::load_from_iter(args_env)?;
     config_from_env.normalize();
     assert_eq!(
         config_from_env.commit_history_limit, large_limit,
@@ -171,10 +184,11 @@ fn commit_history_limit_large_values_are_accepted() {
         std::ffi::OsString::from("--commit-history-limit"),
         std::ffi::OsString::from(large_limit.to_string()),
     ];
-    let mut config_from_cli = FrankieConfig::load_from_iter(args_cli).expect("config should load");
+    let mut config_from_cli = FrankieConfig::load_from_iter(args_cli)?;
     config_from_cli.normalize();
     assert_eq!(
         config_from_cli.commit_history_limit, large_limit,
         "large commit_history_limit from CLI should be accepted unchanged"
     );
+    Ok(())
 }
