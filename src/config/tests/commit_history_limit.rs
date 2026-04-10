@@ -9,10 +9,15 @@ use crate::FrankieConfig;
 use crate::config::DEFAULT_COMMIT_HISTORY_LIMIT;
 
 /// Helper to test `commit_history_limit` loading from environment and/or CLI.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Test helper consolidates raw and normalized loading paths"
+)]
 fn test_commit_history_limit_loading(
     env_limit: Option<&str>,
     cli_args: &[&str],
     expected_limit: usize,
+    normalize: bool,
     description: &str,
 ) {
     let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
@@ -27,7 +32,11 @@ fn test_commit_history_limit_loading(
     let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
     args.extend(cli_args.iter().map(std::ffi::OsString::from));
 
-    let config = FrankieConfig::load_from_iter(args).expect("config should load");
+    let mut config = FrankieConfig::load_from_iter(args).expect("config should load");
+
+    if normalize {
+        config.normalize();
+    }
 
     assert_eq!(config.commit_history_limit, expected_limit, "{description}");
 }
@@ -47,6 +56,7 @@ fn commit_history_limit_loads_from_environment_variable() {
         Some("10"),
         &[],
         10,
+        false,
         "expected FRANKIE_COMMIT_HISTORY_LIMIT to set limit",
     );
 }
@@ -57,6 +67,7 @@ fn commit_history_limit_loads_from_cli_flag() {
         None,
         &["--commit-history-limit", "25"],
         25,
+        false,
         "expected --commit-history-limit to set limit",
     );
 }
@@ -67,6 +78,7 @@ fn commit_history_limit_cli_overrides_environment() {
         Some("10"),
         &["--commit-history-limit", "25"],
         25,
+        false,
         "CLI should override environment for commit_history_limit",
     );
 }
@@ -118,31 +130,6 @@ fn commit_history_limit_zero_from_config_is_clamped_to_one() {
     );
 }
 
-fn test_commit_history_limit_zero_is_clamped(
-    env_limit: Option<&str>,
-    cli_args: &[&str],
-    description: &str,
-) {
-    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
-    let home = temp_dir.path().to_string_lossy().to_string();
-
-    let _guard = env_lock::lock_env([
-        ("FRANKIE_COMMIT_HISTORY_LIMIT", env_limit),
-        ("HOME", Some(home.as_str())),
-        ("XDG_CONFIG_HOME", Some(home.as_str())),
-    ]);
-
-    let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
-    args.extend(cli_args.iter().map(std::ffi::OsString::from));
-
-    let mut config = FrankieConfig::load_from_iter(args).expect("config should load");
-
-    // normalize() should clamp 0 to 1
-    config.normalize();
-
-    assert_eq!(config.commit_history_limit, 1, "{description}");
-}
-
 #[rstest]
 #[case::from_env(
     Some("0"),
@@ -159,7 +146,7 @@ fn commit_history_limit_zero_is_clamped_to_one(
     #[case] cli_args: &[&str],
     #[case] description: &str,
 ) {
-    test_commit_history_limit_zero_is_clamped(env_limit, cli_args, description);
+    test_commit_history_limit_loading(env_limit, cli_args, 1, true, description);
 }
 
 #[rstest]
