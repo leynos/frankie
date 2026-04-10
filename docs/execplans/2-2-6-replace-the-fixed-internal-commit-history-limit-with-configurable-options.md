@@ -151,7 +151,7 @@ limit, and proves the change with tests.
 - The hardcoded `COMMIT_HISTORY_LIMIT` constant has been removed.
 - The limit is configurable via `.frankie.toml`, `FRANKIE_COMMIT_HISTORY_LIMIT`,
   and `--commit-history-limit`, with default `50`.
-- Unit tests (7 config tests + 1 handler test) and BDD tests (3 scenarios)
+- Unit tests (7 config tests + 1 handler test) and BDD tests (4 scenarios)
   verify both default and overridden limits.
 - Documentation updated in `frankie-design.md`, `users-guide.md`, and
   `roadmap.md`.

@@ -15,13 +15,13 @@ use crate::github::error::IntakeError;
     FrankieConfig { pr_url: Some("https://github.com/o/r/pull/1".to_owned()), ..Default::default() },
     "only pr_url"
 )]
-fn validates_with_various_pr_inputs(#[case] mut config: FrankieConfig, #[case] description: &str) {
+fn validates_with_various_pr_inputs(#[case] config: FrankieConfig, #[case] description: &str) {
     assert!(config.validate().is_ok(), "should pass with {description}");
 }
 
 #[rstest]
 fn rejects_both_identifier_and_url() {
-    let mut config = FrankieConfig {
+    let config = FrankieConfig {
         pr_identifier: Some("123".to_owned()),
         pr_url: Some("https://github.com/o/r/pull/1".to_owned()),
         ..Default::default()
@@ -37,7 +37,7 @@ fn rejects_both_identifier_and_url() {
 
 #[rstest]
 fn validates_when_ai_rewrite_mode_and_text_are_both_set() {
-    let mut config = FrankieConfig {
+    let config = FrankieConfig {
         ai_rewrite_mode: Some("expand".to_owned()),
         ai_rewrite_text: Some("hello".to_owned()),
         ..Default::default()
@@ -72,7 +72,7 @@ fn validates_when_ai_rewrite_mode_and_text_are_both_set() {
     "mode with blank text"
 )]
 fn rejects_incomplete_ai_rewrite_configuration(
-    #[case] mut config: FrankieConfig,
+    #[case] config: FrankieConfig,
     #[case] description: &str,
 ) {
     let result = config.validate();
@@ -118,7 +118,7 @@ fn rejects_incomplete_ai_rewrite_configuration(
     "--ai-rewrite-mode"
 )]
 fn rejects_incompatible_summary_mode_configuration(
-    #[case] mut config: FrankieConfig,
+    #[case] config: FrankieConfig,
     #[case] expected_fragment: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let result = config.validate();

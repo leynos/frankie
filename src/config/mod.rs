@@ -572,15 +572,28 @@ impl FrankieConfig {
     ///
     /// # Errors
     ///
+    /// Normalizes configuration values to ensure valid ranges.
+    ///
+    /// Should be called immediately after loading configuration and before
+    /// validation. This method clamps values that would otherwise be invalid
+    /// but can be safely corrected (for example, a commit history limit of 0
+    /// is clamped to 1).
+    pub fn normalize(&mut self) {
+        self.commit_history_limit = self.commit_history_limit.max(1);
+    }
+
+    /// Validates configuration consistency.
+    ///
+    /// # Errors
+    ///
     /// Returns [`IntakeError::Configuration`] when both `pr_identifier` and
     /// `pr_url` are provided, since they are mutually exclusive ways to
     /// specify a pull request.
-    pub fn validate(&mut self) -> Result<(), IntakeError> {
+    pub fn validate(&self) -> Result<(), IntakeError> {
         self.validate_pr_identifier_exclusivity()?;
         self.validate_ai_rewrite_completeness()?;
         self.validate_verify_resolutions_compatibility()?;
         self.validate_summary_mode_compatibility()?;
-        self.commit_history_limit = self.commit_history_limit.max(1);
         Ok(())
     }
 

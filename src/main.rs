@@ -192,6 +192,7 @@ fn load_config() -> Result<FrankieConfig, IntakeError> {
         config.set_pr_identifier(value);
     }
 
+    config.normalize();
     config.validate()?;
 
     Ok(config)
