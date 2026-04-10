@@ -300,7 +300,19 @@ fn verify_line_mapping_optional(
 }
 
 /// Loads the initial time-travel state for a comment.
-fn load_time_travel_state(
+///
+/// # Visibility
+///
+/// This function is `pub` to allow behavioural testing through
+/// `tests/commit_history_limit_bdd.rs`. While publicly accessible, it's
+/// intended for internal use and testing rather than external consumption.
+///
+/// # Errors
+///
+/// Returns a [`GitOperationError`] if:
+/// - The commit snapshot cannot be retrieved
+/// - The parent commit history cannot be fetched
+pub fn load_time_travel_state(
     git_ops: &dyn GitOperations,
     params: &TimeTravelParams,
     head_sha: Option<&CommitSha>,

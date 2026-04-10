@@ -69,6 +69,25 @@ pub struct TimeTravelParams {
 }
 
 impl TimeTravelParams {
+    /// Creates a new `TimeTravelParams` with the given commit SHA, file path,
+    /// and optional line number.
+    ///
+    /// This constructor is primarily intended for testing scenarios where
+    /// you need to create parameters directly rather than extracting them
+    /// from a [`ReviewComment`].
+    #[must_use]
+    pub const fn new(
+        commit_sha: CommitSha,
+        file_path: RepoFilePath,
+        line_number: Option<u32>,
+    ) -> Self {
+        Self {
+            commit_sha,
+            file_path,
+            line_number,
+        }
+    }
+
     /// Extracts time-travel parameters from a review comment.
     ///
     /// Returns a typed error identifying which required field is missing.

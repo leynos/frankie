@@ -1,8 +1,9 @@
 //! Behavioural tests for configurable commit history limit.
 //!
-//! These scenarios verify that `load_time_travel_state` passes the configured
-//! `commit_history_limit` to `GitOperations::get_parent_commits` and that
-//! both default and overridden limits affect the loaded history length.
+//! These scenarios verify that the production `load_time_travel_state` function
+//! correctly passes the configured `commit_history_limit` to
+//! `GitOperations::get_parent_commits` and that both default and overridden
+//! limits affect the loaded history length.
 
 use chrono::Utc;
 use frankie::DEFAULT_COMMIT_HISTORY_LIMIT;
@@ -10,7 +11,8 @@ use frankie::local::{
     CommitMetadata, CommitSha, CommitSnapshot, GitOperationError, GitOperations,
     LineMappingRequest, LineMappingVerification, RepoFilePath,
 };
-use frankie::time_travel::{TimeTravelInitParams, TimeTravelState};
+use frankie::time_travel::{TimeTravelParams, TimeTravelState};
+use frankie::tui::app::time_travel_handlers::load_time_travel_state;
 use mockall::mock;
 use rstest::fixture;
 use rstest_bdd::Slot;
@@ -105,12 +107,17 @@ fn build_test_snapshot(sha: &str) -> CommitSnapshot {
 
 /// Builds a mock `GitOperations` that asserts the exact limit passed to
 /// `get_parent_commits` and returns a fixed number of commits.
+///
+/// The mock expectations align with the production `load_time_travel_state`
+/// behaviour: `get_commit_snapshot` is called with `Some(file_path)`, and
+/// `get_parent_commits` is called with the specified limit.
 fn build_mock(expected_limit: usize, commit_count: usize) -> MockBddGitOps {
     let mut git_ops = MockBddGitOps::new();
 
     git_ops
         .expect_get_commit_snapshot()
         .times(1)
+        .withf(|_sha, file_path| file_path.is_some())
         .returning(|sha, _file_path| Ok(build_test_snapshot(sha.as_str())));
 
     git_ops
@@ -126,29 +133,24 @@ fn build_mock(expected_limit: usize, commit_count: usize) -> MockBddGitOps {
     git_ops
 }
 
-/// Loads time-travel state using the provided mock and limit.
+/// Loads time-travel state using the production loader.
+///
+/// This wrapper calls the real `load_time_travel_state` function to ensure
+/// BDD scenarios exercise the same code path as the TUI.
 fn load_state(
     git_ops: &dyn GitOperations,
     commit_sha: &str,
     file_path: &str,
     limit: usize,
 ) -> Result<TimeTravelState, StepError> {
-    let sha = CommitSha::new(commit_sha.to_owned());
-    let snapshot = git_ops
-        .get_commit_snapshot(&sha, None)
-        .map_err(|_| "get_commit_snapshot failed")?;
-    let commit_history = git_ops
-        .get_parent_commits(&sha, limit)
-        .map_err(|_| "get_parent_commits failed")?;
+    let params = TimeTravelParams::new(
+        CommitSha::new(commit_sha.to_owned()),
+        RepoFilePath::new(file_path.to_owned()),
+        None,
+    );
 
-    Ok(TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: RepoFilePath::new(file_path.to_owned()),
-        original_line: None,
-        line_mapping: None,
-        commit_history,
-        current_index: 0,
-    }))
+    load_time_travel_state(git_ops, &params, None, limit)
+        .map_err(|_| "load_time_travel_state failed")
 }
 
 // -- Given steps --
