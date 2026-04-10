@@ -30,7 +30,6 @@ struct LineMappingContext<'a> {
     head_sha: Option<&'a CommitSha>,
 }
 
-
 /// Direction for commit navigation in time-travel mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NavigationDirection {
@@ -265,7 +264,14 @@ fn spawn_time_travel_load(
 ) -> Cmd {
     spawn_load_task(
         git_ops,
-        move |ops| time_travel::load_time_travel_state(ops, &params, head_sha.as_ref(), commit_history_limit),
+        move |ops| {
+            time_travel::load_time_travel_state(
+                ops,
+                &params,
+                head_sha.as_ref(),
+                commit_history_limit,
+            )
+        },
         |state| AppMsg::TimeTravelLoaded(Box::new(state)),
     )
 }

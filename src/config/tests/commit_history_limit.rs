@@ -2,8 +2,9 @@
 
 #![allow(
     clippy::panic_in_result_fn,
-    reason = "Test assertions in Result-returning functions are expected to panic on failure, \
-              and this pattern is intentional for rstest macro-generated tests"
+    reason = "Test assertions in Result-returning functions are expected to panic on failure; \
+              this file uses rstest parametrized tests which do not support item-scoped lint \
+              expectations (#[expect] does not propagate to macro-generated test functions)"
 )]
 
 use ortho_config::OrthoConfig;
@@ -159,51 +160,21 @@ fn commit_history_limit_large_values_are_accepted() -> Result<(), Box<dyn std::e
     );
 
     // Env layer
-    {
-        let temp_dir = tempfile::TempDir::new()?;
-        let home = temp_dir.path().to_string_lossy().to_string();
-
-        let _guard = env_lock::lock_env([
-            (
-                "FRANKIE_COMMIT_HISTORY_LIMIT",
-                Some(large_limit_str.as_str()),
-            ),
-            ("HOME", Some(home.as_str())),
-            ("XDG_CONFIG_HOME", Some(home.as_str())),
-        ]);
-
-        let args_env: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
-        let mut config_from_env = FrankieConfig::load_from_iter(args_env)?;
-        config_from_env.normalize();
-        assert_eq!(
-            config_from_env.commit_history_limit, large_limit,
-            "large commit_history_limit from env should be accepted unchanged"
-        );
-    } // _guard drops here, clearing the environment variable
+    let mut config_from_env = load_config_under_test(Some(&large_limit_str), &[])?;
+    config_from_env.normalize();
+    assert_eq!(
+        config_from_env.commit_history_limit, large_limit,
+        "large commit_history_limit from env should be accepted unchanged"
+    );
 
     // CLI layer
-    {
-        let temp_dir = tempfile::TempDir::new()?;
-        let home = temp_dir.path().to_string_lossy().to_string();
-
-        let _guard = env_lock::lock_env([
-            ("FRANKIE_COMMIT_HISTORY_LIMIT", None), // Explicitly unset
-            ("HOME", Some(home.as_str())),
-            ("XDG_CONFIG_HOME", Some(home.as_str())),
-        ]);
-
-        let args_cli: Vec<std::ffi::OsString> = vec![
-            std::ffi::OsString::from("frankie"),
-            std::ffi::OsString::from("--commit-history-limit"),
-            std::ffi::OsString::from(large_limit.to_string()),
-        ];
-        let mut config_from_cli = FrankieConfig::load_from_iter(args_cli)?;
-        config_from_cli.normalize();
-        assert_eq!(
-            config_from_cli.commit_history_limit, large_limit,
-            "large commit_history_limit from CLI should be accepted unchanged"
-        );
-    }
+    let mut config_from_cli =
+        load_config_under_test(None, &["--commit-history-limit", &large_limit_str])?;
+    config_from_cli.normalize();
+    assert_eq!(
+        config_from_cli.commit_history_limit, large_limit,
+        "large commit_history_limit from CLI should be accepted unchanged"
+    );
 
     Ok(())
 }
