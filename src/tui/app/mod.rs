@@ -53,13 +53,7 @@ mod rendering;
 mod reply_draft_handlers;
 mod routing;
 mod sync_handlers;
-
-/// Time-travel navigation handlers.
-///
-/// This module is public to allow behavioural testing of the
-/// `load_time_travel_state` function from integration tests.
-pub mod time_travel_handlers;
-
+mod time_travel_handlers;
 mod verification_handlers;
 mod verification_state;
 mod view_mode;

@@ -12,7 +12,7 @@ use std::sync::Arc;
 use bubbletea_rs::Cmd;
 
 use crate::local::{CommitSha, GitOperationError, GitOperations, LineMappingRequest, RepoFilePath};
-use crate::time_travel::{TimeTravelInitParams, TimeTravelParams, TimeTravelState};
+use crate::time_travel::{self, TimeTravelInitParams, TimeTravelParams, TimeTravelState};
 use crate::tui::messages::AppMsg;
 
 use super::ReviewApp;
@@ -29,6 +29,7 @@ struct LineMappingContext<'a> {
     /// SHA of the HEAD commit for comparison, if available.
     head_sha: Option<&'a CommitSha>,
 }
+
 
 /// Direction for commit navigation in time-travel mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -264,7 +265,7 @@ fn spawn_time_travel_load(
 ) -> Cmd {
     spawn_load_task(
         git_ops,
-        move |ops| load_time_travel_state(ops, &params, head_sha.as_ref(), commit_history_limit),
+        move |ops| time_travel::load_time_travel_state(ops, &params, head_sha.as_ref(), commit_history_limit),
         |state| AppMsg::TimeTravelLoaded(Box::new(state)),
     )
 }
@@ -297,55 +298,6 @@ fn verify_line_mapping_optional(
         line,
     );
     git_ops.verify_line_mapping(&request).ok()
-}
-
-/// Loads the initial time-travel state for a comment.
-///
-/// # Visibility
-///
-/// This function is `pub` to allow behavioural testing through
-/// `tests/commit_history_limit_bdd.rs`. While publicly accessible, it's
-/// intended for internal use and testing rather than external consumption.
-///
-/// # Errors
-///
-/// Returns a [`GitOperationError`] if:
-/// - The commit snapshot cannot be retrieved
-/// - The parent commit history cannot be fetched
-pub fn load_time_travel_state(
-    git_ops: &dyn GitOperations,
-    params: &TimeTravelParams,
-    head_sha: Option<&CommitSha>,
-    commit_history_limit: usize,
-) -> Result<TimeTravelState, GitOperationError> {
-    // Get commit snapshot with file content
-    let snapshot = git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path()))?;
-
-    // Normalize limit to at least 1 for defensive safety
-    let effective_limit = commit_history_limit.max(1);
-
-    // Get commit history
-    let commit_history = git_ops.get_parent_commits(params.commit_sha(), effective_limit)?;
-
-    // Verify line mapping if we have a line number and HEAD
-    let line_mapping = verify_line_mapping_optional(
-        git_ops,
-        &LineMappingContext {
-            commit_sha: params.commit_sha(),
-            file_path: params.file_path(),
-            original_line: params.line_number(),
-            head_sha,
-        },
-    );
-
-    Ok(TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: params.file_path().clone(),
-        original_line: params.line_number(),
-        line_mapping,
-        commit_history,
-        current_index: 0,
-    }))
 }
 
 /// Loads a commit snapshot for navigation.

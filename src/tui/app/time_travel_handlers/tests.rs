@@ -9,6 +9,7 @@ use crate::github::models::test_support::minimal_review;
 use crate::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
+use crate::time_travel::load_time_travel_state;
 use chrono::Utc;
 use mockall::mock;
 use rstest::rstest;

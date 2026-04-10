@@ -11,8 +11,7 @@ use frankie::local::{
     CommitMetadata, CommitSha, CommitSnapshot, GitOperationError, GitOperations,
     LineMappingRequest, LineMappingVerification, RepoFilePath,
 };
-use frankie::time_travel::{TimeTravelParams, TimeTravelState};
-use frankie::tui::app::time_travel_handlers::load_time_travel_state;
+use frankie::time_travel::{TimeTravelParams, TimeTravelState, load_time_travel_state};
 use mockall::mock;
 use rstest::fixture;
 use rstest_bdd::Slot;
