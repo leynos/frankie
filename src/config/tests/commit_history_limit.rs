@@ -8,18 +8,9 @@ use super::helpers::build_config_from_layers;
 use crate::FrankieConfig;
 use crate::config::DEFAULT_COMMIT_HISTORY_LIMIT;
 
-/// Helper to test `commit_history_limit` loading from environment and/or CLI.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "Test helper consolidates raw and normalized loading paths"
-)]
-fn test_commit_history_limit_loading(
-    env_limit: Option<&str>,
-    cli_args: &[&str],
-    expected_limit: usize,
-    normalize: bool,
-    description: &str,
-) {
+/// Infrastructure helper: locks the environment, constructs argv, and loads
+/// a `FrankieConfig`.  Callers own all assertions.
+fn load_config_under_test(env_limit: Option<&str>, cli_args: &[&str]) -> FrankieConfig {
     let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
     let home = temp_dir.path().to_string_lossy().to_string();
 
@@ -32,13 +23,7 @@ fn test_commit_history_limit_loading(
     let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
     args.extend(cli_args.iter().map(std::ffi::OsString::from));
 
-    let mut config = FrankieConfig::load_from_iter(args).expect("config should load");
-
-    if normalize {
-        config.normalize();
-    }
-
-    assert_eq!(config.commit_history_limit, expected_limit, "{description}");
+    FrankieConfig::load_from_iter(args).expect("config should load")
 }
 
 #[rstest]
@@ -52,34 +37,28 @@ fn commit_history_limit_defaults_to_50() {
 
 #[rstest]
 fn commit_history_limit_loads_from_environment_variable() {
-    test_commit_history_limit_loading(
-        Some("10"),
-        &[],
-        10,
-        false,
-        "expected FRANKIE_COMMIT_HISTORY_LIMIT to set limit",
+    let config = load_config_under_test(Some("10"), &[]);
+    assert_eq!(
+        config.commit_history_limit, 10,
+        "expected FRANKIE_COMMIT_HISTORY_LIMIT to set limit"
     );
 }
 
 #[rstest]
 fn commit_history_limit_loads_from_cli_flag() {
-    test_commit_history_limit_loading(
-        None,
-        &["--commit-history-limit", "25"],
-        25,
-        false,
-        "expected --commit-history-limit to set limit",
+    let config = load_config_under_test(None, &["--commit-history-limit", "25"]);
+    assert_eq!(
+        config.commit_history_limit, 25,
+        "expected --commit-history-limit to set limit"
     );
 }
 
 #[rstest]
 fn commit_history_limit_cli_overrides_environment() {
-    test_commit_history_limit_loading(
-        Some("10"),
-        &["--commit-history-limit", "25"],
-        25,
-        false,
-        "CLI should override environment for commit_history_limit",
+    let config = load_config_under_test(Some("10"), &["--commit-history-limit", "25"]);
+    assert_eq!(
+        config.commit_history_limit, 25,
+        "CLI should override environment for commit_history_limit"
     );
 }
 
@@ -146,7 +125,9 @@ fn commit_history_limit_zero_is_clamped_to_one(
     #[case] cli_args: &[&str],
     #[case] description: &str,
 ) {
-    test_commit_history_limit_loading(env_limit, cli_args, 1, true, description);
+    let mut config = load_config_under_test(env_limit, cli_args);
+    config.normalize();
+    assert_eq!(config.commit_history_limit, 1, "{description}");
 }
 
 #[rstest]
