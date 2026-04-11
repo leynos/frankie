@@ -134,8 +134,7 @@ fn commit_history_limit_zero_is_clamped_to_one(
     #[case] env_limit: Option<&str>,
     #[case] cli_args: &[&str],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut config = load_config_under_test(env_limit, cli_args)?;
-    config.normalize();
+    let config = load_config_under_test(env_limit, cli_args)?;
 
     if config.commit_history_limit != 1 {
         return Err(format!(
@@ -167,17 +166,15 @@ fn commit_history_limit_large_values_are_accepted() -> Result<(), Box<dyn std::e
     );
 
     // Env layer
-    let mut config_from_env = load_config_under_test(Some(&large_limit_str), &[])?;
-    config_from_env.normalize();
+    let config_from_env = load_config_under_test(Some(&large_limit_str), &[])?;
     assert_eq!(
         config_from_env.commit_history_limit, large_limit,
         "large commit_history_limit from env should be accepted unchanged"
     );
 
     // CLI layer
-    let mut config_from_cli =
+    let config_from_cli =
         load_config_under_test(None, &["--commit-history-limit", &large_limit_str])?;
-    config_from_cli.normalize();
     assert_eq!(
         config_from_cli.commit_history_limit, large_limit,
         "large commit_history_limit from CLI should be accepted unchanged"
