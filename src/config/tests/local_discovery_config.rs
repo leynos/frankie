@@ -1,6 +1,5 @@
 //! Tests for `no_local_discovery` configuration loading and precedence.
 
-use ortho_config::OrthoConfig;
 use rstest::rstest;
 use serde_json::json;
 

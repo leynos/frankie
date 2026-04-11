@@ -1,13 +1,5 @@
 //! Tests for `commit_history_limit` loading and precedence.
 
-#![allow(
-    clippy::panic_in_result_fn,
-    reason = "Test assertions in Result-returning functions are expected to panic on failure; \
-              this file uses rstest parametrized tests which do not support item-scoped lint \
-              expectations (#[expect] does not propagate to macro-generated test functions)"
-)]
-
-use ortho_config::OrthoConfig;
 use rstest::rstest;
 use serde_json::json;
 
@@ -33,7 +25,7 @@ fn load_config_under_test(
     let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
     args.extend(cli_args.iter().map(std::ffi::OsString::from));
 
-    Ok(FrankieConfig::load_from_iter(args)?)
+    FrankieConfig::load_from_iter(args)
 }
 
 #[rstest]
@@ -46,6 +38,10 @@ fn commit_history_limit_defaults_to_50() {
 }
 
 #[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions via assert_eq! are expected to panic on failure"
+)]
 fn commit_history_limit_loads_from_environment_variable() -> Result<(), Box<dyn std::error::Error>>
 {
     let config = load_config_under_test(Some("10"), &[])?;
@@ -57,6 +53,10 @@ fn commit_history_limit_loads_from_environment_variable() -> Result<(), Box<dyn 
 }
 
 #[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions via assert_eq! are expected to panic on failure"
+)]
 fn commit_history_limit_loads_from_cli_flag() -> Result<(), Box<dyn std::error::Error>> {
     let config = load_config_under_test(None, &["--commit-history-limit", "25"])?;
     assert_eq!(
@@ -67,6 +67,10 @@ fn commit_history_limit_loads_from_cli_flag() -> Result<(), Box<dyn std::error::
 }
 
 #[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions via assert_eq! are expected to panic on failure"
+)]
 fn commit_history_limit_cli_overrides_environment() -> Result<(), Box<dyn std::error::Error>> {
     let config = load_config_under_test(Some("10"), &["--commit-history-limit", "25"])?;
     assert_eq!(
@@ -124,28 +128,31 @@ fn commit_history_limit_zero_from_config_is_clamped_to_one() {
 }
 
 #[rstest]
-#[case::from_env(
-    Some("0"),
-    &[],
-    "commit_history_limit of 0 from env should be clamped to 1"
-)]
-#[case::from_cli(
-    None,
-    &["--commit-history-limit", "0"],
-    "commit_history_limit of 0 from CLI should be clamped to 1"
-)]
+#[case::from_env(Some("0"), &[])]
+#[case::from_cli(None, &["--commit-history-limit", "0"])]
 fn commit_history_limit_zero_is_clamped_to_one(
     #[case] env_limit: Option<&str>,
     #[case] cli_args: &[&str],
-    #[case] description: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut config = load_config_under_test(env_limit, cli_args)?;
     config.normalize();
-    assert_eq!(config.commit_history_limit, 1, "{description}");
+
+    if config.commit_history_limit != 1 {
+        return Err(format!(
+            "expected commit_history_limit to be clamped to 1, got {}",
+            config.commit_history_limit
+        )
+        .into());
+    }
+
     Ok(())
 }
 
 #[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions via assert_eq! are expected to panic on failure"
+)]
 fn commit_history_limit_large_values_are_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let large_limit = 10_000usize;
     let large_limit_str = large_limit.to_string();
@@ -176,5 +183,19 @@ fn commit_history_limit_large_values_are_accepted() -> Result<(), Box<dyn std::e
         "large commit_history_limit from CLI should be accepted unchanged"
     );
 
+    Ok(())
+}
+
+#[rstest]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test assertions in Result-returning functions are expected to panic on failure"
+)]
+fn default_load_returns_normalised_config() -> Result<(), Box<dyn std::error::Error>> {
+    let config = load_config_under_test(None, &["--commit-history-limit", "0"])?;
+    assert_eq!(
+        config.commit_history_limit, 1,
+        "load_from_iter should auto-normalize commit_history_limit=0 to 1"
+    );
     Ok(())
 }

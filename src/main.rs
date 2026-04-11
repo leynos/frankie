@@ -5,7 +5,6 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use frankie::{FrankieConfig, IntakeError, OperationMode};
-use ortho_config::OrthoConfig;
 
 mod cli;
 
@@ -192,7 +191,6 @@ fn load_config() -> Result<FrankieConfig, IntakeError> {
         config.set_pr_identifier(value);
     }
 
-    config.normalize();
     config.validate()?;
 
     Ok(config)

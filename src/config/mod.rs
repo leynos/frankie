@@ -12,6 +12,7 @@
 //! 4. **Command-line arguments** – `--pr-url`/`-u`, `--token`/`-t`, etc.
 
 use std::env;
+use std::ffi::OsString;
 
 use ortho_config::OrthoConfig;
 use serde::{Deserialize, Serialize};
@@ -326,8 +327,9 @@ pub struct FrankieConfig {
     /// at the cost of increased load time for repositories with long
     /// histories.
     ///
-    /// Must be at least 1; a value of 0 is clamped to 1 during config
-    /// validation to ensure time-travel mode remains functional.
+    /// Must be at least 1; a value of 0 is clamped to 1 by calling
+    /// `FrankieConfig::normalize()`, which is invoked automatically
+    /// by all public load methods.
     ///
     /// Can be provided via:
     /// - CLI: `--commit-history-limit <COUNT>`
@@ -576,6 +578,42 @@ impl FrankieConfig {
     /// is clamped to 1).
     pub fn normalize(&mut self) {
         self.commit_history_limit = self.commit_history_limit.max(1);
+    }
+
+    /// Loads configuration from CLI arguments, environment variables, and
+    /// configuration files.
+    ///
+    /// This method delegates to the OrthoConfig-derived loader and
+    /// automatically calls `normalize()` on the result before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when argument parsing fails or configuration files
+    /// cannot be loaded.
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let mut config =
+            <Self as OrthoConfig>::load().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        config.normalize();
+        Ok(config)
+    }
+
+    /// Loads configuration from the given iterator of arguments, along with
+    /// environment variables and configuration files.
+    ///
+    /// This method delegates to the OrthoConfig-derived loader and
+    /// automatically calls `normalize()` on the result before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when argument parsing fails or configuration files
+    /// cannot be loaded.
+    pub fn load_from_iter(
+        iter: impl IntoIterator<Item = impl Into<OsString> + Clone>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut config = <Self as OrthoConfig>::load_from_iter(iter)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        config.normalize();
+        Ok(config)
     }
 
     /// Validates that the configuration is internally consistent.
