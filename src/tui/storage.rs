@@ -393,3 +393,120 @@ pub(crate) async fn fetch_reviews() -> Result<Vec<ReviewComment>, IntakeError> {
         OctocrabReviewCommentGateway::new(&context.token, context.locator.api_base().as_str())?;
     gateway.list_review_comments(&context.locator).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- set_commit_history_limit / get_commit_history_limit ---
+
+    /// Verifies that `set_commit_history_limit` stores a value that
+    /// `get_commit_history_limit` can retrieve, and that subsequent set
+    /// calls return `false` because the `OnceLock` has already been filled.
+    #[test]
+    fn commit_history_limit_roundtrip() {
+        let was_set = set_commit_history_limit(42);
+
+        if was_set {
+            // We were the first test to populate this OnceLock.
+            assert_eq!(
+                get_commit_history_limit(),
+                Some(42),
+                "getter should return the value stored by the setter"
+            );
+        }
+
+        // A second set must always fail — the lock is already populated.
+        assert!(
+            !set_commit_history_limit(99),
+            "second set must return false (OnceLock already filled)"
+        );
+    }
+
+    /// Verifies that `get_commit_history_limit` returns `Some` after a
+    /// successful set, confirming the getter never returns `None` once the
+    /// lock has been populated.
+    #[test]
+    fn commit_history_limit_getter_returns_some_after_set() {
+        // Attempt to populate (may already be populated by another test).
+        let _ = set_commit_history_limit(42);
+
+        assert!(
+            get_commit_history_limit().is_some(),
+            "getter should return Some after the lock has been populated"
+        );
+    }
+
+    /// Verifies that `set_commit_history_limit` accepts the boundary value
+    /// of `1` (the minimum meaningful limit). The assertion is conditional
+    /// on this test being the first to populate the `OnceLock`.
+    #[test]
+    fn commit_history_limit_accepts_minimum_value() {
+        let was_set = set_commit_history_limit(1);
+
+        if was_set {
+            assert_eq!(get_commit_history_limit(), Some(1));
+        }
+    }
+
+    // --- set_time_travel_context / get_time_travel_context ---
+
+    /// Verifies roundtrip storage/retrieval for `TimeTravelContext`.
+    #[test]
+    fn time_travel_context_roundtrip() {
+        let context = TimeTravelContext {
+            host: "github.com".to_owned(),
+            owner: "octocat".to_owned(),
+            repo: "hello-world".to_owned(),
+            pr_number: 42,
+            discovery_failure: None,
+        };
+
+        let was_set = set_time_travel_context(context.clone());
+
+        if was_set {
+            let retrieved = get_time_travel_context();
+            assert_eq!(
+                retrieved.as_ref(),
+                Some(&context),
+                "getter should return the context stored by the setter"
+            );
+        }
+
+        assert!(
+            !set_time_travel_context(TimeTravelContext {
+                host: "ghe.corp.com".to_owned(),
+                owner: "other".to_owned(),
+                repo: "repo".to_owned(),
+                pr_number: 99,
+                discovery_failure: Some("test".to_owned()),
+            }),
+            "second set must return false (OnceLock already filled)"
+        );
+    }
+
+    /// Verifies that a `TimeTravelContext` with a discovery failure reason
+    /// is stored and retrieved correctly.
+    #[test]
+    fn time_travel_context_preserves_discovery_failure() {
+        let context = TimeTravelContext {
+            host: "github.com".to_owned(),
+            owner: "octocat".to_owned(),
+            repo: "hello-world".to_owned(),
+            pr_number: 42,
+            discovery_failure: Some("not a git repo".to_owned()),
+        };
+
+        let was_set = set_time_travel_context(context);
+
+        if was_set {
+            let retrieved =
+                get_time_travel_context().expect("getter should return Some after successful set");
+            assert_eq!(
+                retrieved.discovery_failure.as_deref(),
+                Some("not a git repo"),
+                "discovery failure reason should be preserved"
+            );
+        }
+    }
+}
