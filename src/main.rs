@@ -5,7 +5,6 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use frankie::{FrankieConfig, IntakeError, OperationMode};
-use ortho_config::OrthoConfig;
 
 mod cli;
 

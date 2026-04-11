@@ -12,6 +12,7 @@
 //! 4. **Command-line arguments** – `--pr-url`/`-u`, `--token`/`-t`, etc.
 
 use std::env;
+use std::ffi::OsString;
 
 use ortho_config::OrthoConfig;
 use serde::{Deserialize, Serialize};
@@ -319,6 +320,24 @@ pub struct FrankieConfig {
     #[ortho_config()]
     pub ai_timeout_seconds: u64,
 
+    /// Maximum number of commits to load in time-travel history.
+    ///
+    /// Controls how many parent commits are retrieved when entering
+    /// time-travel mode. Larger values provide more navigation depth
+    /// at the cost of increased load time for repositories with long
+    /// histories.
+    ///
+    /// Must be at least 1; a value of 0 is clamped to 1 by calling
+    /// `FrankieConfig::normalize()`, which is invoked automatically
+    /// by all public load methods.
+    ///
+    /// Can be provided via:
+    /// - CLI: `--commit-history-limit <COUNT>`
+    /// - Environment: `FRANKIE_COMMIT_HISTORY_LIMIT`
+    /// - Config file: `commit_history_limit = 50`
+    #[ortho_config()]
+    pub commit_history_limit: usize,
+
     /// Positional PR identifier (bare number or full URL) extracted from
     /// command-line arguments before ortho-config processes the remaining
     /// flags. When set, the TUI is launched without requiring `-T`.
@@ -331,6 +350,9 @@ pub(crate) const DEFAULT_REPLY_MAX_LENGTH: usize = 500;
 pub(crate) const DEFAULT_AI_BASE_URL: &str = "https://api.openai.com/v1";
 pub(crate) const DEFAULT_AI_MODEL: &str = "gpt-4o-mini";
 pub(crate) const DEFAULT_AI_TIMEOUT_SECONDS: u64 = 20;
+
+/// Default maximum number of commits to load in time-travel history.
+pub const DEFAULT_COMMIT_HISTORY_LIMIT: usize = 50;
 
 impl Default for FrankieConfig {
     fn default() -> Self {
@@ -358,6 +380,7 @@ impl Default for FrankieConfig {
             ai_model: DEFAULT_AI_MODEL.to_owned(),
             ai_api_key: None,
             ai_timeout_seconds: DEFAULT_AI_TIMEOUT_SECONDS,
+            commit_history_limit: DEFAULT_COMMIT_HISTORY_LIMIT,
             pr_identifier: None,
         }
     }
@@ -402,6 +425,7 @@ impl FrankieConfig {
         "--ai-model",
         "--ai-api-key",
         "--ai-timeout-seconds",
+        "--commit-history-limit",
         "--config-path",
     ];
 
@@ -546,13 +570,67 @@ impl FrankieConfig {
         self.pr_identifier.as_deref()
     }
 
-    /// Validates that the configuration is internally consistent.
+    /// Normalizes configuration values to ensure valid ranges.
+    ///
+    /// Should be called immediately after loading configuration and before
+    /// validation. This method clamps values that would otherwise be invalid
+    /// but can be safely corrected (for example, a commit history limit of 0
+    /// is clamped to 1).
+    pub fn normalize(&mut self) {
+        self.commit_history_limit = self.commit_history_limit.max(1);
+    }
+
+    /// Loads configuration from CLI arguments, environment variables, and
+    /// configuration files.
+    ///
+    /// This method delegates to the OrthoConfig-derived loader and
+    /// automatically calls `normalize()` on the result before returning.
     ///
     /// # Errors
     ///
-    /// Returns [`IntakeError::Configuration`] when both `pr_identifier` and
-    /// `pr_url` are provided, since they are mutually exclusive ways to
-    /// specify a pull request.
+    /// Returns an error when argument parsing fails or configuration files
+    /// cannot be loaded.
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let mut config =
+            <Self as OrthoConfig>::load().map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        config.normalize();
+        Ok(config)
+    }
+
+    /// Loads configuration from the given iterator of arguments, along with
+    /// environment variables and configuration files.
+    ///
+    /// This method delegates to the OrthoConfig-derived loader and
+    /// automatically calls `normalize()` on the result before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when argument parsing fails or configuration files
+    /// cannot be loaded.
+    pub fn load_from_iter(
+        iter: impl IntoIterator<Item = impl Into<OsString> + Clone>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut config = <Self as OrthoConfig>::load_from_iter(iter)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        config.normalize();
+        Ok(config)
+    }
+
+    /// Validates that the configuration is internally consistent.
+    ///
+    /// Checks that:
+    /// - Positional PR identifier and `--pr-url` are not both provided
+    /// - AI rewrite mode and text are both present when either is specified
+    /// - Verify resolutions mode has compatible configuration
+    /// - Summary mode has compatible configuration
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IntakeError::Configuration`] when:
+    /// - Both `pr_identifier` and `pr_url` are provided (mutually exclusive)
+    /// - AI rewrite mode is specified without text, or vice versa
+    /// - Verify resolutions mode is incompatible with current configuration
+    /// - Summary mode is incompatible with current configuration
     pub fn validate(&self) -> Result<(), IntakeError> {
         self.validate_pr_identifier_exclusivity()?;
         self.validate_ai_rewrite_completeness()?;

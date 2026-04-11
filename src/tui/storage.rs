@@ -73,6 +73,12 @@ static GIT_OPS_CONTEXT: OnceLock<GitOpsContext> = OnceLock::new();
 static REVIEW_COMMENT_VERIFICATION_CACHE: OnceLock<Arc<ReviewCommentVerificationCache>> =
     OnceLock::new();
 
+/// Global storage for configurable commit history limit.
+///
+/// Set before TUI startup from `FrankieConfig::commit_history_limit`. When
+/// not set, `ReviewApp` falls back to `DEFAULT_COMMIT_HISTORY_LIMIT`.
+static COMMIT_HISTORY_LIMIT: OnceLock<usize> = OnceLock::new();
+
 /// Global storage for time-travel context (PR info and discovery status).
 ///
 /// Always set before TUI startup; provides context for error messages when
@@ -224,6 +230,13 @@ pub fn set_review_comment_verification_cache(cache: Arc<ReviewCommentVerificatio
     REVIEW_COMMENT_VERIFICATION_CACHE.set(cache).is_ok()
 }
 
+/// Sets the commit history limit for the TUI application.
+///
+/// Returns `true` if the limit was set, `false` if it was already set.
+pub fn set_commit_history_limit(limit: usize) -> bool {
+    COMMIT_HISTORY_LIMIT.set(limit).is_ok()
+}
+
 /// Sets the time-travel context (PR info and discovery status).
 ///
 /// This must be called before starting the bubbletea-rs program. It stores
@@ -259,6 +272,11 @@ pub(crate) fn get_review_comment_verification_cache() -> Option<Arc<ReviewCommen
 /// contextual error messages.
 pub(crate) fn get_time_travel_context() -> Option<TimeTravelContext> {
     TIME_TRAVEL_CONTEXT.get().cloned()
+}
+
+/// Gets the configured commit history limit, if set.
+pub(crate) fn get_commit_history_limit() -> Option<usize> {
+    COMMIT_HISTORY_LIMIT.get().copied()
 }
 
 /// Gets the telemetry sink, returning a no-op sink if not configured.

@@ -130,7 +130,7 @@ context.
   stable read accessors required by renderers, and is exercised by tests that
   do not import TUI modules. Requires 2.2.4. See
   `docs/adr-005-cross-surface-library-first-delivery.md`.
-- [ ] 2.2.6. Replace the fixed internal commit history limit with configurable
+- [x] 2.2.6. Replace the fixed internal commit history limit with configurable
   options (for example a `commit_history_limit` setting for time travel).
   Acceptance: the history limit is configurable (default remains 50) and tests
   verify both default and overridden limits affect loaded history length.

@@ -494,6 +494,12 @@ Time-travel mode requires:
 - The commit SHA referenced by the comment must exist in the local
   repository.
 
+The number of commits loaded into the history is controlled by the
+`commit_history_limit` configuration option (default `50`). It can be set via
+`.frankie.toml`, the `FRANKIE_COMMIT_HISTORY_LIMIT` environment variable, or
+the `--commit-history-limit` CLI flag. Lower values speed up loading in
+repositories with long histories; higher values provide more navigation depth.
+
 If these requirements are not met, Frankie displays a clear error message
 explaining what is missing.
 
@@ -748,6 +754,9 @@ database_url = "frankie.sqlite"
 # Pull request metadata cache time-to-live (TTL) (optional, seconds)
 pr_metadata_cache_ttl_seconds = 86400
 
+# Time-travel commit history depth (optional, default 50)
+commit_history_limit = 50
+
 # Reply drafting options (optional)
 reply_max_length = 500
 reply_templates = [
@@ -787,6 +796,7 @@ Table: Supported environment variables.
 | `FRANKIE_AI_MODEL`                      | Model name for AI rewrite and summary requests        |
 | `FRANKIE_AI_API_KEY`                    | API key for AI rewrite and summary requests           |
 | `OPENAI_API_KEY`                        | Fallback API key for AI rewrite and summary requests  |
+| `FRANKIE_COMMIT_HISTORY_LIMIT`          | Maximum commits to load in time-travel history        |
 | `FRANKIE_AI_TIMEOUT_SECONDS`            | Timeout for AI rewrite and summary requests (seconds) |
 | `GITHUB_TOKEN`                          | Legacy token variable (lower precedence than above)   |
 
@@ -819,6 +829,7 @@ compatibility. If both `FRANKIE_TOKEN` and `GITHUB_TOKEN` are set,
 | `--ai-base-url <URL>`                       | —     | OpenAI-compatible API base URL                    |
 | `--ai-model <MODEL>`                        | —     | Model name for AI rewrite and summary requests    |
 | `--ai-api-key <KEY>`                        | —     | API key for AI rewrite and summary requests       |
+| `--commit-history-limit <COUNT>`            | —     | Maximum commits to load in time-travel history    |
 | `--ai-timeout-seconds <SECONDS>`            | —     | Timeout for AI rewrite and summary requests       |
 | `--help`                                    | `-h`  | Show help information                             |
 

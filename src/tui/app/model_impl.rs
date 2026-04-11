@@ -34,6 +34,10 @@ impl Model for ReviewApp {
                 .with_resolution_verification_service(verifier);
         }
 
+        if let Some(limit) = crate::tui::get_commit_history_limit() {
+            model = model.with_commit_history_limit(limit);
+        }
+
         if let Some(cache) = crate::tui::get_review_comment_verification_cache() {
             model = model.with_review_comment_verification_cache(cache);
         }

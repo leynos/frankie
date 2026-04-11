@@ -9,6 +9,7 @@ use crate::github::models::test_support::minimal_review;
 use crate::local::{
     CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
 };
+use crate::time_travel::load_time_travel_state;
 use chrono::Utc;
 use mockall::mock;
 use rstest::rstest;
@@ -128,12 +129,49 @@ fn load_time_travel_state_success() -> Result<(), Box<dyn std::error::Error>> {
     let params = TimeTravelParams::from_comment(&comment)?;
 
     let head_sha = CommitSha::new("HEAD".to_owned());
-    let state = load_time_travel_state(&git_ops, &params, Some(&head_sha))?;
+    let state = load_time_travel_state(&git_ops, &params, Some(&head_sha), 50)?;
 
     assert_eq!(state.snapshot().message(), "Test commit");
     assert_eq!(state.file_path().as_str(), "src/main.rs");
     assert_eq!(state.original_line(), Some(10));
     assert_eq!(state.commit_count(), 2);
+
+    Ok(())
+}
+
+#[test]
+#[expect(
+    clippy::panic_in_result_fn,
+    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
+)]
+fn load_time_travel_state_passes_configured_limit() -> Result<(), Box<dyn std::error::Error>> {
+    let mut git_ops = MockGitOps::new();
+    let test_snapshot = create_test_snapshot();
+    let snapshot_clone = test_snapshot.clone();
+
+    git_ops
+        .expect_get_commit_snapshot()
+        .times(1)
+        .returning(move |_sha, _file_path| Ok(snapshot_clone.clone()));
+
+    // Assert the exact limit value reaches get_parent_commits
+    git_ops
+        .expect_get_parent_commits()
+        .times(1)
+        .withf(|_sha, limit| *limit == 15)
+        .returning(|_sha, _limit| Ok(vec![CommitSha::new("abc1234567890".to_owned())]));
+
+    let comment = ReviewComment {
+        commit_sha: Some("abc1234567890".to_owned()),
+        file_path: Some("src/main.rs".to_owned()),
+        line_number: None,
+        ..minimal_review(4, "Limit test", "dave")
+    };
+    let params = TimeTravelParams::from_comment(&comment)?;
+
+    let state = load_time_travel_state(&git_ops, &params, None, 15)?;
+
+    assert_eq!(state.commit_count(), 1);
 
     Ok(())
 }
@@ -160,7 +198,7 @@ fn load_time_travel_state_commit_not_found() -> Result<(), Box<dyn std::error::E
     };
     let params = TimeTravelParams::from_comment(&comment)?;
 
-    let result = load_time_travel_state(&git_ops, &params, None);
+    let result = load_time_travel_state(&git_ops, &params, None, 50);
     assert!(
         matches!(result, Err(GitOperationError::CommitNotFound { .. })),
         "expected missing commit to surface CommitNotFound, got {result:?}"

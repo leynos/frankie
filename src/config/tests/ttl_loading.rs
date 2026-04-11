@@ -1,6 +1,5 @@
 //! Tests for `pr_metadata_cache_ttl_seconds` loading and precedence.
 
-use ortho_config::OrthoConfig;
 use rstest::rstest;
 use serde_json::json;
 

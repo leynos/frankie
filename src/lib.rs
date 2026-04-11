@@ -17,7 +17,7 @@ pub mod time_travel;
 pub mod tui;
 pub mod verification;
 
-pub use config::{FrankieConfig, OperationMode};
+pub use config::{DEFAULT_COMMIT_HISTORY_LIMIT, FrankieConfig, OperationMode};
 pub use export::{
     ExportFormat, ExportedComment, PrUrl, sort_comments, write_jsonl, write_markdown,
     write_template,

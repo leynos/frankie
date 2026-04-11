@@ -27,7 +27,7 @@
 use thiserror::Error;
 
 use crate::github::models::ReviewComment;
-use crate::local::{CommitSha, RepoFilePath};
+use crate::local::{CommitSha, GitOperationError, GitOperations, LineMappingRequest, RepoFilePath};
 
 mod state;
 
@@ -69,6 +69,25 @@ pub struct TimeTravelParams {
 }
 
 impl TimeTravelParams {
+    /// Creates a new `TimeTravelParams` with the given commit SHA, file path,
+    /// and optional line number.
+    ///
+    /// This constructor is primarily intended for testing scenarios where
+    /// you need to create parameters directly rather than extracting them
+    /// from a [`ReviewComment`].
+    #[must_use]
+    pub const fn new(
+        commit_sha: CommitSha,
+        file_path: RepoFilePath,
+        line_number: Option<u32>,
+    ) -> Self {
+        Self {
+            commit_sha,
+            file_path,
+            line_number,
+        }
+    }
+
     /// Extracts time-travel parameters from a review comment.
     ///
     /// Returns a typed error identifying which required field is missing.
@@ -130,6 +149,86 @@ impl TimeTravelParams {
     pub const fn line_number(&self) -> Option<u32> {
         self.line_number
     }
+}
+
+/// Loads the initial time-travel state for a comment.
+///
+/// This function provides the core loading logic for time-travel mode,
+/// fetching the commit snapshot, parent commit history, and optionally
+/// verifying line mappings when both a line number and HEAD SHA are provided.
+///
+/// The `commit_history_limit` parameter is defensively clamped to a minimum
+/// of 1 to ensure at least one commit is loaded.
+///
+/// # Errors
+///
+/// Returns a [`GitOperationError`] if:
+/// - The commit snapshot cannot be retrieved
+/// - The parent commit history cannot be fetched
+///
+/// # Example
+///
+/// ```no_run
+/// use frankie::local::{CommitSha, RepoFilePath};
+/// use frankie::time_travel::{TimeTravelParams, load_time_travel_state};
+/// # use frankie::local::GitOperations;
+///
+/// # fn example(git_ops: &dyn GitOperations) -> Result<(), Box<dyn std::error::Error>> {
+/// let params = TimeTravelParams::new(
+///     CommitSha::new("abc123".to_owned()),
+///     RepoFilePath::new("src/main.rs".to_owned()),
+///     Some(42),
+/// );
+///
+/// let state = load_time_travel_state(git_ops, &params, None, 50)?;
+/// # Ok(())
+/// # }
+/// ```
+pub fn load_time_travel_state(
+    git_ops: &dyn GitOperations,
+    params: &TimeTravelParams,
+    head_sha: Option<&CommitSha>,
+    commit_history_limit: usize,
+) -> Result<TimeTravelState, GitOperationError> {
+    // Get commit snapshot with file content
+    let snapshot = git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path()))?;
+
+    // Normalize limit to at least 1 for defensive safety
+    let effective_limit = commit_history_limit.max(1);
+
+    // Get commit history
+    let commit_history = git_ops.get_parent_commits(params.commit_sha(), effective_limit)?;
+
+    // Verify line mapping if we have a line number and HEAD
+    let line_mapping = verify_line_mapping(git_ops, params, head_sha);
+
+    Ok(TimeTravelState::new(TimeTravelInitParams {
+        snapshot,
+        file_path: params.file_path().clone(),
+        original_line: params.line_number(),
+        line_mapping,
+        commit_history,
+        current_index: 0,
+    }))
+}
+
+/// Verifies line mapping between the comment's commit and HEAD.
+///
+/// Returns `None` if either the line number or HEAD SHA is missing,
+/// or if the verification fails.
+fn verify_line_mapping(
+    git_ops: &dyn GitOperations,
+    params: &TimeTravelParams,
+    head_sha: Option<&CommitSha>,
+) -> Option<crate::local::LineMappingVerification> {
+    let (line, head) = params.line_number().zip(head_sha)?;
+    let request = LineMappingRequest::new(
+        params.commit_sha().as_str().to_owned(),
+        head.as_str().to_owned(),
+        params.file_path().as_str().to_owned(),
+        line,
+    );
+    git_ops.verify_line_mapping(&request).ok()
 }
 
 #[cfg(test)]

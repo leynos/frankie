@@ -12,13 +12,10 @@ use std::sync::Arc;
 use bubbletea_rs::Cmd;
 
 use crate::local::{CommitSha, GitOperationError, GitOperations, LineMappingRequest, RepoFilePath};
-use crate::time_travel::{TimeTravelInitParams, TimeTravelParams, TimeTravelState};
+use crate::time_travel::{self, TimeTravelInitParams, TimeTravelParams, TimeTravelState};
 use crate::tui::messages::AppMsg;
 
 use super::ReviewApp;
-
-/// Maximum number of commits to load in history.
-const COMMIT_HISTORY_LIMIT: usize = 50;
 
 /// Context for verifying line mapping between commits.
 #[derive(Debug, Clone)]
@@ -141,8 +138,14 @@ impl ReviewApp {
         // Spawn async task to load time-travel data
         let git_ops_clone = Arc::clone(git_ops);
         let head_sha = self.head_commit_sha();
+        let commit_history_limit = self.commit_history_limit;
 
-        Some(spawn_time_travel_load(git_ops_clone, params, head_sha))
+        Some(spawn_time_travel_load(
+            git_ops_clone,
+            params,
+            head_sha,
+            commit_history_limit,
+        ))
     }
 
     /// Handles the `ExitTimeTravel` message.
@@ -257,10 +260,18 @@ fn spawn_time_travel_load(
     git_ops: Arc<dyn GitOperations>,
     params: TimeTravelParams,
     head_sha: Option<CommitSha>,
+    commit_history_limit: usize,
 ) -> Cmd {
     spawn_load_task(
         git_ops,
-        move |ops| load_time_travel_state(ops, &params, head_sha.as_ref()),
+        move |ops| {
+            time_travel::load_time_travel_state(
+                ops,
+                &params,
+                head_sha.as_ref(),
+                commit_history_limit,
+            )
+        },
         |state| AppMsg::TimeTravelLoaded(Box::new(state)),
     )
 }
@@ -293,39 +304,6 @@ fn verify_line_mapping_optional(
         line,
     );
     git_ops.verify_line_mapping(&request).ok()
-}
-
-/// Loads the initial time-travel state for a comment.
-fn load_time_travel_state(
-    git_ops: &dyn GitOperations,
-    params: &TimeTravelParams,
-    head_sha: Option<&CommitSha>,
-) -> Result<TimeTravelState, GitOperationError> {
-    // Get commit snapshot with file content
-    let snapshot = git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path()))?;
-
-    // Get commit history
-    let commit_history = git_ops.get_parent_commits(params.commit_sha(), COMMIT_HISTORY_LIMIT)?;
-
-    // Verify line mapping if we have a line number and HEAD
-    let line_mapping = verify_line_mapping_optional(
-        git_ops,
-        &LineMappingContext {
-            commit_sha: params.commit_sha(),
-            file_path: params.file_path(),
-            original_line: params.line_number(),
-            head_sha,
-        },
-    );
-
-    Ok(TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: params.file_path().clone(),
-        original_line: params.line_number(),
-        line_mapping,
-        commit_history,
-        current_index: 0,
-    }))
 }
 
 /// Loads a commit snapshot for navigation.

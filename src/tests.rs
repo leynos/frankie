@@ -3,7 +3,6 @@
 use std::ffi::OsString;
 
 use frankie::{FrankieConfig, IntakeError};
-use ortho_config::OrthoConfig;
 use rstest::rstest;
 
 use super::extract_positional_pr_identifier;

@@ -815,6 +815,18 @@ crate-internal because roadmap item 2.2.7 still owns orchestration extraction.
 No standalone CLI surface is added for this slice; the work is a library-first
 visibility promotion supporting the existing interactive feature.
 
+##### Library API (roadmap 2.2.6)
+
+The commit history limit used by time-travel mode is now configurable via
+`FrankieConfig::commit_history_limit`. The default remains `50`, preserving
+existing behaviour. Users can override it through the configuration file
+(`commit_history_limit = 25`), the `FRANKIE_COMMIT_HISTORY_LIMIT` environment
+variable, or the `--commit-history-limit` CLI flag. The library exposes
+`DEFAULT_COMMIT_HISTORY_LIMIT` as a public constant so embedding hosts can
+reference the baseline without hardcoding the value. No standalone CLI surface
+beyond the configuration flag is added for this slice; full orchestration
+extraction is tracked by roadmap item 2.2.7.
+
 ### 2.1.3 Ai Integration Features
 
 | Feature ID | Feature Name            | Category       | Priority | Status   |

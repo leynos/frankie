@@ -18,10 +18,10 @@ use frankie::persistence::ReviewCommentVerificationCache;
 use frankie::telemetry::StderrJsonlTelemetrySink;
 use frankie::tui::{
     ReplyDraftConfig, ReplyDraftMaxLength, ReviewApp, TimeTravelContext,
-    set_comment_rewrite_service, set_git_ops_context, set_initial_reviews,
-    set_initial_terminal_size, set_pr_discussion_summary_service, set_refresh_context,
-    set_reply_draft_config, set_review_comment_verification_cache, set_telemetry_sink,
-    set_time_travel_context,
+    set_comment_rewrite_service, set_commit_history_limit, set_git_ops_context,
+    set_initial_reviews, set_initial_terminal_size, set_pr_discussion_summary_service,
+    set_refresh_context, set_reply_draft_config, set_review_comment_verification_cache,
+    set_telemetry_sink, set_time_travel_context,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -80,6 +80,8 @@ pub async fn run(config: &FrankieConfig) -> Result<(), IntakeError> {
     {
         let _ = set_review_comment_verification_cache(Arc::new(cache));
     }
+
+    let _ = set_commit_history_limit(config.commit_history_limit);
 
     let reply_draft_config = ReplyDraftConfig::new(
         ReplyDraftMaxLength::new(config.reply_max_length),
