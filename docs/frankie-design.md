@@ -3265,7 +3265,7 @@ fluent methods on `ReviewApp` for post-construction configuration:
   discussion summary service
 
 The module also exposes `default_commit_history_limit()` (package-private) so
-that `ReviewApp::with_dimensions` can initialise the field without importing
+that `ReviewApp::with_dimensions` can initialize the field without importing
 the config constant directly.
 
 ##### Pre-startup storage layer

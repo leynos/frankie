@@ -10,9 +10,11 @@ use crate::local::{
 };
 use crate::telemetry::test_support::RecordingTelemetrySink;
 use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
+use crate::tui::storage::storage_test_guard;
 
 use super::*;
 
+const SAMPLE_HEAD_SHA: &str = "abc123";
 mock! {
     pub GitOps {}
 
@@ -95,23 +97,26 @@ fn recording_sink_captures_sync_latency_event() {
 
 #[test]
 fn set_telemetry_sink_wires_sink_for_record_sync_telemetry() {
-    // OnceLock: only verify events if our sink was first to be set.
+    let _guard = storage_test_guard()
+        .lock()
+        .expect("storage test guard should not be poisoned");
     let sink = Arc::new(RecordingTelemetrySink::default());
-    let was_set = set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
+    assert!(
+        set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>),
+        "first set should populate the OnceLock"
+    );
     record_sync_telemetry(200, 15, true);
-    if was_set {
-        let events = sink.events();
-        assert_eq!(events.len(), 1);
-        let first_event = events.first().expect("events should not be empty");
-        assert!(matches!(
-            first_event,
-            TelemetryEvent::SyncLatencyRecorded {
-                latency_ms: 200,
-                comment_count: 15,
-                incremental: true,
-            }
-        ));
-    }
+    let events = sink.events();
+    assert_eq!(events.len(), 1);
+    let first_event = events.first().expect("events should not be empty");
+    assert!(matches!(
+        first_event,
+        TelemetryEvent::SyncLatencyRecorded {
+            latency_ms: 200,
+            comment_count: 15,
+            incremental: true,
+        }
+    ));
 }
 
 /// Creates a `MockGitOps` with default expectations that return
@@ -145,39 +150,28 @@ fn default_mock_git_ops() -> MockGitOps {
 
 #[test]
 fn set_git_ops_context_wires_ops_for_get() {
+    let _guard = storage_test_guard()
+        .lock()
+        .expect("storage test guard should not be poisoned");
     let ops: Arc<dyn GitOperations> = Arc::new(default_mock_git_ops());
-    let was_set = set_git_ops_context(ops, "abc123".to_owned());
+    assert!(
+        set_git_ops_context(ops, SAMPLE_HEAD_SHA.to_owned()),
+        "first set should populate the OnceLock"
+    );
 
     let retrieved = get_git_ops_context();
     assert!(retrieved.is_some(), "context should always be available");
-
-    if was_set {
-        let (_, head_sha) = retrieved.expect("already asserted Some");
-        assert_eq!(head_sha, "abc123");
-    }
+    let (_, head_sha) = retrieved.expect("already asserted Some");
+    assert_eq!(head_sha, SAMPLE_HEAD_SHA);
 }
 
 #[test]
-fn set_time_travel_context_wires_context_for_get() {
-    let ctx = TimeTravelContext {
-        host: "github.com".to_owned(),
-        owner: "octocat".to_owned(),
-        repo: "hello-world".to_owned(),
-        pr_number: 42,
-        discovery_failure: Some("no repo found".to_owned()),
-    };
-    let was_set = set_time_travel_context(ctx);
+fn time_travel_context_helpers_are_re_exported_from_tui() {
+    let setter: fn(TimeTravelContext) -> bool = set_time_travel_context;
+    let getter: fn() -> Option<TimeTravelContext> = get_time_travel_context;
 
-    let retrieved = get_time_travel_context();
-    assert!(retrieved.is_some(), "context should always be available");
-
-    if was_set {
-        let stored = retrieved.expect("already asserted Some");
-        assert_eq!(stored.owner, "octocat");
-        assert_eq!(stored.repo, "hello-world");
-        assert_eq!(stored.pr_number, 42);
-        assert_eq!(stored.discovery_failure.as_deref(), Some("no repo found"));
-    }
+    let _ = setter;
+    let _ = getter;
 }
 
 #[test]
@@ -195,14 +189,18 @@ fn reply_draft_config_falls_back_to_defaults() {
 
 #[test]
 fn set_reply_draft_config_normalises_zero_max_length() {
+    let _guard = storage_test_guard()
+        .lock()
+        .expect("storage test guard should not be poisoned");
     let custom = ReplyDraftConfig::new(ReplyDraftMaxLength::new(0), vec!["Template".to_owned()]);
-    let was_set = set_reply_draft_config(custom);
+    assert!(
+        set_reply_draft_config(custom),
+        "first set should populate the OnceLock"
+    );
     let config = get_reply_draft_config();
     assert!(
         config.max_length.as_usize() >= 1,
         "max_length should be normalised"
     );
-    if was_set {
-        assert_eq!(config.templates, vec!["Template".to_owned()]);
-    }
+    assert_eq!(config.templates, vec!["Template".to_owned()]);
 }

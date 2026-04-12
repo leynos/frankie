@@ -85,6 +85,9 @@ static COMMIT_HISTORY_LIMIT: OnceLock<usize> = OnceLock::new();
 /// time-travel is attempted without a valid local repository.
 static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
 
+#[cfg(test)]
+static STORAGE_TEST_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
     locator: PullRequestLocator,
@@ -114,6 +117,11 @@ pub struct TimeTravelContext {
     pub pr_number: u64,
     /// Reason discovery failed, if applicable.
     pub discovery_failure: Option<String>,
+}
+
+#[cfg(test)]
+pub(crate) fn storage_test_guard() -> &'static std::sync::Mutex<()> {
+    &STORAGE_TEST_GUARD
 }
 
 /// Sets the initial reviews for the TUI application.
@@ -398,115 +406,90 @@ pub(crate) async fn fetch_reviews() -> Result<Vec<ReviewComment>, IntakeError> {
 mod tests {
     use super::*;
 
+    const SAMPLE_COMMIT_HISTORY_LIMIT: usize = 42;
+    const ALTERNATE_COMMIT_HISTORY_LIMIT: usize = 99;
+    const MINIMUM_COMMIT_HISTORY_LIMIT: usize = 1;
+    const SAMPLE_PR_NUMBER: u64 = 42;
+    const ALTERNATE_PR_NUMBER: u64 = 99;
+
+    fn sample_context(pr_number: u64, discovery_failure: Option<&str>) -> TimeTravelContext {
+        TimeTravelContext {
+            host: "github.com".to_owned(),
+            owner: "octocat".to_owned(),
+            repo: "hello-world".to_owned(),
+            pr_number,
+            discovery_failure: discovery_failure.map(str::to_owned),
+        }
+    }
+
     // --- set_commit_history_limit / get_commit_history_limit ---
 
-    /// Verifies that `set_commit_history_limit` stores a value that
-    /// `get_commit_history_limit` can retrieve, and that subsequent set
-    /// calls return `false` because the `OnceLock` has already been filled.
+    /// Verifies that the commit-history limit `OnceLock` stores a value,
+    /// exposes it through the getter, and rejects later writes.
     #[test]
-    fn commit_history_limit_roundtrip() {
-        let was_set = set_commit_history_limit(42);
+    fn commit_history_limit_once_lock_is_sticky() {
+        let _guard = storage_test_guard()
+            .lock()
+            .expect("storage test guard should not be poisoned");
 
-        if was_set {
-            // We were the first test to populate this OnceLock.
-            assert_eq!(
-                get_commit_history_limit(),
-                Some(42),
-                "getter should return the value stored by the setter"
-            );
-        }
-
-        // A second set must always fail — the lock is already populated.
         assert!(
-            !set_commit_history_limit(99),
+            set_commit_history_limit(SAMPLE_COMMIT_HISTORY_LIMIT),
+            "first set should populate the OnceLock"
+        );
+        assert_eq!(
+            get_commit_history_limit(),
+            Some(SAMPLE_COMMIT_HISTORY_LIMIT),
+            "getter should return the value stored by the setter"
+        );
+
+        assert!(
+            !set_commit_history_limit(ALTERNATE_COMMIT_HISTORY_LIMIT),
             "second set must return false (OnceLock already filled)"
         );
-    }
-
-    /// Verifies that `get_commit_history_limit` returns `Some` after a
-    /// successful set, confirming the getter never returns `None` once the
-    /// lock has been populated.
-    #[test]
-    fn commit_history_limit_getter_returns_some_after_set() {
-        // Attempt to populate (may already be populated by another test).
-        let _ = set_commit_history_limit(42);
-
-        assert!(
-            get_commit_history_limit().is_some(),
-            "getter should return Some after the lock has been populated"
+        assert_eq!(
+            get_commit_history_limit(),
+            Some(SAMPLE_COMMIT_HISTORY_LIMIT),
+            "later writes must not replace the stored commit history limit"
         );
-    }
-
-    /// Verifies that `set_commit_history_limit` accepts the boundary value
-    /// of `1` (the minimum meaningful limit). The assertion is conditional
-    /// on this test being the first to populate the `OnceLock`.
-    #[test]
-    fn commit_history_limit_accepts_minimum_value() {
-        let was_set = set_commit_history_limit(1);
-
-        if was_set {
-            assert_eq!(get_commit_history_limit(), Some(1));
-        }
+        assert!(
+            get_commit_history_limit().is_some_and(|limit| limit >= MINIMUM_COMMIT_HISTORY_LIMIT),
+            "getter should expose a positive commit history limit"
+        );
     }
 
     // --- set_time_travel_context / get_time_travel_context ---
 
-    /// Verifies roundtrip storage/retrieval for `TimeTravelContext`.
+    /// Verifies that the time-travel-context `OnceLock` stores a value,
+    /// preserves discovery-failure details, and rejects later writes.
     #[test]
-    fn time_travel_context_roundtrip() {
-        let context = TimeTravelContext {
-            host: "github.com".to_owned(),
-            owner: "octocat".to_owned(),
-            repo: "hello-world".to_owned(),
-            pr_number: 42,
-            discovery_failure: None,
-        };
-
-        let was_set = set_time_travel_context(context.clone());
-
-        if was_set {
-            let retrieved = get_time_travel_context();
-            assert_eq!(
-                retrieved.as_ref(),
-                Some(&context),
-                "getter should return the context stored by the setter"
-            );
-        }
+    fn time_travel_context_once_lock_is_sticky() {
+        let _guard = storage_test_guard()
+            .lock()
+            .expect("storage test guard should not be poisoned");
+        let context = sample_context(SAMPLE_PR_NUMBER, Some("not a git repo"));
 
         assert!(
-            !set_time_travel_context(TimeTravelContext {
-                host: "ghe.corp.com".to_owned(),
-                owner: "other".to_owned(),
-                repo: "repo".to_owned(),
-                pr_number: 99,
-                discovery_failure: Some("test".to_owned()),
-            }),
+            set_time_travel_context(context.clone()),
+            "first set should populate the OnceLock"
+        );
+        assert_eq!(
+            get_time_travel_context(),
+            Some(context.clone()),
+            "getter should return the context stored by the setter"
+        );
+
+        assert!(
+            !set_time_travel_context(sample_context(ALTERNATE_PR_NUMBER, Some("other failure"))),
             "second set must return false (OnceLock already filled)"
         );
-    }
-
-    /// Verifies that a `TimeTravelContext` with a discovery failure reason
-    /// is stored and retrieved correctly.
-    #[test]
-    fn time_travel_context_preserves_discovery_failure() {
-        let context = TimeTravelContext {
-            host: "github.com".to_owned(),
-            owner: "octocat".to_owned(),
-            repo: "hello-world".to_owned(),
-            pr_number: 42,
-            discovery_failure: Some("not a git repo".to_owned()),
-        };
-
-        let was_set = set_time_travel_context(context);
-
-        if was_set {
-            let retrieved =
-                get_time_travel_context().expect("getter should return Some after successful set");
-            assert_eq!(
-                retrieved.discovery_failure.as_deref(),
-                Some("not a git repo"),
-                "discovery failure reason should be preserved"
-            );
-        }
+        assert_eq!(
+            get_time_travel_context(),
+            Some(context.clone()),
+            "later writes must not replace the stored time-travel context"
+        );
+        assert!(
+            context.discovery_failure.as_deref() == Some("not a git repo"),
+            "stored contexts should preserve discovery-failure text"
+        );
     }
 }
