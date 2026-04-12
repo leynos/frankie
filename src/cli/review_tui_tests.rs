@@ -44,6 +44,7 @@ fn cli_telemetry_wiring_pattern_is_valid() {
 
     // Create the sink exactly as done in run() at line 56
     let sink: Arc<dyn TelemetrySink> = Arc::new(StderrJsonlTelemetrySink);
+    let wire_sink: fn(Arc<dyn TelemetrySink>) -> bool = set_telemetry_sink;
 
     // Verify it implements TelemetrySink and can record events without panic
     sink.record(frankie::telemetry::TelemetryEvent::SyncLatencyRecorded {
@@ -52,10 +53,10 @@ fn cli_telemetry_wiring_pattern_is_valid() {
         incremental: true,
     });
 
-    // Wire it to the TUI module (same call as in run())
-    // The call may fail due to OnceLock if already set by another test,
-    // but we verify the wiring pattern compiles and the sink is usable.
-    let _ = set_telemetry_sink(sink);
+    // Verify the wiring entry point remains callable with the CLI sink type
+    // without mutating the global OnceLock-backed storage in this unit test.
+    let _ = wire_sink;
+    let _ = sink;
 }
 
 #[rstest::rstest]

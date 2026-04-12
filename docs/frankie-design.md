@@ -3219,6 +3219,100 @@ implementations consistently used 30-40% less memory and had a 15% lower CPU
 footprint than equivalent implementations, primarily due to Rust's lack of a
 garbage collector and zero-cost abstractions.
 
+#### Internal architecture
+
+The `ReviewApp` model (`src/tui/app/mod.rs`) is decomposed into focused
+submodules, each owning a single area of responsibility:
+
+Table: Frankie submodules and their responsibilities.
+
+| Submodule                        | Responsibility                                                           |
+| -------------------------------- | ------------------------------------------------------------------------ |
+| `builder`                        | Fluent builder methods for constructing configured `ReviewApp` instances |
+| `codex_handlers`                 | Codex execution trigger and stream polling                               |
+| `diff_context_handlers`          | Full-screen diff context view management                                 |
+| `filter_handlers`                | Review filter application and cycling                                    |
+| `layout`                         | Shared layout and scroll calculations                                    |
+| `lifecycle_handlers`             | Startup, quit, help toggle, and resize handling                          |
+| `model_impl`                     | `bubbletea_rs::Model` trait implementation (`init`, `update`, `view`)    |
+| `navigation`                     | Cursor and page navigation handlers                                      |
+| `pr_discussion_summary_handlers` | PR discussion summary generation and display                             |
+| `pr_discussion_summary_state`    | PR discussion summary view state                                         |
+| `rendering`                      | View rendering methods for terminal output                               |
+| `reply_draft_handlers`           | Inline reply draft editing and AI preview                                |
+| `routing`                        | Mode-aware message routing and category dispatch                         |
+| `sync_handlers`                  | Background sync and refresh handling                                     |
+| `time_travel_handlers`           | Time-travel navigation and loading handlers                              |
+| `verification_handlers`          | Resolution verification trigger and status                               |
+| `verification_state`             | Verification service, cache, and cached verdict state                    |
+| `view_mode`                      | Active view mode enum and layout constants                               |
+
+##### Builder pattern
+
+The `builder` submodule (`src/tui/app/builder.rs`) provides `#[must_use]`
+fluent methods on `ReviewApp` for post-construction configuration:
+
+- `with_git_ops(git_ops, head_sha)` — enables time-travel navigation
+- `with_commit_history_limit(limit)` — overrides the default commit
+  history depth (see `DEFAULT_COMMIT_HISTORY_LIMIT`)
+- `with_codex_service(service)` — sets the Codex execution service
+- `with_codex_poll_interval(interval)` — sets the Codex poll interval
+- `with_reply_draft_config(config)` — sets reply-drafting configuration
+- `with_comment_rewrite_service(service)` — sets the AI rewrite service
+- `with_resolution_verification_service(service)` — sets the
+  resolution verification service
+- `with_review_comment_verification_cache(cache)` — sets the
+  verification persistence cache
+- `with_pr_discussion_summary_service(service)` — sets the PR
+  discussion summary service
+
+The module also exposes `default_commit_history_limit()` (package-private) so
+that `ReviewApp::with_dimensions` can initialize the field without importing
+the config constant directly.
+
+##### Pre-startup storage layer
+
+The storage module (`src/tui/storage.rs`) provides `OnceLock`-backed global
+setters and getters consumed by CLI wiring and TUI bootstrap. Public setter
+functions (`set_initial_reviews`, `set_commit_history_limit`,
+`set_time_travel_context`, etc.) are called before the bubbletea-rs program
+starts. Corresponding crate-internal getters (`get_commit_history_limit`,
+`get_time_travel_context`, etc.) are read by `ReviewApp::init()` and the
+builder layer to hydrate the model.
+
+Table: Storage functions for commit history limit and time-travel context.
+
+| Function                          | Visibility   | Purpose                                           |
+| --------------------------------- | ------------ | ------------------------------------------------- |
+| `set_commit_history_limit(limit)` | `pub`        | Stores the configured limit before TUI startup    |
+| `get_commit_history_limit()`      | `pub(crate)` | Returns the stored limit, or `None` if not set    |
+| `set_time_travel_context(ctx)`    | `pub`        | Stores PR metadata for time-travel error messages |
+| `get_time_travel_context()`       | `pub(crate)` | Returns stored context, or `None` if not set      |
+
+All storage entries follow the `OnceLock` write-once contract: setters return
+`true` on first call and `false` on subsequent calls.
+
+##### `load_time_travel_state` public function
+
+The function `load_time_travel_state` (`src/time_travel/mod.rs`) is the library
+entry point for materializing time-travel context. Its signature:
+
+```rust
+pub fn load_time_travel_state(
+    git_ops: &dyn GitOperations,
+    params: &TimeTravelParams,
+    head_sha: Option<&CommitSha>,
+    commit_history_limit: usize,
+) -> Result<TimeTravelState, GitOperationError>
+```
+
+This function is public to support both the TUI adapter (which calls it from
+`time_travel_handlers`) and embedding hosts that need to materialize
+time-travel state from their own orchestration layer. It clamps
+`commit_history_limit` to a minimum of `1` defensively, fetches the commit
+snapshot, retrieves parent commit history up to the limit, and optionally
+verifies line mapping when a `head_sha` is provided.
+
 ### 6.1.2 Repository Manager Component
 
 **Component Overview**: The Repository Manager handles all GitHub repository

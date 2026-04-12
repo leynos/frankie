@@ -80,10 +80,10 @@ static REVIEW_COMMENT_VERIFICATION_CACHE: OnceLock<Arc<ReviewCommentVerification
 static COMMIT_HISTORY_LIMIT: OnceLock<usize> = OnceLock::new();
 
 /// Global storage for time-travel context (PR info and discovery status).
-///
-/// Always set before TUI startup; provides context for error messages when
-/// time-travel is attempted without a valid local repository.
+/// Always set before TUI startup for time-travel error messages.
 static TIME_TRAVEL_CONTEXT: OnceLock<TimeTravelContext> = OnceLock::new();
+#[cfg(test)]
+static STORAGE_TEST_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// Context required to refresh review data from GitHub.
 struct RefreshContext {
@@ -114,6 +114,11 @@ pub struct TimeTravelContext {
     pub pr_number: u64,
     /// Reason discovery failed, if applicable.
     pub discovery_failure: Option<String>,
+}
+
+#[cfg(test)]
+pub(crate) fn storage_test_guard() -> &'static std::sync::Mutex<()> {
+    &STORAGE_TEST_GUARD
 }
 
 /// Sets the initial reviews for the TUI application.
