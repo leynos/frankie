@@ -1,4 +1,13 @@
-//! Tests for TUI storage helpers backed by process-global `OnceLock`s.
+//! Unit tests for the write-once, `OnceLock`-backed storage helpers in
+//! [`super::storage`].
+//!
+//! Because each `OnceLock` can only be populated once per process lifetime,
+//! tests acquire [`storage_test_guard`] to serialise writes and prevent
+//! flaky failures when the test harness runs tests in parallel.
+//!
+//! Covered primitives: [`set_commit_history_limit`] /
+//! [`get_commit_history_limit`] and [`set_time_travel_context`] /
+//! [`get_time_travel_context`].
 
 use std::sync::MutexGuard;
 

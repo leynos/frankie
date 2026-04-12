@@ -117,7 +117,7 @@ pub struct TimeTravelContext {
 }
 
 #[cfg(test)]
-pub(crate) fn storage_test_guard() -> &'static std::sync::Mutex<()> {
+pub fn storage_test_guard() -> &'static std::sync::Mutex<()> {
     &STORAGE_TEST_GUARD
 }
 
