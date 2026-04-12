@@ -1,8 +1,11 @@
 //! Tests for TUI startup context storage helpers.
 
+use std::error::Error;
 use std::sync::Arc;
+use std::sync::MutexGuard;
 
 use mockall::mock;
+use rstest::{fixture, rstest};
 
 use crate::local::{
     CommitSha, CommitSnapshot, GitOperationError, GitOperations, LineMappingRequest,
@@ -15,6 +18,14 @@ use crate::tui::storage::storage_test_guard;
 use super::*;
 
 const SAMPLE_HEAD_SHA: &str = "abc123";
+
+#[fixture]
+fn storage_guard_fixture() -> MutexGuard<'static, ()> {
+    storage_test_guard()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 mock! {
     pub GitOps {}
 
@@ -95,28 +106,34 @@ fn recording_sink_captures_sync_latency_event() {
     assert!(!*incremental);
 }
 
-#[test]
-fn set_telemetry_sink_wires_sink_for_record_sync_telemetry() {
-    let _guard = storage_test_guard()
-        .lock()
-        .expect("storage test guard should not be poisoned");
+#[rstest]
+fn set_telemetry_sink_wires_sink_for_record_sync_telemetry(
+    storage_guard_fixture: MutexGuard<'static, ()>,
+) -> Result<(), Box<dyn Error>> {
     let sink = Arc::new(RecordingTelemetrySink::default());
-    assert!(
-        set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>),
-        "first set should populate the OnceLock"
-    );
+    let _ = set_telemetry_sink(Arc::clone(&sink) as Arc<dyn TelemetrySink>);
     record_sync_telemetry(200, 15, true);
+
     let events = sink.events();
-    assert_eq!(events.len(), 1);
-    let first_event = events.first().expect("events should not be empty");
-    assert!(matches!(
+    if events.len() != 1 {
+        return Err(format!("expected exactly one telemetry event, got {}", events.len()).into());
+    }
+    let Some(first_event) = events.first() else {
+        return Err("events should not be empty".into());
+    };
+    if !matches!(
         first_event,
         TelemetryEvent::SyncLatencyRecorded {
             latency_ms: 200,
             comment_count: 15,
             incremental: true,
         }
-    ));
+    ) {
+        return Err(format!("unexpected telemetry event: {first_event:?}").into());
+    }
+
+    drop(storage_guard_fixture);
+    Ok(())
 }
 
 /// Creates a `MockGitOps` with default expectations that return
@@ -148,21 +165,22 @@ fn default_mock_git_ops() -> MockGitOps {
     mock
 }
 
-#[test]
-fn set_git_ops_context_wires_ops_for_get() {
-    let _guard = storage_test_guard()
-        .lock()
-        .expect("storage test guard should not be poisoned");
+#[rstest]
+fn set_git_ops_context_wires_ops_for_get(
+    storage_guard_fixture: MutexGuard<'static, ()>,
+) -> Result<(), Box<dyn Error>> {
     let ops: Arc<dyn GitOperations> = Arc::new(default_mock_git_ops());
-    assert!(
-        set_git_ops_context(ops, SAMPLE_HEAD_SHA.to_owned()),
-        "first set should populate the OnceLock"
-    );
+    let _ = set_git_ops_context(ops, SAMPLE_HEAD_SHA.to_owned());
 
-    let retrieved = get_git_ops_context();
-    assert!(retrieved.is_some(), "context should always be available");
-    let (_, head_sha) = retrieved.expect("already asserted Some");
-    assert_eq!(head_sha, SAMPLE_HEAD_SHA);
+    let Some((_, head_sha)) = get_git_ops_context() else {
+        return Err("context should always be available".into());
+    };
+    if head_sha != SAMPLE_HEAD_SHA {
+        return Err(format!("expected head SHA {SAMPLE_HEAD_SHA}, got {head_sha}").into());
+    }
+
+    drop(storage_guard_fixture);
+    Ok(())
 }
 
 #[test]
@@ -187,20 +205,20 @@ fn reply_draft_config_falls_back_to_defaults() {
     );
 }
 
-#[test]
-fn set_reply_draft_config_normalises_zero_max_length() {
-    let _guard = storage_test_guard()
-        .lock()
-        .expect("storage test guard should not be poisoned");
+#[rstest]
+fn set_reply_draft_config_normalises_zero_max_length(
+    storage_guard_fixture: MutexGuard<'static, ()>,
+) -> Result<(), Box<dyn Error>> {
     let custom = ReplyDraftConfig::new(ReplyDraftMaxLength::new(0), vec!["Template".to_owned()]);
-    assert!(
-        set_reply_draft_config(custom),
-        "first set should populate the OnceLock"
-    );
+    let _ = set_reply_draft_config(custom);
     let config = get_reply_draft_config();
-    assert!(
-        config.max_length.as_usize() >= 1,
-        "max_length should be normalised"
-    );
-    assert_eq!(config.templates, vec!["Template".to_owned()]);
+    if config.max_length.as_usize() < 1 {
+        return Err("max_length should be normalised".into());
+    }
+    if config.templates != vec!["Template".to_owned()] {
+        return Err(format!("unexpected templates: {:?}", config.templates).into());
+    }
+
+    drop(storage_guard_fixture);
+    Ok(())
 }

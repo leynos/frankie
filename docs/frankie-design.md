@@ -3219,10 +3219,12 @@ implementations consistently used 30-40% less memory and had a 15% lower CPU
 footprint than equivalent implementations, primarily due to Rust's lack of a
 garbage collector and zero-cost abstractions.
 
-#### Internal Architecture
+#### Internal architecture
 
 The `ReviewApp` model (`src/tui/app/mod.rs`) is decomposed into focused
 submodules, each owning a single area of responsibility:
+
+Table: Frankie submodules and their responsibilities.
 
 | Submodule                        | Responsibility                                                           |
 | -------------------------------- | ------------------------------------------------------------------------ |
