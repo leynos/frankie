@@ -239,6 +239,87 @@ assert_eq!(state.commit_count(), 1);
 assert_eq!(state.snapshot().message(), "Fix login validation");
 ```
 
+### `load_time_travel_state`
+
+```rust
+pub fn load_time_travel_state(
+    git_ops: &dyn GitOperations,
+    params: &TimeTravelParams,
+    head_sha: Option<&CommitSha>,
+    commit_history_limit: usize,
+) -> Result<TimeTravelState, GitOperationError>
+```
+
+`load_time_travel_state` is the primary library entry point for constructing a
+`TimeTravelState` from live Git data. Use it when an embedding host wants
+Frankie to read the commit snapshot, enumerate parent commits, and prepare the
+navigation state from a real repository; construct `TimeTravelState` directly
+with `TimeTravelInitParams` only when you already have all of that data in
+memory.
+
+Table: Parameters for `load_time_travel_state`.
+
+| Parameter              | Description                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------- |
+| `git_ops`              | Implementation of `GitOperations` that provides commit, snapshot, and parent-history access. |
+| `params`               | `TimeTravelParams` carrying the review comment's file path and commit SHA.                   |
+| `head_sha`             | Optional `HEAD` SHA used to verify whether the stored line mapping is still current.         |
+| `commit_history_limit` | Maximum number of parent commits to load; values below `1` are clamped to `1`.               |
+
+The function returns `GitOperationError` when the referenced commit cannot be
+found in the local repository, the commit snapshot cannot be read, or parent
+commit enumeration fails.
+
+```rust
+use frankie::local::{CommitSha, GitOperationError, GitOperations};
+use frankie::time_travel::{TimeTravelParams, load_time_travel_state};
+
+# struct StubGitOps;
+# impl GitOperations for StubGitOps {
+#     fn get_commit_snapshot<'a>(
+#         &self,
+#         _sha: &'a CommitSha,
+#         _file_path: Option<&'a frankie::local::RepoFilePath>,
+#     ) -> Result<frankie::local::CommitSnapshot, GitOperationError> {
+#         unimplemented!()
+#     }
+#     fn get_file_at_commit<'a>(
+#         &self,
+#         _sha: &'a CommitSha,
+#         _file_path: &'a frankie::local::RepoFilePath,
+#     ) -> Result<String, GitOperationError> {
+#         unimplemented!()
+#     }
+#     fn verify_line_mapping<'a>(
+#         &self,
+#         _request: &'a frankie::local::LineMappingRequest,
+#     ) -> Result<frankie::local::LineMappingVerification, GitOperationError> {
+#         unimplemented!()
+#     }
+#     fn get_parent_commits<'a>(
+#         &self,
+#         _sha: &'a CommitSha,
+#         _limit: usize,
+#     ) -> Result<Vec<CommitSha>, GitOperationError> {
+#         unimplemented!()
+#     }
+#     fn commit_exists<'a>(&self, _sha: &'a CommitSha) -> bool {
+#         true
+#     }
+# }
+# fn example(git_ops: &dyn GitOperations) -> Result<(), GitOperationError> {
+let params = TimeTravelParams::new(
+    CommitSha::new("abc1234567890".to_owned()),
+    "src/auth.rs".into(),
+    Some(42),
+);
+let state = load_time_travel_state(git_ops, &params, None, 50)?;
+
+assert_eq!(state.commit_count(), 1);
+# Ok(())
+# }
+```
+
 ## Review TUI mode
 
 Launch an interactive terminal interface for navigating and filtering review

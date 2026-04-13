@@ -326,3 +326,7 @@ mod help_overlay_input_tests;
 #[cfg(test)]
 #[path = "navigation_tests.rs"]
 mod navigation_tests;
+
+#[cfg(test)]
+#[path = "builder_tests.rs"]
+mod builder_tests;
