@@ -320,6 +320,36 @@ assert_eq!(state.commit_count(), 1);
 # }
 ```
 
+### `navigate_time_travel_state`
+
+```rust
+pub fn navigate_time_travel_state(
+    git_ops: &dyn GitOperations,
+    state: &TimeTravelState,
+    direction: TimeTravelNavigationDirection,
+    head_sha: Option<&CommitSha>,
+) -> Result<Option<TimeTravelState>, GitOperationError>
+```
+
+Use `navigate_time_travel_state` when you already have a loaded
+`TimeTravelState` and want Frankie to move to the next newer or previous older
+commit without depending on the TUI adapter. The function preserves the loaded
+history, recalculates the target index in shared library code, and returns
+`Ok(None)` when navigation is unavailable at the current history boundary.
+
+Table: Parameters for `navigate_time_travel_state`.
+
+| Parameter   | Description                                                                |
+| ----------- | -------------------------------------------------------------------------- |
+| `git_ops`   | Implementation of `GitOperations` used to load the target commit snapshot. |
+| `state`     | Existing public `TimeTravelState` to navigate from.                        |
+| `direction` | `TimeTravelNavigationDirection::Next` or `::Previous`.                     |
+| `head_sha`  | Optional `HEAD` SHA used to refresh line mapping for the target snapshot.  |
+
+No new standalone CLI mode is added for this library-first extraction. The
+interactive TUI keeps the existing `t`, `h`, `l`, and `Esc` workflow while
+delegating the underlying load-and-navigate orchestration to the shared API.
+
 ## Review TUI mode
 
 Launch an interactive terminal interface for navigating and filtering review

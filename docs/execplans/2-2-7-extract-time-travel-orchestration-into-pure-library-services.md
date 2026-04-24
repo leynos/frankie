@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (2026-04-16)
+Status: COMPLETE (2026-04-24)
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -159,13 +159,25 @@ needed once the public API shape is being finalized.
 - [x] (2026-04-16 00:00Z) Drafted this ExecPlan for roadmap item 2.2.7.
 - [ ] Stage A: finalize the shared service contract and move orchestration into
       `src/time_travel/`.
-- [ ] Stage B: reduce the TUI time-travel handlers to adapter-only logic.
-- [ ] Stage C: add `rstest` unit coverage for load and navigation using mocked
-      `GitOperations`.
-- [ ] Stage D: add `rstest-bdd` public API behavioural coverage for happy,
+- [x] (2026-04-24 00:00Z) Stage A: finalized the shared service contract in
+      `src/time_travel/service.rs` with public
+      `TimeTravelNavigationDirection`, re-exported
+      `load_time_travel_state`, and new
+      `navigate_time_travel_state`.
+- [x] (2026-04-24 00:00Z) Stage B: reduced
+      `src/tui/app/time_travel_handlers/mod.rs` to adapter-only logic that
+      selects comments, toggles loading state, runs `spawn_blocking`, and
+      translates service results into `AppMsg`.
+- [x] (2026-04-24 00:00Z) Stage C: moved `load_time_travel_state` unit tests
+      into `src/time_travel/service/tests.rs` and added navigation unit
+      coverage for success, boundary, error, and line-mapping cases.
+- [x] (2026-04-24 00:00Z) Stage D: added
+      `tests/time_travel_orchestration_bdd.rs`
+      plus `tests/features/time_travel_orchestration.feature` to cover happy,
       unhappy, and edge navigation cases.
-- [ ] Stage E: update `docs/frankie-design.md`, `docs/users-guide.md`, and
-      `docs/roadmap.md`, then run all validation gates.
+- [x] (2026-04-24 00:00Z) Stage E: updated `docs/frankie-design.md`,
+      `docs/users-guide.md`, and `docs/roadmap.md`, then passed all required
+      validation gates.
 
 ## Surprises & Discoveries
 
@@ -188,6 +200,14 @@ needed once the public API shape is being finalized.
 - `tests/time_travel_bdd.rs` currently proves rendering and message handling,
   but not the real shared orchestration path. A new public API BDD file is
   needed to satisfy the acceptance criteria directly.
+- The cleanest boundary contract for navigation is
+  `Result<Option<TimeTravelState>, GitOperationError>`. `Ok(None)` preserves
+  the existing "do nothing at the history boundary" semantics without inventing
+  a fake git error or leaking TUI-specific message concepts into the library
+  API.
+- The TUI still needs a small navigation pre-check before spawning the
+  background task so impossible navigation remains a synchronous no-op instead
+  of launching an unnecessary blocking task.
 
 ## Decision Log
 
@@ -212,18 +232,61 @@ needed once the public API shape is being finalized.
   standalone CLI mode is added for this narrow slice. Rationale: the roadmap
   item extracts reusable library behaviour from an existing interactive flow,
   but does not introduce a distinct non-interactive workflow.
+- Decision (2026-04-24): define `navigate_time_travel_state` as
+  `Result<Option<TimeTravelState>, GitOperationError>`. Rationale: git failures
+  still surface unchanged, while history-boundary navigation remains a
+  first-class no-op that hosts can inspect without decoding adapter messages.
+- Decision (2026-04-24): keep the TUI-side boundary check using
+  `TimeTravelNavigationDirection::can_navigate(&TimeTravelState)` before
+  launching `spawn_blocking`. Rationale: this avoids unnecessary worker
+  dispatch while still keeping SHA/index calculation in the shared service.
 
 ## Outcomes & Retrospective
 
-This plan is still in draft status; implementation has not started.
+Implementation is complete. The shipped contract shape is:
 
-The final revision of this section must record:
+- `src/time_travel/service.rs` owns `load_time_travel_state`,
+  `navigate_time_travel_state`, and `TimeTravelNavigationDirection`.
+- `navigate_time_travel_state` returns `Ok(None)` when navigation is not
+  available, and otherwise returns a fresh `TimeTravelState`.
+- `src/tui/app/time_travel_handlers/mod.rs` now delegates load and navigation
+  orchestration to `crate::time_travel` and retains only adapter duties.
+- Shared unit coverage now lives under `src/time_travel/service/tests.rs`.
+- Public behavioural coverage now lives in
+  `tests/time_travel_orchestration_bdd.rs`.
 
-- The exact public service API that shipped.
-- Whether any contract adjustments were needed during extraction.
-- Which tests were added or moved.
-- Which docs changed, including the explicit CLI rationale.
-- The final validation commands and whether any tolerance triggers were hit.
+- The exact public service API that shipped:
+  - `frankie::time_travel::load_time_travel_state(...)`
+  - `frankie::time_travel::navigate_time_travel_state(...)`
+  - `frankie::time_travel::TimeTravelNavigationDirection`
+- Contract adjustments made during extraction:
+  - Navigation now returns `Result<Option<TimeTravelState>, GitOperationError>`
+    so git failures remain unchanged while history-boundary navigation is an
+    explicit no-op.
+- Tests added or moved:
+  - Moved loader unit tests from
+    `src/tui/app/time_travel_handlers/tests.rs` to
+    `src/time_travel/service/tests.rs`.
+  - Added shared navigation unit coverage in
+    `src/time_travel/service/tests.rs`.
+  - Added public behavioural coverage in
+    `tests/time_travel_orchestration_bdd.rs` with
+    `tests/features/time_travel_orchestration.feature`.
+- Docs changed:
+  - `docs/frankie-design.md`
+  - `docs/users-guide.md`
+  - `docs/roadmap.md`
+  - This ExecPlan
+  - The design and user documentation explicitly record that no standalone CLI
+    mode was added for this extraction slice.
+- Final validation commands:
+  - `make fmt`
+  - `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`
+  - `make nixie`
+  - `make check-fmt`
+  - `make lint`
+  - `make test`
+- Tolerance triggers hit: none.
 
 ## Context and orientation
 

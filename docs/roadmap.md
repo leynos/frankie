@@ -135,7 +135,7 @@ context.
   Acceptance: the history limit is configurable (default remains 50) and tests
   verify both default and overridden limits affect loaded history length.
   Requires 2.2.4. See `docs/adr-005-cross-surface-library-first-delivery.md`.
-- [ ] 2.2.7. Extract time-travel orchestration out of TUI handlers into pure
+- [x] 2.2.7. Extract time-travel orchestration out of TUI handlers into pure
   library services, keeping `bubbletea_rs::Cmd`, `spawn_blocking`, and any
   global `OnceLock` context in the TUI adapter layer only. Requires 2.2.5 and
   2.2.6. Acceptance: orchestration is implemented as a host-safe library
