@@ -49,7 +49,7 @@ impl Default for ReplyDraftConfig {
     fn default() -> Self {
         Self {
             max_length: ReplyDraftMaxLength::default(),
-            templates: crate::config::default_reply_templates(),
+            templates: crate::reply_template::default_reply_templates_owned(),
         }
     }
 }

@@ -2,7 +2,9 @@
 
 use rstest::{fixture, rstest};
 
-use super::{ReplyTemplateContext, ReplyTemplateError, render_reply_template};
+use super::{
+    DEFAULT_REPLY_TEMPLATES, ReplyTemplateContext, ReplyTemplateError, render_reply_template,
+};
 use crate::github::models::ReviewComment;
 use crate::reply_template::test_support::{review_comment_with_body, sample_review_comment};
 
@@ -57,6 +59,18 @@ fn render_reply_template_does_not_recurse_into_comment_data() {
         .expect("comment body should be rendered as data");
 
     assert_eq!(rendered, "Please keep {{ nested }} literal.");
+}
+
+#[rstest]
+fn default_reply_templates_match_expected_public_contract() {
+    assert_eq!(
+        DEFAULT_REPLY_TEMPLATES,
+        &[
+            "Thanks for the review on {{ file }}:{{ line }}. I will update this.",
+            "Good catch, {{ reviewer }}. I will address this in the next commit.",
+            "I have addressed this feedback and pushed an update.",
+        ]
+    );
 }
 
 #[rstest]

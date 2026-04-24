@@ -841,8 +841,9 @@ commit_history_limit = 50
 # Reply drafting options (optional)
 reply_max_length = 500
 reply_templates = [
-  "Thanks {{ reviewer }}. I will update {{ file }}:{{ line }}.",
-  "Good catch, {{ reviewer }}. I'll address this now."
+  "Thanks for the review on {{ file }}:{{ line }}. I will update this.",
+  "Good catch, {{ reviewer }}. I will address this in the next commit.",
+  "I have addressed this feedback and pushed an update."
 ]
 
 # Database migrations (set to true to run migrations and exit)

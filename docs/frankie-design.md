@@ -2966,6 +2966,18 @@ normalization preserves existing defaults, and
 `tests/template_reply_drafting_bdd.rs`, which proves the adapter still produces
 the same rendered output and user-facing error messages.
 
+Roadmap step `3.2.5` extends that shared module with
+`frankie::reply_template::DEFAULT_REPLY_TEMPLATES`, re-exported at the crate
+root as `frankie::DEFAULT_REPLY_TEMPLATES`. This constant is now the canonical
+built-in reply-template source for library consumers, `FrankieConfig::default`,
+and `ReplyDraftConfig::default`, so the public API, config defaults, and TUI
+fallback path cannot silently diverge. No standalone CLI mode was added for
+this slice because publishing deterministic defaults is a library-contract
+refinement rather than a new non-interactive workflow. Verification is
+auditable through `src/reply_template/tests.rs`,
+`tests/reply_template_public_api.rs`, and the built-in-default scenario in
+`tests/template_reply_drafting_bdd.rs`.
+
 #### Architecture decision record (ADR-006): AI rewrite preview and fallback contract
 
 Canonical record:

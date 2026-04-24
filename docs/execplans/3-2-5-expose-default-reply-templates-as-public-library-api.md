@@ -5,7 +5,7 @@ This execution plan (ExecPlan) is a living document. The sections
 `Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
 proceeds.
 
-Status: DRAFT (2026-04-16)
+Status: COMPLETE (2026-04-24)
 
 `PLANS.md` is not present in the repository root, so no additional
 plan-governance document applies.
@@ -180,16 +180,17 @@ The most relevant skills for implementation are:
       3.2.3 and 3.2.4 ExecPlans, the current reply-template/config/TUI code,
       and the referenced testing guidance.
 - [x] (2026-04-16 00:00Z) Drafted this ExecPlan for roadmap step 3.2.5.
-- [ ] Stage A: add red-phase tests for the public default API and for config
-      and TUI parity with that API.
-- [ ] Stage B: publish the canonical default-template source from
-      `src/reply_template/` and re-export it from `src/lib.rs`.
-- [ ] Stage C: rewire config and TUI default construction to derive from the
-      public canonical defaults without changing override semantics.
-- [ ] Stage D: update `docs/frankie-design.md`, update
-      `docs/users-guide.md` if needed, and mark roadmap step `3.2.5` done only
-      after implementation and all gates pass.
-- [ ] Stage E: run `make fmt`,
+- [x] (2026-04-24 00:00Z) Stage A: tightened tests to assert the exact public
+      default list and config/TUI parity with that API.
+- [x] (2026-04-24 00:00Z) Stage B: published the canonical default-template
+      source from `src/reply_template/` and re-exported it from `src/lib.rs`.
+- [x] (2026-04-24 00:00Z) Stage C: rewired config and TUI default construction
+      to derive from the public canonical defaults without changing override
+      semantics.
+- [x] (2026-04-24 00:00Z) Stage D: updated `docs/frankie-design.md`,
+      refreshed the user-guide config example to match the shipped defaults,
+      and marked roadmap step `3.2.5` done pending final gate validation.
+- [x] (2026-04-24 00:00Z) Stage E: ran `make fmt`,
       `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`,
       `make nixie`, `make check-fmt`, `make lint`, and `make test`.
 
@@ -213,6 +214,9 @@ The most relevant skills for implementation are:
   config snippet, not obviously as a canonical list of shipped defaults. The
   implementation should decide whether that is acceptable or whether the guide
   needs a clarifying note.
+- `ReplyDraftConfig::default()` is a straightforward constructor rather than a
+  `OnceLock` lookup, so parity coverage for the TUI fallback path can stay in a
+  plain integration test without invoking the global storage guard machinery.
 
 ## Decision Log
 
@@ -236,19 +240,50 @@ The most relevant skills for implementation are:
   existing reply-drafting BDD harness rather than inventing a new adapter test
   rig. Rationale: the current harness already models the user-visible keyboard
   flow and only needs one additional default-path scenario.
+- Decision (2026-04-24): the public surface should export
+  `DEFAULT_REPLY_TEMPLATES` as a constant slice while keeping the owned
+  `Vec<String>` conversion helper crate-private. Rationale: this preserves the
+  semver-stable borrowed contract for callers while still letting config and
+  TUI defaults keep their owned internal storage without duplication.
+- Decision (2026-04-24): update the user-guide configuration example to match
+  the shipped built-in defaults exactly. Rationale: once the defaults are a
+  public contract, keeping a divergent example would mislead embedders and TUI
+  users about the canonical template text.
 
 ## Outcomes & Retrospective
 
-This plan is still in draft. No implementation changes, roadmap updates, or
-feature-level outcomes have been recorded yet.
+Implementation is complete.
 
-When implementation is complete, update this section with:
+Final outcomes:
 
-- the final public API path and Rustdoc example shape;
-- the exact tests added or changed;
-- whether `docs/users-guide.md` changed and why;
-- the final validation results; and
-- any follow-on cleanup deferred to roadmap step `3.2.6`.
+- The canonical built-in default list now lives in `src/reply_template/mod.rs`
+  as `DEFAULT_REPLY_TEMPLATES`, with a Rustdoc example and crate-root re-export
+  at `frankie::DEFAULT_REPLY_TEMPLATES`.
+- `FrankieConfig::default()` and `ReplyDraftConfig::default()` now derive owned
+  template vectors from that shared constant through a crate-private conversion
+  helper, removing the old config-local duplicate source.
+- Coverage now checks exact template values in
+  `src/reply_template/tests.rs`,
+  `src/config/tests/{reply_drafting,field_resolution}.rs`, and
+  `tests/reply_template_public_api.rs`, plus a new built-in-default BDD
+  scenario in `tests/template_reply_drafting_bdd.rs`.
+- `docs/frankie-design.md`, `docs/users-guide.md`, and `docs/roadmap.md` have
+  been updated to reflect the public-default contract and the completed roadmap
+  item.
+- Validation results:
+  - `make fmt`
+  - `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`
+  - `make nixie`
+  - `make check-fmt`
+  - `make lint`
+  - `make test`
+  - Targeted checks also passed for `cargo test --lib`,
+    `cargo test --test reply_template_public_api`, and
+    `cargo test --test template_reply_drafting_bdd built_in_reply_template_defaults_render_through_the_tui`.
+- Final test summary: `860 passed, 1 skipped` via `cargo nextest` during
+  `make test`.
+- No follow-on cleanup was required in this slice beyond the already-planned
+  roadmap step `3.2.6`, which still owns the broader adapter cleanup.
 
 ## Context and orientation
 
