@@ -186,6 +186,41 @@ fn read_navigation_state<T>(
         .ok_or("navigation_result should be set")?
 }
 
+fn read_load_result<T>(
+    state: &TimeTravelOrchestrationWorld,
+    map: impl FnOnce(&TimeTravelState) -> T,
+) -> Result<T, StepError> {
+    state
+        .load_result
+        .with_ref(|result| {
+            result
+                .as_ref()
+                .map_or(Err("load should have succeeded"), |loaded_state| {
+                    Ok(map(loaded_state))
+                })
+        })
+        .ok_or("load_result should be set")?
+}
+
+fn navigate(
+    state: &TimeTravelOrchestrationWorld,
+    direction: TimeTravelNavigationDirection,
+) -> StepResult {
+    let loaded_state = state
+        .loaded_state
+        .with_ref(Clone::clone)
+        .ok_or("loaded_state should be set")?;
+    let head_sha = state.head_sha.with_ref(Clone::clone).unwrap_or(None);
+    let result = state
+        .git_ops
+        .with_ref(|git_ops| {
+            navigate_time_travel_state(git_ops, &loaded_state, direction, head_sha.as_ref())
+        })
+        .ok_or("git_ops should be configured")?;
+    state.navigation_result.set(result);
+    Ok(())
+}
+
 #[given("a time-travel request for commit {sha} and file {file_path}")]
 fn given_time_travel_request(state: &TimeTravelOrchestrationWorld, sha: String, file_path: String) {
     state.commit_sha.set(sha);
@@ -321,46 +356,12 @@ fn when_initial_time_travel_state_is_loaded(state: &TimeTravelOrchestrationWorld
 
 #[when("the state is navigated to the previous commit")]
 fn when_state_navigated_previous(state: &TimeTravelOrchestrationWorld) -> StepResult {
-    let loaded_state = state
-        .loaded_state
-        .with_ref(Clone::clone)
-        .ok_or("loaded_state should be set")?;
-    let head_sha = state.head_sha.with_ref(Clone::clone).unwrap_or(None);
-    let result = state
-        .git_ops
-        .with_ref(|git_ops| {
-            navigate_time_travel_state(
-                git_ops,
-                &loaded_state,
-                TimeTravelNavigationDirection::Previous,
-                head_sha.as_ref(),
-            )
-        })
-        .ok_or("git_ops should be configured")?;
-    state.navigation_result.set(result);
-    Ok(())
+    navigate(state, TimeTravelNavigationDirection::Previous)
 }
 
 #[when("the state is navigated to the next commit")]
 fn when_state_navigated_next(state: &TimeTravelOrchestrationWorld) -> StepResult {
-    let loaded_state = state
-        .loaded_state
-        .with_ref(Clone::clone)
-        .ok_or("loaded_state should be set")?;
-    let head_sha = state.head_sha.with_ref(Clone::clone).unwrap_or(None);
-    let result = state
-        .git_ops
-        .with_ref(|git_ops| {
-            navigate_time_travel_state(
-                git_ops,
-                &loaded_state,
-                TimeTravelNavigationDirection::Next,
-                head_sha.as_ref(),
-            )
-        })
-        .ok_or("git_ops should be configured")?;
-    state.navigation_result.set(result);
-    Ok(())
+    navigate(state, TimeTravelNavigationDirection::Next)
 }
 
 #[then("the loaded state snapshot SHA is {expected}")]
@@ -368,52 +369,31 @@ fn then_loaded_state_snapshot_sha(
     state: &TimeTravelOrchestrationWorld,
     expected: String,
 ) -> StepResult {
-    let snapshot_sha = state
-        .load_result
-        .with_ref(|result| {
-            result.as_ref().map_or(Err(()), |loaded_state| {
-                Ok(loaded_state.snapshot().sha().to_owned())
-            })
-        })
-        .ok_or("load_result should be set")?;
-    match snapshot_sha {
-        Ok(actual_snapshot_sha) if actual_snapshot_sha == expected => Ok(()),
-        Ok(_) => Err("loaded state snapshot SHA should match the expected SHA"),
-        Err(()) => Err("load should have succeeded"),
+    let actual = read_load_result(state, |s| s.snapshot().sha().to_owned())?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err("loaded state snapshot SHA should match the expected SHA")
     }
 }
 
 #[then("the loaded state index is {expected}")]
 fn then_loaded_state_index(state: &TimeTravelOrchestrationWorld, expected: usize) -> StepResult {
-    let current_index = state
-        .load_result
-        .with_ref(|result| {
-            result
-                .as_ref()
-                .map_or(Err(()), |loaded_state| Ok(loaded_state.current_index()))
-        })
-        .ok_or("load_result should be set")?;
-    match current_index {
-        Ok(actual_index) if actual_index == expected => Ok(()),
-        Ok(_) => Err("loaded state index should match the expected index"),
-        Err(()) => Err("load should have succeeded"),
+    let actual = read_load_result(state, TimeTravelState::current_index)?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err("loaded state index should match the expected index")
     }
 }
 
 #[then("the loaded history count is {expected}")]
 fn then_loaded_history_count(state: &TimeTravelOrchestrationWorld, expected: usize) -> StepResult {
-    let commit_count = state
-        .load_result
-        .with_ref(|result| {
-            result
-                .as_ref()
-                .map_or(Err(()), |loaded_state| Ok(loaded_state.commit_count()))
-        })
-        .ok_or("load_result should be set")?;
-    match commit_count {
-        Ok(actual_commit_count) if actual_commit_count == expected => Ok(()),
-        Ok(_) => Err("loaded history count should match the expected value"),
-        Err(()) => Err("load should have succeeded"),
+    let actual = read_load_result(state, TimeTravelState::commit_count)?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err("loaded history count should match the expected value")
     }
 }
 
