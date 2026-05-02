@@ -72,28 +72,23 @@ fn crate_root_re_export_exposes_default_reply_templates() {
     );
 }
 
+fn owned_default_templates() -> Vec<String> {
+    DEFAULT_REPLY_TEMPLATES
+        .iter()
+        .map(|t| (*t).to_owned())
+        .collect()
+}
+
 #[rstest]
 fn frankie_config_defaults_match_public_reply_templates() {
     let config = FrankieConfig::default();
 
-    assert_eq!(
-        config.reply_templates,
-        DEFAULT_REPLY_TEMPLATES
-            .iter()
-            .map(|template| (*template).to_owned())
-            .collect::<Vec<_>>()
-    );
+    assert_eq!(config.reply_templates, owned_default_templates());
 }
 
 #[rstest]
 fn tui_reply_draft_defaults_match_public_reply_templates() {
     let config = ReplyDraftConfig::default();
 
-    assert_eq!(
-        config.templates,
-        DEFAULT_REPLY_TEMPLATES
-            .iter()
-            .map(|template| (*template).to_owned())
-            .collect::<Vec<_>>()
-    );
+    assert_eq!(config.templates, owned_default_templates());
 }
