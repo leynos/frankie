@@ -13,6 +13,39 @@ mod test_support;
 #[cfg(test)]
 mod tests;
 
+/// Built-in reply-template defaults used by Frankie when no overrides are set.
+///
+/// Embedding hosts can reuse these borrowed template sources to present the
+/// same keyboard-slot defaults as the TUI without depending on config internals.
+///
+/// # Examples
+///
+/// ```
+/// use frankie::DEFAULT_REPLY_TEMPLATES;
+///
+/// assert_eq!(DEFAULT_REPLY_TEMPLATES[0], "Thanks for the review on {{ file }}:{{ line }}. I will update this.");
+/// assert_eq!(DEFAULT_REPLY_TEMPLATES.len(), 3);
+/// ```
+pub const DEFAULT_REPLY_TEMPLATES: &[&str] = &[
+    "Thanks for the review on {{ file }}:{{ line }}. I will update this.",
+    "Good catch, {{ reviewer }}. I will address this in the next commit.",
+    "I have addressed this feedback and pushed an update.",
+];
+
+/// Returns an owned `Vec<String>` copy of [`DEFAULT_REPLY_TEMPLATES`].
+///
+/// Used internally by [`crate::config::FrankieConfig::default`] and
+/// [`crate::tui::reply_draft_config::ReplyDraftConfig::default`] so that
+/// callers receive owned `String` values while the canonical source remains
+/// the borrowed `&[&str]` constant.
+#[must_use]
+pub(crate) fn default_reply_templates_owned() -> Vec<String> {
+    DEFAULT_REPLY_TEMPLATES
+        .iter()
+        .map(|template| (*template).to_owned())
+        .collect()
+}
+
 /// Errors raised while rendering a reply template.
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum ReplyTemplateError {

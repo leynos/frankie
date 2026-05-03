@@ -30,4 +30,6 @@ pub use github::{
     ReviewComment, ReviewCommentGateway,
 };
 pub use local::{GitHubOrigin, LocalDiscoveryError, LocalRepository, discover_repository};
-pub use reply_template::{ReplyTemplateContext, ReplyTemplateError, render_reply_template};
+pub use reply_template::{
+    DEFAULT_REPLY_TEMPLATES, ReplyTemplateContext, ReplyTemplateError, render_reply_template,
+};

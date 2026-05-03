@@ -320,6 +320,24 @@ assert_eq!(state.commit_count(), 1);
 # }
 ```
 
+## Library API: reply templates
+
+`frankie::DEFAULT_REPLY_TEMPLATES` is the canonical built-in reply-template list
+that Frankie uses when no overrides are supplied. Embedding hosts can re-use
+this constant to present the same keyboard-slot defaults as the TUI without
+depending on configuration internals.
+
+```rust
+use frankie::DEFAULT_REPLY_TEMPLATES;
+
+assert_eq!(DEFAULT_REPLY_TEMPLATES.len(), 3);
+println!("{}", DEFAULT_REPLY_TEMPLATES[0]);
+```
+
+The same values back `FrankieConfig::default()` and
+`ReplyDraftConfig::default()`, so embedding hosts that surface either of those
+configurations will see identical built-in templates.
+
 ## Review TUI mode
 
 Launch an interactive terminal interface for navigating and filtering review
@@ -841,8 +859,9 @@ commit_history_limit = 50
 # Reply drafting options (optional)
 reply_max_length = 500
 reply_templates = [
-  "Thanks {{ reviewer }}. I will update {{ file }}:{{ line }}.",
-  "Good catch, {{ reviewer }}. I'll address this now."
+  "Thanks for the review on {{ file }}:{{ line }}. I will update this.",
+  "Good catch, {{ reviewer }}. I will address this in the next commit.",
+  "I have addressed this feedback and pushed an update."
 ]
 
 # Database migrations (set to true to run migrations and exit)

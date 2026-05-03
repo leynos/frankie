@@ -1,0 +1,19 @@
+---
+source: tests/template_reply_drafting_bdd.rs
+assertion_line: 278
+expression: redacted
+---
+Frankie - Review Comments                                                      
+Filter: All (1/1)                                                              
+                                                                               
+> [alice] src/main.rs:12: Please address this                                  
+───────────────────────────────────────────────────────────────────────────────
+[alice] src/main.rs:12                                                         
+Please address this                                                            
+(No code context available)                                                    
+                                                                               
+Reply draft:                                                                   
+Thanks for the review on src/main.rs:12. I will update this.                   
+Length: 60/120                                                                 
+Templates: 1-9  E:expand  W:reword  Enter:ready  Esc:cancel                    
+Reply draft: 1-9:template  E:expand  W:reword  text:edit  Backspace:delete  Ent

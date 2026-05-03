@@ -1,11 +1,15 @@
 //! Integration tests that prove reply templating is available from `frankie`.
 
-use frankie::{ReplyTemplateContext, ReplyTemplateError, render_reply_template};
+use frankie::{
+    DEFAULT_REPLY_TEMPLATES, FrankieConfig, ReplyTemplateContext, ReplyTemplateError,
+    render_reply_template,
+};
 use rstest::rstest;
 
 #[path = "support/reply_template.rs"]
 mod reply_template_support;
 
+use frankie::tui::ReplyDraftConfig;
 use reply_template_support::{review_comment_with_body, sample_review_comment};
 
 #[rstest]
@@ -54,4 +58,37 @@ fn crate_root_re_export_exposes_reply_template_context_mapping() {
             body: "Please split this into smaller functions.".to_owned(),
         }
     );
+}
+
+#[rstest]
+fn crate_root_re_export_exposes_default_reply_templates() {
+    assert_eq!(
+        DEFAULT_REPLY_TEMPLATES,
+        &[
+            "Thanks for the review on {{ file }}:{{ line }}. I will update this.",
+            "Good catch, {{ reviewer }}. I will address this in the next commit.",
+            "I have addressed this feedback and pushed an update.",
+        ]
+    );
+}
+
+fn owned_default_templates() -> Vec<String> {
+    DEFAULT_REPLY_TEMPLATES
+        .iter()
+        .map(|t| (*t).to_owned())
+        .collect()
+}
+
+#[rstest]
+fn frankie_config_defaults_match_public_reply_templates() {
+    let config = FrankieConfig::default();
+
+    assert_eq!(config.reply_templates, owned_default_templates());
+}
+
+#[rstest]
+fn tui_reply_draft_defaults_match_public_reply_templates() {
+    let config = ReplyDraftConfig::default();
+
+    assert_eq!(config.templates, owned_default_templates());
 }

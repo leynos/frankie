@@ -3,7 +3,7 @@
 
 use rstest::rstest;
 
-use crate::FrankieConfig;
+use crate::{DEFAULT_REPLY_TEMPLATES, FrankieConfig};
 
 #[rstest]
 fn resolve_token_returns_value_when_present() {
@@ -213,8 +213,12 @@ fn reply_drafting_defaults_are_present() {
         config.reply_max_length, 500,
         "reply_max_length should default to 500"
     );
-    assert!(
-        !config.reply_templates.is_empty(),
-        "reply_templates should include defaults"
+    assert_eq!(
+        config.reply_templates,
+        DEFAULT_REPLY_TEMPLATES
+            .iter()
+            .map(|template| (*template).to_owned())
+            .collect::<Vec<_>>(),
+        "reply_templates should include the public default list"
     );
 }
