@@ -247,3 +247,37 @@ fn escaped_braces_and_template_like_body_remain_literal(reply_state: ReplyDraftS
 fn built_in_reply_template_defaults_render_through_the_tui(reply_state: ReplyDraftScenarioState) {
     let _ = reply_state;
 }
+
+#[scenario(path = "tests/features/template_reply_drafting.feature", index = 8)]
+fn built_in_reply_template_slot_2_renders_through_the_tui(reply_state: ReplyDraftScenarioState) {
+    let _ = reply_state;
+}
+
+#[scenario(path = "tests/features/template_reply_drafting.feature", index = 9)]
+fn built_in_reply_template_slot_3_renders_through_the_tui(reply_state: ReplyDraftScenarioState) {
+    let _ = reply_state;
+}
+
+#[rstest::rstest]
+fn snapshot_built_in_template_slot_1_renders() {
+    let mut app = build_app_with_default_templates(120, vec![sample_comment()]);
+
+    press_key_on(&mut app, KeyCode::Char('a'));
+    press_key_on(&mut app, KeyCode::Char('1'));
+
+    let view = app.view();
+
+    let redacted = redact_nondeterministic(&view);
+    insta::assert_snapshot!("built_in_template_slot_1", redacted);
+}
+
+fn press_key_on(app: &mut ReviewApp, code: KeyCode) {
+    app.update(Box::new(KeyMsg {
+        key: code,
+        modifiers: KeyModifiers::empty(),
+    }));
+}
+
+fn redact_nondeterministic(view: &str) -> String {
+    view.to_owned()
+}

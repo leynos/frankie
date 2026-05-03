@@ -32,6 +32,12 @@ pub const DEFAULT_REPLY_TEMPLATES: &[&str] = &[
     "I have addressed this feedback and pushed an update.",
 ];
 
+/// Returns an owned `Vec<String>` copy of [`DEFAULT_REPLY_TEMPLATES`].
+///
+/// Used internally by [`crate::config::FrankieConfig::default`] and
+/// [`crate::tui::reply_draft_config::ReplyDraftConfig::default`] so that
+/// callers receive owned `String` values while the canonical source remains
+/// the borrowed `&[&str]` constant.
 #[must_use]
 pub(crate) fn default_reply_templates_owned() -> Vec<String> {
     DEFAULT_REPLY_TEMPLATES
