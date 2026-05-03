@@ -221,6 +221,10 @@ fn navigate(
     Ok(())
 }
 
+fn assert_eq_step<T: PartialEq>(actual: &T, expected: &T, msg: &'static str) -> StepResult {
+    if actual == expected { Ok(()) } else { Err(msg) }
+}
+
 #[given("a time-travel request for commit {sha} and file {file_path}")]
 fn given_time_travel_request(state: &TimeTravelOrchestrationWorld, sha: String, file_path: String) {
     state.commit_sha.set(sha);
@@ -370,31 +374,31 @@ fn then_loaded_state_snapshot_sha(
     expected: String,
 ) -> StepResult {
     let actual = read_load_result(state, |s| s.snapshot().sha().to_owned())?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("loaded state snapshot SHA should match the expected SHA")
-    }
+    assert_eq_step(
+        &actual,
+        &expected,
+        "loaded state snapshot SHA should match the expected SHA",
+    )
 }
 
 #[then("the loaded state index is {expected}")]
 fn then_loaded_state_index(state: &TimeTravelOrchestrationWorld, expected: usize) -> StepResult {
     let actual = read_load_result(state, TimeTravelState::current_index)?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("loaded state index should match the expected index")
-    }
+    assert_eq_step(
+        &actual,
+        &expected,
+        "loaded state index should match the expected index",
+    )
 }
 
 #[then("the loaded history count is {expected}")]
 fn then_loaded_history_count(state: &TimeTravelOrchestrationWorld, expected: usize) -> StepResult {
     let actual = read_load_result(state, TimeTravelState::commit_count)?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("loaded history count should match the expected value")
-    }
+    assert_eq_step(
+        &actual,
+        &expected,
+        "loaded history count should match the expected value",
+    )
 }
 
 #[then("the loaded line mapping is exact for line {line}")]
@@ -428,14 +432,12 @@ fn then_navigation_returns_snapshot_sha(
     state: &TimeTravelOrchestrationWorld,
     expected: String,
 ) -> StepResult {
-    let actual = read_navigation_state(state, |navigation_state| {
-        navigation_state.snapshot().sha().to_owned()
-    })?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("navigation snapshot SHA should match the expected value")
-    }
+    let actual = read_navigation_state(state, |s| s.snapshot().sha().to_owned())?;
+    assert_eq_step(
+        &actual,
+        &expected,
+        "navigation snapshot SHA should match the expected value",
+    )
 }
 
 #[then("navigation returns history index {expected}")]
@@ -444,11 +446,11 @@ fn then_navigation_returns_history_index(
     expected: usize,
 ) -> StepResult {
     let actual = read_navigation_state(state, TimeTravelState::current_index)?;
-    if actual == expected {
-        Ok(())
-    } else {
-        Err("navigation history index should match the expected value")
-    }
+    assert_eq_step(
+        &actual,
+        &expected,
+        "navigation history index should match the expected value",
+    )
 }
 
 #[then("navigation returns no state")]
