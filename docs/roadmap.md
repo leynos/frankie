@@ -237,42 +237,55 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
 ### 3.4. Review banner translation
 
 - [ ] 3.4.1. Add pull request review banner intake and shared library data
-  contracts for raw banners, translated findings, and persisted decision keys.
-  Acceptance: Frankie can load top-level pull request review bodies as a public
-  library type, and tests cover missing-body, missing-author, and multi-review
-  intake paths. See `docs/review-banner-translation.md` §4.1 and
+  contracts for review-body and issue-comment banner sources, translated
+  findings, PR-level locations, and persisted decision keys. Acceptance:
+  Frankie can load bot-authored top-level pull request review bodies and issue
+  comments as one public banner-source type, preserve `source_kind` and
+  `source_id`, and tests cover missing-body, missing-author, multi-review, and
+  issue-comment intake paths. See `docs/review-banner-translation.md` §4.1 and
   `docs/adr-009-review-banner-translation-contract.md`.
 - [ ] 3.4.2. Implement a deterministic message body translation pipeline over a
   normalized Markdown Abstract Syntax Tree (AST), with provider matching,
-  ignored-section handling, and a built-in CodeRabbit rule pack. Requires
-  3.4.1. Acceptance: the pipeline translates representative CodeRabbit banner
-  fixtures into stable structured findings, validates header-count invariants,
-  and reports explicit drift warnings instead of silent partial output. See
+  ignored-section handling, and a built-in CodeRabbit rule pack for
+  failed-checks tables. Requires 3.4.1. Acceptance: the pipeline translates a
+  CodeRabbit table with `Check name`, `Status`, `Explanation`, and `Resolution`
+  columns into one `BannerFinding` per body row, supports PR-level findings
+  when no reliable file location exists, validates header-count invariants, and
+  reports explicit drift warnings instead of silent partial output. See
   `docs/review-banner-translation.md` §4.2, §4.3, and §4.9.
-- [ ] 3.4.3. Add review banner handling that presents translated findings as
-  Frankie review artefacts and persists per-finding `pending`, `actioned`, and
-  `suppressed` state across library, TUI, and CLI surfaces. Requires 3.4.1 and
-  3.4.2. Acceptance: users can action or suppress individual translated
-  findings, suppressed findings are hidden by default with a recovery path, and
-  persistence tests verify decisions survive refresh and reload. See
-  `docs/review-banner-translation.md` §4.4, §4.5, and §4.8.
-- [ ] 3.4.4. Add a built-in Sourcery rule pack plus fixture-driven regression
+- [ ] 3.4.3. Add a host-neutral PR review presentation API for external
+  consumers that combines native review comments and translated banner findings
+  without requiring TUI types or provider-specific parsing knowledge. Requires
+  3.4.1 and 3.4.2. Acceptance: a caller can pass a pull request locator and
+  receive ordered `PresentedReviewItem` values with source links, item
+  capabilities, native review-comment payloads, and CodeRabbit pre-merge-check
+  `BannerFinding` payloads suitable for display in `vk` without a separate ad
+  hoc GraphQL client for that PR display path. See
+  `docs/review-banner-translation.md` §4.4 and §4.8, and
+  `docs/adr-009-review-banner-translation-contract.md`.
+- [ ] 3.4.4. Add review banner handling that persists per-finding `pending`,
+  `actioned`, and `suppressed` state across library, TUI, and CLI surfaces.
+  Requires 3.4.3. Acceptance: users can action or suppress individual
+  translated findings, suppressed findings are hidden by default with a
+  recovery path, and persistence tests verify decisions survive refresh and
+  reload. See `docs/review-banner-translation.md` §4.4, §4.5, and §4.8.
+- [ ] 3.4.5. Add a built-in Sourcery rule pack plus fixture-driven regression
   coverage for provider-specific extraction drift. Requires 3.4.2. Acceptance:
   Sourcery fixtures translate into stable findings, provider-specific ignored
   sections are not rendered as finding bodies, and golden tests cover both
   CodeRabbit and Sourcery outputs. See `docs/review-banner-translation.md` §4.3
   and §7.
-- [ ] 3.4.5. Implement an approval-gated rule discovery engine that proposes
+- [ ] 3.4.6. Implement an approval-gated rule discovery engine that proposes
   serializable rule packs, previews extracted findings, and refuses automatic
   activation until local validation succeeds, and the user approves the result.
   Requires 3.4.2. Acceptance: unknown or drifted banners can produce a proposal
   preview with validation diagnostics, malformed proposals are rejected before
   activation, and tests cover the non-match, drift, and approval-required
   paths. See `docs/review-banner-translation.md` §4.6 and §7.
-- [ ] 3.4.6. Load approved custom rule packs from user configuration, applying
+- [ ] 3.4.7. Load approved custom rule packs from user configuration, applying
   them after built-in rules so that a custom pack overrides a built-in pack
   only when it shares the same `provider_key` and has a strictly higher
-  `rule_pack_version`. Requires 3.4.5. Acceptance: approved custom rules are
+  `rule_pack_version`. Requires 3.4.6. Acceptance: approved custom rules are
   persisted in a versioned user-visible configuration file, rule loading order
   is deterministic (built-in first, then custom overrides by higher version),
   custom packs with equal or lower versions are ignored with a logged warning,

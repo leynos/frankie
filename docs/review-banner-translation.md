@@ -4,10 +4,10 @@
 
 Frankie needs a deterministic way to translate raw pull request review banners
 from tools such as CodeRabbit and Sourcery into review artefacts that are
-presentable, actionable, and suppressible inside Frankie. These banners often
-arrive as top-level pull request review bodies rather than as inline GitHub
-review comments, so the design must add a review-body intake path before
-translation can occur.
+presentable, actionable, and suppressible inside Frankie. These banners can
+arrive as top-level pull request review bodies or as pull request issue
+comments rather than as inline GitHub review comments, so the design must add a
+banner-source intake path before translation can occur.
 
 This design separates the problem into three composable concerns:
 
@@ -22,35 +22,39 @@ drift.
 
 ## 2. Problem statement
 
-GitHub review bots can emit a single pull request review whose body contains
-multiple actionable findings, duplicate ranges, suggested patches, and agent
-prompt blocks. The raw body is useful as evidence, but it is not directly
-presentable in Frankie because:
+GitHub review bots can emit a single pull request review or issue comment whose
+body contains multiple actionable findings, duplicate ranges, suggested
+patches, and agent prompt blocks. The raw body is useful as evidence, but it is
+not directly presentable in Frankie because:
 
 - the useful findings are nested inside a large Markdown and HTML document,
-- a single review can contain many findings without one GitHub discussion
-  comment per finding,
+- a single review or issue comment can contain many findings without one GitHub
+  discussion comment per finding,
 - provider-specific structures drift over time, and
 - users need to persist a decision to action or suppress each extracted
   finding.
 
-Frankie already models inline `ReviewComment` data, but it does not yet model
-top-level pull request review bodies as first-class library data. The feature
-therefore needs both a new intake path and a translation layer.
+Frankie already models inline `ReviewComment` data and basic pull request issue
+comments, but it does not yet model bot banner sources as first-class library
+data. The feature therefore needs both a source-aware intake path and a
+translation layer.
 
 ## 3. Goals and non-goals
 
 ### 3.1. Goals
 
-- Provide a stable library API for pull request review banner intake,
-  translation, decision persistence, and rule discovery.
+- Provide a stable library API for pull request review banner intake from both
+  top-level review bodies and issue-comment bodies, translation, decision
+  persistence, and rule discovery.
 - Keep the message body translation path deterministic for known providers.
 - Translate known provider banners into structured Frankie review artefacts
   without fabricating inline GitHub comment identifiers.
 - Let users mark individual findings as actioned or suppressed, with those
   decisions persisting across refreshes.
 - Expose the capability through library, Terminal User Interface (TUI), and
-  Command Line Interface (CLI) surfaces where applicable.
+  Command Line Interface (CLI) surfaces where applicable, including
+  host-neutral APIs that external consumers can use without reimplementing
+  GitHub pull request intake.
 - Allow approval-gated LLM discovery of new or drifted rule packs without
   auto-activating unvalidated output.
 
@@ -89,15 +93,21 @@ discovery flow._
 
 ### 4.1. Pull request review banner intake
 
-Frankie should add a new public intake type for top-level pull request review
-bodies, distinct from inline review comments and issue comments.
+Frankie should add a new public intake type for pull request review banner
+sources, distinct from inline review comments while preserving the GitHub
+surface that carried the raw body. A banner source may be:
+
+- a top-level pull request review body, fetched from GitHub's pull request
+  review APIs, or
+- a pull request issue comment, fetched from GitHub's issue-comment APIs.
 
 The shared model should include:
 
 - `PullRequestReviewBanner`
-  - `review_id`
+  - `source_kind` (`pull_request_review` or `issue_comment`)
+  - `source_id`
   - `author_login`
-  - `submitted_at`
+  - `submitted_at` or `created_at`
   - `commit_sha`
   - `body_markdown`
   - `source_url`
@@ -110,6 +120,11 @@ The intake layer only fetches and normalizes raw data. It does not classify,
 translate, or persist decisions. That keeps transport and provider concerns
 outwith the GitHub access layer.
 
+The model name remains banner-oriented rather than transport-oriented: callers
+should not need separate translation APIs for review-body banners and
+issue-comment banners. The `source_kind` and `source_id` fields preserve enough
+evidence for links, refresh reconciliation, and stable finding identity.
+
 ### 4.2. Message body translation pipeline
 
 The translation pipeline is a pure library concern. It takes a raw banner and
@@ -118,7 +133,7 @@ failure.
 
 The pipeline has five stages:
 
-1. Parse the review body into a normalized Markdown Abstract Syntax Tree
+1. Parse the raw banner body into a normalized Markdown Abstract Syntax Tree
    (AST), using an MDAST-style representation that preserves GitHub-flavoured
    Markdown and embedded HTML.
 2. Run an HTML normalization pass that converts `<details>`, `<summary>`, and
@@ -162,6 +177,24 @@ The first built-in rule packs should target:
 - CodeRabbit banner extraction, and
 - Sourcery banner extraction.
 
+The first CodeRabbit rule pack should explicitly support failed-checks tables
+posted as pull request issue comments. The extractor should match a heading
+such as `Failed checks`, parse the adjacent GitHub-flavoured Markdown table,
+and require the canonical columns `Check name`, `Status`, `Explanation`, and
+`Resolution`. Each table body row becomes one `BannerFinding` candidate:
+
+- `Check name` maps to the headline and extractor-specific item key.
+- `Status` maps to provider status and severity metadata.
+- `Explanation` maps to rationale.
+- `Resolution` maps to remediation text and, when appropriate, an agent
+  prompt.
+- The source table row maps to the raw source excerpt.
+
+If the heading includes published counts, for example error, warning, or
+inconclusive totals, the extractor must validate those counts against the
+parsed rows and emit a drift warning instead of silently returning partial
+output when they disagree.
+
 ### 4.4. Review banner handling
 
 Review banner handling is the orchestration and presentation layer that sits
@@ -185,8 +218,17 @@ The central output model should be `BannerFinding`, not `ReviewComment`.
 - optional suggested patch,
 - optional agent prompt,
 - raw source excerpt,
-- source review reference, and
+- source banner reference, and
 - persisted decision state.
+
+`BannerFindingLocation` must support both file-bound and pull-request-level
+findings. Many pre-merge check tables describe repository, architecture,
+testing, or documentation issues without a reliable file path or line range.
+Extractors may attach a file-bound location only when the banner exposes one in
+a structured, deterministic way; prose mentions of paths or line numbers should
+be treated as weak evidence unless the rule pack contains a dedicated parser
+and confidence policy. Pull-request-level findings remain actionable and
+suppressible, but they should not be surfaced as inline review comments.
 
 The handling layer should also define a higher-level presentation enum, for
 example `PresentedReviewItem`, so Frankie can present native review comments
@@ -201,14 +243,17 @@ the underlying finding.
 The stable finding key should be derived from:
 
 - `provider_key`,
-- `source_review_id`,
-- canonicalized primary location,
+- `source_kind`,
+- `source_id`,
+- canonicalized primary location, or an explicit pull-request-level location
+  marker when no file-bound location exists,
 - canonicalized headline, and
 - an extractor-specific item key where available.
 
 The persistent decision state should live in `SQLite` and include:
 
-- `source_review_id`,
+- `source_kind`,
+- `source_id`,
 - `provider_key`,
 - `finding_key`,
 - `decision_state`,
@@ -233,7 +278,8 @@ and Frankie treats it as a new finding with a fresh `pending` state. This is an
 intentional simplification: tracking rename history would require cross-commit
 analysis that conflicts with the goal of keeping translation deterministic over
 a single banner body. Consumers should expect finding identity to reset when
-files are renamed or moved.
+files are renamed or moved. Pull-request-level findings use the stable source
+and extractor item key instead of inventing a file path.
 
 ### 4.6. Rule discovery engine
 
@@ -289,11 +335,22 @@ packs must still pass the same local validation as built-in rules.
 
 The public library API should expose at least:
 
-- raw pull request review banner intake,
+- raw pull request review banner intake for review-body and issue-comment
+  sources,
 - deterministic banner translation,
+- a host-neutral pull request presentation API that can return native review
+  comments and translated banner findings in one ordered collection,
 - decision mutation and lookup,
 - rule discovery proposal generation, and
 - approval and loading of custom rule packs.
+
+The host-neutral presentation API is the minimum external-consumer contract.
+Tools such as `vk` should be able to call Frankie with a pull request locator
+and receive display-ready PR review items, including CodeRabbit pre-merge check
+table findings, without maintaining their own ad hoc GitHub GraphQL client for
+that PR display path. The API must preserve enough source metadata for callers
+to link back to GitHub and to distinguish native comments from banner findings,
+but it must not require callers to understand CodeRabbit table parsing rules.
 
 The CLI should expose:
 
@@ -329,12 +386,13 @@ _Table: Proposed module boundaries and responsibilities._
 
 | Module                                  | Responsibility                                                         |
 | --------------------------------------- | ---------------------------------------------------------------------- |
-| `src/review_banner/intake.rs`           | Public pull request review banner models and intake helpers            |
+| `src/review_banner/intake.rs`           | Public banner source models and intake helpers                         |
 | `src/review_banner/translation.rs`      | Deterministic translation pipeline orchestration                       |
 | `src/review_banner/ast.rs`              | Markdown AST parsing and HTML normalization                            |
 | `src/review_banner/rules.rs`            | Built-in rule pack registry, rule matching, and extractors             |
 | `src/review_banner/model.rs`            | Shared banner findings, translation outcomes, and decision DTOs        |
 | `src/review_banner/decision_store.rs`   | Persistence contract for `pending`, `actioned`, and `suppressed` state |
+| `src/review_items.rs`                   | Host-neutral native comment and banner finding presentation contracts  |
 | `src/ai/review_banner_rule_discovery/*` | Approval-gated rule proposal generation and validation helpers         |
 | `src/cli/*` and `src/tui/*`             | Thin adapters over the shared library APIs                             |
 
@@ -342,15 +400,17 @@ _Table: Proposed module boundaries and responsibilities._
 
 _Table: Core shared data contracts._
 
-| Type                       | Purpose                                                     |
-| -------------------------- | ----------------------------------------------------------- |
-| `PullRequestReviewBanner`  | Raw top-level GitHub review body plus metadata              |
-| `BannerTranslationRequest` | Input to deterministic translation                          |
-| `BannerTranslationOutcome` | Matched provider, findings, ignored sections, and warnings  |
-| `BannerFinding`            | Presentable, actionable translated review artefact          |
-| `BannerFindingLocation`    | File, line span, outside-diff, and secondary range metadata |
-| `BannerDecision`           | Persisted user action or suppression state                  |
-| `ProposedRulePack`         | Approval-gated discovery output for user review             |
+| Type                       | Purpose                                                        |
+| -------------------------- | -------------------------------------------------------------- |
+| `PullRequestReviewBanner`  | Raw GitHub banner body plus source-kind metadata               |
+| `BannerSourceKind`         | Whether the banner came from a review body or issue comment    |
+| `BannerTranslationRequest` | Input to deterministic translation                             |
+| `BannerTranslationOutcome` | Matched provider, findings, ignored sections, and warnings     |
+| `BannerFinding`            | Presentable, actionable translated review artefact             |
+| `BannerFindingLocation`    | File, line span, PR-level, outside-diff, and range metadata    |
+| `BannerDecision`           | Persisted user action or suppression state                     |
+| `PresentedReviewItem`      | Host-neutral native comment or banner finding display contract |
+| `ProposedRulePack`         | Approval-gated discovery output for user review                |
 
 ## 7. Testing strategy
 
@@ -358,8 +418,8 @@ The implementation should use five layers of validation:
 
 - unit tests for AST normalization, classifier scoring, extractor logic, and
   stable key generation,
-- fixture-based golden tests that translate sample CodeRabbit and Sourcery
-  banners into structured JSON,
+- fixture-based golden tests that translate sample CodeRabbit failed-checks
+  tables and Sourcery banners into structured JSON,
 - behavioural tests for TUI and CLI decision handling,
 - persistence tests for `actioned` and `suppressed` state round-tripping
   through `SQLite`, and
@@ -378,11 +438,18 @@ paths so the approval gate is exercised rather than assumed.
 - Presenting translated findings beside native review comments will require
   careful capability checks so unsupported operations are disabled rather than
   failing at runtime.
+- PR-level findings without file paths can be made misleading if callers assume
+  every review item has inline diff semantics. The presentation contract must
+  expose item capabilities so external consumers render source links and
+  available actions correctly.
 
 ## 9. Rollout plan
 
-1. Add raw pull request review banner intake and shared data contracts.
-2. Implement deterministic translation for CodeRabbit with golden fixtures.
-3. Add banner handling, decision persistence, and cross-surface adapters.
-4. Add Sourcery support and drift-detection metrics.
-5. Add approval-gated rule discovery and custom rule loading.
+1. Add raw pull request review banner source intake and shared data contracts.
+2. Implement deterministic translation for CodeRabbit failed-checks tables with
+   golden fixtures.
+3. Add a host-neutral PR review presentation API for native comments and banner
+   findings.
+4. Add banner handling, decision persistence, and cross-surface adapters.
+5. Add Sourcery support and drift-detection metrics.
+6. Add approval-gated rule discovery and custom rule loading.

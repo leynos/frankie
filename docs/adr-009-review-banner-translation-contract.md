@@ -15,15 +15,16 @@ artefacts with persisted per-finding decision state.
 
 Frankie needs to present raw pull request review banners from tools such as
 CodeRabbit and Sourcery as actionable review artefacts inside the library, the
-TUI, and the CLI. Those banners often contain many findings in one review body,
-including duplicate sections, file and line references, suggested patches, and
-embedded agent prompts.
+TUI, and the CLI. Those banners may arrive as top-level pull request review
+bodies or as pull request issue comments. They often contain many findings in
+one body, including duplicate sections, file and line references, suggested
+patches, pre-merge check tables, and embedded agent prompts.
 
 The current GitHub intake path models inline review comments and issue
-comments, but it does not yet expose top-level pull request review bodies as a
-shared library concept. Frankie also needs a way to persist a user’s decision
-to action or suppress each extracted finding, while still handling provider
-format drift over time.
+comments, but it does not yet expose bot-authored banner bodies as a shared
+library concept. Frankie also needs a way to persist a user’s decision to
+action or suppress each extracted finding, while still handling provider format
+drift over time.
 
 ## Decision drivers
 
@@ -40,14 +41,16 @@ format drift over time.
 
 ### Functional requirements
 
-- Ingest raw pull request review bodies as first-class data.
+- Ingest raw pull request review bodies and issue-comment banner bodies as
+  first-class data.
 - Translate known provider banners into structured Frankie findings.
 - Let users action or suppress individual translated findings, with that
   decision persisting.
 - Surface discovery proposals for unknown or drifted banners and require user
   approval before activation.
 - Expose the capability through library, TUI, and CLI surfaces where
-  applicable.
+  applicable, including host-neutral presentation APIs suitable for external
+  consumers.
 
 ### Technical requirements
 
@@ -75,13 +78,16 @@ model clarity, and delivery cost._
 Adopt **Option A** with the following contract:
 
 - Frankie introduces a raw `PullRequestReviewBanner` library model for
-  top-level review bodies.
+  bot-authored banner bodies, with source-kind metadata that distinguishes
+  top-level review bodies from issue comments.
 - Deterministic translation operates in a shared library module using a
   normalized Markdown AST, provider matchers, and versioned rule packs.
 - Review banner handling remains separate from translation and is responsible
   for presentation, user decisions, and adapter orchestration.
 - Translated findings are represented as `BannerFinding` review artefacts, not
-  as synthetic `ReviewComment` values.
+  as synthetic `ReviewComment` values. `BannerFinding` supports both file-bound
+  and pull-request-level findings so pre-merge check tables without reliable
+  file locations remain representable without fabricating inline diff locations.
 - Per-finding decision state is stored in `SQLite` with `pending`,
   `actioned`, and `suppressed` states.
 - LLM-backed discovery emits a `ProposedRulePack`, which must pass local
@@ -98,6 +104,8 @@ Adopt **Option A** with the following contract:
 - **Goals**
   - Stable library contracts for banner intake, translation, decisions, and
     discovery.
+  - Host-neutral PR review presentation contracts for native review comments
+    and translated banner findings.
   - Deterministic translation for known providers.
   - Clear separation between deterministic and AI-assisted concerns.
   - Persistent user decisions on individual translated findings.
@@ -109,11 +117,14 @@ Adopt **Option A** with the following contract:
 
 ## Migration plan
 
-1. Add shared raw review banner models and intake support.
-2. Implement deterministic translation, validation, and built-in rule packs.
-3. Add banner handling, persisted decisions, and library, TUI, and CLI
+1. Add shared raw review banner source models and intake support.
+2. Implement deterministic translation, validation, and built-in rule packs,
+   including CodeRabbit failed-checks table extraction.
+3. Add a host-neutral PR review presentation API for native review comments
+   and translated banner findings.
+4. Add banner handling, persisted decisions, and library, TUI, and CLI
    adapters.
-4. Add approval-gated discovery and loading of custom rule packs.
+5. Add approval-gated discovery and loading of custom rule packs.
 
 ## Known risks and limitations
 
@@ -122,6 +133,9 @@ Adopt **Option A** with the following contract:
 - A single-banner discovery proposal can overfit to one format sample.
 - Mixing translated findings and native review comments in one presentation
   layer requires capability-aware UI and CLI behaviour.
+- PR-level findings from pre-merge check tables lack inline diff locations, so
+  clients must inspect item capabilities instead of assuming every finding can
+  be rendered as a file comment.
 
 ## Architectural rationale
 
