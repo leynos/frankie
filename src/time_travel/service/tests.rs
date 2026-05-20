@@ -122,6 +122,7 @@ fn load_time_travel_state_success() -> Result<(), Box<dyn std::error::Error>> {
     git_ops
         .expect_get_commit_snapshot()
         .times(1)
+        .withf(|sha, file_path| sha.as_str() == "abc1234567890" && file_path.is_some())
         .returning(move |_sha, _file_path| Ok(snapshot_clone.clone()));
 
     git_ops
@@ -164,6 +165,7 @@ fn load_time_travel_state_passes_configured_limit() -> Result<(), Box<dyn std::e
     git_ops
         .expect_get_commit_snapshot()
         .times(1)
+        .withf(|sha, file_path| sha.as_str() == "abc1234567890" && file_path.is_some())
         .returning(move |_sha, _file_path| Ok(snapshot_clone.clone()));
 
     git_ops

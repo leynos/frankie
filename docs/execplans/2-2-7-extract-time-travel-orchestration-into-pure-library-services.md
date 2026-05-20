@@ -281,7 +281,7 @@ Implementation is complete. The shipped contract shape is:
     mode was added for this extraction slice.
 - Final validation commands:
   - `make fmt`
-  - `MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint`
+  - `make markdownlint`
   - `make nixie`
   - `make check-fmt`
   - `make lint`
@@ -480,7 +480,7 @@ make fmt 2>&1 | tee /tmp/2-2-7-fmt.log
 
 ```bash
 set -o pipefail
-MDLINT=/root/.bun/bin/markdownlint-cli2 make markdownlint 2>&1 | tee /tmp/2-2-7-markdownlint.log
+make markdownlint 2>&1 | tee /tmp/2-2-7-markdownlint.log
 ```
 
 ```bash

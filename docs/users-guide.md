@@ -331,11 +331,12 @@ pub fn navigate_time_travel_state(
 ) -> Result<Option<TimeTravelState>, GitOperationError>
 ```
 
-Use `navigate_time_travel_state` when you already have a loaded
-`TimeTravelState` and want Frankie to move to the next newer or previous older
-commit without depending on the TUI adapter. The function preserves the loaded
-history, recalculates the target index in shared library code, and returns
-`Ok(None)` when navigation is unavailable at the current history boundary.
+Use `navigate_time_travel_state` when a `TimeTravelState` is already loaded and
+Frankie should move to the next newer or previous older commit without
+depending on the TUI adapter. The function preserves the loaded
+`TimeTravelState`, recalculates the target index in shared library code, and
+returns `Ok(None)` when navigation is unavailable at the current history
+boundary.
 
 Table: Parameters for `navigate_time_travel_state`.
 

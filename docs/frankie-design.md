@@ -809,11 +809,15 @@ renderers and embedding hosts can inspect state without depending on the TUI
 adapter. Consumers import these types as
 `frankie::time_travel::{TimeTravelInitParams, TimeTravelState}` and read state
 through documented getters such as `snapshot()`, `file_path()`,
-`line_mapping()`, `current_index()`, and the commit-sha accessors. Mutation
-helpers such as loading/error factories and setter methods remain
-crate-internal because roadmap item 2.2.7 still owns orchestration extraction.
-No standalone CLI surface is added for this slice; the work is a library-first
-visibility promotion supporting the existing interactive feature.
+`line_mapping()`, `current_index()`, and the commit-sha accessors.
+Time-travel orchestration was extracted into shared library code in roadmap
+item 2.2.7. The public contract now includes
+`TimeTravelNavigationDirection` and `navigate_time_travel_state` in
+`src/time_travel/service.rs`, returning
+`Result<Option<TimeTravelState>, GitOperationError>` so history-boundary
+navigation remains an explicit no-op while git failures still surface
+unchanged. Orchestration ownership and the no-standalone-CLI decision are
+resolved by the 2.2.7 extraction rather than pending.
 
 ##### Library API (roadmap 2.2.6)
 
