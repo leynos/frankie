@@ -5,11 +5,8 @@ mod time_travel_support;
 
 use std::sync::Arc;
 
-use bubbletea_rs::Model;
-use frankie::local::{
-    CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
-};
-use frankie::time_travel::{TimeTravelInitParams, TimeTravelState};
+use bubbletea_rs::{Cmd, Model};
+use frankie::local::LineMappingVerification;
 use frankie::tui::app::ReviewApp;
 use frankie::tui::components::test_utils::strip_ansi_codes;
 use frankie::tui::messages::AppMsg;
@@ -29,44 +26,6 @@ fn default_comment() -> frankie::github::models::ReviewComment {
         .body("Check validation")
         .commit_sha("abc1234567890")
         .build()
-}
-
-/// Creates a mock time-travel state for testing at a specific history index.
-fn create_mock_time_travel_state_at_index(index: usize) -> Result<TimeTravelState, StepError> {
-    let commit_history = vec![
-        CommitSha::new("abc1234567890".to_owned()),
-        CommitSha::new("def5678901234".to_owned()),
-        CommitSha::new("ghi9012345678".to_owned()),
-    ];
-    let sha = commit_history
-        .get(index)
-        .cloned()
-        .ok_or("invalid commit index for commit_history")?;
-    let metadata = CommitMetadata::new(
-        sha.as_str().to_owned(),
-        "Fix login validation".to_owned(),
-        "Alice".to_owned(),
-        chrono::Utc::now(),
-    );
-    let snapshot = CommitSnapshot::with_file_content(
-        metadata,
-        "src/auth.rs".to_owned(),
-        "fn login() {\n    // validation\n}".to_owned(),
-    );
-    let line_mapping = Some(LineMappingVerification::exact(42));
-    Ok(TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: RepoFilePath::new("src/auth.rs".to_owned()),
-        original_line: Some(42),
-        line_mapping,
-        commit_history,
-        current_index: index,
-    }))
-}
-
-/// Creates a mock time-travel state for testing.
-fn create_mock_time_travel_state() -> Result<TimeTravelState, StepError> {
-    create_mock_time_travel_state_at_index(0)
 }
 
 #[fixture]
@@ -129,6 +88,23 @@ impl TimeTravelTestState {
         Ok(())
     }
 
+    /// Handles a message, executes its command, and feeds the emitted message
+    /// back through the app. Bubble Tea delivers command output as later
+    /// messages, so this exercises the same handler delegation path without
+    /// relying on a prebuilt callback.
+    fn handle_and_execute_command(&self, msg: &AppMsg) -> StepResult {
+        let cmd = self
+            .app
+            .with_mut(|app| app.handle_message(msg))
+            .ok_or("app should be initialised before handling message")?
+            .ok_or("message should produce a command")?;
+        let emitted = execute_cmd(cmd)?;
+        self.app
+            .with_mut(|app| app.handle_message(&emitted))
+            .ok_or("app should handle command output")?;
+        Ok(())
+    }
+
     fn render_view(&self) -> StepResult {
         let view = self
             .app
@@ -154,6 +130,20 @@ impl TimeTravelTestState {
             Err("expected string not found in view")
         }
     }
+}
+
+fn execute_cmd(cmd: Cmd) -> Result<AppMsg, StepError> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .map_err(|_| "tokio runtime should build for command execution")?;
+    let output = runtime
+        .block_on(cmd)
+        .ok_or("time-travel command should emit a message")?;
+    output
+        .downcast::<AppMsg>()
+        .map(|message| *message)
+        .map_err(|_| "time-travel command should emit AppMsg")
 }
 
 // Given steps
@@ -213,30 +203,36 @@ fn given_line_mapping_deleted(state: &TimeTravelTestState, line: u32) {
 #[given("time-travel mode is entered for the selected comment")]
 #[when("time-travel mode is entered for the selected comment")]
 fn time_travel_entered(state: &TimeTravelTestState) -> StepResult {
-    let mock_state = create_mock_time_travel_state()?;
-    state.handle_with_callback(
-        &AppMsg::EnterTimeTravel,
-        Some(AppMsg::TimeTravelLoaded(Box::new(mock_state))),
-    )
+    state.handle_and_execute_command(&AppMsg::EnterTimeTravel)
 }
 
 #[given("the previous commit is navigated to")]
 #[when("the previous commit is navigated to")]
 fn previous_commit(state: &TimeTravelTestState) -> StepResult {
-    let mock_state = create_mock_time_travel_state_at_index(1)?;
-    state.handle_with_callback(
-        &AppMsg::PreviousCommit,
-        Some(AppMsg::CommitNavigated(Box::new(mock_state))),
-    )
+    state.handle_and_execute_command(&AppMsg::PreviousCommit)?;
+    let requested = state
+        .mock_git_ops
+        .with_ref(|git_ops| git_ops.requested_snapshot("def5678901234"))
+        .ok_or("mock git ops should be configured")?;
+    if requested {
+        Ok(())
+    } else {
+        Err("previous navigation should request the older commit snapshot")
+    }
 }
 
 #[when("the next commit is navigated to")]
 fn when_next_commit(state: &TimeTravelTestState) -> StepResult {
-    let mock_state = create_mock_time_travel_state_at_index(0)?;
-    state.handle_with_callback(
-        &AppMsg::NextCommit,
-        Some(AppMsg::CommitNavigated(Box::new(mock_state))),
-    )
+    state.handle_and_execute_command(&AppMsg::NextCommit)?;
+    let requested = state
+        .mock_git_ops
+        .with_ref(|git_ops| git_ops.requested_snapshot("abc1234567890"))
+        .ok_or("mock git ops should be configured")?;
+    if requested {
+        Ok(())
+    } else {
+        Err("next navigation should request the newer commit snapshot")
+    }
 }
 
 #[when("time-travel mode is exited")]

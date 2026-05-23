@@ -125,7 +125,7 @@ impl ReviewApp {
         direction: TimeTravelNavigationDirection,
     ) -> Option<Cmd> {
         let current_state = self.time_travel_state.as_ref()?;
-        if !direction.can_navigate(current_state) {
+        if navigation_is_blocked(current_state, direction) {
             return None;
         }
 
@@ -138,6 +138,9 @@ impl ReviewApp {
             time_travel_state.set_loading(true);
         }
 
+        // Bubble Tea processes messages sequentially, so marking the state as
+        // loading here is enough to block later navigation messages until the
+        // command emits `CommitNavigated` or `TimeTravelFailed`.
         Some(spawn_commit_navigation(
             git_ops,
             navigation_state,
@@ -178,12 +181,16 @@ where
         match result {
             Ok(Ok(value)) => Some(Box::new(success_msg(value)) as Box<dyn Any + Send>),
             Ok(Err(e)) => {
+                tracing::debug!(?e, "time-travel blocking load failed");
                 Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>)
             }
-            Err(e) => Some(
-                Box::new(AppMsg::TimeTravelFailed(format!("Task join error: {e}")))
-                    as Box<dyn Any + Send>,
-            ),
+            Err(e) => {
+                tracing::debug!(?e, "time-travel blocking load task failed to join");
+                Some(
+                    Box::new(AppMsg::TimeTravelFailed(format!("Task join error: {e}")))
+                        as Box<dyn Any + Send>,
+                )
+            }
         }
     })
 }
@@ -228,14 +235,35 @@ fn spawn_commit_navigation(
             }
             Ok(Ok(None)) => None,
             Ok(Err(e)) => {
+                tracing::debug!(?e, "time-travel navigation failed");
                 Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>)
             }
-            Err(e) => Some(
-                Box::new(AppMsg::TimeTravelFailed(format!("Task join error: {e}")))
-                    as Box<dyn Any + Send>,
-            ),
+            Err(e) => {
+                tracing::debug!(?e, "time-travel navigation task failed to join");
+                Some(
+                    Box::new(AppMsg::TimeTravelFailed(format!("Task join error: {e}")))
+                        as Box<dyn Any + Send>,
+                )
+            }
         }
     })
+}
+
+fn navigation_is_blocked(
+    current_state: &TimeTravelState,
+    direction: TimeTravelNavigationDirection,
+) -> bool {
+    let is_blocked = !direction.can_navigate(current_state);
+    if is_blocked {
+        tracing::debug!(
+            direction = ?direction,
+            loading = current_state.is_loading(),
+            current_index = current_state.current_index(),
+            commit_count = current_state.commit_count(),
+            "time-travel TUI navigation ignored"
+        );
+    }
+    is_blocked
 }
 
 #[cfg(test)]

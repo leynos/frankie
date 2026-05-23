@@ -5,7 +5,8 @@
 //! depending on Bubble Tea, Tokio, or TUI-only storage.
 
 use crate::local::{
-    CommitSha, GitOperationError, GitOperations, LineMappingRequest, LineMappingVerification,
+    CommitSha, CommitSnapshot, GitOperationError, GitOperations, LineMappingRequest,
+    LineMappingVerification,
 };
 
 use super::{TimeTravelInitParams, TimeTravelParams, TimeTravelState};
@@ -128,9 +129,9 @@ pub fn load_time_travel_state(
     head_sha: Option<&CommitSha>,
     commit_history_limit: usize,
 ) -> Result<TimeTravelState, GitOperationError> {
-    let snapshot = git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path()))?;
-    let commit_history =
-        git_ops.get_parent_commits(params.commit_sha(), commit_history_limit.max(1))?;
+    let snapshot = load_initial_snapshot(git_ops, params)?;
+    let effective_limit = commit_history_limit.max(1);
+    let commit_history = load_commit_history(git_ops, params.commit_sha(), effective_limit)?;
     let line_mapping = verify_line_mapping(&LineMappingContext {
         git_ops,
         commit_sha: params.commit_sha(),
@@ -194,14 +195,10 @@ pub fn navigate_time_travel_state(
     direction: TimeTravelNavigationDirection,
     head_sha: Option<&CommitSha>,
 ) -> Result<Option<TimeTravelState>, GitOperationError> {
-    if !direction.can_navigate(state) {
-        return Ok(None);
-    }
-
-    let Some(target_sha) = direction.target_sha(state) else {
+    let Some(target_sha) = navigation_target(state, direction) else {
         return Ok(None);
     };
-    let snapshot = git_ops.get_commit_snapshot(target_sha, Some(state.file_path()))?;
+    let snapshot = load_navigation_snapshot(git_ops, state, direction, target_sha)?;
     let line_mapping = verify_line_mapping(&LineMappingContext {
         git_ops,
         commit_sha: target_sha,
@@ -220,15 +217,161 @@ pub fn navigate_time_travel_state(
     })))
 }
 
+fn navigation_target(
+    state: &TimeTravelState,
+    direction: TimeTravelNavigationDirection,
+) -> Option<&CommitSha> {
+    if navigation_blocked(state, direction) {
+        return None;
+    }
+
+    target_sha_or_log(state, direction)
+}
+
+fn navigation_blocked(state: &TimeTravelState, direction: TimeTravelNavigationDirection) -> bool {
+    let is_blocked = !direction.can_navigate(state);
+    if is_blocked {
+        tracing::debug!(
+            direction = ?direction,
+            current_index = state.current_index(),
+            commit_count = state.commit_count(),
+            loading = state.is_loading(),
+            "time-travel navigation returned no state"
+        );
+    }
+    is_blocked
+}
+
+fn target_sha_or_log(
+    state: &TimeTravelState,
+    direction: TimeTravelNavigationDirection,
+) -> Option<&CommitSha> {
+    direction.target_sha(state).or_else(|| {
+        tracing::debug!(
+            direction = ?direction,
+            current_index = state.current_index(),
+            commit_count = state.commit_count(),
+            "time-travel navigation had no target SHA"
+        );
+        None
+    })
+}
+
+fn load_initial_snapshot(
+    git_ops: &dyn GitOperations,
+    params: &TimeTravelParams,
+) -> Result<CommitSnapshot, GitOperationError> {
+    tracing::debug!(
+        commit_sha = params.commit_sha().as_str(),
+        file_path = params.file_path().as_str(),
+        "loading time-travel snapshot"
+    );
+    git_ops
+        .get_commit_snapshot(params.commit_sha(), Some(params.file_path()))
+        .map_err(|error| {
+            tracing::debug!(
+                commit_sha = params.commit_sha().as_str(),
+                file_path = params.file_path().as_str(),
+                ?error,
+                "time-travel snapshot load failed"
+            );
+            error
+        })
+}
+
+fn load_commit_history(
+    git_ops: &dyn GitOperations,
+    commit_sha: &CommitSha,
+    effective_limit: usize,
+) -> Result<Vec<CommitSha>, GitOperationError> {
+    tracing::debug!(
+        commit_sha = commit_sha.as_str(),
+        limit = effective_limit,
+        "loading time-travel commit history"
+    );
+    git_ops
+        .get_parent_commits(commit_sha, effective_limit)
+        .map_err(|error| {
+            tracing::debug!(
+                commit_sha = commit_sha.as_str(),
+                limit = effective_limit,
+                ?error,
+                "time-travel commit history load failed"
+            );
+            error
+        })
+}
+
+fn load_navigation_snapshot(
+    git_ops: &dyn GitOperations,
+    state: &TimeTravelState,
+    direction: TimeTravelNavigationDirection,
+    target_sha: &CommitSha,
+) -> Result<CommitSnapshot, GitOperationError> {
+    tracing::debug!(
+        direction = ?direction,
+        current_index = state.current_index(),
+        target_sha = target_sha.as_str(),
+        file_path = state.file_path().as_str(),
+        "loading time-travel navigation snapshot"
+    );
+    git_ops
+        .get_commit_snapshot(target_sha, Some(state.file_path()))
+        .map_err(|error| {
+            tracing::debug!(
+                direction = ?direction,
+                target_sha = target_sha.as_str(),
+                file_path = state.file_path().as_str(),
+                ?error,
+                "time-travel navigation snapshot load failed"
+            );
+            error
+        })
+}
+
 fn verify_line_mapping(context: &LineMappingContext<'_>) -> Option<LineMappingVerification> {
-    let (line, head) = context.original_line.zip(context.head_sha)?;
+    let Some((line, head)) = context.original_line.zip(context.head_sha) else {
+        log_skipped_line_mapping(context);
+        return None;
+    };
     let request = LineMappingRequest::new(
         context.commit_sha.as_str().to_owned(),
         head.as_str().to_owned(),
         context.file_path.as_str().to_owned(),
         line,
     );
-    context.git_ops.verify_line_mapping(&request).ok()
+    tracing::debug!(
+        commit_sha = context.commit_sha.as_str(),
+        head_sha = head.as_str(),
+        file_path = context.file_path.as_str(),
+        original_line = line,
+        "verifying time-travel line mapping"
+    );
+    context
+        .git_ops
+        .verify_line_mapping(&request)
+        .map_err(|error| {
+            tracing::debug!(
+                commit_sha = context.commit_sha.as_str(),
+                head_sha = head.as_str(),
+                file_path = context.file_path.as_str(),
+                original_line = line,
+                ?error,
+                "time-travel line mapping verification failed"
+            );
+            error
+        })
+        .ok()
+}
+
+fn log_skipped_line_mapping(context: &LineMappingContext<'_>) {
+    tracing::debug!(
+        commit_sha = context.commit_sha.as_str(),
+        file_path = context.file_path.as_str(),
+        has_original_line = context.original_line.is_some(),
+        has_head_sha = context.head_sha.is_some(),
+        "skipping time-travel line mapping verification"
+    );
 }
 
 #[cfg(test)]
