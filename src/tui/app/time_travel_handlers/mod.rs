@@ -116,16 +116,17 @@ impl ReviewApp {
         session_id: u64,
         state: Box<TimeTravelState>,
     ) -> Option<Cmd> {
-        if !self.is_active_time_travel_session(session_id) {
-            return None;
-        }
-        self.accept_time_travel_state(state, "load_success", |s| {
-            tracing::info!(
-                commit_sha = s.snapshot().sha(),
-                commit_count = s.commit_count(),
-                "time-travel load succeeded"
-            );
-        })
+        self.accept_time_travel_state(
+            TimeTravelCompletion { session_id, state },
+            "load_success",
+            |s| {
+                tracing::info!(
+                    commit_sha = s.snapshot().sha(),
+                    commit_count = s.commit_count(),
+                    "time-travel load succeeded"
+                );
+            },
+        )
     }
 
     /// Handles the `TimeTravelFailed` message.
@@ -195,6 +196,25 @@ impl ReviewApp {
             && self.view_mode == super::ViewMode::TimeTravel
     }
 
+    fn accept_time_travel_state(
+        &mut self,
+        completion: TimeTravelCompletion,
+        transition: &'static str,
+        log: impl FnOnce(&TimeTravelState),
+    ) -> Option<Cmd> {
+        if !self.is_active_time_travel_session(completion.session_id) {
+            return None;
+        }
+        counter!(
+            "time_travel_tui_state_transitions_total",
+            "transition" => transition
+        )
+        .increment(1);
+        log(&completion.state);
+        self.time_travel_state = Some(*completion.state);
+        None
+    }
+
     fn mark_time_travel_navigation_started(
         &mut self,
         current_index: usize,
@@ -212,24 +232,6 @@ impl ReviewApp {
         );
     }
 
-    fn accept_time_travel_state(
-        &mut self,
-        state: Box<TimeTravelState>,
-        transition: &'static str,
-        log: impl FnOnce(&TimeTravelState),
-    ) -> Option<Cmd> {
-        if self.view_mode == super::ViewMode::TimeTravel {
-            counter!(
-                "time_travel_tui_state_transitions_total",
-                "transition" => transition
-            )
-            .increment(1);
-            log(&state);
-            self.time_travel_state = Some(*state);
-        }
-        None
-    }
-
     fn record_time_travel_error(&mut self, error: &str) {
         if let Some(ref mut state) = self.time_travel_state {
             state.set_error(error.to_owned());
@@ -245,17 +247,23 @@ impl ReviewApp {
         session_id: u64,
         state: Box<TimeTravelState>,
     ) -> Option<Cmd> {
-        if !self.is_active_time_travel_session(session_id) {
-            return None;
-        }
-        self.accept_time_travel_state(state, "navigation_success", |s| {
-            tracing::info!(
-                commit_sha = s.snapshot().sha(),
-                current_index = s.current_index(),
-                "time-travel navigation succeeded"
-            );
-        })
+        self.accept_time_travel_state(
+            TimeTravelCompletion { session_id, state },
+            "navigation_success",
+            |s| {
+                tracing::info!(
+                    commit_sha = s.snapshot().sha(),
+                    current_index = s.current_index(),
+                    "time-travel navigation succeeded"
+                );
+            },
+        )
     }
+}
+
+struct TimeTravelCompletion {
+    session_id: u64,
+    state: Box<TimeTravelState>,
 }
 
 /// Builds the error message for missing repository, using stored context.
