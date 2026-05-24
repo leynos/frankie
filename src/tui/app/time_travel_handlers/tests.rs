@@ -7,8 +7,8 @@ use super::*;
 use crate::github::models::ReviewComment;
 use crate::github::models::test_support::minimal_review;
 use crate::local::{
-    CommitMetadata, CommitSha, CommitSnapshot, LineMappingRequest, LineMappingVerification,
-    RepoFilePath,
+    CommitMetadata, CommitSha, CommitSnapshot, GitOperationError, GitOperations,
+    LineMappingRequest, LineMappingVerification, RepoFilePath,
 };
 use crate::time_travel::TimeTravelInitParams;
 use crate::tui::app::ViewMode;
@@ -107,6 +107,8 @@ fn time_travel_app_at(index: usize) -> ReviewApp {
         .with_git_ops(Arc::new(NoopGitOps), "HEAD".to_owned());
     app.view_mode = ViewMode::TimeTravel;
     app.time_travel_state = Some(loaded_state_at(index));
+    app.active_time_travel_session_id = Some(1);
+    app.next_time_travel_session_id = 2;
     app
 }
 
@@ -164,19 +166,46 @@ enum LateTimeTravelResult {
     InitialLoad,
 }
 
+#[derive(Clone, Copy)]
+enum StaleTimeTravelCompletion {
+    Navigation,
+    InitialLoad,
+    Failure,
+}
+
 fn invoke_late_time_travel_result(app: &mut ReviewApp, result: LateTimeTravelResult) {
     match result {
         LateTimeTravelResult::Navigation => {
             assert!(
-                app.handle_commit_navigated(Box::new(loaded_state_at(1)))
+                app.handle_commit_navigated(1, Box::new(loaded_state_at(1)))
                     .is_none()
             );
         }
         LateTimeTravelResult::InitialLoad => {
             assert!(
-                app.handle_time_travel_loaded(Box::new(loaded_state_at(1)))
+                app.handle_time_travel_loaded(1, Box::new(loaded_state_at(1)))
                     .is_none()
             );
+        }
+    }
+}
+
+fn invoke_stale_time_travel_completion(app: &mut ReviewApp, completion: StaleTimeTravelCompletion) {
+    match completion {
+        StaleTimeTravelCompletion::Navigation => {
+            assert!(
+                app.handle_commit_navigated(1, Box::new(loaded_state_at(1)))
+                    .is_none()
+            );
+        }
+        StaleTimeTravelCompletion::InitialLoad => {
+            assert!(
+                app.handle_time_travel_loaded(1, Box::new(loaded_state_at(1)))
+                    .is_none()
+            );
+        }
+        StaleTimeTravelCompletion::Failure => {
+            assert!(app.handle_time_travel_failed(1, "old failure").is_none());
         }
     }
 }
@@ -196,4 +225,27 @@ fn exit_during_time_travel_ignores_late_result(
     exit_then_assert_late_result_ignored(&mut app, |review_app| {
         invoke_late_time_travel_result(review_app, late_result);
     });
+}
+
+#[rstest]
+#[case(StaleTimeTravelCompletion::Navigation)]
+#[case(StaleTimeTravelCompletion::InitialLoad)]
+#[case(StaleTimeTravelCompletion::Failure)]
+fn stale_time_travel_completion_does_not_mutate_active_session(
+    #[case] completion: StaleTimeTravelCompletion,
+) {
+    let mut app = time_travel_app_at(0);
+    app.active_time_travel_session_id = Some(2);
+
+    invoke_stale_time_travel_completion(&mut app, completion);
+
+    let state = app
+        .time_travel_state
+        .as_ref()
+        .expect("active session state should remain loaded");
+    assert_eq!(state.current_index(), 0);
+    assert_eq!(state.snapshot().sha(), "abc1234567890");
+    assert!(state.error_message().is_none());
+    assert!(app.error.is_none());
+    assert!(matches!(app.view_mode, ViewMode::TimeTravel));
 }

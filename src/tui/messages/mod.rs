@@ -62,15 +62,30 @@ pub enum AppMsg {
     /// Exit time-travel mode.
     ExitTimeTravel,
     /// Time-travel data loaded successfully.
-    TimeTravelLoaded(Box<TimeTravelState>),
+    TimeTravelLoaded {
+        /// Session identifier used to ignore stale async completions.
+        session_id: u64,
+        /// Loaded time-travel state.
+        state: Box<TimeTravelState>,
+    },
     /// Time-travel loading failed.
-    TimeTravelFailed(String),
+    TimeTravelFailed {
+        /// Session identifier used to ignore stale async completions.
+        session_id: u64,
+        /// Error returned by the load or navigation task.
+        error: String,
+    },
     /// Navigate to the next (more recent) commit in time-travel.
     NextCommit,
     /// Navigate to the previous (older) commit in time-travel.
     PreviousCommit,
     /// Commit navigation completed with updated state.
-    CommitNavigated(Box<TimeTravelState>),
+    CommitNavigated {
+        /// Session identifier used to ignore stale async completions.
+        session_id: u64,
+        /// Updated time-travel state.
+        state: Box<TimeTravelState>,
+    },
 
     // Codex execution
     /// Start Codex execution using currently filtered comments.

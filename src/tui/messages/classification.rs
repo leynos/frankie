@@ -53,11 +53,11 @@ impl AppMsg {
             }
             Self::EnterTimeTravel
             | Self::ExitTimeTravel
-            | Self::TimeTravelLoaded(_)
-            | Self::TimeTravelFailed(_)
+            | Self::TimeTravelLoaded { .. }
+            | Self::TimeTravelFailed { .. }
             | Self::NextCommit
             | Self::PreviousCommit
-            | Self::CommitNavigated(_) => MessageCategory::TimeTravel,
+            | Self::CommitNavigated { .. } => MessageCategory::TimeTravel,
             Self::StartCodexExecution
             | Self::CodexPollTick
             | Self::CodexProgress(_)
@@ -207,11 +207,11 @@ impl AppMsg {
             self,
             Self::EnterTimeTravel
                 | Self::ExitTimeTravel
-                | Self::TimeTravelLoaded(_)
-                | Self::TimeTravelFailed(_)
+                | Self::TimeTravelLoaded { .. }
+                | Self::TimeTravelFailed { .. }
                 | Self::NextCommit
                 | Self::PreviousCommit
-                | Self::CommitNavigated(_)
+                | Self::CommitNavigated { .. }
         )
     }
 }

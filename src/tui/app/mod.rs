@@ -99,6 +99,10 @@ pub struct ReviewApp {
     head_sha: Option<String>,
     /// Maximum number of commits to load in time-travel history.
     commit_history_limit: usize,
+    /// Monotonic session ID used to identify stale time-travel completions.
+    next_time_travel_session_id: u64,
+    /// Active time-travel session ID while mode is open.
+    active_time_travel_session_id: Option<u64>,
     /// Service used to execute Codex runs.
     codex_service: Arc<dyn CodexExecutionService>,
     /// Active Codex execution handle while a run is in progress.
@@ -192,6 +196,8 @@ impl ReviewApp {
             git_ops: None,
             head_sha: None,
             commit_history_limit: builder::default_commit_history_limit(),
+            next_time_travel_session_id: 1,
+            active_time_travel_session_id: None,
             codex_service: Arc::new(SystemCodexExecutionService::new()),
             codex_handle: None,
             codex_status: None,
