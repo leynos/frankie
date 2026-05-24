@@ -4,83 +4,22 @@
 //! users to view the code state at the time a comment was made and verify
 //! line mapping correctness.
 
+mod async_tasks;
 mod error_messages;
 
-use std::any::Any;
 use std::sync::Arc;
 
 use bubbletea_rs::Cmd;
+use metrics::counter;
 
-use crate::local::{CommitSha, GitOperationError, GitOperations, LineMappingRequest, RepoFilePath};
-use crate::time_travel::{self, TimeTravelInitParams, TimeTravelParams, TimeTravelState};
-use crate::tui::messages::AppMsg;
+use crate::local::CommitSha;
+use crate::time_travel::{TimeTravelNavigationDirection, TimeTravelParams, TimeTravelState};
+use crate::tui::messages::{AppMsg, TimeTravelFailurePhase};
 
 use super::ReviewApp;
-
-/// Context for verifying line mapping between commits.
-#[derive(Debug, Clone)]
-struct LineMappingContext<'a> {
-    /// SHA of the commit where the line was originally referenced.
-    commit_sha: &'a CommitSha,
-    /// Path to the file being verified.
-    file_path: &'a RepoFilePath,
-    /// Original line number from the comment, if available.
-    original_line: Option<u32>,
-    /// SHA of the HEAD commit for comparison, if available.
-    head_sha: Option<&'a CommitSha>,
-}
-
-/// Direction for commit navigation in time-travel mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NavigationDirection {
-    /// Navigate to the next (more recent) commit.
-    Next,
-    /// Navigate to the previous (older) commit.
-    Previous,
-}
-
-impl NavigationDirection {
-    /// Returns whether navigation in this direction is possible.
-    const fn can_navigate(self, state: &TimeTravelState) -> bool {
-        match self {
-            Self::Next => state.can_go_next(),
-            Self::Previous => state.can_go_previous(),
-        }
-    }
-
-    /// Returns the target commit SHA for this direction.
-    fn target_sha(self, state: &TimeTravelState) -> Option<&CommitSha> {
-        match self {
-            Self::Next => state.next_commit_sha(),
-            Self::Previous => state.previous_commit_sha(),
-        }
-    }
-
-    /// Calculates the new index after navigating in this direction.
-    const fn calculate_index(self, current: usize) -> usize {
-        match self {
-            Self::Next => current.saturating_sub(1),
-            Self::Previous => current + 1,
-        }
-    }
-}
-
-/// Context for navigating to a specific commit in time-travel mode.
-#[derive(Debug, Clone)]
-struct CommitNavigationContext {
-    /// SHA of the commit to navigate to.
-    sha: CommitSha,
-    /// Path to the file being viewed.
-    file_path: RepoFilePath,
-    /// Original line number from the comment.
-    original_line: Option<u32>,
-    /// SHA of the HEAD commit for line mapping verification.
-    head_sha: Option<CommitSha>,
-    /// New index in the commit history.
-    new_index: usize,
-    /// List of commit SHAs in the history.
-    commit_history: Vec<CommitSha>,
-}
+use async_tasks::{
+    CommitNavigationTask, TimeTravelLoadTask, spawn_commit_navigation, spawn_time_travel_load,
+};
 
 impl ReviewApp {
     /// Converts the stored HEAD SHA string to a `CommitSha` newtype.
@@ -93,11 +32,19 @@ impl ReviewApp {
         match msg {
             AppMsg::EnterTimeTravel => self.handle_enter_time_travel(),
             AppMsg::ExitTimeTravel => self.handle_exit_time_travel(),
-            AppMsg::TimeTravelLoaded(state) => self.handle_time_travel_loaded(state.clone()),
-            AppMsg::TimeTravelFailed(error) => self.handle_time_travel_failed(error),
+            AppMsg::TimeTravelLoaded { session_id, state } => {
+                self.handle_time_travel_loaded(*session_id, state.clone())
+            }
+            AppMsg::TimeTravelFailed {
+                session_id,
+                phase,
+                error,
+            } => self.handle_time_travel_failed(*session_id, *phase, error),
             AppMsg::NextCommit => self.handle_next_commit(),
             AppMsg::PreviousCommit => self.handle_previous_commit(),
-            AppMsg::CommitNavigated(state) => self.handle_commit_navigated(state.clone()),
+            AppMsg::CommitNavigated { session_id, state } => {
+                self.handle_commit_navigated(*session_id, state.clone())
+            }
             _ => None,
         }
     }
@@ -121,10 +68,11 @@ impl ReviewApp {
             }
         };
 
-        let Some(ref git_ops) = self.git_ops else {
+        let Some(git_ops_clone) = self.git_ops.as_ref().map(Arc::clone) else {
             self.error = Some(build_no_repo_error());
             return None;
         };
+        let session_id = self.start_time_travel_session();
 
         // Set loading state and enter time-travel mode
         // Note: commit existence is verified asynchronously in load_time_travel_state,
@@ -134,92 +82,191 @@ impl ReviewApp {
             params.line_number(),
         ));
         self.view_mode = super::ViewMode::TimeTravel;
+        counter!("time_travel_tui_state_transitions_total", "transition" => "enter").increment(1);
+        tracing::info!(
+            commit_sha = params.commit_sha().as_str(),
+            file_path = params.file_path().as_str(),
+            "entered time-travel mode"
+        );
 
         // Spawn async task to load time-travel data
-        let git_ops_clone = Arc::clone(git_ops);
         let head_sha = self.head_commit_sha();
         let commit_history_limit = self.commit_history_limit;
 
-        Some(spawn_time_travel_load(
-            git_ops_clone,
+        Some(spawn_time_travel_load(TimeTravelLoadTask {
+            git_ops: git_ops_clone,
             params,
             head_sha,
             commit_history_limit,
-        ))
+            session_id,
+        }))
     }
 
     /// Handles the `ExitTimeTravel` message.
     pub(super) fn handle_exit_time_travel(&mut self) -> Option<Cmd> {
         self.time_travel_state = None;
         self.view_mode = super::ViewMode::ReviewList;
+        self.active_time_travel_session_id = None;
+        counter!("time_travel_tui_state_transitions_total", "transition" => "exit").increment(1);
+        tracing::info!("exited time-travel mode");
         None
     }
 
     /// Handles the `TimeTravelLoaded` message.
-    pub(super) fn handle_time_travel_loaded(&mut self, state: Box<TimeTravelState>) -> Option<Cmd> {
-        if self.view_mode == super::ViewMode::TimeTravel {
-            self.time_travel_state = Some(*state);
-        }
-        None
+    pub(super) fn handle_time_travel_loaded(
+        &mut self,
+        session_id: u64,
+        state: Box<TimeTravelState>,
+    ) -> Option<Cmd> {
+        self.accept_time_travel_state(
+            TimeTravelCompletion { session_id, state },
+            "load_success",
+            |s| {
+                tracing::info!(
+                    commit_sha = s.snapshot().sha(),
+                    commit_count = s.commit_count(),
+                    "time-travel load succeeded"
+                );
+            },
+        )
     }
 
     /// Handles the `TimeTravelFailed` message.
-    pub(super) fn handle_time_travel_failed(&mut self, error: &str) -> Option<Cmd> {
+    pub(super) fn handle_time_travel_failed(
+        &mut self,
+        session_id: u64,
+        phase: TimeTravelFailurePhase,
+        error: &str,
+    ) -> Option<Cmd> {
+        if !self.is_active_time_travel_session(session_id) {
+            return None;
+        }
+        counter!("time_travel_tui_state_transitions_total", "transition" => phase.transition())
+            .increment(1);
+        tracing::info!(error, "{}", phase.log_message());
+        self.record_time_travel_error(error);
+        None
+    }
+
+    /// Handles the `NextCommit` message.
+    pub(super) fn handle_next_commit(&mut self) -> Option<Cmd> {
+        self.handle_commit_navigation(TimeTravelNavigationDirection::Next)
+    }
+
+    /// Handles the `PreviousCommit` message.
+    pub(super) fn handle_previous_commit(&mut self) -> Option<Cmd> {
+        self.handle_commit_navigation(TimeTravelNavigationDirection::Previous)
+    }
+
+    /// Handles commit navigation in the given direction.
+    fn handle_commit_navigation(
+        &mut self,
+        direction: TimeTravelNavigationDirection,
+    ) -> Option<Cmd> {
+        let current_state = self.time_travel_state.as_ref()?;
+        if navigation_is_blocked(current_state, direction) {
+            return None;
+        }
+
+        let navigation_state = current_state.clone();
+        let git_ops = Arc::clone(self.git_ops.as_ref()?);
+        let head_sha = self.head_commit_sha();
+        let session_id = self.active_time_travel_session_id?;
+
+        self.mark_time_travel_navigation_started(navigation_state.current_index(), direction);
+
+        // Bubble Tea processes messages sequentially, so marking the state as
+        // loading here is enough to block later navigation messages until the
+        // command emits `CommitNavigated` or `TimeTravelFailed`.
+        Some(spawn_commit_navigation(CommitNavigationTask {
+            git_ops,
+            state: navigation_state,
+            direction,
+            head_sha,
+            session_id,
+        }))
+    }
+
+    const fn start_time_travel_session(&mut self) -> u64 {
+        let session_id = self.next_time_travel_session_id;
+        self.next_time_travel_session_id = self.next_time_travel_session_id.saturating_add(1);
+        self.active_time_travel_session_id = Some(session_id);
+        session_id
+    }
+
+    fn is_active_time_travel_session(&self, session_id: u64) -> bool {
+        self.active_time_travel_session_id == Some(session_id)
+            && self.view_mode == super::ViewMode::TimeTravel
+    }
+
+    fn accept_time_travel_state(
+        &mut self,
+        completion: TimeTravelCompletion,
+        transition: &'static str,
+        log: impl FnOnce(&TimeTravelState),
+    ) -> Option<Cmd> {
+        if !self.is_active_time_travel_session(completion.session_id) {
+            return None;
+        }
+        counter!(
+            "time_travel_tui_state_transitions_total",
+            "transition" => transition
+        )
+        .increment(1);
+        log(&completion.state);
+        self.time_travel_state = Some(*completion.state);
+        None
+    }
+
+    fn mark_time_travel_navigation_started(
+        &mut self,
+        current_index: usize,
+        direction: TimeTravelNavigationDirection,
+    ) {
+        if let Some(time_travel_state) = self.time_travel_state.as_mut() {
+            time_travel_state.set_loading(true);
+        }
+        counter!("time_travel_tui_state_transitions_total", "transition" => "navigation_start")
+            .increment(1);
+        tracing::info!(
+            direction = ?direction,
+            current_index,
+            "started time-travel navigation"
+        );
+    }
+
+    fn record_time_travel_error(&mut self, error: &str) {
         if let Some(ref mut state) = self.time_travel_state {
             state.set_error(error.to_owned());
         } else {
             self.error = Some(error.to_owned());
             self.view_mode = super::ViewMode::ReviewList;
         }
-        None
-    }
-
-    /// Handles the `NextCommit` message.
-    pub(super) fn handle_next_commit(&mut self) -> Option<Cmd> {
-        self.handle_commit_navigation(NavigationDirection::Next)
-    }
-
-    /// Handles the `PreviousCommit` message.
-    pub(super) fn handle_previous_commit(&mut self) -> Option<Cmd> {
-        self.handle_commit_navigation(NavigationDirection::Previous)
-    }
-
-    /// Handles commit navigation in the given direction.
-    fn handle_commit_navigation(&mut self, direction: NavigationDirection) -> Option<Cmd> {
-        let context = {
-            let state = self.time_travel_state.as_ref()?;
-
-            if !direction.can_navigate(state) {
-                return None;
-            }
-
-            CommitNavigationContext {
-                sha: direction.target_sha(state)?.clone(),
-                file_path: state.file_path().clone(),
-                original_line: state.original_line(),
-                head_sha: self.head_commit_sha(),
-                new_index: direction.calculate_index(state.current_index()),
-                commit_history: state.commit_history().to_vec(),
-            }
-        };
-
-        let git_ops = Arc::clone(self.git_ops.as_ref()?);
-
-        // Set loading state
-        if let Some(state) = self.time_travel_state.as_mut() {
-            state.set_loading(true);
-        }
-
-        Some(spawn_commit_navigation(git_ops, context))
     }
 
     /// Handles the `CommitNavigated` message.
-    pub(super) fn handle_commit_navigated(&mut self, state: Box<TimeTravelState>) -> Option<Cmd> {
-        if self.view_mode == super::ViewMode::TimeTravel {
-            self.time_travel_state = Some(*state);
-        }
-        None
+    pub(super) fn handle_commit_navigated(
+        &mut self,
+        session_id: u64,
+        state: Box<TimeTravelState>,
+    ) -> Option<Cmd> {
+        self.accept_time_travel_state(
+            TimeTravelCompletion { session_id, state },
+            "navigation_success",
+            |s| {
+                tracing::info!(
+                    commit_sha = s.snapshot().sha(),
+                    current_index = s.current_index(),
+                    "time-travel navigation succeeded"
+                );
+            },
+        )
     }
+}
+
+struct TimeTravelCompletion {
+    session_id: u64,
+    state: Box<TimeTravelState>,
 }
 
 /// Builds the error message for missing repository, using stored context.
@@ -230,114 +277,22 @@ fn build_no_repo_error() -> String {
         })
 }
 
-/// Spawns an async task that loads data and maps the result to a message.
-///
-/// Uses `tokio::task::spawn_blocking` to offload synchronous git2 operations
-/// to a blocking thread pool, preventing the async executor from being stalled.
-fn spawn_load_task<T, F, L>(git_ops: Arc<dyn GitOperations>, loader: L, success_msg: F) -> Cmd
-where
-    T: Send + 'static,
-    F: FnOnce(T) -> AppMsg + Send + 'static,
-    L: FnOnce(&dyn GitOperations) -> Result<T, GitOperationError> + Send + 'static,
-{
-    Box::pin(async move {
-        let result = tokio::task::spawn_blocking(move || loader(&*git_ops)).await;
-        match result {
-            Ok(Ok(value)) => Some(Box::new(success_msg(value)) as Box<dyn Any + Send>),
-            Ok(Err(e)) => {
-                Some(Box::new(AppMsg::TimeTravelFailed(e.to_string())) as Box<dyn Any + Send>)
-            }
-            Err(e) => Some(
-                Box::new(AppMsg::TimeTravelFailed(format!("Task join error: {e}")))
-                    as Box<dyn Any + Send>,
-            ),
-        }
-    })
-}
-
-/// Spawns an async task to load time-travel data.
-fn spawn_time_travel_load(
-    git_ops: Arc<dyn GitOperations>,
-    params: TimeTravelParams,
-    head_sha: Option<CommitSha>,
-    commit_history_limit: usize,
-) -> Cmd {
-    spawn_load_task(
-        git_ops,
-        move |ops| {
-            time_travel::load_time_travel_state(
-                ops,
-                &params,
-                head_sha.as_ref(),
-                commit_history_limit,
-            )
-        },
-        |state| AppMsg::TimeTravelLoaded(Box::new(state)),
-    )
-}
-
-/// Spawns an async task to navigate to a different commit.
-fn spawn_commit_navigation(
-    git_ops: Arc<dyn GitOperations>,
-    context: CommitNavigationContext,
-) -> Cmd {
-    spawn_load_task(
-        git_ops,
-        move |ops| load_commit_snapshot(ops, context),
-        |state| AppMsg::CommitNavigated(Box::new(state)),
-    )
-}
-
-/// Verifies line mapping between a commit and HEAD.
-///
-/// Returns `None` if either `original_line` or `head_sha` is `None`, or if
-/// the verification fails.
-fn verify_line_mapping_optional(
-    git_ops: &dyn GitOperations,
-    context: &LineMappingContext<'_>,
-) -> Option<crate::local::LineMappingVerification> {
-    let (line, head) = context.original_line.zip(context.head_sha)?;
-    let request = LineMappingRequest::new(
-        context.commit_sha.as_str().to_owned(),
-        head.as_str().to_owned(),
-        context.file_path.as_str().to_owned(),
-        line,
-    );
-    git_ops.verify_line_mapping(&request).ok()
-}
-
-/// Loads a commit snapshot for navigation.
-fn load_commit_snapshot(
-    git_ops: &dyn GitOperations,
-    context: CommitNavigationContext,
-) -> Result<TimeTravelState, GitOperationError> {
-    // Get commit snapshot with file content
-    let snapshot = git_ops.get_commit_snapshot(&context.sha, Some(&context.file_path))?;
-
-    // Verify line mapping if we have a line number and HEAD
-    let line_mapping = verify_line_mapping_optional(
-        git_ops,
-        &LineMappingContext {
-            commit_sha: &context.sha,
-            file_path: &context.file_path,
-            original_line: context.original_line,
-            head_sha: context.head_sha.as_ref(),
-        },
-    );
-
-    Ok(TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: context.file_path,
-        original_line: context.original_line,
-        line_mapping,
-        commit_history: context.commit_history,
-        current_index: context.new_index,
-    }))
+fn navigation_is_blocked(
+    current_state: &TimeTravelState,
+    direction: TimeTravelNavigationDirection,
+) -> bool {
+    let is_blocked = !direction.can_navigate(current_state);
+    if is_blocked {
+        tracing::debug!(
+            direction = ?direction,
+            loading = current_state.is_loading(),
+            current_index = current_state.current_index(),
+            commit_count = current_state.commit_count(),
+            "time-travel TUI navigation ignored"
+        );
+    }
+    is_blocked
 }
 
 #[cfg(test)]
-#[expect(
-    clippy::ref_option_ref,
-    reason = "Generated by mockall macro for Option<&T> parameters"
-)]
 mod tests;

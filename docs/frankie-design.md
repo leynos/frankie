@@ -809,11 +809,15 @@ renderers and embedding hosts can inspect state without depending on the TUI
 adapter. Consumers import these types as
 `frankie::time_travel::{TimeTravelInitParams, TimeTravelState}` and read state
 through documented getters such as `snapshot()`, `file_path()`,
-`line_mapping()`, `current_index()`, and the commit-sha accessors. Mutation
-helpers such as loading/error factories and setter methods remain
-crate-internal because roadmap item 2.2.7 still owns orchestration extraction.
-No standalone CLI surface is added for this slice; the work is a library-first
-visibility promotion supporting the existing interactive feature.
+`line_mapping()`, `current_index()`, and the commit-sha accessors.
+Time-travel orchestration was extracted into shared library code in roadmap
+item 2.2.7. The public contract now includes
+`TimeTravelNavigationDirection` and `navigate_time_travel_state` in
+`src/time_travel/service.rs`, returning
+`Result<Option<TimeTravelState>, GitOperationError>` so history-boundary
+navigation remains an explicit no-op while git failures still surface
+unchanged. Orchestration ownership and the no-standalone-CLI decision are
+resolved by the 2.2.7 extraction rather than pending.
 
 ##### Library API (roadmap 2.2.6)
 
@@ -826,6 +830,20 @@ variable, or the `--commit-history-limit` CLI flag. The library exposes
 reference the baseline without hardcoding the value. No standalone CLI surface
 beyond the configuration flag is added for this slice; full orchestration
 extraction is tracked by roadmap item 2.2.7.
+
+##### Library API (roadmap 2.2.7)
+
+Time-travel orchestration now lives in shared library code under
+`src/time_travel/service.rs`, re-exported from `frankie::time_travel`. The
+public contract now includes `TimeTravelNavigationDirection` plus
+`navigate_time_travel_state(git_ops, state, direction, head_sha)`, which keeps
+navigation target selection, snapshot loading, index calculation, and optional
+line-mapping verification outwith `crate::tui`. The function returns
+`Result<Option<TimeTravelState>, GitOperationError>` so history-boundary
+navigation remains an explicit no-op (`Ok(None)`) while git failures still
+surface unchanged. No standalone CLI mode is added for this slice because the
+work extracts reusable orchestration from an existing interactive workflow
+rather than defining a new non-interactive task.
 
 ### 2.1.3 Ai Integration Features
 
@@ -3292,10 +3310,10 @@ Table: Storage functions for commit history limit and time-travel context.
 All storage entries follow the `OnceLock` write-once contract: setters return
 `true` on first call and `false` on subsequent calls.
 
-##### `load_time_travel_state` public function
+##### Time-travel public functions
 
-The function `load_time_travel_state` (`src/time_travel/mod.rs`) is the library
-entry point for materializing time-travel context. Its signature:
+The function `load_time_travel_state` (`src/time_travel/service.rs`) is the
+library entry point for materializing time-travel context. Its signature:
 
 ```rust
 pub fn load_time_travel_state(
@@ -3312,6 +3330,25 @@ time-travel state from their own orchestration layer. It clamps
 `commit_history_limit` to a minimum of `1` defensively, fetches the commit
 snapshot, retrieves parent commit history up to the limit, and optionally
 verifies line mapping when a `head_sha` is provided.
+
+The companion navigation entry point is:
+
+```rust
+pub fn navigate_time_travel_state(
+    git_ops: &dyn GitOperations,
+    state: &TimeTravelState,
+    direction: TimeTravelNavigationDirection,
+    head_sha: Option<&CommitSha>,
+) -> Result<Option<TimeTravelState>, GitOperationError>
+```
+
+This function keeps commit-direction orchestration in the shared library. It
+derives the target commit from the current `TimeTravelState`, loads the new
+snapshot, rebuilds the line mapping when enough metadata is available, and
+returns `Ok(None)` when navigation is unavailable at the current history
+boundary. The TUI remains an adapter around this contract: it still owns `Cmd`,
+`tokio::task::spawn_blocking`, `OnceLock`-backed repository context, and
+loading-flag mutation.
 
 ### 6.1.2 Repository Manager Component
 

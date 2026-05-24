@@ -10,6 +10,10 @@ use rstest::{fixture, rstest};
 use super::*;
 use crate::local::LineMappingStatus;
 
+/// Property-based invariant tests for time-travel state.
+#[path = "property_tests.rs"]
+mod property_tests;
+
 /// Structured error for fallible test helpers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StepError(String);

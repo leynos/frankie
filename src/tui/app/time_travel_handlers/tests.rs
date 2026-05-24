@@ -7,63 +7,176 @@ use super::*;
 use crate::github::models::ReviewComment;
 use crate::github::models::test_support::minimal_review;
 use crate::local::{
-    CommitMetadata, CommitSha, CommitSnapshot, LineMappingVerification, RepoFilePath,
+    CommitMetadata, CommitSha, CommitSnapshot, GitOperationError, GitOperations,
+    LineMappingRequest, LineMappingVerification, RepoFilePath,
 };
-use crate::time_travel::load_time_travel_state;
-use chrono::Utc;
-use mockall::mock;
+use crate::time_travel::TimeTravelInitParams;
+use crate::tui::app::ViewMode;
+use crate::tui::messages::{AppMsg, TimeTravelFailurePhase};
 use rstest::rstest;
+use std::sync::Arc;
 
-// Mock GitOperations using mockall
-mock! {
-    pub GitOps {}
+#[derive(Debug)]
+struct NoopGitOps;
 
-    impl std::fmt::Debug for GitOps {
-        fn fmt<'a>(&self, f: &mut std::fmt::Formatter<'a>) -> std::fmt::Result;
+impl GitOperations for NoopGitOps {
+    fn get_commit_snapshot(
+        &self,
+        sha: &CommitSha,
+        file_path: Option<&RepoFilePath>,
+    ) -> Result<CommitSnapshot, GitOperationError> {
+        let metadata = CommitMetadata::new(
+            sha.as_str().to_owned(),
+            "Loaded".to_owned(),
+            "Alice".to_owned(),
+            chrono::Utc::now(),
+        );
+        Ok(if let Some(path) = file_path {
+            CommitSnapshot::with_file_content(
+                metadata,
+                path.as_str().to_owned(),
+                "fn main() {}".to_owned(),
+            )
+        } else {
+            CommitSnapshot::new(metadata)
+        })
     }
 
-    impl GitOperations for GitOps {
-        fn get_commit_snapshot<'a>(
-            &self,
-            sha: &'a CommitSha,
-            file_path: Option<&'a RepoFilePath>,
-        ) -> Result<CommitSnapshot, GitOperationError>;
+    fn get_file_at_commit(
+        &self,
+        _sha: &CommitSha,
+        _file_path: &RepoFilePath,
+    ) -> Result<String, GitOperationError> {
+        Ok("fn main() {}".to_owned())
+    }
 
-        fn get_file_at_commit<'a>(
-            &self,
-            sha: &'a CommitSha,
-            file_path: &'a RepoFilePath,
-        ) -> Result<String, GitOperationError>;
+    fn verify_line_mapping(
+        &self,
+        request: &LineMappingRequest,
+    ) -> Result<LineMappingVerification, GitOperationError> {
+        Ok(LineMappingVerification::exact(request.line))
+    }
 
-        fn verify_line_mapping<'a>(
-            &self,
-            request: &'a LineMappingRequest,
-        ) -> Result<LineMappingVerification, GitOperationError>;
+    fn get_parent_commits(
+        &self,
+        _sha: &CommitSha,
+        limit: usize,
+    ) -> Result<Vec<CommitSha>, GitOperationError> {
+        Ok(fake_parent_commits(limit))
+    }
 
-        fn get_parent_commits<'a>(
-            &self,
-            sha: &'a CommitSha,
-            limit: usize,
-        ) -> Result<Vec<CommitSha>, GitOperationError>;
-
-        fn commit_exists<'a>(&self, sha: &'a CommitSha) -> bool;
+    fn commit_exists(&self, _sha: &CommitSha) -> bool {
+        true
     }
 }
 
-/// Helper to create a test commit snapshot.
-fn create_test_snapshot() -> CommitSnapshot {
-    let timestamp = Utc::now();
+#[derive(Debug)]
+struct FailingSnapshotGitOps;
+
+impl GitOperations for FailingSnapshotGitOps {
+    fn get_commit_snapshot(
+        &self,
+        sha: &CommitSha,
+        _file_path: Option<&RepoFilePath>,
+    ) -> Result<CommitSnapshot, GitOperationError> {
+        Err(GitOperationError::CommitAccessFailed {
+            sha: sha.clone(),
+            message: "snapshot unavailable".to_owned(),
+        })
+    }
+
+    fn get_file_at_commit(
+        &self,
+        _sha: &CommitSha,
+        _file_path: &RepoFilePath,
+    ) -> Result<String, GitOperationError> {
+        Ok("fn main() {}".to_owned())
+    }
+
+    fn verify_line_mapping(
+        &self,
+        request: &LineMappingRequest,
+    ) -> Result<LineMappingVerification, GitOperationError> {
+        Ok(LineMappingVerification::exact(request.line))
+    }
+
+    fn get_parent_commits(
+        &self,
+        _sha: &CommitSha,
+        limit: usize,
+    ) -> Result<Vec<CommitSha>, GitOperationError> {
+        Ok(fake_parent_commits(limit))
+    }
+
+    fn commit_exists(&self, _sha: &CommitSha) -> bool {
+        true
+    }
+}
+
+fn fake_parent_commits(limit: usize) -> Vec<CommitSha> {
+    ["abc1234567890", "def5678901234", "ghi9012345678"]
+        .into_iter()
+        .take(limit)
+        .map(|sha| CommitSha::new(sha.to_owned()))
+        .collect()
+}
+
+fn loaded_state_at(index: usize) -> TimeTravelState {
+    let history: Vec<_> = ["abc1234567890", "def5678901234", "ghi9012345678"]
+        .into_iter()
+        .map(|sha| CommitSha::new(sha.to_owned()))
+        .collect();
+    let sha = history
+        .get(index)
+        .map_or("abc1234567890", CommitSha::as_str)
+        .to_owned();
     let metadata = CommitMetadata::new(
-        "abc1234567890".to_owned(),
-        "Test commit".to_owned(),
-        "Test Author".to_owned(),
-        timestamp,
+        sha,
+        "Loaded".to_owned(),
+        "Alice".to_owned(),
+        chrono::Utc::now(),
     );
-    CommitSnapshot::with_file_content(
-        metadata,
-        "src/main.rs".to_owned(),
-        "fn main() {}".to_owned(),
-    )
+    TimeTravelState::new(TimeTravelInitParams {
+        snapshot: CommitSnapshot::with_file_content(
+            metadata,
+            "src/main.rs".to_owned(),
+            "fn main() {}".to_owned(),
+        ),
+        file_path: RepoFilePath::new("src/main.rs".to_owned()),
+        original_line: Some(10),
+        line_mapping: None,
+        commit_history: history,
+        current_index: index,
+    })
+}
+
+fn time_travel_app_at(index: usize) -> ReviewApp {
+    let mut app = ReviewApp::new(vec![minimal_review(1, "Test", "alice")])
+        .with_git_ops(Arc::new(NoopGitOps), "HEAD".to_owned());
+    app.view_mode = ViewMode::TimeTravel;
+    app.time_travel_state = Some(loaded_state_at(index));
+    app.active_time_travel_session_id = Some(1);
+    app.next_time_travel_session_id = 2;
+    app
+}
+
+fn time_travel_app_with_git_ops(git_ops: Arc<dyn GitOperations>, index: usize) -> ReviewApp {
+    let mut app = ReviewApp::new(vec![minimal_review(1, "Test", "alice")])
+        .with_git_ops(git_ops, "HEAD".to_owned());
+    app.view_mode = ViewMode::TimeTravel;
+    app.time_travel_state = Some(loaded_state_at(index));
+    app.active_time_travel_session_id = Some(1);
+    app.next_time_travel_session_id = 2;
+    app
+}
+
+async fn resolve_time_travel_cmd(cmd: bubbletea_rs::Cmd) -> AppMsg {
+    let message = cmd
+        .await
+        .expect("time-travel command should emit a message");
+    *message
+        .downcast::<AppMsg>()
+        .expect("time-travel command should emit AppMsg")
 }
 
 #[rstest]
@@ -88,121 +201,150 @@ fn handle_enter_time_travel_surfaces_metadata_error(
 }
 
 #[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
-)]
-fn load_time_travel_state_success() -> Result<(), Box<dyn std::error::Error>> {
-    let mut git_ops = MockGitOps::new();
-    let test_snapshot = create_test_snapshot();
-    let snapshot_clone = test_snapshot.clone();
+fn rapid_navigation_is_blocked_while_navigation_is_loading() {
+    let mut app = time_travel_app_at(0);
 
-    // Expect get_commit_snapshot to be called with the commit SHA
-    git_ops
-        .expect_get_commit_snapshot()
-        .times(1)
-        .returning(move |_sha, _file_path| Ok(snapshot_clone.clone()));
+    let first_cmd = app.handle_previous_commit();
+    let second_cmd = app.handle_previous_commit();
 
-    // Expect get_parent_commits to be called
-    git_ops
-        .expect_get_parent_commits()
-        .times(1)
-        .returning(|_sha, _limit| {
-            Ok(vec![
-                CommitSha::new("abc1234567890".to_owned()),
-                CommitSha::new("def5678901234".to_owned()),
-            ])
-        });
-
-    // Expect verify_line_mapping to be called with line number
-    git_ops
-        .expect_verify_line_mapping()
-        .times(1)
-        .returning(|request| Ok(LineMappingVerification::exact(request.line)));
-
-    let comment = ReviewComment {
-        commit_sha: Some("abc1234567890".to_owned()),
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: Some(10),
-        ..minimal_review(2, "Load test", "bob")
-    };
-    let params = TimeTravelParams::from_comment(&comment)?;
-
-    let head_sha = CommitSha::new("HEAD".to_owned());
-    let state = load_time_travel_state(&git_ops, &params, Some(&head_sha), 50)?;
-
-    assert_eq!(state.snapshot().message(), "Test commit");
-    assert_eq!(state.file_path().as_str(), "src/main.rs");
-    assert_eq!(state.original_line(), Some(10));
-    assert_eq!(state.commit_count(), 2);
-
-    Ok(())
-}
-
-#[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
-)]
-fn load_time_travel_state_passes_configured_limit() -> Result<(), Box<dyn std::error::Error>> {
-    let mut git_ops = MockGitOps::new();
-    let test_snapshot = create_test_snapshot();
-    let snapshot_clone = test_snapshot.clone();
-
-    git_ops
-        .expect_get_commit_snapshot()
-        .times(1)
-        .returning(move |_sha, _file_path| Ok(snapshot_clone.clone()));
-
-    // Assert the exact limit value reaches get_parent_commits
-    git_ops
-        .expect_get_parent_commits()
-        .times(1)
-        .withf(|_sha, limit| *limit == 15)
-        .returning(|_sha, _limit| Ok(vec![CommitSha::new("abc1234567890".to_owned())]));
-
-    let comment = ReviewComment {
-        commit_sha: Some("abc1234567890".to_owned()),
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: None,
-        ..minimal_review(4, "Limit test", "dave")
-    };
-    let params = TimeTravelParams::from_comment(&comment)?;
-
-    let state = load_time_travel_state(&git_ops, &params, None, 15)?;
-
-    assert_eq!(state.commit_count(), 1);
-
-    Ok(())
-}
-
-#[test]
-#[expect(
-    clippy::panic_in_result_fn,
-    reason = "Test returns Result to propagate setup errors via ? operator, but uses assertions for test checks"
-)]
-fn load_time_travel_state_commit_not_found() -> Result<(), Box<dyn std::error::Error>> {
-    let mut git_ops = MockGitOps::new();
-
-    // Expect get_commit_snapshot to be called and return CommitNotFound error
-    git_ops
-        .expect_get_commit_snapshot()
-        .times(1)
-        .returning(|sha, _file_path| Err(GitOperationError::CommitNotFound { sha: sha.clone() }));
-
-    let comment = ReviewComment {
-        commit_sha: Some("nonexistent".to_owned()),
-        file_path: Some("src/main.rs".to_owned()),
-        line_number: None,
-        ..minimal_review(3, "Missing commit test", "charlie")
-    };
-    let params = TimeTravelParams::from_comment(&comment)?;
-
-    let result = load_time_travel_state(&git_ops, &params, None, 50);
+    assert!(first_cmd.is_some());
+    assert!(second_cmd.is_none());
     assert!(
-        matches!(result, Err(GitOperationError::CommitNotFound { .. })),
-        "expected missing commit to surface CommitNotFound, got {result:?}"
+        app.time_travel_state
+            .as_ref()
+            .is_some_and(TimeTravelState::is_loading)
     );
+}
 
-    Ok(())
+fn exit_then_assert_late_result_ignored(
+    app: &mut ReviewApp,
+    invoke_late: impl FnOnce(&mut ReviewApp),
+) {
+    let exit_cmd = app.handle_exit_time_travel();
+    invoke_late(app);
+    assert!(exit_cmd.is_none());
+    assert!(matches!(app.view_mode, ViewMode::ReviewList));
+    assert!(app.time_travel_state.is_none());
+}
+
+#[derive(Clone, Copy)]
+enum TimeTravelCompletion {
+    Navigation,
+    InitialLoad,
+    Failure(TimeTravelFailurePhase),
+}
+
+fn invoke_time_travel_completion(
+    app: &mut ReviewApp,
+    session_id: u64,
+    completion: TimeTravelCompletion,
+) {
+    match completion {
+        TimeTravelCompletion::Navigation => {
+            assert!(
+                app.handle_commit_navigated(session_id, Box::new(loaded_state_at(1)))
+                    .is_none()
+            );
+        }
+        TimeTravelCompletion::InitialLoad => {
+            assert!(
+                app.handle_time_travel_loaded(session_id, Box::new(loaded_state_at(1)))
+                    .is_none()
+            );
+        }
+        TimeTravelCompletion::Failure(phase) => {
+            assert!(
+                app.handle_time_travel_failed(session_id, phase, "old failure")
+                    .is_none()
+            );
+        }
+    }
+}
+
+#[rstest]
+#[case(TimeTravelCompletion::Navigation, true)]
+#[case(TimeTravelCompletion::InitialLoad, false)]
+#[case(TimeTravelCompletion::Failure(TimeTravelFailurePhase::Navigate), true)]
+fn exit_during_time_travel_ignores_late_result(
+    #[case] completion: TimeTravelCompletion,
+    #[case] start_navigation: bool,
+) {
+    let mut app = time_travel_app_at(0);
+    if start_navigation {
+        assert!(app.handle_previous_commit().is_some());
+    }
+
+    exit_then_assert_late_result_ignored(&mut app, |review_app| {
+        invoke_time_travel_completion(review_app, 1, completion);
+    });
+}
+
+#[tokio::test]
+async fn previous_commit_command_delegates_to_service_and_updates_state() {
+    let mut app = time_travel_app_at(0);
+    let cmd = app
+        .handle_previous_commit()
+        .expect("previous commit should spawn navigation command");
+
+    let message = resolve_time_travel_cmd(cmd).await;
+
+    let AppMsg::CommitNavigated { session_id, state } = message else {
+        panic!("navigation command should emit CommitNavigated");
+    };
+    assert_eq!(session_id, 1);
+    assert_eq!(state.current_index(), 1);
+    assert_eq!(state.snapshot().sha(), "def5678901234");
+
+    assert!(app.handle_commit_navigated(session_id, state).is_none());
+    let updated_state = app
+        .time_travel_state
+        .as_ref()
+        .expect("navigation result should update state");
+    assert_eq!(updated_state.current_index(), 1);
+    assert_eq!(updated_state.snapshot().sha(), "def5678901234");
+}
+
+#[tokio::test]
+async fn previous_commit_command_reports_navigation_failure_phase() {
+    let mut app = time_travel_app_with_git_ops(Arc::new(FailingSnapshotGitOps), 0);
+    let cmd = app
+        .handle_previous_commit()
+        .expect("previous commit should spawn navigation command");
+
+    let message = resolve_time_travel_cmd(cmd).await;
+
+    let AppMsg::TimeTravelFailed {
+        session_id,
+        phase,
+        error,
+    } = message
+    else {
+        panic!("navigation command should emit TimeTravelFailed");
+    };
+    assert_eq!(session_id, 1);
+    assert_eq!(phase, TimeTravelFailurePhase::Navigate);
+    assert!(error.contains("snapshot unavailable"));
+}
+
+#[rstest]
+#[case(TimeTravelCompletion::Navigation)]
+#[case(TimeTravelCompletion::InitialLoad)]
+#[case(TimeTravelCompletion::Failure(TimeTravelFailurePhase::Load))]
+fn stale_time_travel_completion_does_not_mutate_active_session(
+    #[case] completion: TimeTravelCompletion,
+) {
+    let mut app = time_travel_app_at(0);
+    app.active_time_travel_session_id = Some(2);
+
+    invoke_time_travel_completion(&mut app, 1, completion);
+
+    let state = app
+        .time_travel_state
+        .as_ref()
+        .expect("active session state should remain loaded");
+    assert_eq!(state.current_index(), 0);
+    assert_eq!(state.snapshot().sha(), "abc1234567890");
+    assert!(state.error_message().is_none());
+    assert!(app.error.is_none());
+    assert!(matches!(app.view_mode, ViewMode::TimeTravel));
 }

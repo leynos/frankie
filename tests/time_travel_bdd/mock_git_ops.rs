@@ -4,6 +4,7 @@ use frankie::local::{
     CommitMetadata, CommitSha, CommitSnapshot, GitOperationError, GitOperations,
     LineMappingRequest, LineMappingVerification, RepoFilePath,
 };
+use std::sync::{Mutex, MutexGuard};
 
 /// Mock implementation of `GitOperations` for testing.
 #[derive(Debug)]
@@ -14,6 +15,8 @@ pub(crate) struct MockGitOperations {
     commit_history: Vec<CommitSha>,
     /// Optional configured line mapping response. If None, defaults to exact match.
     line_mapping_response: Option<LineMappingVerification>,
+    /// Snapshot SHAs requested by the TUI orchestration command.
+    snapshot_requests: Mutex<Vec<CommitSha>>,
 }
 
 impl Default for MockGitOperations {
@@ -26,6 +29,7 @@ impl Default for MockGitOperations {
                 CommitSha::new("ghi9012345678".to_owned()),
             ],
             line_mapping_response: None,
+            snapshot_requests: Mutex::default(),
         }
     }
 }
@@ -60,6 +64,13 @@ impl MockGitOperations {
         self.line_mapping_response = Some(mapping);
         self
     }
+
+    /// Returns whether a snapshot request was made for the SHA.
+    pub(crate) fn requested_snapshot(&self, expected_sha: &str) -> bool {
+        lock_or_recover(&self.snapshot_requests)
+            .iter()
+            .any(|sha| sha.as_str() == expected_sha)
+    }
 }
 
 impl GitOperations for MockGitOperations {
@@ -68,6 +79,7 @@ impl GitOperations for MockGitOperations {
         sha: &CommitSha,
         file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError> {
+        lock_or_recover(&self.snapshot_requests).push(sha.clone());
         if !self.commit_exists {
             return Err(GitOperationError::CommitNotFound { sha: sha.clone() });
         }
@@ -123,4 +135,10 @@ impl GitOperations for MockGitOperations {
     fn commit_exists(&self, _sha: &CommitSha) -> bool {
         self.commit_exists
     }
+}
+
+fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
