@@ -12,7 +12,7 @@ use crate::local::{
 };
 use crate::time_travel::TimeTravelInitParams;
 use crate::tui::app::ViewMode;
-use crate::tui::messages::TimeTravelFailurePhase;
+use crate::tui::messages::{AppMsg, TimeTravelFailurePhase};
 use rstest::rstest;
 use std::sync::Arc;
 
@@ -39,6 +39,53 @@ impl GitOperations for NoopGitOps {
             )
         } else {
             CommitSnapshot::new(metadata)
+        })
+    }
+
+    fn get_file_at_commit(
+        &self,
+        _sha: &CommitSha,
+        _file_path: &RepoFilePath,
+    ) -> Result<String, GitOperationError> {
+        Ok("fn main() {}".to_owned())
+    }
+
+    fn verify_line_mapping(
+        &self,
+        request: &LineMappingRequest,
+    ) -> Result<LineMappingVerification, GitOperationError> {
+        Ok(LineMappingVerification::exact(request.line))
+    }
+
+    fn get_parent_commits(
+        &self,
+        _sha: &CommitSha,
+        limit: usize,
+    ) -> Result<Vec<CommitSha>, GitOperationError> {
+        Ok(["abc1234567890", "def5678901234", "ghi9012345678"]
+            .into_iter()
+            .take(limit)
+            .map(|sha| CommitSha::new(sha.to_owned()))
+            .collect())
+    }
+
+    fn commit_exists(&self, _sha: &CommitSha) -> bool {
+        true
+    }
+}
+
+#[derive(Debug)]
+struct FailingSnapshotGitOps;
+
+impl GitOperations for FailingSnapshotGitOps {
+    fn get_commit_snapshot(
+        &self,
+        sha: &CommitSha,
+        _file_path: Option<&RepoFilePath>,
+    ) -> Result<CommitSnapshot, GitOperationError> {
+        Err(GitOperationError::CommitAccessFailed {
+            sha: sha.clone(),
+            message: "snapshot unavailable".to_owned(),
         })
     }
 
@@ -113,6 +160,25 @@ fn time_travel_app_at(index: usize) -> ReviewApp {
     app
 }
 
+fn time_travel_app_with_git_ops(git_ops: Arc<dyn GitOperations>, index: usize) -> ReviewApp {
+    let mut app = ReviewApp::new(vec![minimal_review(1, "Test", "alice")])
+        .with_git_ops(git_ops, "HEAD".to_owned());
+    app.view_mode = ViewMode::TimeTravel;
+    app.time_travel_state = Some(loaded_state_at(index));
+    app.active_time_travel_session_id = Some(1);
+    app.next_time_travel_session_id = 2;
+    app
+}
+
+async fn resolve_time_travel_cmd(cmd: bubbletea_rs::Cmd) -> AppMsg {
+    let message = cmd
+        .await
+        .expect("time-travel command should emit a message");
+    *message
+        .downcast::<AppMsg>()
+        .expect("time-travel command should emit AppMsg")
+}
+
 #[rstest]
 #[case(None, Some("src/main.rs".to_owned()), "review comment is missing a commit SHA")]
 #[case(Some("abc123".to_owned()), None, "review comment is missing a file path")]
@@ -165,6 +231,7 @@ fn exit_then_assert_late_result_ignored(
 enum LateTimeTravelResult {
     Navigation,
     InitialLoad,
+    Failure,
 }
 
 #[derive(Clone, Copy)]
@@ -185,6 +252,12 @@ fn invoke_late_time_travel_result(app: &mut ReviewApp, result: LateTimeTravelRes
         LateTimeTravelResult::InitialLoad => {
             assert!(
                 app.handle_time_travel_loaded(1, Box::new(loaded_state_at(1)))
+                    .is_none()
+            );
+        }
+        LateTimeTravelResult::Failure => {
+            assert!(
+                app.handle_time_travel_failed(1, TimeTravelFailurePhase::Navigate, "old failure")
                     .is_none()
             );
         }
@@ -217,6 +290,7 @@ fn invoke_stale_time_travel_completion(app: &mut ReviewApp, completion: StaleTim
 #[rstest]
 #[case(LateTimeTravelResult::Navigation, true)]
 #[case(LateTimeTravelResult::InitialLoad, false)]
+#[case(LateTimeTravelResult::Failure, true)]
 fn exit_during_time_travel_ignores_late_result(
     #[case] late_result: LateTimeTravelResult,
     #[case] start_navigation: bool,
@@ -229,6 +303,53 @@ fn exit_during_time_travel_ignores_late_result(
     exit_then_assert_late_result_ignored(&mut app, |review_app| {
         invoke_late_time_travel_result(review_app, late_result);
     });
+}
+
+#[tokio::test]
+async fn previous_commit_command_delegates_to_service_and_updates_state() {
+    let mut app = time_travel_app_at(0);
+    let cmd = app
+        .handle_previous_commit()
+        .expect("previous commit should spawn navigation command");
+
+    let message = resolve_time_travel_cmd(cmd).await;
+
+    let AppMsg::CommitNavigated { session_id, state } = message else {
+        panic!("navigation command should emit CommitNavigated");
+    };
+    assert_eq!(session_id, 1);
+    assert_eq!(state.current_index(), 1);
+    assert_eq!(state.snapshot().sha(), "def5678901234");
+
+    assert!(app.handle_commit_navigated(session_id, state).is_none());
+    let updated_state = app
+        .time_travel_state
+        .as_ref()
+        .expect("navigation result should update state");
+    assert_eq!(updated_state.current_index(), 1);
+    assert_eq!(updated_state.snapshot().sha(), "def5678901234");
+}
+
+#[tokio::test]
+async fn previous_commit_command_reports_navigation_failure_phase() {
+    let mut app = time_travel_app_with_git_ops(Arc::new(FailingSnapshotGitOps), 0);
+    let cmd = app
+        .handle_previous_commit()
+        .expect("previous commit should spawn navigation command");
+
+    let message = resolve_time_travel_cmd(cmd).await;
+
+    let AppMsg::TimeTravelFailed {
+        session_id,
+        phase,
+        error,
+    } = message
+    else {
+        panic!("navigation command should emit TimeTravelFailed");
+    };
+    assert_eq!(session_id, 1);
+    assert_eq!(phase, TimeTravelFailurePhase::Navigate);
+    assert!(error.contains("snapshot unavailable"));
 }
 
 #[rstest]

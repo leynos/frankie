@@ -165,10 +165,22 @@ pub fn navigate_time_travel_state(
         Ok(None) => {
             counter!("time_travel_service_operations_noop_total", "operation" => "navigate")
                 .increment(1);
+            log_navigation_noop(state, direction);
         }
         Err(_) => {}
     }
     result
+}
+
+fn log_navigation_noop(state: &TimeTravelState, direction: TimeTravelNavigationDirection) {
+    tracing::debug!(
+        direction = ?direction,
+        from_index = state.current_index(),
+        to_index = direction.target_index(state.current_index()),
+        commit_count = state.commit_count(),
+        loading = state.is_loading(),
+        "time-travel navigation produced no state"
+    );
 }
 
 fn navigation_target(
