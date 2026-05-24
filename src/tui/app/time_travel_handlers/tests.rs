@@ -158,28 +158,42 @@ fn exit_then_assert_late_result_ignored(
     assert!(app.time_travel_state.is_none());
 }
 
-#[test]
-fn exit_during_navigation_ignores_late_navigation_result() {
-    let mut app = time_travel_app_at(0);
-    let cmd = app.handle_previous_commit();
-    assert!(cmd.is_some());
-    exit_then_assert_late_result_ignored(&mut app, |review_app| {
-        assert!(
-            review_app
-                .handle_commit_navigated(Box::new(loaded_state_at(1)))
-                .is_none()
-        );
-    });
+#[derive(Clone, Copy)]
+enum LateTimeTravelResult {
+    Navigation,
+    InitialLoad,
 }
 
-#[test]
-fn exit_during_initial_load_ignores_late_load_result() {
+fn invoke_late_time_travel_result(app: &mut ReviewApp, result: LateTimeTravelResult) {
+    match result {
+        LateTimeTravelResult::Navigation => {
+            assert!(
+                app.handle_commit_navigated(Box::new(loaded_state_at(1)))
+                    .is_none()
+            );
+        }
+        LateTimeTravelResult::InitialLoad => {
+            assert!(
+                app.handle_time_travel_loaded(Box::new(loaded_state_at(1)))
+                    .is_none()
+            );
+        }
+    }
+}
+
+#[rstest]
+#[case(LateTimeTravelResult::Navigation, true)]
+#[case(LateTimeTravelResult::InitialLoad, false)]
+fn exit_during_time_travel_ignores_late_result(
+    #[case] late_result: LateTimeTravelResult,
+    #[case] start_navigation: bool,
+) {
     let mut app = time_travel_app_at(0);
+    if start_navigation {
+        assert!(app.handle_previous_commit().is_some());
+    }
+
     exit_then_assert_late_result_ignored(&mut app, |review_app| {
-        assert!(
-            review_app
-                .handle_time_travel_loaded(Box::new(loaded_state_at(1)))
-                .is_none()
-        );
+        invoke_late_time_travel_result(review_app, late_result);
     });
 }

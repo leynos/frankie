@@ -10,6 +10,14 @@ use crate::time_travel_orchestration_helpers::{
 };
 use frankie::time_travel::load_time_travel_state;
 
+fn update_git_ops(
+    state: &TimeTravelOrchestrationWorld,
+    mutate: impl FnOnce(ScriptedGitOps) -> ScriptedGitOps,
+) {
+    let git_ops = mutate(state.git_ops.take().unwrap_or_default());
+    state.git_ops.set(git_ops);
+}
+
 #[given("a time-travel request for commit {sha} and file {file_path}")]
 fn given_time_travel_request(state: &TimeTravelOrchestrationWorld, sha: String, file_path: String) {
     state.commit_sha.set(sha);
@@ -40,12 +48,9 @@ fn given_no_head_sha(state: &TimeTravelOrchestrationWorld) {
 
 #[given("git loads snapshot {sha} with message {message}")]
 fn given_git_loads_snapshot(state: &TimeTravelOrchestrationWorld, sha: String, message: String) {
-    let git_ops = state
-        .git_ops
-        .take()
-        .unwrap_or_default()
-        .with_snapshot(&sha, build_snapshot(&sha, &message));
-    state.git_ops.set(git_ops);
+    update_git_ops(state, |git_ops| {
+        git_ops.with_snapshot(&sha, build_snapshot(&sha, &message))
+    });
 }
 
 #[given("git returns commit history {first}, {second}, and {third}")]
@@ -55,26 +60,20 @@ fn given_git_returns_commit_history(
     second: String,
     third: String,
 ) {
-    let git_ops = state
-        .git_ops
-        .take()
-        .unwrap_or_default()
-        .with_commit_history(vec![
+    update_git_ops(state, |git_ops| {
+        git_ops.with_commit_history(vec![
             CommitSha::new(first),
             CommitSha::new(second),
             CommitSha::new(third),
-        ]);
-    state.git_ops.set(git_ops);
+        ])
+    });
 }
 
 #[given("git reports an exact line mapping for line {line}")]
 fn given_exact_line_mapping(state: &TimeTravelOrchestrationWorld, line: u32) {
-    let git_ops = state
-        .git_ops
-        .take()
-        .unwrap_or_default()
-        .with_line_mapping(Some(LineMappingVerification::exact(line)));
-    state.git_ops.set(git_ops);
+    update_git_ops(state, |git_ops| {
+        git_ops.with_line_mapping(Some(LineMappingVerification::exact(line)))
+    });
 }
 
 #[given("a loaded time-travel state at history index {index}")]
@@ -100,12 +99,7 @@ fn given_git_fails_to_load_snapshot(state: &TimeTravelOrchestrationWorld, sha: S
     let error = GitOperationError::CommitNotFound {
         sha: CommitSha::new(sha.clone()),
     };
-    let git_ops = state
-        .git_ops
-        .take()
-        .unwrap_or_default()
-        .with_snapshot_error(&sha, error);
-    state.git_ops.set(git_ops);
+    update_git_ops(state, |git_ops| git_ops.with_snapshot_error(&sha, error));
 }
 
 #[when("the initial time-travel state is loaded")]
