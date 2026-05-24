@@ -147,30 +147,39 @@ fn rapid_navigation_is_blocked_while_navigation_is_loading() {
     );
 }
 
-#[test]
-fn exit_during_navigation_ignores_late_navigation_result() {
-    let mut app = time_travel_app_at(0);
-
-    let cmd = app.handle_previous_commit();
+fn exit_then_assert_late_result_ignored(
+    app: &mut ReviewApp,
+    invoke_late: impl FnOnce(&mut ReviewApp),
+) {
     let exit_cmd = app.handle_exit_time_travel();
-    let late_cmd = app.handle_commit_navigated(Box::new(loaded_state_at(1)));
-
-    assert!(cmd.is_some());
+    invoke_late(app);
     assert!(exit_cmd.is_none());
-    assert!(late_cmd.is_none());
     assert!(matches!(app.view_mode, ViewMode::ReviewList));
     assert!(app.time_travel_state.is_none());
 }
 
 #[test]
+fn exit_during_navigation_ignores_late_navigation_result() {
+    let mut app = time_travel_app_at(0);
+    let cmd = app.handle_previous_commit();
+    assert!(cmd.is_some());
+    exit_then_assert_late_result_ignored(&mut app, |review_app| {
+        assert!(
+            review_app
+                .handle_commit_navigated(Box::new(loaded_state_at(1)))
+                .is_none()
+        );
+    });
+}
+
+#[test]
 fn exit_during_initial_load_ignores_late_load_result() {
     let mut app = time_travel_app_at(0);
-
-    let exit_cmd = app.handle_exit_time_travel();
-    let late_cmd = app.handle_time_travel_loaded(Box::new(loaded_state_at(1)));
-
-    assert!(exit_cmd.is_none());
-    assert!(late_cmd.is_none());
-    assert!(matches!(app.view_mode, ViewMode::ReviewList));
-    assert!(app.time_travel_state.is_none());
+    exit_then_assert_late_result_ignored(&mut app, |review_app| {
+        assert!(
+            review_app
+                .handle_time_travel_loaded(Box::new(loaded_state_at(1)))
+                .is_none()
+        );
+    });
 }
