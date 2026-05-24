@@ -119,15 +119,13 @@ impl ReviewApp {
         if !self.is_active_time_travel_session(session_id) {
             return None;
         }
-        counter!("time_travel_tui_state_transitions_total", "transition" => "load_success")
-            .increment(1);
-        tracing::info!(
-            commit_sha = state.snapshot().sha(),
-            commit_count = state.commit_count(),
-            "time-travel load succeeded"
-        );
-        self.time_travel_state = Some(*state);
-        None
+        self.accept_time_travel_state(state, "load_success", |s| {
+            tracing::info!(
+                commit_sha = s.snapshot().sha(),
+                commit_count = s.commit_count(),
+                "time-travel load succeeded"
+            );
+        })
     }
 
     /// Handles the `TimeTravelFailed` message.
@@ -214,6 +212,24 @@ impl ReviewApp {
         );
     }
 
+    fn accept_time_travel_state(
+        &mut self,
+        state: Box<TimeTravelState>,
+        transition: &'static str,
+        log: impl FnOnce(&TimeTravelState),
+    ) -> Option<Cmd> {
+        if self.view_mode == super::ViewMode::TimeTravel {
+            counter!(
+                "time_travel_tui_state_transitions_total",
+                "transition" => transition
+            )
+            .increment(1);
+            log(&state);
+            self.time_travel_state = Some(*state);
+        }
+        None
+    }
+
     fn record_time_travel_error(&mut self, error: &str) {
         if let Some(ref mut state) = self.time_travel_state {
             state.set_error(error.to_owned());
@@ -232,15 +248,13 @@ impl ReviewApp {
         if !self.is_active_time_travel_session(session_id) {
             return None;
         }
-        counter!("time_travel_tui_state_transitions_total", "transition" => "navigation_success")
-            .increment(1);
-        tracing::info!(
-            commit_sha = state.snapshot().sha(),
-            current_index = state.current_index(),
-            "time-travel navigation succeeded"
-        );
-        self.time_travel_state = Some(*state);
-        None
+        self.accept_time_travel_state(state, "navigation_success", |s| {
+            tracing::info!(
+                commit_sha = s.snapshot().sha(),
+                current_index = s.current_index(),
+                "time-travel navigation succeeded"
+            );
+        })
     }
 }
 
