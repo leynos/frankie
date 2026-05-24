@@ -14,7 +14,7 @@ use metrics::counter;
 
 use crate::local::CommitSha;
 use crate::time_travel::{TimeTravelNavigationDirection, TimeTravelParams, TimeTravelState};
-use crate::tui::messages::AppMsg;
+use crate::tui::messages::{AppMsg, TimeTravelFailurePhase};
 
 use super::ReviewApp;
 use async_tasks::{
@@ -35,9 +35,11 @@ impl ReviewApp {
             AppMsg::TimeTravelLoaded { session_id, state } => {
                 self.handle_time_travel_loaded(*session_id, state.clone())
             }
-            AppMsg::TimeTravelFailed { session_id, error } => {
-                self.handle_time_travel_failed(*session_id, error)
-            }
+            AppMsg::TimeTravelFailed {
+                session_id,
+                phase,
+                error,
+            } => self.handle_time_travel_failed(*session_id, *phase, error),
             AppMsg::NextCommit => self.handle_next_commit(),
             AppMsg::PreviousCommit => self.handle_previous_commit(),
             AppMsg::CommitNavigated { session_id, state } => {
@@ -133,14 +135,15 @@ impl ReviewApp {
     pub(super) fn handle_time_travel_failed(
         &mut self,
         session_id: u64,
+        phase: TimeTravelFailurePhase,
         error: &str,
     ) -> Option<Cmd> {
         if !self.is_active_time_travel_session(session_id) {
             return None;
         }
-        counter!("time_travel_tui_state_transitions_total", "transition" => "load_failed")
+        counter!("time_travel_tui_state_transitions_total", "transition" => phase.transition())
             .increment(1);
-        tracing::info!(error, "time-travel load failed");
+        tracing::info!(error, "{}", phase.log_message());
         self.record_time_travel_error(error);
         None
     }

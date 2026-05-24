@@ -12,6 +12,7 @@ use crate::local::{
 };
 use crate::time_travel::TimeTravelInitParams;
 use crate::tui::app::ViewMode;
+use crate::tui::messages::TimeTravelFailurePhase;
 use rstest::rstest;
 use std::sync::Arc;
 
@@ -205,7 +206,10 @@ fn invoke_stale_time_travel_completion(app: &mut ReviewApp, completion: StaleTim
             );
         }
         StaleTimeTravelCompletion::Failure => {
-            assert!(app.handle_time_travel_failed(1, "old failure").is_none());
+            assert!(
+                app.handle_time_travel_failed(1, TimeTravelFailurePhase::Load, "old failure")
+                    .is_none()
+            );
         }
     }
 }

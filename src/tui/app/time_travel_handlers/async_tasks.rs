@@ -7,7 +7,7 @@ use bubbletea_rs::Cmd;
 
 use crate::local::{CommitSha, GitOperationError, GitOperations};
 use crate::time_travel::{self, TimeTravelNavigationDirection, TimeTravelParams, TimeTravelState};
-use crate::tui::messages::AppMsg;
+use crate::tui::messages::{AppMsg, TimeTravelFailurePhase};
 
 pub(super) struct TimeTravelLoadTask {
     pub(super) git_ops: Arc<dyn GitOperations>,
@@ -93,12 +93,17 @@ where
             Ok(Ok(value)) => Some(Box::new(success_msg(value)) as Box<dyn Any + Send>),
             Ok(Err(e)) => {
                 tracing::debug!(?e, "time-travel blocking load failed");
-                Some(time_travel_failed_msg(session_id, e.to_string()))
+                Some(time_travel_failed_msg(
+                    session_id,
+                    TimeTravelFailurePhase::Load,
+                    e.to_string(),
+                ))
             }
             Err(e) => {
                 tracing::debug!(?e, "time-travel blocking load task failed to join");
                 Some(time_travel_failed_msg(
                     session_id,
+                    TimeTravelFailurePhase::Load,
                     format!("Task join error: {e}"),
                 ))
             }
@@ -128,7 +133,11 @@ fn map_navigation_operation_result(
         Ok(None) => None,
         Err(e) => {
             tracing::debug!(?e, "time-travel navigation failed");
-            Some(time_travel_failed_msg(session_id, e.to_string()))
+            Some(time_travel_failed_msg(
+                session_id,
+                TimeTravelFailurePhase::Navigate,
+                e.to_string(),
+            ))
         }
     }
 }
@@ -138,9 +147,21 @@ fn map_navigation_join_error(
     session_id: u64,
 ) -> Box<dyn Any + Send> {
     tracing::debug!(?error, "time-travel navigation task failed to join");
-    time_travel_failed_msg(session_id, format!("Task join error: {error}"))
+    time_travel_failed_msg(
+        session_id,
+        TimeTravelFailurePhase::Navigate,
+        format!("Task join error: {error}"),
+    )
 }
 
-fn time_travel_failed_msg(session_id: u64, error: String) -> Box<dyn Any + Send> {
-    Box::new(AppMsg::TimeTravelFailed { session_id, error })
+fn time_travel_failed_msg(
+    session_id: u64,
+    phase: TimeTravelFailurePhase,
+    error: String,
+) -> Box<dyn Any + Send> {
+    Box::new(AppMsg::TimeTravelFailed {
+        session_id,
+        phase,
+        error,
+    })
 }

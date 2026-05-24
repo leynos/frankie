@@ -72,6 +72,8 @@ pub enum AppMsg {
     TimeTravelFailed {
         /// Session identifier used to ignore stale async completions.
         session_id: u64,
+        /// Phase that produced the failure.
+        phase: TimeTravelFailurePhase,
         /// Error returned by the load or navigation task.
         error: String,
     },
@@ -219,4 +221,33 @@ pub enum AppMsg {
         /// New height in rows.
         height: u16,
     },
+}
+
+/// Phase of a failed time-travel asynchronous operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimeTravelFailurePhase {
+    /// Initial time-travel state loading failed.
+    Load,
+    /// Commit navigation failed.
+    Navigate,
+}
+
+impl TimeTravelFailurePhase {
+    /// Returns the transition label used by time-travel telemetry.
+    #[must_use]
+    pub const fn transition(self) -> &'static str {
+        match self {
+            Self::Load => "load_failed",
+            Self::Navigate => "navigation_failed",
+        }
+    }
+
+    /// Returns the log message for this failure phase.
+    #[must_use]
+    pub const fn log_message(self) -> &'static str {
+        match self {
+            Self::Load => "time-travel load failed",
+            Self::Navigate => "time-travel navigation failed",
+        }
+    }
 }
