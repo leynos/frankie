@@ -62,11 +62,7 @@ impl GitOperations for NoopGitOps {
         _sha: &CommitSha,
         limit: usize,
     ) -> Result<Vec<CommitSha>, GitOperationError> {
-        Ok(["abc1234567890", "def5678901234", "ghi9012345678"]
-            .into_iter()
-            .take(limit)
-            .map(|sha| CommitSha::new(sha.to_owned()))
-            .collect())
+        Ok(fake_parent_commits(limit))
     }
 
     fn commit_exists(&self, _sha: &CommitSha) -> bool {
@@ -109,16 +105,20 @@ impl GitOperations for FailingSnapshotGitOps {
         _sha: &CommitSha,
         limit: usize,
     ) -> Result<Vec<CommitSha>, GitOperationError> {
-        Ok(["abc1234567890", "def5678901234", "ghi9012345678"]
-            .into_iter()
-            .take(limit)
-            .map(|sha| CommitSha::new(sha.to_owned()))
-            .collect())
+        Ok(fake_parent_commits(limit))
     }
 
     fn commit_exists(&self, _sha: &CommitSha) -> bool {
         true
     }
+}
+
+fn fake_parent_commits(limit: usize) -> Vec<CommitSha> {
+    ["abc1234567890", "def5678901234", "ghi9012345678"]
+        .into_iter()
+        .take(limit)
+        .map(|sha| CommitSha::new(sha.to_owned()))
+        .collect()
 }
 
 fn loaded_state_at(index: usize) -> TimeTravelState {
@@ -228,59 +228,33 @@ fn exit_then_assert_late_result_ignored(
 }
 
 #[derive(Clone, Copy)]
-enum LateTimeTravelResult {
+enum TimeTravelCompletion {
     Navigation,
     InitialLoad,
-    Failure,
+    Failure(TimeTravelFailurePhase),
 }
 
-#[derive(Clone, Copy)]
-enum StaleTimeTravelCompletion {
-    Navigation,
-    InitialLoad,
-    Failure,
-}
-
-fn invoke_late_time_travel_result(app: &mut ReviewApp, result: LateTimeTravelResult) {
-    match result {
-        LateTimeTravelResult::Navigation => {
-            assert!(
-                app.handle_commit_navigated(1, Box::new(loaded_state_at(1)))
-                    .is_none()
-            );
-        }
-        LateTimeTravelResult::InitialLoad => {
-            assert!(
-                app.handle_time_travel_loaded(1, Box::new(loaded_state_at(1)))
-                    .is_none()
-            );
-        }
-        LateTimeTravelResult::Failure => {
-            assert!(
-                app.handle_time_travel_failed(1, TimeTravelFailurePhase::Navigate, "old failure")
-                    .is_none()
-            );
-        }
-    }
-}
-
-fn invoke_stale_time_travel_completion(app: &mut ReviewApp, completion: StaleTimeTravelCompletion) {
+fn invoke_time_travel_completion(
+    app: &mut ReviewApp,
+    session_id: u64,
+    completion: TimeTravelCompletion,
+) {
     match completion {
-        StaleTimeTravelCompletion::Navigation => {
+        TimeTravelCompletion::Navigation => {
             assert!(
-                app.handle_commit_navigated(1, Box::new(loaded_state_at(1)))
+                app.handle_commit_navigated(session_id, Box::new(loaded_state_at(1)))
                     .is_none()
             );
         }
-        StaleTimeTravelCompletion::InitialLoad => {
+        TimeTravelCompletion::InitialLoad => {
             assert!(
-                app.handle_time_travel_loaded(1, Box::new(loaded_state_at(1)))
+                app.handle_time_travel_loaded(session_id, Box::new(loaded_state_at(1)))
                     .is_none()
             );
         }
-        StaleTimeTravelCompletion::Failure => {
+        TimeTravelCompletion::Failure(phase) => {
             assert!(
-                app.handle_time_travel_failed(1, TimeTravelFailurePhase::Load, "old failure")
+                app.handle_time_travel_failed(session_id, phase, "old failure")
                     .is_none()
             );
         }
@@ -288,11 +262,11 @@ fn invoke_stale_time_travel_completion(app: &mut ReviewApp, completion: StaleTim
 }
 
 #[rstest]
-#[case(LateTimeTravelResult::Navigation, true)]
-#[case(LateTimeTravelResult::InitialLoad, false)]
-#[case(LateTimeTravelResult::Failure, true)]
+#[case(TimeTravelCompletion::Navigation, true)]
+#[case(TimeTravelCompletion::InitialLoad, false)]
+#[case(TimeTravelCompletion::Failure(TimeTravelFailurePhase::Navigate), true)]
 fn exit_during_time_travel_ignores_late_result(
-    #[case] late_result: LateTimeTravelResult,
+    #[case] completion: TimeTravelCompletion,
     #[case] start_navigation: bool,
 ) {
     let mut app = time_travel_app_at(0);
@@ -301,7 +275,7 @@ fn exit_during_time_travel_ignores_late_result(
     }
 
     exit_then_assert_late_result_ignored(&mut app, |review_app| {
-        invoke_late_time_travel_result(review_app, late_result);
+        invoke_time_travel_completion(review_app, 1, completion);
     });
 }
 
@@ -353,16 +327,16 @@ async fn previous_commit_command_reports_navigation_failure_phase() {
 }
 
 #[rstest]
-#[case(StaleTimeTravelCompletion::Navigation)]
-#[case(StaleTimeTravelCompletion::InitialLoad)]
-#[case(StaleTimeTravelCompletion::Failure)]
+#[case(TimeTravelCompletion::Navigation)]
+#[case(TimeTravelCompletion::InitialLoad)]
+#[case(TimeTravelCompletion::Failure(TimeTravelFailurePhase::Load))]
 fn stale_time_travel_completion_does_not_mutate_active_session(
-    #[case] completion: StaleTimeTravelCompletion,
+    #[case] completion: TimeTravelCompletion,
 ) {
     let mut app = time_travel_app_at(0);
     app.active_time_travel_session_id = Some(2);
 
-    invoke_stale_time_travel_completion(&mut app, completion);
+    invoke_time_travel_completion(&mut app, 1, completion);
 
     let state = app
         .time_travel_state
