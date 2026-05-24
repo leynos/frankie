@@ -10,6 +10,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use bubbletea_rs::Cmd;
+use metrics::counter;
 
 use crate::local::{CommitSha, GitOperationError, GitOperations};
 use crate::time_travel::{self, TimeTravelNavigationDirection, TimeTravelParams, TimeTravelState};
@@ -69,6 +70,12 @@ impl ReviewApp {
             params.line_number(),
         ));
         self.view_mode = super::ViewMode::TimeTravel;
+        counter!("time_travel_tui_state_transitions_total", "transition" => "enter").increment(1);
+        tracing::info!(
+            commit_sha = params.commit_sha().as_str(),
+            file_path = params.file_path().as_str(),
+            "entered time-travel mode"
+        );
 
         // Spawn async task to load time-travel data
         let git_ops_clone = Arc::clone(git_ops);
@@ -87,12 +94,21 @@ impl ReviewApp {
     pub(super) fn handle_exit_time_travel(&mut self) -> Option<Cmd> {
         self.time_travel_state = None;
         self.view_mode = super::ViewMode::ReviewList;
+        counter!("time_travel_tui_state_transitions_total", "transition" => "exit").increment(1);
+        tracing::info!("exited time-travel mode");
         None
     }
 
     /// Handles the `TimeTravelLoaded` message.
     pub(super) fn handle_time_travel_loaded(&mut self, state: Box<TimeTravelState>) -> Option<Cmd> {
         if self.view_mode == super::ViewMode::TimeTravel {
+            counter!("time_travel_tui_state_transitions_total", "transition" => "load_success")
+                .increment(1);
+            tracing::info!(
+                commit_sha = state.snapshot().sha(),
+                commit_count = state.commit_count(),
+                "time-travel load succeeded"
+            );
             self.time_travel_state = Some(*state);
         }
         None
@@ -100,6 +116,9 @@ impl ReviewApp {
 
     /// Handles the `TimeTravelFailed` message.
     pub(super) fn handle_time_travel_failed(&mut self, error: &str) -> Option<Cmd> {
+        counter!("time_travel_tui_state_transitions_total", "transition" => "load_failed")
+            .increment(1);
+        tracing::info!(error, "time-travel load failed");
         if let Some(ref mut state) = self.time_travel_state {
             state.set_error(error.to_owned());
         } else {
@@ -133,10 +152,7 @@ impl ReviewApp {
         let git_ops = Arc::clone(self.git_ops.as_ref()?);
         let head_sha = self.head_commit_sha();
 
-        // Set loading state
-        if let Some(time_travel_state) = self.time_travel_state.as_mut() {
-            time_travel_state.set_loading(true);
-        }
+        self.mark_time_travel_navigation_started(navigation_state.current_index(), direction);
 
         // Bubble Tea processes messages sequentially, so marking the state as
         // loading here is enough to block later navigation messages until the
@@ -149,9 +165,33 @@ impl ReviewApp {
         ))
     }
 
+    fn mark_time_travel_navigation_started(
+        &mut self,
+        current_index: usize,
+        direction: TimeTravelNavigationDirection,
+    ) {
+        if let Some(time_travel_state) = self.time_travel_state.as_mut() {
+            time_travel_state.set_loading(true);
+        }
+        counter!("time_travel_tui_state_transitions_total", "transition" => "navigation_start")
+            .increment(1);
+        tracing::info!(
+            direction = ?direction,
+            current_index,
+            "started time-travel navigation"
+        );
+    }
+
     /// Handles the `CommitNavigated` message.
     pub(super) fn handle_commit_navigated(&mut self, state: Box<TimeTravelState>) -> Option<Cmd> {
         if self.view_mode == super::ViewMode::TimeTravel {
+            counter!("time_travel_tui_state_transitions_total", "transition" => "navigation_success")
+                .increment(1);
+            tracing::info!(
+                commit_sha = state.snapshot().sha(),
+                current_index = state.current_index(),
+                "time-travel navigation succeeded"
+            );
             self.time_travel_state = Some(*state);
         }
         None

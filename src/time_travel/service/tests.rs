@@ -13,6 +13,7 @@ use crate::local::{
 use super::{TimeTravelNavigationDirection, load_time_travel_state, navigate_time_travel_state};
 use crate::time_travel::{TimeTravelInitParams, TimeTravelParams, TimeTravelState};
 
+/// Property-based invariant tests for shared time-travel services.
 #[path = "property_tests.rs"]
 mod property_tests;
 

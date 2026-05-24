@@ -8,6 +8,8 @@ use crate::local::{
     CommitSha, CommitSnapshot, GitOperationError, GitOperations, LineMappingRequest,
     LineMappingVerification,
 };
+use metrics::{counter, histogram};
+use std::time::Instant;
 
 use super::{TimeTravelInitParams, TimeTravelParams, TimeTravelState};
 
@@ -129,25 +131,43 @@ pub fn load_time_travel_state(
     head_sha: Option<&CommitSha>,
     commit_history_limit: usize,
 ) -> Result<TimeTravelState, GitOperationError> {
-    let snapshot = load_initial_snapshot(git_ops, params)?;
-    let effective_limit = commit_history_limit.max(1);
-    let commit_history = load_commit_history(git_ops, params.commit_sha(), effective_limit)?;
-    let line_mapping = verify_line_mapping(&LineMappingContext {
-        git_ops,
-        commit_sha: params.commit_sha(),
-        file_path: params.file_path(),
-        original_line: params.line_number(),
-        head_sha,
-    });
+    let started_at = Instant::now();
+    counter!("time_travel_service_operations_total", "operation" => "load").increment(1);
+    let result = (|| {
+        let snapshot = load_initial_snapshot(git_ops, params)?;
+        let effective_limit = commit_history_limit.max(1);
+        let commit_history = load_commit_history(git_ops, params.commit_sha(), effective_limit)?;
+        let line_mapping = verify_line_mapping(&LineMappingContext {
+            git_ops,
+            commit_sha: params.commit_sha(),
+            file_path: params.file_path(),
+            original_line: params.line_number(),
+            head_sha,
+        });
 
-    Ok(TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: params.file_path().clone(),
-        original_line: params.line_number(),
-        line_mapping,
-        commit_history,
-        current_index: 0,
-    }))
+        Ok(TimeTravelState::new(TimeTravelInitParams {
+            snapshot,
+            file_path: params.file_path().clone(),
+            original_line: params.line_number(),
+            line_mapping,
+            commit_history,
+            current_index: 0,
+        }))
+    })();
+    histogram!("time_travel_service_operation_duration_seconds", "operation" => "load")
+        .record(started_at.elapsed().as_secs_f64());
+    if let Ok(state) = &result {
+        counter!("time_travel_service_operations_success_total", "operation" => "load")
+            .increment(1);
+        tracing::info!(
+            commit_sha = params.commit_sha().as_str(),
+            file_path = params.file_path().as_str(),
+            commit_count = state.commit_count(),
+            has_line_mapping = state.line_mapping().is_some(),
+            "loaded time-travel state"
+        );
+    }
+    result
 }
 
 /// Navigates a loaded time-travel state to an adjacent commit.
@@ -195,26 +215,51 @@ pub fn navigate_time_travel_state(
     direction: TimeTravelNavigationDirection,
     head_sha: Option<&CommitSha>,
 ) -> Result<Option<TimeTravelState>, GitOperationError> {
-    let Some(target_sha) = navigation_target(state, direction) else {
-        return Ok(None);
-    };
-    let snapshot = load_navigation_snapshot(git_ops, state, direction, target_sha)?;
-    let line_mapping = verify_line_mapping(&LineMappingContext {
-        git_ops,
-        commit_sha: target_sha,
-        file_path: state.file_path(),
-        original_line: state.original_line(),
-        head_sha,
-    });
+    let started_at = Instant::now();
+    counter!("time_travel_service_operations_total", "operation" => "navigate").increment(1);
+    let result = (|| {
+        let Some(target_sha) = navigation_target(state, direction) else {
+            return Ok(None);
+        };
+        let snapshot = load_navigation_snapshot(git_ops, state, direction, target_sha)?;
+        let line_mapping = verify_line_mapping(&LineMappingContext {
+            git_ops,
+            commit_sha: target_sha,
+            file_path: state.file_path(),
+            original_line: state.original_line(),
+            head_sha,
+        });
 
-    Ok(Some(TimeTravelState::new(TimeTravelInitParams {
-        snapshot,
-        file_path: state.file_path().clone(),
-        original_line: state.original_line(),
-        line_mapping,
-        commit_history: state.commit_history().to_vec(),
-        current_index: direction.target_index(state.current_index()),
-    })))
+        Ok(Some(TimeTravelState::new(TimeTravelInitParams {
+            snapshot,
+            file_path: state.file_path().clone(),
+            original_line: state.original_line(),
+            line_mapping,
+            commit_history: state.commit_history().to_vec(),
+            current_index: direction.target_index(state.current_index()),
+        })))
+    })();
+    histogram!("time_travel_service_operation_duration_seconds", "operation" => "navigate")
+        .record(started_at.elapsed().as_secs_f64());
+    match &result {
+        Ok(Some(next_state)) => {
+            counter!("time_travel_service_operations_success_total", "operation" => "navigate")
+                .increment(1);
+            tracing::info!(
+                direction = ?direction,
+                from_index = state.current_index(),
+                to_index = next_state.current_index(),
+                target_sha = next_state.snapshot().sha(),
+                "navigated time-travel state"
+            );
+        }
+        Ok(None) => {
+            counter!("time_travel_service_operations_noop_total", "operation" => "navigate")
+                .increment(1);
+        }
+        Err(_) => {}
+    }
+    result
 }
 
 fn navigation_target(
@@ -269,6 +314,12 @@ fn load_initial_snapshot(
     git_ops
         .get_commit_snapshot(params.commit_sha(), Some(params.file_path()))
         .map_err(|error| {
+            counter!(
+                "time_travel_service_operation_errors_total",
+                "operation" => "load",
+                "error_type" => git_error_type(&error)
+            )
+            .increment(1);
             tracing::debug!(
                 commit_sha = params.commit_sha().as_str(),
                 file_path = params.file_path().as_str(),
@@ -292,6 +343,12 @@ fn load_commit_history(
     git_ops
         .get_parent_commits(commit_sha, effective_limit)
         .map_err(|error| {
+            counter!(
+                "time_travel_service_operation_errors_total",
+                "operation" => "load",
+                "error_type" => git_error_type(&error)
+            )
+            .increment(1);
             tracing::debug!(
                 commit_sha = commit_sha.as_str(),
                 limit = effective_limit,
@@ -318,6 +375,12 @@ fn load_navigation_snapshot(
     git_ops
         .get_commit_snapshot(target_sha, Some(state.file_path()))
         .map_err(|error| {
+            counter!(
+                "time_travel_service_operation_errors_total",
+                "operation" => "navigate",
+                "error_type" => git_error_type(&error)
+            )
+            .increment(1);
             tracing::debug!(
                 direction = ?direction,
                 target_sha = target_sha.as_str(),
@@ -351,6 +414,12 @@ fn verify_line_mapping(context: &LineMappingContext<'_>) -> Option<LineMappingVe
         .git_ops
         .verify_line_mapping(&request)
         .map_err(|error| {
+            counter!(
+                "time_travel_service_operation_errors_total",
+                "operation" => "line_mapping",
+                "error_type" => git_error_type(&error)
+            )
+            .increment(1);
             tracing::debug!(
                 commit_sha = context.commit_sha.as_str(),
                 head_sha = head.as_str(),
@@ -372,6 +441,17 @@ fn log_skipped_line_mapping(context: &LineMappingContext<'_>) {
         has_head_sha = context.head_sha.is_some(),
         "skipping time-travel line mapping verification"
     );
+}
+
+const fn git_error_type(error: &GitOperationError) -> &'static str {
+    match error {
+        GitOperationError::CommitNotFound { .. } => "commit_not_found",
+        GitOperationError::FileNotFound { .. } => "file_not_found",
+        GitOperationError::CommitAccessFailed { .. } => "commit_access_failed",
+        GitOperationError::DiffComputationFailed { .. } => "diff_computation_failed",
+        GitOperationError::RepositoryNotAvailable { .. } => "repository_not_available",
+        GitOperationError::Git { .. } => "git",
+    }
 }
 
 #[cfg(test)]

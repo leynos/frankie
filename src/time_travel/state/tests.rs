@@ -10,6 +10,7 @@ use rstest::{fixture, rstest};
 use super::*;
 use crate::local::LineMappingStatus;
 
+/// Property-based invariant tests for time-travel state.
 #[path = "property_tests.rs"]
 mod property_tests;
 

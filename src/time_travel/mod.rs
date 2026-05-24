@@ -30,7 +30,9 @@ use thiserror::Error;
 use crate::github::models::ReviewComment;
 use crate::local::{CommitSha, RepoFilePath};
 
+/// Shared Git-backed time-travel orchestration services.
 mod service;
+/// Library-facing time-travel state container and navigation accessors.
 mod state;
 
 pub use service::{

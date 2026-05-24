@@ -38,6 +38,7 @@ unicode-width = "0.2.2"
 
 # Template engine
 minijinja = "2.14.0"
+metrics = "0.24.1"
 
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
