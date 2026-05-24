@@ -90,6 +90,22 @@ pub fn load_time_travel_state(
     result
 }
 
+fn load_with_error_instrumentation<T>(
+    operation: &'static str,
+    execute: impl FnOnce() -> Result<T, GitOperationError>,
+    on_error: impl FnOnce(&GitOperationError),
+) -> Result<T, GitOperationError> {
+    execute().inspect_err(|error| {
+        counter!(
+            "time_travel_service_operation_errors_total",
+            "operation" => operation,
+            "error_type" => git_error_type(error)
+        )
+        .increment(1);
+        on_error(error);
+    })
+}
+
 pub(super) fn load_initial_snapshot(
     git_ops: &dyn GitOperations,
     params: &TimeTravelParams,
@@ -99,23 +115,18 @@ pub(super) fn load_initial_snapshot(
         file_path = params.file_path().as_str(),
         "loading time-travel snapshot"
     );
-    git_ops
-        .get_commit_snapshot(params.commit_sha(), Some(params.file_path()))
-        .map_err(|error| {
-            counter!(
-                "time_travel_service_operation_errors_total",
-                "operation" => "load",
-                "error_type" => git_error_type(&error)
-            )
-            .increment(1);
+    load_with_error_instrumentation(
+        "load",
+        || git_ops.get_commit_snapshot(params.commit_sha(), Some(params.file_path())),
+        |error| {
             tracing::debug!(
                 commit_sha = params.commit_sha().as_str(),
                 file_path = params.file_path().as_str(),
                 ?error,
                 "time-travel snapshot load failed"
             );
-            error
-        })
+        },
+    )
 }
 
 fn load_commit_history(
@@ -128,23 +139,18 @@ fn load_commit_history(
         limit = effective_limit,
         "loading time-travel commit history"
     );
-    git_ops
-        .get_parent_commits(commit_sha, effective_limit)
-        .map_err(|error| {
-            counter!(
-                "time_travel_service_operation_errors_total",
-                "operation" => "load",
-                "error_type" => git_error_type(&error)
-            )
-            .increment(1);
+    load_with_error_instrumentation(
+        "load",
+        || git_ops.get_parent_commits(commit_sha, effective_limit),
+        |error| {
             tracing::debug!(
                 commit_sha = commit_sha.as_str(),
                 limit = effective_limit,
                 ?error,
                 "time-travel commit history load failed"
             );
-            error
-        })
+        },
+    )
 }
 
 pub(super) fn load_navigation_snapshot(
@@ -160,15 +166,10 @@ pub(super) fn load_navigation_snapshot(
         file_path = state.file_path().as_str(),
         "loading time-travel navigation snapshot"
     );
-    git_ops
-        .get_commit_snapshot(target_sha, Some(state.file_path()))
-        .map_err(|error| {
-            counter!(
-                "time_travel_service_operation_errors_total",
-                "operation" => "navigate",
-                "error_type" => git_error_type(&error)
-            )
-            .increment(1);
+    load_with_error_instrumentation(
+        "navigate",
+        || git_ops.get_commit_snapshot(target_sha, Some(state.file_path())),
+        |error| {
             tracing::debug!(
                 direction = ?direction,
                 target_sha = target_sha.as_str(),
@@ -176,6 +177,6 @@ pub(super) fn load_navigation_snapshot(
                 ?error,
                 "time-travel navigation snapshot load failed"
             );
-            error
-        })
+        },
+    )
 }
