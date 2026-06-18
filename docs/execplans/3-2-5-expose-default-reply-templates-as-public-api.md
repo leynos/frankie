@@ -178,7 +178,9 @@ Thresholds that trigger escalation when breached.
   applicable / use your best judgement" guidance for snapshot, property, and
   BDD tiers. If the reviewer prefers maximal-rigour coverage, this is the point
   to say so at the approval gate. Date/Author: 2026-06-18, planning panel
-  (Dinolump), endorsed by the panel.
+  (Dinolump), endorsed by the panel. **Confirmed by the repository owner on
+  2026-06-18**: the proportionate test surface (rstest unit tests plus one
+  integration parity assertion; no insta/proptest/rstest-bdd) is accepted.
 
 - Decision: Update ADR-004's consequences and the design doc rather than
   writing a new ADR. Rationale: "built-in defaults are part of the public API"
