@@ -117,10 +117,19 @@ Thresholds that trigger escalation when breached.
 
 - [x] (2026-06-22 15:54 Europe/Berlin) Stage A: confirmed orientation and the
       two call sites with `leta refs default_reply_templates`.
-- [ ] (pending) Stage B: red tests (unit + integration) that reference the not-
-      yet-public API and fail to compile/assert.
-- [ ] (pending) Stage C: implement `src/reply_template/defaults.rs`, re-export,
-      refactor consumers, delete crate-private copy.
+- [x] (2026-06-22 16:00 Europe/Berlin) Stage B: red integration tests added
+      and `cargo test -p frankie --test reply_template_public_api` failed with
+      unresolved imports for `frankie::DEFAULT_REPLY_TEMPLATES` and
+      `frankie::default_reply_templates`.
+- [x] (2026-06-22 16:09 Europe/Berlin) Stage C: implemented
+      `src/reply_template/defaults.rs`, re-exported the public API, refactored
+      config and TUI consumers, and deleted the crate-private config copy.
+      Focused tests pass:
+      `cargo test -p frankie --test reply_template_public_api` and
+      `cargo test -p frankie reply_template`.
+- [x] (2026-06-22 16:16 Europe/Berlin) Stage C gates and review: `make
+      check-fmt`, `make lint`, `make test`, and `make markdownlint` passed;
+      `coderabbit review --agent` reported 0 findings.
 - [ ] (pending) Stage D: documentation, ADR-004 update, design-doc note,
       gates, CodeRabbit, roadmap tick.
 
@@ -134,6 +143,11 @@ Thresholds that trigger escalation when breached.
 - 2026-06-22: `leta refs default_reply_templates` matched the plan exactly:
   the crate-private definition in `src/config/mod.rs`, the
   `FrankieConfig::default` call, and the `ReplyDraftConfig::default` call.
+- 2026-06-22: The concrete test snippet in the plan imported `googletest` and
+  `pretty_assertions`, but this crate does not currently depend on either
+  crate. Because the plan forbids new dependencies, the unit tests were adapted
+  to use standard `assert!` and `assert_eq!` while preserving the same
+  behavioural assertions.
 
 ## Decision log
 
@@ -142,6 +156,12 @@ Thresholds that trigger escalation when breached.
   Rationale: the ExecPlan skill requires explicit approval before execution;
   the request names the plan file and directs implementation, so the plan is no
   longer in draft. Date/Author: 2026-06-22, implementation agent.
+
+- Decision: Keep the defaults unit tests dependency-free instead of adding
+  `googletest` or `pretty_assertions`. Rationale: no-new-dependency is a hard
+  plan constraint, and the assertions are simple equality and success checks
+  that remain clear with standard test macros. Date/Author: 2026-06-22,
+  implementation agent.
 
 - Decision: Relocate the canonical defaults into the `reply_template` domain
   module rather than simply making the existing `config` function `pub`.
@@ -244,9 +264,8 @@ Key files for this change:
   `review_comment_with_body`).
 
 - `src/config/tests/reply_drafting.rs` and
-  `src/config/tests/field_resolution.rs`
-  — existing config tests asserting the default `reply_templates` list is
-  non-empty. These must continue to pass.
+  `src/config/tests/field_resolution.rs` — existing config tests asserting the
+  default `reply_templates` list is non-empty. These must continue to pass.
 
 Terms used:
 

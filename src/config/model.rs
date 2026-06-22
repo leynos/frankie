@@ -334,7 +334,7 @@ impl Default for FrankieConfig {
             template: None,
             repo_path: None,
             reply_max_length: DEFAULT_REPLY_MAX_LENGTH,
-            reply_templates: default_reply_templates(),
+            reply_templates: crate::reply_template::default_reply_templates(),
             ai_rewrite_mode: None,
             ai_rewrite_text: None,
             ai_base_url: DEFAULT_AI_BASE_URL.to_owned(),
@@ -345,12 +345,4 @@ impl Default for FrankieConfig {
             pr_identifier: None,
         }
     }
-}
-
-pub(crate) fn default_reply_templates() -> Vec<String> {
-    vec![
-        "Thanks for the review on {{ file }}:{{ line }}. I will update this.".to_owned(),
-        "Good catch, {{ reviewer }}. I will address this in the next commit.".to_owned(),
-        "I have addressed this feedback and pushed an update.".to_owned(),
-    ]
 }
