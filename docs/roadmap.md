@@ -196,7 +196,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: a public
   DTO is used by the renderer, and adapter tests cover mapping from
   `ReviewComment` into the DTO without changing rendered output.
-- [ ] 3.2.5. Expose default reply templates as a public library API (they are
+- [x] 3.2.5. Expose default reply templates as a public library API (they are
   currently crate-private). Requires 3.2.3. See
   `docs/adr-004-inline-template-based-reply-drafting.md`. Acceptance: defaults
   are publicly available, deterministic, and non-empty, and tests assert the

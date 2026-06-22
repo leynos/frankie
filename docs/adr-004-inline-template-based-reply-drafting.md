@@ -48,6 +48,12 @@ template slots `1` to `9` to insert a starter reply, edit inline, then press
   detail pane.
 - Templates can be configured through config layers (`reply_max_length`,
   `reply_templates`) without code changes.
+- The built-in default templates are public library API owned by
+  `frankie::reply_template` and re-exported as
+  `frankie::DEFAULT_REPLY_TEMPLATES` and `frankie::default_reply_templates()`.
+  Tests in `src/reply_template/defaults_tests.rs` and
+  `tests/reply_template_public_api.rs` guard the ordered defaults and config
+  parity.
 - Over-limit insertions and invalid template slots surface explicit inline
   errors instead of silently truncating content.
 - Continuous Integration (CI) coverage includes the first-use reply-draft flow

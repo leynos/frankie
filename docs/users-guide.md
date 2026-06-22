@@ -282,31 +282,43 @@ use frankie::time_travel::{TimeTravelParams, load_time_travel_state};
 #         _file_path: Option<&'a frankie::local::RepoFilePath>,
 #     ) -> Result<frankie::local::CommitSnapshot, GitOperationError> {
 #         unimplemented!()
-#     }
+# }
+```
+
 #     fn get_file_at_commit<'a>(
 #         &self,
 #         _sha: &'a CommitSha,
 #         _file_path: &'a frankie::local::RepoFilePath,
 #     ) -> Result<String, GitOperationError> {
 #         unimplemented!()
-#     }
+# }
+```
+
 #     fn verify_line_mapping<'a>(
 #         &self,
 #         _request: &'a frankie::local::LineMappingRequest,
 #     ) -> Result<frankie::local::LineMappingVerification, GitOperationError> {
 #         unimplemented!()
-#     }
+# }
+```
+
 #     fn get_parent_commits<'a>(
 #         &self,
 #         _sha: &'a CommitSha,
 #         _limit: usize,
 #     ) -> Result<Vec<CommitSha>, GitOperationError> {
 #         unimplemented!()
-#     }
+# }
+```
+
 #     fn commit_exists<'a>(&self, _sha: &'a CommitSha) -> bool {
 #         true
-#     }
 # }
+```
+
+# }
+```
+
 # fn example(git_ops: &dyn GitOperations) -> Result<(), GitOperationError> {
 let params = TimeTravelParams::new(
     CommitSha::new("abc1234567890".to_owned()),
@@ -879,6 +891,11 @@ reply_templates = [
 # Database migrations (set to true to run migrations and exit)
 migrate_db = true
 ```
+
+When `reply_templates` is not configured, Frankie uses its built-in starter
+reply templates. Library consumers can read the same defaults with
+`frankie::DEFAULT_REPLY_TEMPLATES` or take an owned copy with
+`frankie::default_reply_templates()`.
 
 Frankie searches for configuration files in this order:
 

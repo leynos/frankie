@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: IN PROGRESS
+Status: COMPLETE
 
 ## Purpose / big picture
 
@@ -130,8 +130,18 @@ Thresholds that trigger escalation when breached.
 - [x] (2026-06-22 16:16 Europe/Berlin) Stage C gates and review: `make
       check-fmt`, `make lint`, `make test`, and `make markdownlint` passed;
       `coderabbit review --agent` reported 0 findings.
-- [ ] (pending) Stage D: documentation, ADR-004 update, design-doc note,
-      gates, CodeRabbit, roadmap tick.
+- [x] (2026-06-22 16:23 Europe/Berlin) Stage D documentation edits: updated
+      `docs/users-guide.md`, `docs/developers-guide.md`,
+      `docs/adr-004-inline-template-based-reply-drafting.md`,
+      `docs/frankie-design.md`, and `docs/roadmap.md`.
+- [x] (2026-06-22 16:29 Europe/Berlin) Stage D deterministic gates: `make
+      check-fmt`, `make lint`, `make test`, `make markdownlint`, and `make
+      nixie` passed. `make fmt` was attempted and failed on the existing
+      unrelated Markdown line recorded below.
+- [x] (2026-06-22 16:34 Europe/Berlin) Stage D final CodeRabbit review:
+      `coderabbit review --agent` reported 0 findings.
+- [x] (2026-06-22 16:35 Europe/Berlin) Delivery retrospective recorded and
+      the ExecPlan marked complete.
 
 ## Surprises & discoveries
 
@@ -148,6 +158,12 @@ Thresholds that trigger escalation when breached.
   crate. Because the plan forbids new dependencies, the unit tests were adapted
   to use standard `assert!` and `assert_eq!` while preserving the same
   behavioural assertions.
+- 2026-06-22: `make fmt` runs `mdformat-all`, which touched many unrelated
+  Markdown files before failing on an existing long line in
+  `docs/execplans/3-1-2-session-resumption-for-interrupted-codex-runs.md`.
+  Those incidental formatter edits were restored; subsequent validation uses
+  `make check-fmt` and `make markdownlint`, which are the documented commit
+  gates for Rust formatting and Markdown linting.
 
 ## Decision log
 
@@ -225,7 +241,37 @@ Thresholds that trigger escalation when breached.
 
 ## Outcomes & retrospective
 
-- (to be completed at delivery)
+Delivered the public default reply-template API described by roadmap item
+3.2.5. Library consumers can now borrow the canonical defaults through
+`frankie::DEFAULT_REPLY_TEMPLATES` or request an owned `Vec<String>` through
+`frankie::default_reply_templates()`. The same items are also available under
+`frankie::reply_template`.
+
+The implementation moved the canonical strings from `src/config/mod.rs` into
+`src/reply_template/defaults.rs`. `FrankieConfig::default` and
+`ReplyDraftConfig::default` now consume the reply-template domain module, so
+configuration and TUI adapters share one source of truth.
+
+Validation evidence:
+
+- Red: `cargo test -p frankie --test reply_template_public_api` failed with
+  unresolved imports for `frankie::DEFAULT_REPLY_TEMPLATES` and
+  `frankie::default_reply_templates`.
+- Green: `cargo test -p frankie --test reply_template_public_api` passed with
+  6 tests, and `cargo test -p frankie reply_template` passed with the new
+  default-template unit tests plus existing renderer and adapter coverage.
+- Full gates: `make check-fmt`, `make lint`, `make test`, `make
+  markdownlint`, and `make nixie` passed after both the implementation and
+  documentation milestones.
+- Review: `coderabbit review --agent` reported 0 findings after Stage C and 0
+  findings after Stage D.
+
+One lesson: the plan's concrete test snippet named assertion crates that were
+not present in the project. Keeping the tests dependency-free preserved the
+plan's no-new-dependency constraint without weakening the behavioural checks.
+Another lesson: `make fmt` currently has a repository-wide Markdown formatting
+failure in an unrelated ExecPlan; the change was still validated through the
+documented commit gates and `make nixie`.
 
 ## Context and orientation
 
