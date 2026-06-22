@@ -4,7 +4,7 @@ This ExecPlan (execution plan) is a living document. The sections `Constraints`,
 `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
 and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -115,7 +115,8 @@ Thresholds that trigger escalation when breached.
 
 ## Progress
 
-- [ ] (pending) Stage A: confirm orientation and the two call sites.
+- [x] (2026-06-22 15:54 Europe/Berlin) Stage A: confirmed orientation and the
+      two call sites with `leta refs default_reply_templates`.
 - [ ] (pending) Stage B: red tests (unit + integration) that reference the not-
       yet-public API and fail to compile/assert.
 - [ ] (pending) Stage C: implement `src/reply_template/defaults.rs`, re-export,
@@ -125,9 +126,22 @@ Thresholds that trigger escalation when breached.
 
 ## Surprises & discoveries
 
-- (none yet)
+- 2026-06-22: The local branch was already named
+  `3-2-5-expose-default-reply-templates-as-public-api`, but it was not tracking
+  a remote branch. The remote branch
+  `origin/3-2-5-expose-default-reply-templates-as-public-api` exists, so the
+  local branch was configured to track it before implementation.
+- 2026-06-22: `leta refs default_reply_templates` matched the plan exactly:
+  the crate-private definition in `src/config/mod.rs`, the
+  `FrankieConfig::default` call, and the `ReplyDraftConfig::default` call.
 
 ## Decision log
+
+- Decision: Treat the repository owner's 2026-06-22 request to "proceed with
+  implementation" as the approval gate for this previously drafted ExecPlan.
+  Rationale: the ExecPlan skill requires explicit approval before execution;
+  the request names the plan file and directs implementation, so the plan is no
+  longer in draft. Date/Author: 2026-06-22, implementation agent.
 
 - Decision: Relocate the canonical defaults into the `reply_template` domain
   module rather than simply making the existing `config` function `pub`.
