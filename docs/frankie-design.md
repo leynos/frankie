@@ -631,6 +631,8 @@ The application operates within the following technical boundaries:
 
 ## 2.1 Feature Catalogue
 
+## 2.1 Feature Catalogue
+
 ### 2.1.1 Core Repository Access Features
 
 | Feature ID | Feature Name               | Category          | Priority | Status   |
@@ -3498,9 +3500,9 @@ governance decisions separately.
 - `TimeTravelService`, `ResolutionVerificationService`, and
   `ReviewReplyService` expose on-demand context, verification, and review
   action capabilities without requiring TUI orchestration types.
-- Shared summary and navigation models use host-neutral review references, with
-  TUI deep links rendered as one adapter-specific projection rather than the
-  canonical contract.
+- Shared summary and navigation models use host-neutral `ReviewViewRef`
+  references, with `FrankieDeepLink` rendering TUI deep links as one
+  adapter-specific projection rather than the canonical contract.
 
 **End-to-end ownership walkthrough — new review comment lifecycle**:
 

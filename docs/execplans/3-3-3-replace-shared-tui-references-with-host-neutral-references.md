@@ -137,10 +137,14 @@ escalation, not a workaround.
   pass unchanged. On 2026-06-23, `make check-fmt`, `make lint`, and
   `make test` passed; the full test gate ran 882 tests, all passed, with one
   skipped.
-- [ ] (Stage D, milestone M3) Update documentation: ADR-008 amendment,
-  `frankie-design.md`, `users-guide.md`, `developers-guide.md`.
-- [ ] (Stage D, milestone M4) Mark roadmap 3.3.3 done; run the full gate suite
-  and `coderabbit review --agent`; clear all concerns.
+- [x] (Stage D, milestone M3) Update documentation: ADR-008 amendment,
+  `frankie-design.md`, `users-guide.md`, `developers-guide.md`. On
+  2026-06-23, `make markdownlint` and `make nixie` passed after these
+  documentation edits.
+- [x] (Stage D, milestone M4) Mark roadmap 3.3.3 done; run the full gate suite
+  and `coderabbit review --agent`; clear all concerns. On 2026-06-23, final
+  gates passed (`make check-fmt`, `make lint`, `make test`,
+  `make markdownlint`, and `make nixie`) and CodeRabbit reported zero findings.
 
 ## Surprises & discoveries
 
@@ -272,10 +276,22 @@ escalation, not a workaround.
 
 ## Outcomes & retrospective
 
-To be completed at milestone boundaries and on completion. Compare the result
-against the Purpose: host-neutral `ReviewViewRef` on summary items, identical
-rendered output, and a passing serialization test that proves independence from
-TUI types.
+Implemented the host-neutral summary navigation contract. Summary items now
+carry `ReviewViewRef`, `ReviewView` names the logical review destination, and
+`FrankieDeepLink` renders the preserved
+`frankie://review-comment/<id>?view=detail` token for CLI and TUI output. The
+DTO no longer implements URI rendering.
+
+Observable behaviour stayed stable: CLI and TUI behavioural tests still assert
+the same rendered deep link, and TUI jump-back navigation still uses the
+structured comment ID. The new serialization test proves the shared wire shape
+contains `view_ref`, `comment_id`, and `view`, with no TUI-specific field or
+deep-link string.
+
+Documentation was updated in ADR-008, the design guide, users guide,
+developers guide, and roadmap. CodeRabbit raised two code-review concerns
+during M1/M2; both were fixed before proceeding. The final review reported zero
+findings.
 
 ## Context and orientation
 

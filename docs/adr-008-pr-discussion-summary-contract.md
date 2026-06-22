@@ -2,12 +2,12 @@
 
 ## Status
 
-Accepted (2026-03-09): Adopt thread-root summarization with shared severity and
-TUI-link models across library, CLI, and TUI surfaces.
+Accepted (2026-06-23): Adopt thread-root summarization with shared severity
+and host-neutral review-view references across library, CLI, and TUI surfaces.
 
 ## Date
 
-2026-03-09
+2026-06-23
 
 ## Context and problem statement
 
@@ -21,7 +21,7 @@ ordering, and link behaviour deterministic and shared.
 
 - Shared, stable library contract for CLI and TUI parity.
 - Deterministic grouping by file and severity.
-- Traceable links back to concrete TUI comment-detail views.
+- Traceable references back to concrete review comment-detail views.
 - Explicit failure for AI-provider schema or configuration problems.
 - Low-friction end-to-end testing against an OpenAI-compatible local mock.
 
@@ -32,7 +32,7 @@ ordering, and link behaviour deterministic and shared.
 - Summarize review discussions at the thread-root level rather than per
   comment row.
 - Group summary output by file and severity.
-- Emit stable links back to TUI comment-detail views.
+- Emit stable references back to review comment-detail views.
 - Expose the workflow through both a standalone CLI mode and a dedicated TUI
   summary view.
 
@@ -40,8 +40,8 @@ ordering, and link behaviour deterministic and shared.
 
 - Keep core behaviour in shared library modules under `src/ai/`.
 - Use a shared `DiscussionSeverity` taxonomy with `high`, `medium`, and `low`.
-- Keep file grouping, severity ordering, and TUI-link construction outside the
-  AI provider.
+- Keep file grouping, severity ordering, and review-view reference
+  construction outside the AI provider.
 - Validate provider responses against the requested thread-root IDs.
 - Cover the real OpenAI-compatible adapter with `vidaimock`.
 
@@ -68,14 +68,17 @@ Adopt **Option A** with the following contract:
   - `SeverityBucket`
   - `DiscussionSummaryItem`
   - `DiscussionSeverity`
-  - `TuiViewLink`
+  - `ReviewView`
+  - `ReviewViewRef`
 - File grouping and severity ordering are deterministic in library code:
   - file groups sort alphabetically, with `(general discussion)` last;
   - severities sort `high`, then `medium`, then `low`;
   - items sort by root comment ID.
-- Links back to the TUI are represented structurally as
-  `TuiViewLink { comment_id, view: CommentDetail }` and rendered as
-  `frankie://review-comment/<id>?view=detail` when needed.
+- References back to review comments are represented structurally as
+  `ReviewViewRef { comment_id, view: CommentDetail }`. The compatibility
+  `frankie://review-comment/<id>?view=detail` deep-link token is rendered by
+  the `FrankieDeepLink` presentation wrapper when a CLI or TUI surface needs
+  text output.
 - AI-provider failures, malformed JSON, invalid severities, unknown thread
   IDs, and missing required fields fail explicitly rather than falling back to
   heuristic prose.
@@ -83,6 +86,15 @@ Adopt **Option A** with the following contract:
 The OpenAI-compatible adapter uses `vidaimock` end-to-end coverage via disk
 template overrides under
 `tests/fixtures/vidaimock/pr_discussion_summary/templates/openai/`.
+
+### Amendment: host-neutral review-view references (2026-06-23)
+
+Roadmap item 3.3.3 and ADR-010 refined the original navigation contract. The
+shared summary data transfer object (DTO) no longer exposes TUI-specific type
+names or URI rendering behaviour. `DiscussionSummaryItem` carries a
+`ReviewViewRef`, and URI rendering lives in `FrankieDeepLink` as an
+adapter-facing presentation projection. This preserves the original CLI/TUI
+output while making the shared contract suitable for embedded hosts.
 
 ## Goals and non-goals
 
@@ -113,8 +125,8 @@ template overrides under
   affect prioritization quality even when schema validation passes.
 - Thread-root summarization cannot distinguish between semantically unrelated
   replies on the same root; Frankie treats the thread as one unit.
-- The TUI link contract intentionally targets only the comment-detail view in
-  the current review list, not arbitrary future surfaces.
+- The review-view reference contract intentionally targets only the
+  comment-detail view today, not arbitrary future surfaces.
 
 ## Architectural rationale
 
@@ -122,8 +134,8 @@ template overrides under
    and replies.
 2. **Library-owned grouping** keeps CLI and TUI output aligned even if the AI
    text differs slightly over time.
-3. **Structured links first** let the TUI navigate directly while the CLI can
-   still print a stable token.
+3. **Structured references first** let the TUI navigate directly while the CLI
+   can still print a stable token.
 4. **Explicit failure** is safer than fabricated prose for prioritization
    workflows.
 5. **Template-override `vidaimock` coverage** exercises the production HTTP
