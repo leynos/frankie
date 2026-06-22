@@ -137,16 +137,16 @@ impl ReviewApp {
             self.error = Some("No PR discussion summary is open.".to_owned());
             return;
         };
-        let Some(link) = state.selected_link().cloned() else {
+        let Some(view_ref) = state.selected_view_ref().cloned() else {
             self.error = Some("PR discussion summary has no selectable item.".to_owned());
             return;
         };
 
         self.handle_clear_filter();
-        if !self.select_by_id(link.comment_id.as_u64()) {
+        if !self.select_by_id(view_ref.comment_id.as_u64()) {
             self.error = Some(format!(
-                "Could not find review comment {} referenced by the summary link",
-                link.comment_id.as_u64()
+                "Could not find review comment {} referenced by the summary reference",
+                view_ref.comment_id.as_u64()
             ));
             return;
         }

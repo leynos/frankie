@@ -74,50 +74,50 @@ impl FromStr for DiscussionSeverity {
     }
 }
 
-/// TUI view targeted by a summary link.
+/// Logical review view a summary reference points at.
+///
+/// This host-neutral enum is forward-looking: only
+/// [`ReviewView::CommentDetail`] exists today, and further review views can
+/// extend it without adding adapter-specific concepts to the shared contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum TuiView {
+pub enum ReviewView {
     /// Review-list comment-detail view for a selected comment.
     CommentDetail,
 }
 
-impl TuiView {
+impl ReviewView {
     #[must_use]
     pub(crate) const fn label(self) -> &'static str {
         match self {
+            // This string is user-visible in Frankie deep links; keep it
+            // stable for CLI and TUI behavioural compatibility.
             Self::CommentDetail => "detail",
         }
     }
 }
 
-/// Structured link pointing back to a TUI view.
+/// Host-neutral reference from a summary item back to a review view.
+///
+/// This type deliberately has no `Display` or URI rendering implementation:
+/// the `frankie://...` deep link is a presentation concern rendered by
+/// [`FrankieDeepLink`](super::FrankieDeepLink). Keeping rendering out of this
+/// DTO preserves the adapter boundary described by ADR-010.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct TuiViewLink {
-    /// Comment targeted by the link.
+pub struct ReviewViewRef {
+    /// Review comment the reference targets.
     pub comment_id: GithubCommentId,
-    /// View to open for the comment.
-    pub view: TuiView,
+    /// Logical review view to open for the comment.
+    pub view: ReviewView,
 }
 
-impl TuiViewLink {
-    /// Creates a link to the comment-detail view for the provided comment.
+impl ReviewViewRef {
+    /// Creates a reference to the comment-detail view for the provided comment.
     #[must_use]
     pub const fn comment_detail(comment_id: GithubCommentId) -> Self {
         Self {
             comment_id,
-            view: TuiView::CommentDetail,
+            view: ReviewView::CommentDetail,
         }
-    }
-}
-
-impl fmt::Display for TuiViewLink {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "frankie://review-comment/{}?view={}",
-            self.comment_id.as_u64(),
-            self.view.label()
-        )
     }
 }
 
@@ -247,8 +247,8 @@ pub struct DiscussionSummaryItem {
     pub rationale: String,
     /// Assigned severity.
     pub severity: DiscussionSeverity,
-    /// Stable TUI link back to the root discussion.
-    pub tui_link: TuiViewLink,
+    /// Stable host-neutral reference back to the root discussion.
+    pub view_ref: ReviewViewRef,
 }
 
 #[cfg(test)]
@@ -258,8 +258,10 @@ mod tests {
     use rstest::rstest;
 
     use super::{
-        DiscussionSeverity, PrDiscussionSummary, PrDiscussionSummaryRequest, TuiView, TuiViewLink,
+        DiscussionSeverity, PrDiscussionSummary, PrDiscussionSummaryRequest, ReviewView,
+        ReviewViewRef,
     };
+    use crate::ai::FrankieDeepLink;
     use crate::github::models::test_support::minimal_review;
 
     #[rstest]
@@ -278,11 +280,55 @@ mod tests {
     }
 
     #[test]
-    fn tui_link_formats_as_uri_like_token() {
-        let link = TuiViewLink::comment_detail(42_u64.into());
+    fn review_view_ref_renders_as_frankie_deep_link() {
+        let view_ref = ReviewViewRef::comment_detail(42_u64.into());
 
-        assert_eq!(link.to_string(), "frankie://review-comment/42?view=detail",);
-        assert_eq!(link.view, TuiView::CommentDetail);
+        assert_eq!(
+            FrankieDeepLink::new(&view_ref).to_string(),
+            "frankie://review-comment/42?view=detail",
+        );
+        assert_eq!(view_ref.view, ReviewView::CommentDetail);
+    }
+
+    #[test]
+    fn review_view_ref_serialization_is_host_neutral() {
+        let summary = PrDiscussionSummary {
+            files: vec![super::FileDiscussionSummary {
+                file_path: "src/lib.rs".to_owned(),
+                severities: vec![super::SeverityBucket {
+                    severity: DiscussionSeverity::High,
+                    items: vec![super::DiscussionSummaryItem {
+                        root_comment_id: 42_u64.into(),
+                        related_comment_ids: vec![42_u64.into()],
+                        headline: "Headline".to_owned(),
+                        rationale: "Rationale".to_owned(),
+                        severity: DiscussionSeverity::High,
+                        view_ref: ReviewViewRef::comment_detail(42_u64.into()),
+                    }],
+                }],
+            }],
+        };
+
+        let serialized =
+            serde_json::to_value(&summary).expect("summary should serialize to JSON value");
+        let item = serialized
+            .pointer("/files/0/severities/0/items/0")
+            .expect("summary JSON should contain the single test item");
+
+        assert_eq!(
+            item["view_ref"],
+            serde_json::json!({ "comment_id": 42, "view": "CommentDetail" })
+        );
+
+        let serialized_text =
+            serde_json::to_string(&summary).expect("summary should serialize to JSON text");
+        assert!(!serialized_text.contains(concat!("tui", "_link")));
+        assert!(!serialized_text.contains("frankie://"));
+        assert!(!serialized_text.contains(concat!("T", "ui")));
+
+        let round_tripped = serde_json::from_value::<PrDiscussionSummary>(serialized)
+            .expect("summary should deserialize from its host-neutral JSON value");
+        assert_eq!(round_tripped, summary);
     }
 
     #[test]
@@ -313,7 +359,7 @@ mod tests {
                             headline: "Headline".to_owned(),
                             rationale: "Rationale".to_owned(),
                             severity: DiscussionSeverity::High,
-                            tui_link: TuiViewLink::comment_detail(1_u64.into()),
+                            view_ref: ReviewViewRef::comment_detail(1_u64.into()),
                         }],
                     }],
                 },
@@ -327,7 +373,7 @@ mod tests {
                             headline: "Later".to_owned(),
                             rationale: "Later rationale".to_owned(),
                             severity: DiscussionSeverity::Low,
-                            tui_link: TuiViewLink::comment_detail(2_u64.into()),
+                            view_ref: ReviewViewRef::comment_detail(2_u64.into()),
                         }],
                     }],
                 },

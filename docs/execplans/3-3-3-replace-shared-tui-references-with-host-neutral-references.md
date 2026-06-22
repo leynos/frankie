@@ -1,11 +1,10 @@
 # Replace shared `TuiViewLink` references with host-neutral review-view references (3.3.3)
 
-This ExecPlan (execution plan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This ExecPlan (execution plan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
-Status: DRAFT
+Status: IN PROGRESS
 
 ## Purpose / big picture
 
@@ -14,18 +13,18 @@ Frankie's shared PR-discussion summary contract currently exposes a type named
 named `tui_link`. The name bakes one delivery surface — the Terminal User
 Interface (TUI) — into a data transfer object (DTO) that is meant to be
 host-neutral and consumed by the library, the Command Line Interface (CLI), and
-embedded hosts alike. ADR-010 identifies this as an architectural gap:
-"summary contracts currently expose `TuiViewLink`, which bakes one delivery
-surface into the shared model".
+embedded hosts alike. ADR-010 identifies this as an architectural gap: "summary
+contracts currently expose `TuiViewLink`, which bakes one delivery surface into
+the shared model".
 
-After this change, a consumer of the `frankie` library will find a
-host-neutral `ReviewViewRef` value object (with an accompanying `ReviewView`
-enum) on each summary item, carrying only *which review comment* and *which
-logical view* the summary points at. The `frankie://review-comment/<id>?view=detail`
-deep link — previously produced by a `Display` implementation on the DTO — is
-rendered by a separate, explicitly named presentation helper
-(`FrankieDeepLink`), shared by the CLI and the TUI. The DTO itself carries no
-rendering behaviour and serializes to host-neutral fields.
+After this change, a consumer of the `frankie` library will find a host-neutral
+`ReviewViewRef` value object (with an accompanying `ReviewView` enum) on each
+summary item, carrying only *which review comment* and *which logical view* the
+summary points at. The `frankie://review-comment/<id>?view=detail` deep link —
+previously produced by a `Display` implementation on the DTO — is rendered by a
+separate, explicitly named presentation helper (`FrankieDeepLink`), shared by
+the CLI and the TUI. The DTO itself carries no rendering behaviour and
+serializes to host-neutral fields.
 
 You can observe success three ways:
 
@@ -36,8 +35,7 @@ You can observe success three ways:
    "jump to linked comment" action still works.
 3. A new library test serializes a `PrDiscussionSummary` to JSON and proves the
    wire form contains only host-neutral fields (`view_ref`, `comment_id`,
-   `view`) and no TUI-specific type name, deep-link string, or `tui_link`
-   field.
+   `view`) and no TUI-specific type name, deep-link string, or `tui_link` field.
 
 This is a behaviour-preserving refactor: the only *new* behaviour is the
 serialization guarantee. Every existing behavioural assertion (the `.feature`
@@ -63,8 +61,8 @@ escalation, not a workaround.
   value object; rendering is an adapter/presentation concern.
 - Public-surface change is intentional and sanctioned by ADR-010. This is a
   hard rename with NO deprecated alias (see Decision Log D2). The crate is
-  `0.1.0` (pre-1.0) with no `cargo-public-api`/`cargo-semver-checks` gate, so no
-  SemVer guard blocks the break.
+  `0.1.0` (pre-1.0) with no `cargo-public-api`/`cargo-semver-checks` gate, so
+  no SemVer guard blocks the break.
 - Do not modify modules outside the PR-discussion-summary feature and its
   direct consumers, the relevant docs, and the roadmap entry.
 - Keep all work on the branch
@@ -92,24 +90,24 @@ escalation, not a workaround.
 ## Risks
 
 - Risk: a hidden consumer (insta snapshot, persisted fixture, doctest)
-  references the old symbol or the `tui_link` field and is missed.
-  Severity: medium. Likelihood: low. Mitigation: the exhaustive inventory in
-  "Context and orientation" lists every site; additionally run
+  references the old symbol or the `tui_link` field and is missed. Severity:
+  medium. Likelihood: low. Mitigation: the exhaustive inventory in "Context and
+  orientation" lists every site; additionally run
   `rg -n 'TuiViewLink|TuiView|tui_link'` after the migration and expect zero
   hits in `src/`, `tests/`, and `benches/`. The inventory confirmed no insta
   snapshots reference these symbols.
 - Risk: the shared `FrankieDeepLink` helper re-introduces a coupling that the
   ADR wanted removed. Severity: low. Likelihood: low. Mitigation: per D8 the
-  helper is a presentation newtype in a clearly named `deep_link` submodule, not
-  part of the DTO; the *canonical* shared format is the serde representation of
-  `ReviewViewRef`, and the helper renders one projection. This matches ADR-010
-  ("TUI deep links are rendered from those references as an adapter concern")
-  and its non-goal ("Making TUI deep links the canonical shared navigation
-  format"). The helper is host-neutral (usable by any Frankie surface), not
-  TUI-only. Lock the invariant in rustdoc: `ReviewViewRef`'s doc states it
-  deliberately has no `Display`/URI rendering and intra-doc-links to
-  `FrankieDeepLink` (Dinolump 🔴), so a future edit cannot silently re-add a
-  URI `Display` and resurrect the coupling.
+  helper is a presentation newtype in a clearly named `deep_link` submodule,
+  not part of the DTO; the *canonical* shared format is the serde
+  representation of `ReviewViewRef`, and the helper renders one projection.
+  This matches ADR-010 ("TUI deep links are rendered from those references as
+  an adapter concern") and its non-goal ("Making TUI deep links the canonical
+  shared navigation format"). The helper is host-neutral (usable by any Frankie
+  surface), not TUI-only. Lock the invariant in rustdoc: `ReviewViewRef`'s doc
+  states it deliberately has no `Display`/URI rendering and intra-doc-links to
+  `FrankieDeepLink` (Dinolump 🔴), so a future edit cannot silently re-add a URI
+  `Display` and resurrect the coupling.
 - Risk: changing the `ReviewView` serde representation breaks a wire consumer.
   Severity: low. Likelihood: low. Mitigation: preserve the existing default
   serde derivation (no `rename_all`); `CommentDetail` continues to serialize as
@@ -122,16 +120,23 @@ escalation, not a workaround.
 
 ## Progress
 
-- [ ] (Stage A) Plan approved by the user (approval gate).
-- [ ] (Stage B / Red) Add the host-neutral serialization test and the
+- [x] (Stage A) Plan approved by the user (approval gate). Approved for
+  implementation on 2026-06-23 in the Lody session for PR #68.
+- [x] (Stage B / Red) Add the host-neutral serialization test and the
   `FrankieDeepLink` rendering test describing the target API; observe them fail
-  to compile / fail for the expected reason.
-- [ ] (Stage C / Green, milestone M1) Introduce `ReviewView`, `ReviewViewRef`,
+  to compile / fail for the expected reason. On 2026-06-23,
+  `cargo nextest run -p frankie review_view_ref_serialization_is_host_neutral
+  review_view_ref_renders_as_frankie_deep_link` failed with unresolved imports
+  for `ReviewView`, `ReviewViewRef`, `FrankieDeepLink`, and missing field
+  `view_ref`, which is the expected red failure.
+- [x] (Stage C / Green, milestone M1) Introduce `ReviewView`, `ReviewViewRef`,
   and `FrankieDeepLink`; rename the `tui_link` field to `view_ref`; migrate
   every consumer and re-export; make the workspace compile and all tests pass.
-- [ ] (Stage C, milestone M2) Update construction sites in tests and confirm
+- [x] (Stage C, milestone M2) Update construction sites in tests and confirm
   behavioural assertions (feature files, component/service/VidaiMock tests)
-  pass unchanged.
+  pass unchanged. On 2026-06-23, `make check-fmt`, `make lint`, and
+  `make test` passed; the full test gate ran 882 tests, all passed, with one
+  skipped.
 - [ ] (Stage D, milestone M3) Update documentation: ADR-008 amendment,
   `frankie-design.md`, `users-guide.md`, `developers-guide.md`.
 - [ ] (Stage D, milestone M4) Mark roadmap 3.3.3 done; run the full gate suite
@@ -139,11 +144,39 @@ escalation, not a workaround.
 
 ## Surprises & discoveries
 
+- Observation: implementation resumed in worktree
+  `/home/leynos/.lody/repos/github---leynos---frankie/worktrees/ab496267-b105-41d3-9de5-e126c3e6c779`,
+  not the older planning worktree path shown in "Concrete steps". Impact:
+  commands are run from the current worktree root while preserving the same
+  branch and plan filename.
+- Observation: `make fmt` runs Rust formatting and then all-repository
+  Markdown formatting. Rust formatting completed, but the command failed on an
+  unrelated pre-existing Markdown line-length violation in
+  `docs/execplans/3-1-2-session-resumption-for-interrupted-codex-runs.md:392`.
+  The formatter also rewrote unrelated Markdown files before failing; those
+  unrelated edits were restored. Impact: code milestone gates use `cargo fmt`
+  / `make check-fmt` first, and the all-doc Markdown gate must be revisited in
+  the documentation milestone without weakening this plan's scope constraint.
+- Observation: after introducing `ReviewViewRef` and `FrankieDeepLink`, the
+  focused tests
+  `review_view_ref_serialization_is_host_neutral` and
+  `review_view_ref_renders_as_frankie_deep_link` both pass, and
+  `rg -n 'TuiViewLink|TuiView|tui_link|selected_link' src tests` returns no
+  matches. Impact: the code migration appears complete before wider gates.
+- Observation: Clippy rejected chained indexing into the JSON value in the new
+  serialization test under `clippy::indexing_slicing`. Impact: the test now
+  uses `Value::pointer(...).expect(...)`, keeping the assertion explicit while
+  respecting the repository lint policy.
+- Observation: CodeRabbit reviewed the code milestone three times. It first
+  requested repository-style cleanup for `FrankieDeepLink::new`, then requested
+  rustdoc examples for the public wrapper and constructor. Both concerns were
+  fixed; after rerunning `make check-fmt`, `make lint`, and `make test`,
+  CodeRabbit reported zero findings. Impact: M1/M2 review is clear.
 - Observation: the TUI "jump to linked comment" handler
   (`open_selected_pr_discussion_summary_link`) only consumes
-  `link.comment_id.as_u64()`; it never parses the `frankie://` string.
-  Evidence: `src/tui/app/pr_discussion_summary_handlers.rs:140-152`. Impact:
-  the host-neutral reference needs only `comment_id` + `view`; removing the
+  `link.comment_id.as_u64()`; it never parses the `frankie://` string. Evidence:
+  `src/tui/app/pr_discussion_summary_handlers.rs:140-152`. Impact: the
+  host-neutral reference needs only `comment_id` + `view`; removing the
   `Display` impl from the DTO cannot break navigation.
 - Observation: the dependency "Requires 2.1.3" (public `ReviewThread`
   aggregate) is nominal for this item. The summary code keys on
@@ -185,11 +218,12 @@ escalation, not a workaround.
   selection; crate is `0.1.0` and ADR-010 explicitly sanctions the break; an
   alias would keep the TUI-coupled name alive in the public surface, defeating
   the purpose. Date/Author: 2026-06-18, user.
-- Decision (D3): the CLI keeps printing `Link: frankie://review-comment/<id>?view=detail`,
+- Decision (D3): the CLI keeps printing
+  `Link: frankie://review-comment/<id>?view=detail`,
   rendered through the shared, host-neutral `FrankieDeepLink` presentation
-  helper rather than a `Display` on the DTO. Rationale: user selection
-  ("Keep frankie:// via shared helper"); preserves user-visible output, keeps
-  the DTO rendering-free, and avoids a CLI→TUI dependency because the helper is
+  helper rather than a `Display` on the DTO. Rationale: user selection ("Keep
+  frankie:// via shared helper"); preserves user-visible output, keeps the DTO
+  rendering-free, and avoids a CLI→TUI dependency because the helper is
   host-neutral. Date/Author: 2026-06-18, user.
 - Decision (D4): render the deep link via a newtype `Display` wrapper
   `FrankieDeepLink<'a>(&'a ReviewViewRef)` rather than a free function, with a
@@ -212,15 +246,15 @@ escalation, not a workaround.
   resulting casing asymmetry — the sibling `DiscussionSeverity` uses
   `rename_all = "lowercase"` (`"high"`/`"low"`), so one payload mixes `"high"`
   and `"CommentDetail"` (Telefono 💡). This is deliberate (it preserves the old
-  `TuiView` wire form); aligning to `snake_case` is explicitly out of scope.
-  A code comment on `label()` will flag that `"detail"` is user-visible in the
+  `TuiView` wire form); aligning to `snake_case` is explicitly out of scope. A
+  code comment on `label()` will flag that `"detail"` is user-visible in the
   deep link so nobody "tidies" it and breaks the `.feature` assertions.
   Date/Author: 2026-06-18, planning + panel.
 - Decision (D7): amend ADR-008 in place (keep `Accepted`, bump `Date`, add a
   dated amendment note) rather than superseding it. Rationale: only the
   link-model portion of ADR-008 changes; the thread-root summary contract is
-  unaffected. ADR-010 already records the host-neutral direction.
-  Date/Author: 2026-06-18, planning.
+  unaffected. ADR-010 already records the host-neutral direction. Date/Author:
+  2026-06-18, planning.
 - Decision (D8): keep the shared `FrankieDeepLink` renderer (per the user's
   "shared helper" decision) but house it in a clearly named presentation
   submodule (`src/ai/pr_discussion_summary/deep_link.rs`) whose module-level
@@ -249,15 +283,16 @@ This section assumes no prior knowledge of the repository.
 
 ### What the feature does today
 
-The PR-discussion summary feature condenses GitHub review-comment threads into a
-grouped, severity-ranked summary shared by the CLI and TUI. Its shared model
+The PR-discussion summary feature condenses GitHub review-comment threads into
+a grouped, severity-ranked summary shared by the CLI and TUI. Its shared model
 lives under `src/ai/pr_discussion_summary/`. Each summary item
 (`DiscussionSummaryItem`) currently carries a `tui_link: TuiViewLink`. The
 `TuiViewLink` struct holds a `comment_id: GithubCommentId` and a
 `view: TuiView` (an enum whose only variant is `CommentDetail`). `TuiViewLink`
-implements `std::fmt::Display`, producing `frankie://review-comment/<id>?view=detail`.
-The CLI prints this via `Display`; the TUI renders it in each row and, on a
-"jump" key, navigates by the link's `comment_id` (it never parses the string).
+implements `std::fmt::Display`, producing
+`frankie://review-comment/<id>?view=detail`. The CLI prints this via `Display`;
+the TUI renders it in each row and, on a "jump" key, navigates by the link's
+`comment_id` (it never parses the string).
 
 ### Key terms
 
@@ -278,13 +313,14 @@ Type definition and field — `src/ai/pr_discussion_summary/model.rs`:
 - L113–122: `impl fmt::Display for TuiViewLink` (the `frankie://…` format) →
   REMOVE from the DTO; relocate the format into `FrankieDeepLink`.
 - L251: field `pub tui_link: TuiViewLink` → `pub view_ref: ReviewViewRef`.
-- Rustdoc prose to reword host-neutral (completeness audit 🔴): L77 `/// TUI view
-  targeted by a summary link.`, L93 `/// Structured link pointing back to a TUI
-  view.`, L96/L98 field docs, L103 `/// Creates a link to the comment-detail
-  view…`, L250 `/// Stable TUI link back to the root discussion.`. Replace
+- Rustdoc prose to reword host-neutral (completeness audit 🔴): L77
+  `/// TUI view targeted by a summary link.`, L93
+  `/// Structured link pointing back to a TUI view.`, L96/L98 field docs, L103
+  `/// Creates a link to the comment-detail view…`, L250
+  `/// Stable TUI link back to the root discussion.`. Replace
   "TUI"/"link" wording with host-neutral language and add the rustdoc described
-  in M1 (intra-doc link to `FrankieDeepLink`, host-neutrality + `Display`-removal
-  rationale).
+  in M1 (intra-doc link to `FrankieDeepLink`, host-neutrality +
+  `Display`-removal rationale).
 - L261, L282, L284, L285, L316, L330: in-module tests constructing/asserting
   the old types and the `Display` output. Also rename the test function L281
   `tui_link_formats_as_uri_like_token` → e.g.
@@ -394,18 +430,21 @@ Add two tests that specify the *new* contract and currently cannot compile/pass:
    `PrDiscussionSummary` with one item and `serde_json::to_value(&summary)`.
    Assert the EXACT wire shape of the reference, not just key presence
    (Telefono 🟡): the verified shape is a bare numeric `comment_id`
-   (`GithubCommentId` is a one-field tuple struct that serializes transparently)
-   and a PascalCase `view` string, so assert that `item["view_ref"]` equals
-   `serde_json::json!({ "comment_id": 42, "view": "CommentDetail" })`.
-   Keep negative substring guards on the serialized string as a supplement: it
+   (`GithubCommentId` is a one-field tuple struct that serializes
+   transparently) and a PascalCase `view` string, so assert that
+   `item["view_ref"]` equals
+   `serde_json::json!({ "comment_id": 42, "view": "CommentDetail" })`. Keep
+   negative substring guards on the serialized string as a supplement: it
    contains none of `"tui_link"`, `"frankie://"`, `"Tui"`. Then assert a
-   Deserialize round-trip (Telefono 🟡): `serde_json::from_value::<PrDiscussionSummary>(v)`
-   equals the original (the structs derive `PartialEq, Eq`). Together these are
-   the acceptance proof that serialization is host-neutral and bidirectional.
-   `serde_json` is a confirmed runtime dependency (`Cargo.toml` `[dependencies]`),
-   so no manifest change is needed.
+   Deserialize round-trip (Telefono 🟡):
+   `serde_json::from_value::<PrDiscussionSummary>(v)` equals the original (the
+   structs derive `PartialEq, Eq`). Together these are the acceptance proof
+   that serialization is host-neutral and bidirectional. `serde_json` is a
+   confirmed runtime dependency (`Cargo.toml` `[dependencies]`), so no manifest
+   change is needed.
 2. `FrankieDeepLink` rendering test (in the new presentation submodule's
-   tests): `FrankieDeepLink::new(&ReviewViewRef::comment_detail(42_u64.into())).to_string()`
+   tests):
+   `FrankieDeepLink::new(&ReviewViewRef::comment_detail(42_u64.into())).to_string()`
    equals `"frankie://review-comment/42?view=detail"`.
 
 Run the focused tests and observe failure for the expected reason (missing
@@ -417,31 +456,31 @@ Milestone M1 — introduce types and migrate consumers (one coherent, compiling
 change; the compiler enforces completeness):
 
 1. In `src/ai/pr_discussion_summary/model.rs`, rename `TuiView` → `ReviewView`
-   and `TuiViewLink` → `ReviewViewRef`; keep `comment_detail()` and
-   `label()` (the latter `pub(crate)`); keep serde derives unchanged (D6);
-   REMOVE the `impl fmt::Display for …`. Rename the field `tui_link` →
-   `view_ref`. Reword all "TUI link"/"TUI view" rustdoc to host-neutral wording.
-   Add compiler-checked rustdoc (Dinolump 🔴): on `ReviewViewRef`, state it is a
+   and `TuiViewLink` → `ReviewViewRef`; keep `comment_detail()` and `label()`
+   (the latter `pub(crate)`); keep serde derives unchanged (D6); REMOVE the
+   `impl fmt::Display for …`. Rename the field `tui_link` → `view_ref`. Reword
+   all "TUI link"/"TUI view" rustdoc to host-neutral wording. Add
+   compiler-checked rustdoc (Dinolump 🔴): on `ReviewViewRef`, state it is a
    host-neutral reference that deliberately has no `Display`/URI rendering —
    render it with the `FrankieDeepLink` renderer — and cite ADR-010; on
    `ReviewView`, note it is forward-looking with a single `CommentDetail`
-   variant today; on `label()`, note `"detail"` is user-visible in the deep link
-   (do not "tidy").
+   variant today; on `label()`, note `"detail"` is user-visible in the deep
+   link (do not "tidy").
 2. Add `src/ai/pr_discussion_summary/deep_link.rs` with module-level rustdoc
    declaring it a presentation/adapter projection (NOT the canonical contract;
    the canonical shared format is the serde form of `ReviewViewRef`) per D8.
    Define `pub struct FrankieDeepLink<'a>(&'a ReviewViewRef);` with a private
    field, `pub const fn new(view_ref: &'a ReviewViewRef) -> Self`, and
    `impl fmt::Display` rendering `frankie://review-comment/{id}?view={label}`.
-   Rustdoc intra-doc-links back to `ReviewViewRef`. Add a brief comment
-   noting the `//` authority form is an authority-less deep link kept for
+   Rustdoc intra-doc-links back to `ReviewViewRef`. Add a brief comment noting
+   the `//` authority form is an authority-less deep link kept for
    compatibility (RFC 7595 §3.2). Declare `mod deep_link;` (unconditional — it
    is used by production CLI/TUI code, so no `#[cfg]` gate) in `mod.rs`.
 3. Update re-exports: add `ReviewView, ReviewViewRef, FrankieDeepLink` and drop
-   `TuiView, TuiViewLink` in BOTH `mod.rs` and `src/ai/mod.rs` (the CLI/TUI/test
-   call sites import via `crate::ai::{…}`/`frankie::ai::{…}`, so `FrankieDeepLink`
-   must be reachable through both hops; the CLI render site doubles as the
-   cross-crate reachability proof — Pandalump 🟡).
+   `TuiView, TuiViewLink` in BOTH `mod.rs` and `src/ai/mod.rs` (the
+   CLI/TUI/test call sites import via `crate::ai::{…}`/`frankie::ai::{…}`, so
+   `FrankieDeepLink` must be reachable through both hops; the CLI render site
+   doubles as the cross-crate reachability proof — Pandalump 🟡).
 4. Migrate `service.rs`, `summarize_discussions.rs`,
    `pr_discussion_summary_state.rs` (rename `selected_link` →
    `selected_view_ref`, fix the `.map(ToString::to_string)` site),
@@ -457,9 +496,8 @@ Milestone M2 — migrate test construction sites and confirm behaviour:
 
 ### Stage D — refactor, documentation, cleanup
 
-Milestone M3 — docs (ADR-008 amendment, `frankie-design.md`,
-`users-guide.md`, `developers-guide.md`). Milestone M4 — roadmap tick, full
-gate, CodeRabbit.
+Milestone M3 — docs (ADR-008 amendment, `frankie-design.md`, `users-guide.md`,
+`developers-guide.md`). Milestone M4 — roadmap tick, full gate, CodeRabbit.
 
 Each stage ends with the gate suite; do not proceed past a failing gate.
 
@@ -526,8 +564,8 @@ Quality criteria for "done":
 - Rustdoc (M1 acceptance bullet, Dinolump 🟡): the public types `ReviewView`,
   `ReviewViewRef`, and `FrankieDeepLink` carry rustdoc that (a) states
   host-neutrality, (b) intra-doc-links the DTO to its renderer and back, and
-  (c) records the `Display`-removal rationale (ADR-010). `cargo doc` builds with
-  no broken intra-doc links.
+  (c) records the `Display`-removal rationale (ADR-010). `cargo doc` builds
+  with no broken intra-doc links.
 - Lint/format: `make check-fmt` and `make lint` clean (warnings denied).
 - Docs: `make markdownlint` and `make nixie` (Mermaid) clean.
 - Review: `coderabbit review --agent` reports no outstanding concerns; run it
@@ -620,12 +658,13 @@ Prescriptive end-state names and paths:
 
 - `frankie::ai::ReviewView` — enum, variant `CommentDetail`,
   `pub(crate) const fn label(self) -> &'static str` → `"detail"`.
-- `frankie::ai::ReviewViewRef` — struct `{ comment_id: GithubCommentId, view:
-  ReviewView }`, `pub const fn comment_detail(GithubCommentId) -> Self`, serde
+- `frankie::ai::ReviewViewRef` — struct
+  `{ comment_id: GithubCommentId, view: ReviewView }`,
+  `pub const fn comment_detail(GithubCommentId) -> Self`, serde
   `Serialize`/`Deserialize`, NO `Display`.
 - `frankie::ai::FrankieDeepLink<'a>` — presentation newtype (private field) with
-  `pub const fn new(&'a ReviewViewRef) -> Self` and `impl Display` rendering the
-  deep link; the single shared renderer used by CLI and TUI. Defined in the
+  `pub const fn new(&'a ReviewViewRef) -> Self` and `impl Display` rendering
+  the deep link; the single shared renderer used by CLI and TUI. Defined in the
   `deep_link` presentation submodule (D8).
 - `frankie::ai::DiscussionSummaryItem.view_ref: ReviewViewRef` (renamed from
   `tui_link`).
@@ -642,8 +681,9 @@ Skills: `rust-router` (entry), `rust-types-and-apis` (newtype value object,
 public API shape), `arch-crate-design` (module boundaries and re-exports),
 `hexagonal-architecture` (keep the DTO a pure driven-port value object;
 rendering is an adapter concern), `rust-unit-testing` and the `rstest` /
-`rstest-bdd` skills (test shape), `leta` (navigation/rename), `arch-decision-records`
-(ADR-008 amendment style), `commit-message` and `pr-creation` (delivery).
+`rstest-bdd` skills (test shape), `leta` (navigation/rename),
+`arch-decision-records` (ADR-008 amendment style), `commit-message` and
+`pr-creation` (delivery).
 
 Repository docs to consult: `docs/adr-008-pr-discussion-summary-contract.md`,
 `docs/adr-010-close-review-adapter-capability-gap.md`, `docs/frankie-design.md`,
@@ -665,10 +705,10 @@ without putting `Display` on the domain type.
 
 ## Revision note
 
-Initial draft (2026-06-18). Establishes the host-neutral rename
-(`TuiViewLink`→`ReviewViewRef`, `TuiView`→`ReviewView`, `tui_link`→`view_ref`),
-the shared `FrankieDeepLink` presentation helper, the exhaustive change
-inventory, the red-green test strategy, and the documentation/roadmap updates.
+Initial draft (2026-06-18). Establishes the host-neutral rename (`TuiViewLink`→
+`ReviewViewRef`, `TuiView`→`ReviewView`, `tui_link`→`view_ref`), the shared
+`FrankieDeepLink` presentation helper, the exhaustive change inventory, the
+red-green test strategy, and the documentation/roadmap updates.
 
 Revision 2 (2026-06-18, post community-of-experts panel review). What changed:
 added D8 (presentation-submodule placement and the boundary trade-off for
@@ -681,6 +721,6 @@ rustdoc prose, the handler error string/binding, and the
 `tui_link_formats_as_uri_like_token` test-fn name; and added explicit M1
 rustdoc requirements (host-neutrality statement, bidirectional intra-doc links,
 `Display`-removal rationale). Why: to close boundary, contract, completeness,
-and maintainability gaps the panel surfaced. Effect on remaining work: the
-edit list and acceptance criteria are now tighter; no scope change. Awaiting
+and maintainability gaps the panel surfaced. Effect on remaining work: the edit
+list and acceptance criteria are now tighter; no scope change. Awaiting
 approval before implementation.

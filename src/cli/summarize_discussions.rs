@@ -4,8 +4,8 @@ use std::io::{self, Write};
 use std::time::Duration;
 
 use frankie::ai::{
-    OpenAiPrDiscussionSummaryConfig, OpenAiPrDiscussionSummaryService, PrDiscussionSummary,
-    PrDiscussionSummaryRequest, PrDiscussionSummaryService,
+    FrankieDeepLink, OpenAiPrDiscussionSummaryConfig, OpenAiPrDiscussionSummaryService,
+    PrDiscussionSummary, PrDiscussionSummaryRequest, PrDiscussionSummaryService,
 };
 use frankie::{
     FrankieConfig, IntakeError, OctocrabReviewCommentGateway, PersonalAccessToken,
@@ -66,8 +66,12 @@ fn write_summary<W: Write>(
                 writeln!(writer, "    - {}", item.headline).map_err(|error| io_error(&error))?;
                 writeln!(writer, "      Rationale: {}", item.rationale)
                     .map_err(|error| io_error(&error))?;
-                writeln!(writer, "      Link: {}", item.tui_link)
-                    .map_err(|error| io_error(&error))?;
+                writeln!(
+                    writer,
+                    "      Link: {}",
+                    FrankieDeepLink::new(&item.view_ref)
+                )
+                .map_err(|error| io_error(&error))?;
             }
         }
     }
@@ -83,7 +87,8 @@ mod tests {
     use frankie::FrankieConfig;
     use frankie::ai::pr_discussion_summary::test_support::StubPrDiscussionSummaryService;
     use frankie::ai::{
-        DiscussionSeverity, FileDiscussionSummary, PrDiscussionSummary, SeverityBucket, TuiViewLink,
+        DiscussionSeverity, FileDiscussionSummary, PrDiscussionSummary, ReviewViewRef,
+        SeverityBucket,
     };
 
     #[rstest]
@@ -103,7 +108,7 @@ mod tests {
                         headline: "Handle panic path".to_owned(),
                         rationale: "Review thread flagged unwrap".to_owned(),
                         severity: DiscussionSeverity::High,
-                        tui_link: TuiViewLink::comment_detail(1_u64.into()),
+                        view_ref: ReviewViewRef::comment_detail(1_u64.into()),
                     }],
                 }],
             }],
@@ -124,7 +129,7 @@ mod tests {
                             headline: "Handle panic path".to_owned(),
                             rationale: "Review thread flagged unwrap".to_owned(),
                             severity: DiscussionSeverity::High,
-                            tui_link: TuiViewLink::comment_detail(1_u64.into()),
+                            view_ref: ReviewViewRef::comment_detail(1_u64.into()),
                         }],
                     }],
                 }],

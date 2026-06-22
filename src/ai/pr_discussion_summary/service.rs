@@ -7,7 +7,7 @@ use crate::verification::GithubCommentId;
 
 use super::model::{
     DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary, PrDiscussionSummary,
-    PrDiscussionSummaryRequest, SeverityBucket, TuiViewLink,
+    PrDiscussionSummaryRequest, ReviewViewRef, SeverityBucket,
 };
 use super::threads::{DiscussionThread, build_discussion_threads};
 
@@ -174,7 +174,7 @@ fn group_summary_items(
             headline: draft.headline.trim().to_owned(),
             rationale: draft.rationale.trim().to_owned(),
             severity: draft.severity,
-            tui_link: TuiViewLink::comment_detail(draft.root_comment_id),
+            view_ref: ReviewViewRef::comment_detail(draft.root_comment_id),
         };
         grouped
             .entry(thread.file_path.clone())
@@ -235,7 +235,9 @@ mod tests {
         ThreadSummaryDraft, ThreadSummaryProvider, ThreadSummaryProviderRequest,
         summarize_with_provider,
     };
-    use crate::ai::pr_discussion_summary::{DiscussionSeverity, PrDiscussionSummaryRequest};
+    use crate::ai::pr_discussion_summary::{
+        DiscussionSeverity, FrankieDeepLink, PrDiscussionSummaryRequest,
+    };
     use crate::github::IntakeError;
     use crate::github::models::test_support::minimal_review;
 
@@ -337,7 +339,7 @@ mod tests {
             vec![1_u64.into(), 3_u64.into()]
         );
         assert_eq!(
-            first_second_file_item.tui_link.to_string(),
+            FrankieDeepLink::new(&first_second_file_item.view_ref).to_string(),
             "frankie://review-comment/1?view=detail"
         );
     }

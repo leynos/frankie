@@ -82,10 +82,10 @@ fn summarize_reads_structured_response_from_vidaimock() -> TestResult<()> {
     {
         return Err("expected parsed summary to contain a high-severity item".into());
     }
-    if !items
-        .iter()
-        .any(|item| item.tui_link.to_string() == "frankie://review-comment/1?view=detail")
-    {
+    if !items.iter().any(|item| {
+        frankie::ai::FrankieDeepLink::new(&item.view_ref).to_string()
+            == "frankie://review-comment/1?view=detail"
+    }) {
         return Err("expected parsed summary to contain the VidaiMock summary link".into());
     }
 
