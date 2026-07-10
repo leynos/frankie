@@ -100,7 +100,7 @@ Success is observable when:
 
 - Risk: interrupted session detection relies on filesystem state that may
   be stale or corrupted. Severity: low. Likelihood: low. Mitigation: validate
-  session state file integrity on read; discard invalid or unparseable session
+  session state file integrity on read; discard invalid or unparsable session
   files silently and treat as "no interrupted session".
 
 ## Progress
@@ -393,7 +393,7 @@ In `src/ai/session.rs`:
    owner: &str, repository: &str, pr_number: u64) ->
    Result<Option<SessionState>, IntakeError>`:
    - List all `.session.json` files in `base_dir`.
-   - Parse each as `SessionState`; skip unparseable files silently.
+   - Parse each as `SessionState`; skip unparsable files silently.
    - Filter to those matching the owner, repository, and PR number.
    - Filter to those with status `Interrupted` and a non-empty
      `thread_id`.

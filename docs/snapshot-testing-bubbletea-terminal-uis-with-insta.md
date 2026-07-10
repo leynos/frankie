@@ -802,7 +802,7 @@ Settings::clone_current()
 ```
 
 This tells insta to look in a directory relative to the current one. In most
-cases, the default is fine. Organise tests so that each component or feature
+cases, the default is fine. Organize tests so that each component or feature
 has its own test module, which will naturally group the snapshots.
 
 - **Reviewing and updating snapshots:** When a snapshot test fails (because the
@@ -899,7 +899,7 @@ managed:
 One concrete example: a developer retrofitting snapshot tests for a Bubbletea
 app noted that the process forced deeper thought about the app’s architecture
 and state handling. That process often reveals where side effects should be
-separated from pure updates, or where code can be reorganised to be more
+separated from pure updates, or where code can be reorganized to be more
 testable. Embracing those improvements leaves the TUI code cleaner and more
 maintainable.
 

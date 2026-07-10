@@ -326,7 +326,7 @@ classDiagram
         +pull_request_comments(locator: &PullRequestLocator) Result_Vec_PullRequestComment_IntakeError
     }
 
-    class PullRequestIntake~G: PullRequestGateway~ {
+    class PullRequestIntake~G~ {
         -client: &G
         +new(client: &G) PullRequestIntake~G~
         +load(locator: &PullRequestLocator) Result~PullRequestDetails, IntakeError~
@@ -627,7 +627,7 @@ The application operates within the following technical boundaries:
 
 ## 2. Product Requirements
 
-## 2.1 Feature Catalog
+## 2.1 Feature Catalogue
 
 ### 2.1.1 Core Repository Access Features
 
@@ -1336,7 +1336,7 @@ services.
 - **Builder Pattern**: Methods with multiple optional parameters built
   as Builder structs for easy parameter specification
 - **Extensible HTTP Methods**: Suite of HTTP methods for extending
-  Octocrab's existing behavior
+  Octocrab's existing behaviour
 
 ### 3.2.3 Local Git Operations
 
@@ -4205,7 +4205,7 @@ frameworks while ensuring scalability, maintainability, and security.
 
 Frankie runs as a single-process, monolithic TUI built on the MVU loop outlined
 in Section 5.1. UI, review logic, and integrations share one binary and memory
-space to minimise keyboard latency, simplify distribution, and honour the
+space to minimize keyboard latency, simplify distribution, and honour the
 local-first constraint of a developer tool. No alternative runtime topologies
 are planned.
 
@@ -6157,12 +6157,12 @@ contents. Prompts can include source code and potentially sensitive data.
 
 **Data Masking Implementation**:
 
-| Data Category       | Masking Rule                                                                                                  | Implementation                                                              | Audit Requirements          |
-| ------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------- |
-| Source Code Context | Redact sensitive patterns                                                                                     | Regex-based content filtering                                               | Code context access logging |
-| API Credentials     | Full masking in logs                                                                                          | Don't return sensitive data like credentials, passwords, or security tokens | Credential access auditing  |
-| User Information    | Partial masking (email domains)                                                                               | Hash-based anonymization                                                    | User data access tracking   |
-| Command Arguments   | Treat tool arguments and outputs as potentially sensitive. Favor redaction at collector or SIEM when feasible | Dynamic content analysis                                                    | Command execution logging   |
+| Data Category       | Masking Rule                                                                                                   | Implementation                                                              | Audit Requirements          |
+| ------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------- |
+| Source Code Context | Redact sensitive patterns                                                                                      | Regex-based content filtering                                               | Code context access logging |
+| API Credentials     | Full masking in logs                                                                                           | Don't return sensitive data like credentials, passwords, or security tokens | Credential access auditing  |
+| User Information    | Partial masking (email domains)                                                                                | Hash-based anonymization                                                    | User data access tracking   |
+| Command Arguments   | Treat tool arguments and outputs as potentially sensitive. Favour redaction at collector or SIEM when feasible | Dynamic content analysis                                                    | Command execution logging   |
 
 #### 6.8.3.4 Secure Communication
 
@@ -6592,7 +6592,7 @@ flowchart TD
 **TUI Performance Tracking**:
 
 Real-time monitoring is an important task that lets you see what's happening
-under the hood, catch anomalies, and understand application behavior as it
+under the hood, catch anomalies, and understand application behaviour as it
 unfolds, providing a lightweight but effective monitoring approach.
 
 ```mermaid
@@ -7836,21 +7836,21 @@ requests
 
 **Cross-Platform Support**:
 
-- ANSI color support with fallback to monochrome
+- ANSI colour support with fallback to monochrome
 - Unicode character support with ASCII alternatives
 - Terminal size adaptation (minimum 80x24, optimal 120x40)
 - Font rendering compatibility across terminal emulators
 
 **Accessibility Features**:
 
-- High contrast color schemes
+- High contrast colour schemes
 - Screen reader compatibility through structured text
 - Keyboard-only navigation support
-- Customizable color themes for visual impairments
+- Customizable colour themes for visual impairments
 
-### 7.7.2 Color Scheme And Theming
+### 7.7.2 Colour Scheme And Theming
 
-**Default Color Palette**:
+**Default Colour Palette**:
 
 - Primary: Blue (#0066CC) for selections and highlights
 - Success: Green (#00AA00) for completed actions
@@ -7861,7 +7861,7 @@ requests
 **Theme Customization**:
 
 - Light and dark theme variants
-- User-configurable color schemes
+- User-configurable colour schemes
 - Syntax highlighting theme integration
 - Terminal-specific optimizations
 
@@ -7878,7 +7878,7 @@ requests
 
 - Headers with bold and underline formatting
 - Code blocks with monospace font preservation
-- Emphasis through color and style variations
+- Emphasis through colour and style variations
 - Consistent spacing and alignment
 
 ### 7.7.4 Progress And Status Indicators
@@ -8249,7 +8249,7 @@ The octocrab library provides comprehensive GitHub API integration capabilities:
 
 - High-level strongly typed semantic API with models mapping to GitHub's
   types
-- Lower-level HTTP API for extending behavior
+- Lower-level HTTP API for extending behaviour
 - Builder pattern implementation for methods with multiple optional
   parameters
 - Extensible HTTP methods suite for custom functionality
@@ -8280,14 +8280,14 @@ characteristics:
 
 **Cross-Platform Terminal Support**:
 
-- ANSI color support with fallback to monochrome
+- ANSI colour support with fallback to monochrome
 - Unicode character support with ASCII alternatives
 - Terminal size adaptation (minimum 80x24, optimal 120x40)
 - Font rendering compatibility across terminal emulators
 
 **Event Handling System**: Comprehensive Event Handling: Keyboard, mouse,
 window resize, and focus events · Memory Monitoring: Built-in memory usage
-tracking and leak detection · Gradient Rendering: Rich color gradients for
+tracking and leak detection · Gradient Rendering: Rich colour gradients for
 progress bars and visual elements · Flexible Input Sources: Support for
 different input mechanisms and testing
 
