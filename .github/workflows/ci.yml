@@ -28,6 +28,8 @@ jobs:
             **/*.md
             !**/target/**
             !**/dist/**
+      - name: Spelling
+        run: make spelling
       - name: Lint
         run: make lint
       - name: Install VidaiMock

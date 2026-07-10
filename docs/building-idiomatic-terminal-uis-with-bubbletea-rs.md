@@ -3,8 +3,8 @@
 Experienced Rust developers can leverage the **Bubbletea-rs** crate to build
 rich, interactive terminal user interfaces following the Elm-style
 Model–View–Update (MVU) architecture. This guide provides a comprehensive look
-at designing system control dashboards (as opposed to data visualisation
-dashboards) with `bubbletea-rs`, emphasising idiomatic Rust practices. We will
+at designing system control dashboards (as opposed to data visualization
+dashboards) with `bubbletea-rs`, emphasizing idiomatic Rust practices. We will
 cover the core architecture (model, view, update, message passing), best
 practices in structuring and managing state, modular component design, handling
 user input (keyboard and mouse), integrating asynchronous tasks and external
@@ -365,7 +365,7 @@ real-time system logs, you might create a `LogPanel` struct with its own state
 (maybe a scroll position, a vector of log lines, etc.), and give it methods
 `update(&mut self, Msg) -> Option<Cmd>` and `view(&self) -> String`. Your main
 model would include `log_panel: LogPanel` and delegate events to it similarly.
-This approach keeps code organised – each module or struct handles its own
+This approach keeps code organized – each module or struct handles its own
 piece of state and UI, and the main model just ties them together. It’s very
 much akin to React’s component model or Elm’s nested TEA pattern, but without a
 formal virtual DOM: you are manually orchestrating which part of the state gets
@@ -393,7 +393,7 @@ which events.
 - **Use modules for large apps**: Rust’s module system is your friend. You can
   have `mod widgets; mod panels; mod controllers;` etc., where each defines a
   piece of the UI or logic, and import them into your main app. This is purely
-  for code organisation – at runtime it’s all one program – but it makes the
+  for code organization – at runtime it’s all one program – but it makes the
   development experience much better for a big dashboard project.
 
 ## Ergonomic State Management and Update Handling
@@ -810,7 +810,7 @@ possible, use channels: have the external thread send data on a Rust `mpsc`
 channel, and within your Bubbletea app, perhaps use an `every` tick to poll
 that channel periodically and turn any received messages into `Msg`. This
 polling approach keeps things in the single-threaded loop and avoids tricky
-synchronisation.
+synchronization.
 
 ### Async Backends and Integration
 
@@ -861,7 +861,7 @@ fn test_counter_increment() {
 In this test, we simulate sending the `Increment` message and verify that the
 counter increments and no command is returned. You can similarly test that a
 Quit message returns a quit command, or that a certain key press when in a
-given state triggers the expected behavior.
+given state triggers the expected behaviour.
 
 For messages that come from bubbletea’s system (like `KeyMsg` or `MouseMsg`),
 you can construct them using the types from `crossterm`. For example, `Msg` for
@@ -930,7 +930,7 @@ explicitly.
 
 ### Debugging Tools
 
-Even with tests, you’ll likely need to debug interactive behavior. We already
+Even with tests, you’ll likely need to debug interactive behaviour. We already
 mentioned logging with `log_to_file()`. You can enable that early in `main()`
 if you suspect something is off. Also, run your application with
 `RUST_LOG=debug` if Bubbletea-rs emits log messages (it uses the `log` crate
@@ -964,7 +964,7 @@ Bubble Tea in Go or Elm) should be aware of some differences and gotchas in
 Rust’s approach:
 
 - **Elm Architecture in Rust:** The high-level pattern is the same, but Elm is
-  pure and staticly typed for messages. In Bubbletea-rs, messages are dynamic,
+  pure and statically typed for messages. In Bubbletea-rs, messages are dynamic,
   so **the compiler won’t warn you about unhandled message types** – you must
   be diligent in handling all relevant cases. The benefit is you can easily
   integrate new message types (especially from third-party components) without
@@ -1047,7 +1047,7 @@ Rust’s approach:
 
 - **Oxford -ize and British Spelling:** Finally, a light-hearted note if you
   generate any user-facing text: since we’re in Britain, perhaps your
-  application should display “Colour” instead of “Color” in any UI messages!
+  application should display “Colour” instead of `Color` in any UI messages!
   (The code, of course, remains in Rust with American English in libraries like
   `color` in lipgloss.)
 
