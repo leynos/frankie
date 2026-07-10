@@ -1,5 +1,7 @@
 //! AI-rewrite preview tests for reply-drafting handlers.
 
+use rstest::rstest;
+
 use super::*;
 
 #[tokio::test]
@@ -109,42 +111,41 @@ where
     assert_eq!(app.error_message(), Some(expected_error));
 }
 
-#[test]
-fn ai_rewrite_request_with_empty_draft_sets_error_and_returns_no_command() {
-    assert_ai_rewrite_request_fails_with_error(
-        || {
-            let mut app = ReviewApp::new(sample_reviews()).with_comment_rewrite_service(Arc::new(
-                StubCommentRewriteService::success("unused"),
-            ));
-            app.handle_message(&AppMsg::StartReplyDraft);
-            app
-        },
-        "Reply draft is empty; type text before AI rewrite.",
-    );
+/// Builds an app with a stub rewrite service whose response is unused.
+fn app_with_unused_stub() -> ReviewApp {
+    ReviewApp::new(sample_reviews())
+        .with_comment_rewrite_service(Arc::new(StubCommentRewriteService::success("unused")))
 }
 
-#[test]
-fn ai_rewrite_request_without_active_draft_sets_error_and_returns_no_command() {
-    assert_ai_rewrite_request_fails_with_error(
-        || {
-            ReviewApp::new(sample_reviews()).with_comment_rewrite_service(Arc::new(
-                StubCommentRewriteService::success("unused"),
-            ))
-        },
-        "No active reply draft. Press 'a' to start drafting.",
-    );
+fn app_with_empty_draft() -> ReviewApp {
+    let mut app = app_with_unused_stub();
+    app.handle_message(&AppMsg::StartReplyDraft);
+    app
 }
 
-#[test]
-fn ai_rewrite_request_without_selected_comment_sets_error_and_returns_no_command() {
-    assert_ai_rewrite_request_fails_with_error(
-        || {
-            ReviewApp::empty().with_comment_rewrite_service(Arc::new(
-                StubCommentRewriteService::success("unused"),
-            ))
-        },
-        "Reply drafting requires a selected comment",
-    );
+fn app_without_selected_comment() -> ReviewApp {
+    ReviewApp::empty()
+        .with_comment_rewrite_service(Arc::new(StubCommentRewriteService::success("unused")))
+}
+
+#[rstest]
+#[case::empty_draft(
+    app_with_empty_draft as fn() -> ReviewApp,
+    "Reply draft is empty; type text before AI rewrite."
+)]
+#[case::without_active_draft(
+    app_with_unused_stub as fn() -> ReviewApp,
+    "No active reply draft. Press 'a' to start drafting."
+)]
+#[case::without_selected_comment(
+    app_without_selected_comment as fn() -> ReviewApp,
+    "Reply drafting requires a selected comment"
+)]
+fn ai_rewrite_request_in_invalid_state_sets_error_and_returns_no_command(
+    #[case] setup: fn() -> ReviewApp,
+    #[case] expected_error: &str,
+) {
+    assert_ai_rewrite_request_fails_with_error(setup, expected_error);
 }
 
 #[test]

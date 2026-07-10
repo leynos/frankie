@@ -30,7 +30,7 @@ pub enum InputContext {
 /// This is a convenience wrapper that assumes the `ReviewList` context.
 /// For context-aware key mapping, use `map_key_to_message_with_context`.
 #[must_use]
-pub const fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+pub fn map_key_to_message(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     map_key_to_message_with_context(key, InputContext::ReviewList)
 }
 
@@ -58,29 +58,52 @@ const fn shared_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     }
 }
 
-const fn time_travel_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
+/// Key bindings for full-screen overlay views that navigate between items
+/// and exit back to the review list.
+struct OverlayNavigationBindings {
+    previous_key: char,
+    next_key: char,
+    previous_msg: AppMsg,
+    next_msg: AppMsg,
+    exit_msg: AppMsg,
+}
+
+/// Maps keys for overlay views sharing the previous/next/exit shape, such
+/// as time travel and the full-screen diff context.
+fn overlay_navigation_keys(
+    key: &bubbletea_rs::event::KeyMsg,
+    bindings: OverlayNavigationBindings,
+) -> Option<AppMsg> {
     use crossterm::event::KeyCode;
 
     match key.key {
-        KeyCode::Char('h') => Some(AppMsg::PreviousCommit),
-        KeyCode::Char('l') => Some(AppMsg::NextCommit),
-        KeyCode::Esc => Some(AppMsg::ExitTimeTravel),
+        KeyCode::Char(character) if character == bindings.previous_key => {
+            Some(bindings.previous_msg)
+        }
+        KeyCode::Char(character) if character == bindings.next_key => Some(bindings.next_msg),
+        KeyCode::Esc => Some(bindings.exit_msg),
         KeyCode::Char('q') => Some(AppMsg::Quit),
         _ => shared_keys(key),
     }
 }
 
-const fn diff_context_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
-    use crossterm::event::KeyCode;
+/// Bindings for the time-travel overlay (`h`/`l` navigate commits).
+const TIME_TRAVEL_BINDINGS: OverlayNavigationBindings = OverlayNavigationBindings {
+    previous_key: 'h',
+    next_key: 'l',
+    previous_msg: AppMsg::PreviousCommit,
+    next_msg: AppMsg::NextCommit,
+    exit_msg: AppMsg::ExitTimeTravel,
+};
 
-    match key.key {
-        KeyCode::Char('[') => Some(AppMsg::PreviousHunk),
-        KeyCode::Char(']') => Some(AppMsg::NextHunk),
-        KeyCode::Esc => Some(AppMsg::HideDiffContext),
-        KeyCode::Char('q') => Some(AppMsg::Quit),
-        _ => shared_keys(key),
-    }
-}
+/// Bindings for the diff-context overlay (`[`/`]` navigate hunks).
+const DIFF_CONTEXT_BINDINGS: OverlayNavigationBindings = OverlayNavigationBindings {
+    previous_key: '[',
+    next_key: ']',
+    previous_msg: AppMsg::PreviousHunk,
+    next_msg: AppMsg::NextHunk,
+    exit_msg: AppMsg::HideDiffContext,
+};
 
 const fn resume_prompt_keys(key: &bubbletea_rs::event::KeyMsg) -> Option<AppMsg> {
     use crossterm::event::KeyCode;
@@ -155,13 +178,13 @@ const fn pr_discussion_summary_keys(key: &bubbletea_rs::event::KeyMsg) -> Option
 /// in the review list.
 #[must_use]
 #[doc(hidden)]
-pub const fn map_key_to_message_with_context(
+pub fn map_key_to_message_with_context(
     key: &bubbletea_rs::event::KeyMsg,
     context: InputContext,
 ) -> Option<AppMsg> {
     match context {
-        InputContext::TimeTravel => time_travel_keys(key),
-        InputContext::DiffContext => diff_context_keys(key),
+        InputContext::TimeTravel => overlay_navigation_keys(key, TIME_TRAVEL_BINDINGS),
+        InputContext::DiffContext => overlay_navigation_keys(key, DIFF_CONTEXT_BINDINGS),
         InputContext::ResumePrompt => resume_prompt_keys(key),
         InputContext::ReviewList => review_list_keys(key),
         InputContext::ReplyDraft => reply_draft_keys(key),
