@@ -1,3 +1,5 @@
+//! Unit tests for the `commit` module.
+
 use super::*;
 
 /// Expected line mapping properties for test assertions.

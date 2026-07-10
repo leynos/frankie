@@ -1,6 +1,6 @@
 //! Shared test utilities for CLI tests.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use async_trait::async_trait;
 use frankie::github::RepositoryGateway;
@@ -22,15 +22,21 @@ impl RepositoryGateway for CapturingGateway {
         locator: &RepositoryLocator,
         params: &ListPullRequestsParams,
     ) -> Result<PaginatedPullRequests, IntakeError> {
+        // Poisoned mutexes are recovered: the mock stores plain data that
+        // stays valid after a panic in another thread.
         self.captured
             .lock()
-            .expect("captured mutex should be available")
+            .unwrap_or_else(PoisonError::into_inner)
             .replace((locator.clone(), params.clone()));
 
         self.response
             .lock()
-            .expect("response mutex should be available")
+            .unwrap_or_else(PoisonError::into_inner)
             .take()
-            .expect("response should only be consumed once")
+            .unwrap_or_else(|| {
+                Err(IntakeError::Api {
+                    message: "mock response was already consumed".to_owned(),
+                })
+            })
     }
 }

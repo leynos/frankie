@@ -87,6 +87,8 @@ pub(crate) fn io_error(error: &io::Error) -> IntakeError {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `output` module.
+
     use frankie::github::{PageInfo, PullRequestMetadata};
     use frankie::{PaginatedPullRequests, PullRequestDetails, PullRequestSummary, RateLimitInfo};
 

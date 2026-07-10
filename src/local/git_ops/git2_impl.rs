@@ -1,7 +1,7 @@
 //! Git2-based implementation of `GitOperations`.
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use chrono::{TimeZone, Utc};
 use git2::Repository;
@@ -72,6 +72,42 @@ impl Git2Operations {
             repo: Mutex::new(repo),
         }
     }
+
+    /// Locks the wrapped repository, surfacing mutex poisoning as an error.
+    ///
+    /// A poisoned mutex means another thread panicked while holding the
+    /// repository handle; propagating the failure lets callers report it
+    /// instead of aborting the process.
+    fn lock_repo(&self) -> Result<MutexGuard<'_, Repository>, GitOperationError> {
+        self.repo
+            .lock()
+            .map_err(|_| GitOperationError::RepositoryNotAvailable {
+                message: "Git repository mutex poisoned".to_owned(),
+            })
+    }
+}
+
+/// Reads a file's blob content from a commit as UTF-8 text.
+fn read_file_content_at_commit(
+    repo: &Repository,
+    commit: &git2::Commit<'_>,
+    file_path: &str,
+    sha: &CommitSha,
+) -> Result<String, GitOperationError> {
+    let blob_oid = helpers::get_file_blob_oid(commit, file_path)?;
+    let blob = repo
+        .find_blob(blob_oid)
+        .map_err(|e| GitOperationError::CommitAccessFailed {
+            sha: sha.clone(),
+            message: e.message().to_owned(),
+        })?;
+
+    std::str::from_utf8(blob.content())
+        .map_err(|_| GitOperationError::CommitAccessFailed {
+            sha: sha.clone(),
+            message: "file content is not valid UTF-8".to_owned(),
+        })
+        .map(str::to_owned)
 }
 
 impl GitOperations for Git2Operations {
@@ -80,11 +116,7 @@ impl GitOperations for Git2Operations {
         sha: &CommitSha,
         file_path: Option<&RepoFilePath>,
     ) -> Result<CommitSnapshot, GitOperationError> {
-        #[expect(
-            clippy::expect_used,
-            reason = "Mutex poisoning is an unrecoverable error"
-        )]
-        let repo = self.repo.lock().expect("Git repository mutex poisoned");
+        let repo = self.lock_repo()?;
         let oid = helpers::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
@@ -109,20 +141,7 @@ impl GitOperations for Git2Operations {
         let metadata = CommitMetadata::new(oid.to_string(), message, author_name, timestamp);
 
         if let Some(path) = file_path {
-            let blob_oid = helpers::get_file_blob_oid(&commit, path.as_str())?;
-            let blob =
-                repo.find_blob(blob_oid)
-                    .map_err(|e| GitOperationError::CommitAccessFailed {
-                        sha: sha.clone(),
-                        message: e.message().to_owned(),
-                    })?;
-
-            let content = std::str::from_utf8(blob.content())
-                .map_err(|_| GitOperationError::CommitAccessFailed {
-                    sha: sha.clone(),
-                    message: "file content is not valid UTF-8".to_owned(),
-                })?
-                .to_owned();
+            let content = read_file_content_at_commit(&repo, &commit, path.as_str(), sha)?;
 
             Ok(CommitSnapshot::with_file_content(
                 metadata,
@@ -139,43 +158,20 @@ impl GitOperations for Git2Operations {
         sha: &CommitSha,
         file_path: &RepoFilePath,
     ) -> Result<String, GitOperationError> {
-        #[expect(
-            clippy::expect_used,
-            reason = "Mutex poisoning is an unrecoverable error"
-        )]
-        let repo = self.repo.lock().expect("Git repository mutex poisoned");
+        let repo = self.lock_repo()?;
         let oid = helpers::parse_sha_with_repo(&repo, sha.as_str())?;
         let commit = repo
             .find_commit(oid)
             .map_err(|_| GitOperationError::CommitNotFound { sha: sha.clone() })?;
 
-        let blob_oid = helpers::get_file_blob_oid(&commit, file_path.as_str())?;
-        let blob = repo
-            .find_blob(blob_oid)
-            .map_err(|e| GitOperationError::CommitAccessFailed {
-                sha: sha.clone(),
-                message: e.message().to_owned(),
-            })?;
-
-        let content = std::str::from_utf8(blob.content()).map_err(|_| {
-            GitOperationError::CommitAccessFailed {
-                sha: sha.clone(),
-                message: "file content is not valid UTF-8".to_owned(),
-            }
-        })?;
-
-        Ok(content.to_owned())
+        read_file_content_at_commit(&repo, &commit, file_path.as_str(), sha)
     }
 
     fn verify_line_mapping(
         &self,
         request: &LineMappingRequest,
     ) -> Result<LineMappingVerification, GitOperationError> {
-        #[expect(
-            clippy::expect_used,
-            reason = "Mutex poisoning is an unrecoverable error"
-        )]
-        let repo = self.repo.lock().expect("Git repository mutex poisoned");
+        let repo = self.lock_repo()?;
         let old_oid = helpers::parse_sha_with_repo(&repo, &request.old_sha)?;
         let new_oid = helpers::parse_sha_with_repo(&repo, &request.new_sha)?;
 
@@ -225,11 +221,7 @@ impl GitOperations for Git2Operations {
         sha: &CommitSha,
         limit: usize,
     ) -> Result<Vec<CommitSha>, GitOperationError> {
-        #[expect(
-            clippy::expect_used,
-            reason = "Mutex poisoning is an unrecoverable error"
-        )]
-        let repo = self.repo.lock().expect("Git repository mutex poisoned");
+        let repo = self.lock_repo()?;
         let oid = helpers::parse_sha_with_repo(&repo, sha.as_str())?;
         let mut revwalk = repo.revwalk()?;
         revwalk.push(oid)?;
@@ -248,11 +240,11 @@ impl GitOperations for Git2Operations {
     }
 
     fn commit_exists(&self, sha: &CommitSha) -> bool {
-        #[expect(
-            clippy::expect_used,
-            reason = "Mutex poisoning is an unrecoverable error"
-        )]
-        let repo = self.repo.lock().expect("Git repository mutex poisoned");
+        // A poisoned mutex means the repository state cannot be trusted, so
+        // the commit is reported as absent rather than panicking.
+        let Ok(repo) = self.lock_repo() else {
+            return false;
+        };
         helpers::parse_sha_with_repo(&repo, sha.as_str())
             .and_then(|oid| {
                 repo.find_commit(oid)

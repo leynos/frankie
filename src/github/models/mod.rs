@@ -197,6 +197,8 @@ impl From<ApiReviewComment> for ReviewComment {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `models` module.
+
     use rstest::{fixture, rstest};
     use serde_json::json;
 
@@ -249,7 +251,7 @@ mod tests {
     }
 
     #[fixture]
-    fn sample_api_review_comment() -> ApiReviewComment {
+    fn sample_api_review_comment() -> Result<ApiReviewComment, serde_json::Error> {
         let value = json!({
             "id": 456,
             "body": "Consider using a constant here.",
@@ -263,11 +265,14 @@ mod tests {
             "created_at": "2025-01-01T00:00:00Z",
             "updated_at": "2025-01-02T00:00:00Z"
         });
-        serde_json::from_value(value).expect("ApiReviewComment should deserialise")
+        serde_json::from_value(value)
     }
 
     #[rstest]
-    fn api_review_comment_deserialises_core_fields(sample_api_review_comment: ApiReviewComment) {
+    fn api_review_comment_deserialises_core_fields(
+        #[from(sample_api_review_comment)] sample_res: Result<ApiReviewComment, serde_json::Error>,
+    ) {
+        let sample_api_review_comment = sample_res.expect("ApiReviewComment should deserialise");
         assert_eq!(sample_api_review_comment.id, 456);
         assert_eq!(
             sample_api_review_comment.body.as_deref(),
@@ -290,8 +295,9 @@ mod tests {
 
     #[rstest]
     fn api_review_comment_deserialises_metadata_fields(
-        sample_api_review_comment: ApiReviewComment,
+        #[from(sample_api_review_comment)] sample_res: Result<ApiReviewComment, serde_json::Error>,
     ) {
+        let sample_api_review_comment = sample_res.expect("ApiReviewComment should deserialise");
         assert_eq!(
             sample_api_review_comment.commit_id.as_deref(),
             Some("abc123")

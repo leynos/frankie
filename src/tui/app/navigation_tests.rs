@@ -7,9 +7,11 @@ use crate::github::models::test_support::create_reviews;
 
 #[fixture]
 fn setup_app(#[default(10)] review_count: usize, #[default(3)] visible_height: usize) -> ReviewApp {
+    // Saturate rather than panic: test heights are tiny, and a saturated
+    // terminal height would surface as an assertion failure anyway.
     let terminal_height =
         u16::try_from(visible_height + super::CHROME_HEIGHT + super::MIN_DETAIL_HEIGHT)
-            .expect("test terminal height fits in u16");
+            .unwrap_or(u16::MAX);
     ReviewApp::with_dimensions(create_reviews(review_count), 80, terminal_height)
 }
 

@@ -169,6 +169,8 @@ impl CommentRewriteOutcome {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `model` module.
+
     use rstest::rstest;
 
     use super::{CommentRewriteMode, CommentRewriteOutcome, CommentRewriteRequest};

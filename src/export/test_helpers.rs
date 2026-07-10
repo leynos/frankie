@@ -31,8 +31,9 @@ impl From<String> for TestError {
     }
 }
 
-/// Test data constants to reduce string argument repetition.
 pub mod test_data {
+    //! Shared constants that keep test call sites free of repeated literals.
+
     use super::PrUrl;
 
     /// Default PR URL for tests that don't need a specific URL.

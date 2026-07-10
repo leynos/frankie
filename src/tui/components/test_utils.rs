@@ -155,6 +155,8 @@ fn process_char_for_ansi_strip(ch: char, in_escape: bool, result: &mut String) -
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `test_utils` module.
+
     use super::*;
 
     #[test]

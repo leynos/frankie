@@ -67,12 +67,17 @@ fn collect_until_finished(handle: &CodexExecutionHandle) -> Vec<CodexExecutionUp
 }
 
 #[fixture]
-fn temp_dir() -> TempDir {
-    TempDir::new().expect("failed to create temporary directory")
+fn temp_dir() -> Result<TempDir, IntakeError> {
+    TempDir::new().map_err(|error| IntakeError::Io {
+        message: format!("failed to create temporary directory: {error}"),
+    })
 }
 
 #[fixture]
-fn utf8_path_from_temp(temp_dir: TempDir) -> Result<Utf8PathBuf, IntakeError> {
+fn utf8_path_from_temp(
+    #[from(temp_dir)] temp_dir_res: Result<TempDir, IntakeError>,
+) -> Result<Utf8PathBuf, IntakeError> {
+    let temp_dir = temp_dir_res?;
     Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf()).map_err(|_| IntakeError::Io {
         message: "temporary directory path is not valid UTF-8".to_owned(),
     })
@@ -130,9 +135,9 @@ fn script_fixture(temp_dir: TempDir, name: &str, contents: &str) -> ScriptFixtur
 }
 
 #[fixture]
-fn success_script(temp_dir: TempDir) -> ScriptFixture {
+fn success_script(#[from(temp_dir)] temp_dir_res: Result<TempDir, IntakeError>) -> ScriptFixture {
     script_fixture(
-        temp_dir,
+        temp_dir_res?,
         "codex-success.sh",
         concat!(
             "#!/bin/sh\n",
@@ -144,9 +149,9 @@ fn success_script(temp_dir: TempDir) -> ScriptFixture {
 }
 
 #[fixture]
-fn failure_script(temp_dir: TempDir) -> ScriptFixture {
+fn failure_script(#[from(temp_dir)] temp_dir_res: Result<TempDir, IntakeError>) -> ScriptFixture {
     script_fixture(
-        temp_dir,
+        temp_dir_res?,
         "codex-fail.sh",
         concat!(
             "#!/bin/sh\n",
@@ -157,9 +162,11 @@ fn failure_script(temp_dir: TempDir) -> ScriptFixture {
 }
 
 #[fixture]
-fn stderr_failure_script(temp_dir: TempDir) -> ScriptFixture {
+fn stderr_failure_script(
+    #[from(temp_dir)] temp_dir_res: Result<TempDir, IntakeError>,
+) -> ScriptFixture {
     script_fixture(
-        temp_dir,
+        temp_dir_res?,
         "codex-stderr.sh",
         concat!(
             "#!/bin/sh\n",

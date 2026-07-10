@@ -137,6 +137,8 @@ fn contains_ansi_escape(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `text_truncate` module.
+
     use super::*;
 
     #[test]

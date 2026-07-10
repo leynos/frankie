@@ -170,13 +170,14 @@ fn time_travel_app_with_git_ops(git_ops: Arc<dyn GitOperations>, index: usize) -
     app
 }
 
-async fn resolve_time_travel_cmd(cmd: bubbletea_rs::Cmd) -> AppMsg {
+async fn resolve_time_travel_cmd(cmd: bubbletea_rs::Cmd) -> Result<AppMsg, String> {
     let message = cmd
         .await
-        .expect("time-travel command should emit a message");
-    *message
+        .ok_or("time-travel command should emit a message")?;
+    message
         .downcast::<AppMsg>()
-        .expect("time-travel command should emit AppMsg")
+        .map(|boxed| *boxed)
+        .map_err(|_| "time-travel command should emit AppMsg".to_owned())
 }
 
 #[rstest]
@@ -286,7 +287,9 @@ async fn previous_commit_command_delegates_to_service_and_updates_state() {
         .handle_previous_commit()
         .expect("previous commit should spawn navigation command");
 
-    let message = resolve_time_travel_cmd(cmd).await;
+    let message = resolve_time_travel_cmd(cmd)
+        .await
+        .expect("time-travel command should resolve");
 
     let AppMsg::CommitNavigated { session_id, state } = message else {
         panic!("navigation command should emit CommitNavigated");
@@ -311,7 +314,9 @@ async fn previous_commit_command_reports_navigation_failure_phase() {
         .handle_previous_commit()
         .expect("previous commit should spawn navigation command");
 
-    let message = resolve_time_travel_cmd(cmd).await;
+    let message = resolve_time_travel_cmd(cmd)
+        .await
+        .expect("time-travel command should resolve");
 
     let AppMsg::TimeTravelFailed {
         session_id,

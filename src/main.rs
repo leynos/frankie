@@ -8,17 +8,35 @@ use frankie::{FrankieConfig, IntakeError, OperationMode};
 
 mod cli;
 
-#[tokio::main]
-async fn main() -> ExitCode {
-    match run().await {
-        Ok(()) => ExitCode::SUCCESS,
+// A hand-rolled runtime bootstrap replaces `#[tokio::main]` because the
+// macro expansion calls `expect` on runtime construction, which the
+// `no_expect_outside_tests` lint rejects in binary code.
+fn main() -> ExitCode {
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
         Err(error) => {
-            if writeln!(io::stderr().lock(), "{error}").is_err() {
-                return ExitCode::FAILURE;
-            }
-            ExitCode::FAILURE
+            drop(writeln!(
+                io::stderr().lock(),
+                "failed to start async runtime: {error}"
+            ));
+            return ExitCode::FAILURE;
         }
-    }
+    };
+
+    runtime.block_on(async {
+        match run().await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                if writeln!(io::stderr().lock(), "{error}").is_err() {
+                    return ExitCode::FAILURE;
+                }
+                ExitCode::FAILURE
+            }
+        }
+    })
 }
 
 async fn run() -> Result<(), IntakeError> {

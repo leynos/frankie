@@ -87,8 +87,9 @@ fn parse_invalid_urls_returns_error(#[case] input: &str) {
     );
 }
 
-/// `GitHubOrigin` accessor tests.
 mod accessors {
+    //! Tests covering remote accessor methods.
+
     use super::*;
 
     #[test]

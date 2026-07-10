@@ -28,27 +28,29 @@ struct TempRepoNoRemotes {
     repo: Repository,
 }
 
+/// Errors produced while arranging test repositories.
+type FixtureError = Box<dyn std::error::Error>;
+
 /// Creates a temporary Git repository with the specified origin URL.
-fn create_temp_repo_with_origin(origin_url: &str) -> TempRepoWithOrigin {
-    let temp_dir = TempDir::new().expect("should create temp directory");
-    let repo = Repository::init(temp_dir.path()).expect("should init repository");
-    repo.remote("origin", origin_url)
-        .expect("should add origin remote");
-    TempRepoWithOrigin { temp_dir, repo }
+fn create_temp_repo_with_origin(origin_url: &str) -> Result<TempRepoWithOrigin, FixtureError> {
+    let temp_dir = TempDir::new()?;
+    let repo = Repository::init(temp_dir.path())?;
+    repo.remote("origin", origin_url)?;
+    Ok(TempRepoWithOrigin { temp_dir, repo })
 }
 
 /// Creates a temporary Git repository with no remotes.
 #[fixture]
-fn temp_repo_no_remotes() -> TempRepoNoRemotes {
-    let temp_dir = TempDir::new().expect("should create temp directory");
-    let repo = Repository::init(temp_dir.path()).expect("should init repository");
-    TempRepoNoRemotes { temp_dir, repo }
+fn temp_repo_no_remotes() -> Result<TempRepoNoRemotes, FixtureError> {
+    let temp_dir = TempDir::new()?;
+    let repo = Repository::init(temp_dir.path())?;
+    Ok(TempRepoNoRemotes { temp_dir, repo })
 }
 
 /// Creates a temporary directory that is not a Git repository.
 #[fixture]
-fn non_repo_dir() -> TempDir {
-    TempDir::new().expect("should create temp directory")
+fn non_repo_dir() -> Result<TempDir, FixtureError> {
+    Ok(TempDir::new()?)
 }
 
 /// Expected result for a GitHub.com origin discovery test case.
@@ -82,7 +84,8 @@ struct EnterpriseExpected {
     GitHubComExpected { owner: "org", repository: "lib" }
 )]
 fn discover_github_com_origins(#[case] origin_url: &str, #[case] expected: GitHubComExpected) {
-    let temp_repo = create_temp_repo_with_origin(origin_url);
+    let temp_repo =
+        create_temp_repo_with_origin(origin_url).expect("should create repo with origin");
     let result = discover_repository(temp_repo.temp_dir.path());
 
     let local_repo = result.expect("should discover repository");
@@ -102,7 +105,8 @@ fn discover_github_com_origins(#[case] origin_url: &str, #[case] expected: GitHu
     EnterpriseExpected { host: "github.acme.corp", owner: "team", repository: "app" }
 )]
 fn discover_enterprise_origins(#[case] origin_url: &str, #[case] expected: EnterpriseExpected) {
-    let temp_repo = create_temp_repo_with_origin(origin_url);
+    let temp_repo =
+        create_temp_repo_with_origin(origin_url).expect("should create repo with origin");
     let result = discover_repository(temp_repo.temp_dir.path());
 
     let local_repo = result.expect("should discover repository");
@@ -119,14 +123,20 @@ fn discover_enterprise_origins(#[case] origin_url: &str, #[case] expected: Enter
 }
 
 #[rstest]
-fn discover_repository_not_a_repo(non_repo_dir: TempDir) {
+fn discover_repository_not_a_repo(
+    #[from(non_repo_dir)] non_repo_dir_res: Result<TempDir, FixtureError>,
+) {
+    let non_repo_dir = non_repo_dir_res.expect("should create temp directory");
     let result = discover_repository(non_repo_dir.path());
 
     assert!(matches!(result, Err(LocalDiscoveryError::NotARepository)));
 }
 
 #[rstest]
-fn discover_repository_no_remotes(temp_repo_no_remotes: TempRepoNoRemotes) {
+fn discover_repository_no_remotes(
+    #[from(temp_repo_no_remotes)] temp_repo_res: Result<TempRepoNoRemotes, FixtureError>,
+) {
+    let temp_repo_no_remotes = temp_repo_res.expect("should create repo without remotes");
     let result = discover_repository(temp_repo_no_remotes.temp_dir.path());
 
     assert!(matches!(result, Err(LocalDiscoveryError::NoRemotes)));
@@ -134,7 +144,8 @@ fn discover_repository_no_remotes(temp_repo_no_remotes: TempRepoNoRemotes) {
 
 #[test]
 fn discover_repository_remote_not_found() {
-    let temp_repo = create_temp_repo_with_origin("git@github.com:owner/repo.git");
+    let temp_repo = create_temp_repo_with_origin("git@github.com:owner/repo.git")
+        .expect("should create repo with origin");
 
     let result = discover_repository_with_remote(temp_repo.temp_dir.path(), "upstream");
 
@@ -146,7 +157,8 @@ fn discover_repository_remote_not_found() {
 
 #[test]
 fn discover_repository_treats_non_github_com_as_enterprise() {
-    let temp_repo = create_temp_repo_with_origin("git@gitlab.com:owner/repo.git");
+    let temp_repo = create_temp_repo_with_origin("git@gitlab.com:owner/repo.git")
+        .expect("should create repo with origin");
 
     let result = discover_repository(temp_repo.temp_dir.path());
 
@@ -161,7 +173,8 @@ fn discover_repository_treats_non_github_com_as_enterprise() {
 
 #[test]
 fn discover_repository_invalid_url() {
-    let temp_repo = create_temp_repo_with_origin("not-a-valid-url");
+    let temp_repo =
+        create_temp_repo_with_origin("not-a-valid-url").expect("should create repo with origin");
 
     let result = discover_repository(temp_repo.temp_dir.path());
 
@@ -173,11 +186,16 @@ fn discover_repository_invalid_url() {
 
 #[test]
 fn discover_repository_from_subdirectory() {
-    let temp_repo = create_temp_repo_with_origin("git@github.com:owner/repo.git");
+    let temp_repo = create_temp_repo_with_origin("git@github.com:owner/repo.git")
+        .expect("should create repo with origin");
 
-    // Create a subdirectory
+    // Create a subdirectory through a capability handle on the temp dir.
+    let dir =
+        cap_std::fs::Dir::open_ambient_dir(temp_repo.temp_dir.path(), cap_std::ambient_authority())
+            .expect("should open temp directory");
+    dir.create_dir_all("src/lib")
+        .expect("should create subdirectory");
     let subdir = temp_repo.temp_dir.path().join("src").join("lib");
-    std::fs::create_dir_all(&subdir).expect("should create subdirectory");
 
     let result = discover_repository(&subdir);
 
@@ -188,7 +206,8 @@ fn discover_repository_from_subdirectory() {
 
 #[test]
 fn workdir_is_correct() {
-    let temp_repo = create_temp_repo_with_origin("git@github.com:owner/repo.git");
+    let temp_repo = create_temp_repo_with_origin("git@github.com:owner/repo.git")
+        .expect("should create repo with origin");
 
     let result = discover_repository(temp_repo.temp_dir.path());
 

@@ -49,6 +49,8 @@ const fn is_configuration_error(error: &PersistenceError) -> bool {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `migrations` module.
+
     use frankie::persistence::PersistenceError;
     use frankie::{FrankieConfig, IntakeError};
     use rstest::rstest;

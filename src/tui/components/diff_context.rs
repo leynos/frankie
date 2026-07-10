@@ -159,6 +159,8 @@ fn ensure_trailing_newline(mut value: String) -> String {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `diff_context` module.
+
     use rstest::{fixture, rstest};
 
     use super::*;

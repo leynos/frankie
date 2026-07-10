@@ -84,6 +84,8 @@ pub fn merge_reviews(existing: &[ReviewComment], incoming: Vec<ReviewComment>) -
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `sync` module.
+
     use rstest::{fixture, rstest};
 
     use super::*;

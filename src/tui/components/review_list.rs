@@ -157,6 +157,8 @@ fn first_trimmed_line(body: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `review_list` module.
+
     use rstest::{fixture, rstest};
     use unicode_width::UnicodeWidthStr;
 

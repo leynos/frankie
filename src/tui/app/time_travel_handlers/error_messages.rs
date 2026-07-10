@@ -117,6 +117,8 @@ pub(crate) fn build_fallback_time_travel_error() -> String {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `error_messages` module.
+
     use rstest::rstest;
 
     use super::*;

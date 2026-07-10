@@ -126,6 +126,8 @@ impl fmt::Display for ExportFormat {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `model` module.
+
     use rstest::rstest;
 
     use super::*;

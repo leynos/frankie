@@ -115,6 +115,8 @@ fn normalized_body(comment: &ReviewComment) -> String {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `threads` module.
+
     use std::collections::HashMap;
 
     use rstest::rstest;

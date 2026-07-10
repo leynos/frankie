@@ -157,6 +157,8 @@ fn row_index_for_item_in_bucket(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `pr_discussion_summary_state` module.
+
     use rstest::rstest;
 
     use super::PrDiscussionSummaryViewState;

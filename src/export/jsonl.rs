@@ -97,14 +97,16 @@ impl CommentBuilder {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `jsonl` module.
+
     use rstest::rstest;
 
     use super::*;
 
-    fn write_to_string(comments: &[ExportedComment]) -> String {
+    fn write_to_string(comments: &[ExportedComment]) -> Result<String, Box<dyn std::error::Error>> {
         let mut buffer = Vec::new();
-        write_jsonl(&mut buffer, comments).expect("should write JSONL");
-        String::from_utf8(buffer).expect("valid UTF-8")
+        write_jsonl(&mut buffer, comments)?;
+        Ok(String::from_utf8(buffer)?)
     }
 
     fn assert_json_field_eq(
@@ -128,7 +130,7 @@ mod tests {
                 .build(),
         ];
 
-        let output = write_to_string(&comments);
+        let output = write_to_string(&comments).expect("should write JSONL");
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 1);
 
@@ -166,7 +168,7 @@ mod tests {
                 .build(),
         ];
 
-        let output = write_to_string(&comments);
+        let output = write_to_string(&comments).expect("should write JSONL");
         let lines: Vec<&str> = output.lines().collect();
         assert_eq!(lines.len(), 3);
 
@@ -182,7 +184,7 @@ mod tests {
     fn empty_comments_produces_empty_output() {
         let comments: Vec<ExportedComment> = vec![];
 
-        let output = write_to_string(&comments);
+        let output = write_to_string(&comments).expect("should write JSONL");
         assert!(output.is_empty());
     }
 
@@ -190,7 +192,7 @@ mod tests {
     fn omits_none_fields() {
         let comments = vec![CommentBuilder::new(42).build()];
 
-        let output = write_to_string(&comments);
+        let output = write_to_string(&comments).expect("should write JSONL");
         let parsed: serde_json::Value =
             serde_json::from_str(output.trim()).expect("should be valid JSON");
 
@@ -209,7 +211,7 @@ mod tests {
                 .build(),
         ];
 
-        let output = write_to_string(&comments);
+        let output = write_to_string(&comments).expect("should write JSONL");
         // The JSON should be on a single line with escaped characters
         assert_eq!(output.lines().count(), 1);
 
@@ -228,7 +230,7 @@ mod tests {
                 .build(),
         ];
 
-        let output = write_to_string(&comments);
+        let output = write_to_string(&comments).expect("should write JSONL");
         let parsed: serde_json::Value =
             serde_json::from_str(output.trim()).expect("should be valid JSON");
 
@@ -244,7 +246,7 @@ mod tests {
             CommentBuilder::new(2).build(),
         ];
 
-        let output = write_to_string(&comments);
+        let output = write_to_string(&comments).expect("should write JSONL");
         assert!(output.ends_with('\n'));
         // Count newlines
         assert_eq!(output.chars().filter(|&c| c == '\n').count(), 2);

@@ -188,6 +188,8 @@ fn write_format<W: Write>(writer: &mut W, params: &ExportParams<'_>) -> Result<(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `export_comments` module.
+
     use rstest::rstest;
 
     use frankie::export::test_helpers::{CommentBuilder, TestError, assert_contains};

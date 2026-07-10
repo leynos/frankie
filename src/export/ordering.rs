@@ -48,6 +48,8 @@ fn compare_options<T: Ord>(a: Option<&T>, b: Option<&T>) -> Ordering {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `ordering` module.
+
     use rstest::rstest;
 
     use super::*;

@@ -14,18 +14,17 @@ use frankie::persistence::CURRENT_SCHEMA_VERSION;
 use support::create_temp_dir;
 
 /// Returns the path to the built binary.
-fn binary_path() -> std::path::PathBuf {
+fn binary_path() -> std::io::Result<std::path::PathBuf> {
     // cargo test builds binaries in target/debug
-    let mut path = std::env::current_exe()
-        .unwrap_or_else(|error| panic!("failed to get current exe path: {error}"));
+    let mut path = std::env::current_exe()?;
     path.pop(); // remove test binary name
     path.pop(); // remove deps
     path.push("frankie");
-    path
+    Ok(path)
 }
 
-fn run_frankie(args: &[&str], env: &[(&str, Option<&str>)]) -> Output {
-    let mut command = Command::new(binary_path());
+fn run_frankie(args: &[&str], env: &[(&str, Option<&str>)]) -> std::io::Result<Output> {
+    let mut command = Command::new(binary_path()?);
     command.args(args);
 
     // Ensure tests are hermetic even if the developer has Frankie env vars set.
@@ -49,12 +48,13 @@ fn run_frankie(args: &[&str], env: &[(&str, Option<&str>)]) -> Output {
         }
     }
 
-    command
-        .output()
-        .unwrap_or_else(|error| panic!("failed to execute binary: {error}"))
+    command.output()
 }
 
-fn run_migrate_db(database_url: Option<&str>, env: &[(&str, Option<&str>)]) -> Output {
+fn run_migrate_db(
+    database_url: Option<&str>,
+    env: &[(&str, Option<&str>)],
+) -> std::io::Result<Output> {
     let mut args = vec!["--migrate-db"];
     if let Some(database_url_value) = database_url {
         args.extend(["--database-url", database_url_value]);
@@ -63,44 +63,51 @@ fn run_migrate_db(database_url: Option<&str>, env: &[(&str, Option<&str>)]) -> O
     run_frankie(&args, env)
 }
 
-fn assert_migrate_db_succeeds(database_url: &str) {
-    let output = run_migrate_db(Some(database_url), &[]);
-    assert!(
-        output.status.success(),
-        "expected successful exit, got: {:?}\nstderr: {}",
-        output.status,
-        String::from_utf8_lossy(&output.stderr)
-    );
+/// Runs `--migrate-db` and asserts a successful exit status.
+macro_rules! assert_migrate_db_succeeds {
+    ($database_url:expr) => {{
+        let output = run_migrate_db(Some($database_url), &[]).expect("failed to execute binary");
+        assert!(
+            output.status.success(),
+            "expected successful exit, got: {:?}\nstderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }};
 }
 
-fn assert_migrate_db_fails(
-    database_url: Option<&str>,
-    env: &[(&str, Option<&str>)],
-    expected_stderr_substring: &str,
-) {
-    let output = run_migrate_db(database_url, env);
-    assert!(!output.status.success(), "expected failure exit status");
+/// Runs `--migrate-db` and asserts failure with the expected stderr text.
+macro_rules! assert_migrate_db_fails {
+    ($database_url:expr, $env:expr, $expected_stderr_substring:expr) => {{
+        let output = run_migrate_db($database_url, $env).expect("failed to execute binary");
+        assert!(!output.status.success(), "expected failure exit status");
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains(expected_stderr_substring),
-        "expected stderr to contain {expected_stderr_substring:?}, got: {stderr}"
-    );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains($expected_stderr_substring),
+            "expected stderr to contain {:?}, got: {stderr}",
+            $expected_stderr_substring
+        );
+    }};
 }
 
-fn assert_migrate_db_exit_code(database_url: Option<&str>, expected_code: i32) {
-    let output = run_migrate_db(database_url, &[("FRANKIE_DATABASE_URL", None)]);
-    assert_eq!(
-        output.status.code(),
-        Some(expected_code),
-        "unexpected exit code: {:?}",
-        output.status
-    );
+/// Runs `--migrate-db` with a scrubbed environment and asserts the exit code.
+macro_rules! assert_migrate_db_exit_code {
+    ($database_url:expr, $expected_code:expr) => {{
+        let output = run_migrate_db($database_url, &[("FRANKIE_DATABASE_URL", None)])
+            .expect("failed to execute binary");
+        assert_eq!(
+            output.status.code(),
+            Some($expected_code),
+            "unexpected exit code: {:?}",
+            output.status
+        );
+    }};
 }
 
 #[test]
 fn migrate_db_succeeds_with_in_memory_database() {
-    assert_migrate_db_succeeds(":memory:");
+    assert_migrate_db_succeeds!(":memory:");
 }
 
 #[test]
@@ -110,7 +117,7 @@ fn migrate_db_succeeds_with_file_database() {
     let db_path = temp_dir.path().join("frankie.sqlite");
     let db_url = db_path.to_string_lossy().to_string();
 
-    assert_migrate_db_succeeds(&db_url);
+    assert_migrate_db_succeeds!(&db_url);
 
     assert!(
         db_path.exists(),
@@ -121,7 +128,7 @@ fn migrate_db_succeeds_with_file_database() {
 
 #[test]
 fn migrate_db_emits_telemetry_to_stderr() {
-    let output = run_migrate_db(Some(":memory:"), &[]);
+    let output = run_migrate_db(Some(":memory:"), &[]).expect("failed to execute binary");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -142,7 +149,8 @@ fn migrate_db_does_not_perform_github_operations() {
     let output = run_migrate_db(
         Some(":memory:"),
         &[("GITHUB_TOKEN", None), ("FRANKIE_TOKEN", None)],
-    );
+    )
+    .expect("failed to execute binary");
 
     assert!(
         output.status.success(),
@@ -170,10 +178,10 @@ fn migrate_db_fails_with_invalid_database_url(
     #[case] database_url: Option<&str>,
     #[case] expected_stderr_substring: &str,
 ) {
-    assert_migrate_db_fails(
+    assert_migrate_db_fails!(
         database_url,
         &[("FRANKIE_DATABASE_URL", None)],
-        expected_stderr_substring,
+        expected_stderr_substring
     );
 }
 
@@ -183,10 +191,10 @@ fn migrate_db_fails_with_directory_path() {
         .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
     let dir_path = temp_dir.path().to_string_lossy().to_string();
 
-    assert_migrate_db_fails(
+    assert_migrate_db_fails!(
         Some(&dir_path),
         &[("FRANKIE_DATABASE_URL", None)],
-        "failed to connect to SQLite database",
+        "failed to connect to SQLite database"
     );
 }
 
@@ -197,12 +205,13 @@ fn migrate_db_exits_with_expected_code(
     #[case] database_url: Option<&str>,
     #[case] expected_code: i32,
 ) {
-    assert_migrate_db_exit_code(database_url, expected_code);
+    assert_migrate_db_exit_code!(database_url, expected_code);
 }
 
 #[test]
 fn migrate_db_succeeds_with_database_url_from_environment() {
-    let output = run_migrate_db(None, &[("FRANKIE_DATABASE_URL", Some(":memory:"))]);
+    let output = run_migrate_db(None, &[("FRANKIE_DATABASE_URL", Some(":memory:"))])
+        .expect("failed to execute binary");
 
     assert!(
         output.status.success(),
@@ -213,7 +222,8 @@ fn migrate_db_succeeds_with_database_url_from_environment() {
 
 #[test]
 fn migrate_db_cli_database_url_overrides_environment() {
-    let output = run_migrate_db(Some(":memory:"), &[("FRANKIE_DATABASE_URL", Some("   "))]);
+    let output = run_migrate_db(Some(":memory:"), &[("FRANKIE_DATABASE_URL", Some("   "))])
+        .expect("failed to execute binary");
 
     assert!(
         output.status.success(),
@@ -224,10 +234,10 @@ fn migrate_db_cli_database_url_overrides_environment() {
 
 #[test]
 fn migrate_db_fails_with_blank_database_url_from_environment() {
-    assert_migrate_db_fails(
+    assert_migrate_db_fails!(
         None,
         &[("FRANKIE_DATABASE_URL", Some("   "))],
-        "database URL must not be blank",
+        "database URL must not be blank"
     );
 }
 
@@ -239,12 +249,12 @@ fn migrate_db_is_idempotent() {
     let db_url = db_path.to_string_lossy().to_string();
 
     // First migration
-    let first = run_migrate_db(Some(&db_url), &[]);
+    let first = run_migrate_db(Some(&db_url), &[]).expect("failed to execute binary");
 
     assert!(first.status.success(), "first migration should succeed");
 
     // Second migration
-    let second = run_migrate_db(Some(&db_url), &[]);
+    let second = run_migrate_db(Some(&db_url), &[]).expect("failed to execute binary");
 
     assert!(
         second.status.success(),

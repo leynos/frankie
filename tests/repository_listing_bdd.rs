@@ -25,8 +25,7 @@ fn listing_state() -> ListingState {
     reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn seed_server_with_prs(listing_state: &ListingState, count: PullRequestCount) {
-    let runtime = ensure_runtime_and_server(listing_state)
-        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
+    let runtime = ensure_runtime_and_server(listing_state).expect("failed to create Tokio runtime");
 
     let prs = generate_pr_list(count, PageNumber::new(1), count);
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
@@ -60,8 +59,7 @@ fn seed_server_with_paginated_prs(
     total: PullRequestCount,
     pages: PageCount,
 ) {
-    let runtime = ensure_runtime_and_server(listing_state)
-        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
+    let runtime = ensure_runtime_and_server(listing_state).expect("failed to create Tokio runtime");
     let per_page = total.value() / pages.value();
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
@@ -125,8 +123,7 @@ fn seed_server_with_paginated_prs(
     reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: RateLimitCount) {
-    let runtime = ensure_runtime_and_server(listing_state)
-        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
+    let runtime = ensure_runtime_and_server(listing_state).expect("failed to create Tokio runtime");
 
     let prs = generate_pr_list(
         PullRequestCount::new(10),
@@ -162,8 +159,7 @@ fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: 
     reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn seed_server_with_rate_limit_error(listing_state: &ListingState) {
-    let runtime = ensure_runtime_and_server(listing_state)
-        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
+    let runtime = ensure_runtime_and_server(listing_state).expect("failed to create Tokio runtime");
 
     let pulls_path = "/api/v3/repos/owner/repo/pulls";
 

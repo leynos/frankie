@@ -13,6 +13,11 @@ use chrono::{DateTime, Utc};
 
 use crate::github::IntakeError;
 
+#[path = "transcript_fs.rs"]
+mod fs;
+
+use fs::create_file_with_parents;
+
 /// Metadata used to derive transcript file names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TranscriptMetadata {
@@ -205,66 +210,6 @@ fn sanitize_segment(segment: &str) -> String {
         .chars()
         .map(|ch| if is_safe_for_filename(ch) { ch } else { '-' })
         .collect()
-}
-
-/// Creates a file at `path`, ensuring parent directories exist first.
-///
-/// Returns the canonical path and the opened file handle.  All directory
-/// and path logic is centralised here so callers do not need to coordinate
-/// `ensure_parent_dirs` and `open_dir_for_path` separately.
-fn create_file_with_parents(
-    path: &Utf8Path,
-    path_type: &str,
-) -> Result<(Utf8PathBuf, cap_std::fs_utf8::File), IntakeError> {
-    let parent = path.parent().unwrap_or_else(|| Utf8Path::new("."));
-    let file_name = path.file_name().ok_or_else(|| IntakeError::Io {
-        message: format!("invalid {path_type} path '{path}': no file name"),
-    })?;
-
-    let (dir, rel_parent) = if parent == Utf8Path::new(".") || parent.as_str().is_empty() {
-        (
-            Dir::open_ambient_dir(".", ambient_authority()).map_err(|error| IntakeError::Io {
-                message: format!("failed to open current directory for {path_type}s: {error}"),
-            })?,
-            Utf8Path::new("."),
-        )
-    } else if parent.is_absolute() {
-        let root =
-            Dir::open_ambient_dir("/", ambient_authority()).map_err(|error| IntakeError::Io {
-                message: format!("failed to open root directory for {path_type}s: {error}"),
-            })?;
-        let rel = parent.strip_prefix("/").map_err(|_| IntakeError::Io {
-            message: format!("failed to normalise {path_type} directory '{parent}'"),
-        })?;
-        (root, rel)
-    } else {
-        (
-            Dir::open_ambient_dir(".", ambient_authority()).map_err(|error| IntakeError::Io {
-                message: format!("failed to open current directory for {path_type}s: {error}"),
-            })?,
-            parent,
-        )
-    };
-
-    let target_dir = if !rel_parent.as_str().is_empty() && rel_parent != Utf8Path::new(".") {
-        dir.create_dir_all(rel_parent)
-            .map_err(|error| IntakeError::Io {
-                message: format!("failed to create {path_type} directory '{parent}': {error}"),
-            })?;
-        dir.open_dir(rel_parent).map_err(|error| IntakeError::Io {
-            message: format!("failed to open {path_type} directory '{parent}': {error}"),
-        })?
-    } else {
-        dir
-    };
-
-    let file = target_dir
-        .create(file_name)
-        .map_err(|error| IntakeError::Io {
-            message: format!("failed to create {path_type} file '{path}': {error}"),
-        })?;
-
-    Ok((path.to_path_buf(), file))
 }
 
 #[cfg(test)]
