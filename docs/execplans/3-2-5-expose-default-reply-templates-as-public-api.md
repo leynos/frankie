@@ -292,6 +292,10 @@ Follow-up notes:
   limit was reached. The main session therefore ran the same gates sequentially
   and retained their logs under `/tmp`. `coderabbit review --agent` then
   completed with 0 findings.
+- Post-rebase documentation checks corrected the remaining American spelling
+  variants of "artefact", removed duplicate feature-catalogue headings, and
+  repaired spacing in the developer guide. The generated `typos.toml` cleanup
+  was retained after `make markdownlint` confirmed the refreshed policy.
 
 ## Context and orientation
 
@@ -413,7 +417,7 @@ exercise the new surface.
 3. In `src/lib.rs`, extend the crate-root re-export on line 33 to add
    `DEFAULT_REPLY_TEMPLATES` and `default_reply_templates` alongside the
    existing reply-template items. The final form is shown verbatim under
-   *Artifacts and notes* below.
+   *Artefacts and notes* below.
 
 4. In `src/config/mod.rs`, delete the crate-private `default_reply_templates()`
    function and change `FrankieConfig::default` to call
@@ -649,7 +653,7 @@ the partial state and the compiler/clippy identify any dangling reference to
 the removed function. Reverting is `git restore` on the affected files. No
 data, no migrations, and no external services are involved.
 
-## Artifacts and notes
+## Artefacts and notes
 
 The final public surface added at the crate root:
 
