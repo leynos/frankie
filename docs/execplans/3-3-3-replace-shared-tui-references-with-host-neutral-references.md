@@ -148,6 +148,10 @@ escalation, not a workaround.
 
 ## Surprises & discoveries
 
+- Observation: on 2026-07-15 the stale status warning was corrected; Wyvern
+  verified `FrankieDeepLink` already has exact helper-level coverage, so only
+  the PR-summary component render snapshot was added. Impact: the final review
+  follow-up stays narrowly scoped.
 - Observation: implementation resumed in worktree
   `/home/leynos/.lody/repos/github---leynos---frankie/worktrees/ab496267-b105-41d3-9de5-e126c3e6c779`,
   not the older planning worktree path shown in "Concrete steps". Impact:
