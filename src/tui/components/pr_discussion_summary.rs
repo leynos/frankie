@@ -115,7 +115,7 @@ mod tests {
     }
 
     #[rstest]
-    fn view_renders_grouped_summary_rows() {
+    fn view_snapshot_renders_grouped_summary_rows() {
         let state = sample_state();
         let output = PrDiscussionSummaryComponent::view(&PrDiscussionSummaryViewContext {
             state: Some(&state),
@@ -123,10 +123,7 @@ mod tests {
             max_height: 10,
         });
 
-        assert!(output.contains("File: src/main.rs"));
-        assert!(output.contains("Severity: high"));
-        assert!(output.contains("> Handle panic path"));
-        assert!(output.contains("frankie://review-comment/1?view=detail"));
+        insta::assert_snapshot!(output);
     }
 
     #[rstest]
