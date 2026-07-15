@@ -273,6 +273,26 @@ Another lesson: `make fmt` currently has a repository-wide Markdown formatting
 failure in an unrelated ExecPlan; the change was still validated through the
 documented commit gates and `make nixie`.
 
+Follow-up notes:
+
+- A review finding exposed missing `ReplyDraftConfig::default()` parity
+  coverage; that coverage was added in `src/tui/tests.rs`.
+- The PR title already satisfies the `(3.2.5)` requirement, so no title change
+  is needed.
+- `insta` snapshots and `trybuild` tests were intentionally skipped. The exact
+  assertions and out-of-crate integration coverage are more precise here, and
+  this API has no compile-time shape complexity that would justify
+  `trybuild`.
+- A new end-to-end BDD scenario was also skipped: the focused TUI default
+  parity test directly covers the regression and the existing BDD suite
+  already exercises reply drafting. The follow-up deterministic gates passed:
+  `make check-fmt`, `make lint`, `make test` (889 passed, 1 skipped), `make
+  markdownlint`, and `make nixie`.
+- A requested scrutineer agent could not be allocated because the agent-thread
+  limit was reached. The main session therefore ran the same gates sequentially
+  and retained their logs under `/tmp`. `coderabbit review --agent` then
+  completed with 0 findings.
+
 ## Context and orientation
 
 The `frankie` crate is both a library (`src/lib.rs`) and a binary
