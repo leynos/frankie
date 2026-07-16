@@ -629,10 +629,6 @@ The application operates within the following technical boundaries:
 
 ## 2.1 Feature Catalogue
 
-## 2.1 Feature Catalogue
-
-## 2.1 Feature Catalogue
-
 ### 2.1.1 Core Repository Access Features
 
 | Feature ID | Feature Name               | Category          | Priority | Status   |
@@ -7996,10 +7992,10 @@ GitHub Actions runs the following:
 **Binary Installation Optimization**: Binstall provides a low-complexity
 mechanism for installing Rust binaries as an alternative to building from
 source (via cargo install) or manually downloading packages. This is intended
-to work with existing CI artifacts and infrastructure, and with minimal
+to work with existing CI artefacts and infrastructure, and with minimal
 overhead for package maintainers. Binstall works by fetching the crate
 information from crates.io and searching the linked repository for matching
-releases and artifacts, falling back to the quickinstall third-party artifact
+releases and artefacts, falling back to the quickinstall third-party artefact
 host, to alternate targets as supported, and finally to cargo install as a last
 resort.
 

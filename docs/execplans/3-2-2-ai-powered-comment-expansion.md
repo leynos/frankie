@@ -436,9 +436,9 @@ Documentation acceptance:
 - If a stage fails, fix and rerun stage-local tests before resuming next stage.
 - Preserve log files in `/tmp/frankie-*.log` for escalation/debugging.
 
-## Artifacts and notes
+## Artefacts and notes
 
-Capture these artifacts during implementation:
+Capture these artefacts during implementation:
 
 - Unit-test additions for shared AI rewrite logic and adapters.
 - BDD feature files and step definitions for TUI/CLI AI rewrite behaviour.

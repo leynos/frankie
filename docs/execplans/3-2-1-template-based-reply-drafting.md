@@ -418,7 +418,7 @@ Documentation acceptance:
 - Keep temporary logs in `/tmp/execplan-3-2-1-*.log`; they can be overwritten
   safely on retries.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Capture concise evidence during implementation:
 

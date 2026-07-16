@@ -40,7 +40,6 @@ Further detail:
 - The architectural rationale and TUI adapter boundary are in
   [docs/frankie-design.md](frankie-design.md#227-extract-time-travel-orchestration-into-a-pure-library-service).
 
-
 ## Host-neutral summary references
 
 Shared summary and navigation data transfer objects (DTOs) must use
@@ -60,6 +59,7 @@ When adding a new summary or navigation target:
   wrappers, not on the DTO itself;
 - add serialization tests for the shared wire shape before changing CLI or TUI
   rendering.
+
 ## Spelling policy
 
 Run `make spelling` to enforce en-GB-oxendict prose spelling. The generated

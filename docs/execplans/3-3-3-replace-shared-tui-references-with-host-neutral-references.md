@@ -599,7 +599,7 @@ milestone so any step can be rolled back with `git revert`/`git reset`. The
 the iteration tolerance; if it cannot be made green in 3 attempts, stop and
 escalate.
 
-## Artifacts and notes
+## Artefacts and notes
 
 Target API at the end of M1 — in `src/ai/pr_discussion_summary/model.rs`:
 

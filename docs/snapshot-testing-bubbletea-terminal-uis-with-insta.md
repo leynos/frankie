@@ -925,7 +925,7 @@ intended. Committing the updated snapshots to version control makes future test
 runs use those as the baseline.
 
 In CI, snapshot tests typically run as part of `cargo test`. If there is a
-failure, the CI logs will show which snapshot did not match. CI artifacts can
+failure, the CI logs will show which snapshot did not match. CI artefacts can
 include the new snapshot suggestions for manual download and inspection.
 However, it is often easier to reproduce the failure locally, run the review,
 and then update the files.
