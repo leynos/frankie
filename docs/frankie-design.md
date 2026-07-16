@@ -3497,7 +3497,7 @@ governance decisions separately.
   `ReviewReplyService` expose on-demand context, verification, and review
   action capabilities without requiring TUI orchestration types.
 - Shared summary and navigation models use host-neutral `ReviewViewRef`
-  references, with `FrankieDeepLink` rendering TUI deep links as one
+  references, with `FrankieDeepLink` rendering Frankie deep-link tokens as one
   adapter-specific projection rather than the canonical contract.
 
 **End-to-end ownership walkthrough — new review comment lifecycle**:

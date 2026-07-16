@@ -82,6 +82,7 @@ impl FromStr for DiscussionSeverity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ReviewView {
     /// Review-list comment-detail view for a selected comment.
+    #[serde(rename = "CommentDetail")]
     CommentDetail,
 }
 

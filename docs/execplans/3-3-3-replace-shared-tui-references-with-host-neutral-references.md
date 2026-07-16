@@ -109,9 +109,9 @@ escalation, not a workaround.
   `FrankieDeepLink` (Dinolump 🔴), so a future edit cannot silently re-add a URI
   `Display` and resurrect the coupling.
 - Risk: changing the `ReviewView` serde representation breaks a wire consumer.
-  Severity: low. Likelihood: low. Mitigation: preserve the existing default
-  serde derivation (no `rename_all`); `CommentDetail` continues to serialize as
-  `"CommentDetail"`. Treat any change here as out of scope.
+  Severity: low. Likelihood: low. Mitigation: pin `CommentDetail` to the
+  existing `"CommentDetail"` wire spelling with a per-variant serde rename (no
+  `rename_all`). Treat any change here as out of scope.
 - Risk: ADR amendment conflicts with the documentation style guide's ADR
   conventions. Severity: low. Likelihood: low. Mitigation: follow
   `docs/documentation-style-guide.md` §"Architectural decision records": keep
@@ -247,11 +247,11 @@ escalation, not a workaround.
   Rationale: see Surprises — the implementation does not depend on
   `ReviewThread`; this item independently advances the host-neutral-contract
   goal that 2.1.3 also serves. Date/Author: 2026-06-18, planning.
-- Decision (D6): preserve the existing serde derivation of `ReviewView`
-  (no `rename_all`); `CommentDetail` continues to serialize as
-  `"CommentDetail"`. Rationale: avoid an unnecessary wire-format change; the
-  host-neutrality requirement is about *type coupling*, not casing. Note the
-  resulting casing asymmetry — the sibling `DiscussionSeverity` uses
+- Decision (D6): pin the `ReviewView::CommentDetail` serde spelling to
+  `"CommentDetail"` with a per-variant rename (no `rename_all`). Rationale:
+  avoid an unnecessary wire-format change, even if the Rust variant is renamed;
+  the host-neutrality requirement is about *type coupling*, not casing. Note
+  the resulting casing asymmetry — the sibling `DiscussionSeverity` uses
   `rename_all = "lowercase"` (`"high"`/`"low"`), so one payload mixes `"high"`
   and `"CommentDetail"` (Telefono 💡). This is deliberate (it preserves the old
   `TuiView` wire form); aligning to `snake_case` is explicitly out of scope. A
@@ -611,6 +611,7 @@ Target API at the end of M1 — in `src/ai/pr_discussion_summary/model.rs`:
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ReviewView {
     /// Review-list comment-detail view for a selected comment.
+    #[serde(rename = "CommentDetail")]
     CommentDetail,
 }
 
@@ -742,5 +743,4 @@ rustdoc prose, the handler error string/binding, and the
 rustdoc requirements (host-neutrality statement, bidirectional intra-doc links,
 `Display`-removal rationale). Why: to close boundary, contract, completeness,
 and maintainability gaps the panel surfaced. Effect on remaining work: the edit
-list and acceptance criteria are now tighter; no scope change. Awaiting
-approval before implementation.
+list and acceptance criteria are now tighter; no scope change.
