@@ -206,7 +206,7 @@ fn reply_draft_config_falls_back_to_defaults() {
     );
 }
 
-#[test]
+#[rstest]
 fn reply_draft_config_default_templates_match_public_defaults() {
     assert_eq!(
         ReplyDraftConfig::default().templates,

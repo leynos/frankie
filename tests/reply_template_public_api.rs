@@ -43,6 +43,14 @@ fn crate_root_exposes_default_reply_templates() {
 
     assert_eq!(default_reply_templates(), expected);
     assert_eq!(
+        frankie::reply_template::DEFAULT_REPLY_TEMPLATES,
+        DEFAULT_REPLY_TEMPLATES
+    );
+    assert_eq!(
+        frankie::reply_template::default_reply_templates(),
+        default_reply_templates()
+    );
+    assert_eq!(
         DEFAULT_REPLY_TEMPLATES,
         [
             "Thanks for the review on {{ file }}:{{ line }}. I will update this.",

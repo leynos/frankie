@@ -2967,11 +2967,12 @@ Canonical record:
 Canonical record:
 [docs/adr-005-cross-surface-library-first-delivery.md](adr-005-cross-surface-library-first-delivery.md).
 
-The reply-template contract required by ADR-005 now lives in the shared
-`frankie::reply_template` module and is re-exported at the crate root as
-`frankie::render_reply_template`, `frankie::ReplyTemplateContext`, and
-`frankie::ReplyTemplateError`. The built-in defaults are also exposed from the
-same module as `frankie::DEFAULT_REPLY_TEMPLATES` and
+The reply-template contract required by ADR-005 now lives at the canonical
+`frankie::reply_template` paths, including `render_reply_template`,
+`ReplyTemplateContext`, `ReplyTemplateError`, `DEFAULT_REPLY_TEMPLATES`, and
+`default_reply_templates()`. These items are also re-exported at the crate root
+as `frankie::render_reply_template`, `frankie::ReplyTemplateContext`,
+`frankie::ReplyTemplateError`, `frankie::DEFAULT_REPLY_TEMPLATES`, and
 `frankie::default_reply_templates()`. The shared renderer now consumes the
 DTO-based `ReplyTemplateContext`, while TUI reply drafting remains an adapter
 that maps `ReviewComment` into that DTO before rendering. This keeps the
@@ -2980,9 +2981,9 @@ changing rendered output or user-facing error messages. No standalone CLI mode
 was added for this narrow step because the work only refines the shared library
 contract rather than introducing a distinct non-interactive workflow.
 Verification is auditable through `tests/reply_template_public_api.rs`, which
-proves the crate-root DTO, renderer, and default-template API remain reachable
-from `frankie::reply_template`, `src/reply_template/tests.rs`, which proves
-`ReviewComment` to DTO normalization preserves existing defaults, and
+exercises the module-qualified DTO, renderer, and default-template API and
+confirms their crate-root re-exports, `src/reply_template/tests.rs`, which
+proves `ReviewComment` to DTO normalization preserves existing defaults, and
 `tests/template_reply_drafting_bdd.rs`, which proves the adapter still produces
 the same rendered output and user-facing error messages.
 
@@ -7995,11 +7996,10 @@ GitHub Actions runs the following:
 mechanism for installing Rust binaries as an alternative to building from
 source (via cargo install) or manually downloading packages. This is intended
 to work with existing CI artefacts and infrastructure, and with minimal
-overhead for package maintainers. Binstall works by fetching the crate
-information from crates.io and searching the linked repository for matching
-releases and artefacts, falling back to the quickinstall third-party artefact
-host, to alternate targets as supported, and finally to cargo install as a last
-resort.
+overhead for package maintainers. After fetching crate information from
+crates.io, Binstall first searches linked repository releases and artefacts,
+then tries the quickinstall third-party artefact host, then alternate supported
+targets, and finally falls back to cargo install.
 
 ### 8.3.4 Release Management Process
 

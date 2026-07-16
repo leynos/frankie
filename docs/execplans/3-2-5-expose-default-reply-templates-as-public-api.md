@@ -10,11 +10,11 @@ Status: COMPLETE
 
 Frankie ships a small set of built-in reply templates that seed the interactive
 reply-drafting experience (press `a`, then a digit `1`-`9` to insert a starter
-reply). Today those defaults are crate-private: the function
-`default_reply_templates()` lives in `src/config/mod.rs` and is only reachable
+reply). Before this change, those defaults were crate-private: the function
+`default_reply_templates()` lived in `src/config/mod.rs` and was only reachable
 from inside the `frankie` crate.
 
-Roadmap item 3.2.5 requires these defaults to become part of the **public
+Roadmap item 3.2.5 required these defaults to become part of the **public
 library API** so that embedding hosts and alternative front ends (the
 "library-first" delivery contract from ADR-005) can read the same canonical
 defaults Frankie uses, without copying string literals or depending on the TUI.
@@ -296,6 +296,10 @@ Follow-up notes:
   variants of "artefact", removed duplicate feature-catalogue headings, and
   repaired spacing in the developer guide. The generated `typos.toml` cleanup
   was retained after `make markdownlint` confirmed the refreshed policy.
+- Review follow-up corrected this plan's dependency-free test snippet, made the
+  documented module and crate-root API paths explicit, and added parity checks
+  for both public paths. The full gate suite passed, and `coderabbit review
+  --agent` reported 0 findings.
 
 ## Context and orientation
 
@@ -474,8 +478,6 @@ Work from the repository root. The exact unit tests to add to
 ```rust
 //! Unit tests for the built-in default reply templates.
 
-use googletest::prelude::*;
-use pretty_assertions::assert_eq;
 use rstest::rstest;
 
 use super::{DEFAULT_REPLY_TEMPLATES, default_reply_templates};
