@@ -1,5 +1,6 @@
 //! Shared orchestration for PR-discussion summary generation.
 
+use std::collections::{BTreeMap, HashMap};
 
 use crate::github::IntakeError;
 use crate::verification::GithubCommentId;
@@ -9,6 +10,11 @@ use super::model::{
     PrDiscussionSummaryRequest, ReviewViewRef, SeverityBucket,
 };
 use super::threads::{DiscussionThread, build_discussion_threads};
+
+#[path = "service_validation.rs"]
+mod validation;
+
+use validation::validate_drafts;
 
 /// Shared summary service contract used by CLI and TUI adapters.
 pub trait PrDiscussionSummaryService: Send + Sync + std::fmt::Debug {
@@ -321,5 +327,3 @@ mod tests {
         assert!(matches!(result, Err(IntakeError::Configuration { .. })));
     }
 }
-
-mod validation;

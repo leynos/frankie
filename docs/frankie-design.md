@@ -629,8 +629,6 @@ The application operates within the following technical boundaries:
 
 ## 2.1 Feature Catalogue
 
-## 2.1 Feature Catalogue
-
 ### 2.1.1 Core Repository Access Features
 
 | Feature ID | Feature Name               | Category          | Priority | Status   |

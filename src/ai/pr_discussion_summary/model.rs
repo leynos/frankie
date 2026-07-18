@@ -74,17 +74,6 @@ impl FromStr for DiscussionSeverity {
     }
 }
 
-impl ReviewView {
-    #[must_use]
-    pub(crate) const fn label(self) -> &'static str {
-        match self {
-            // This string is user-visible in Frankie deep links; keep it
-            // stable for CLI and TUI behavioural compatibility.
-            Self::CommentDetail => "detail",
-        }
-    }
-}
-
 /// Logical review view a summary reference points at.
 ///
 /// This host-neutral enum is forward-looking: only
