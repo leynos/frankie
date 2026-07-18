@@ -1,6 +1,6 @@
 //! Full-screen PR-discussion summary view for the review TUI.
 
-use crate::ai::PrDiscussionSummary;
+use crate::ai::{FrankieDeepLink, PrDiscussionSummary};
 use crate::tui::app::PrDiscussionSummaryViewState;
 use crate::tui::components::text_truncate::truncate_to_display_width_with_ellipsis;
 
@@ -66,7 +66,7 @@ fn render_lines(summary: &PrDiscussionSummary, selected_item_index: usize) -> Ve
                     selected_prefix(item_index, selected_item_index),
                     item.headline,
                     item.rationale,
-                    item.tui_link
+                    FrankieDeepLink::new(&item.view_ref)
                 ));
                 item_index = item_index.saturating_add(1);
             }
@@ -91,7 +91,7 @@ mod tests {
     use super::{PrDiscussionSummaryComponent, PrDiscussionSummaryViewContext};
     use crate::ai::{
         DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary, PrDiscussionSummary,
-        SeverityBucket, TuiViewLink,
+        ReviewViewRef, SeverityBucket,
     };
     use crate::tui::app::PrDiscussionSummaryViewState;
 
@@ -107,7 +107,7 @@ mod tests {
                         headline: "Handle panic path".to_owned(),
                         rationale: "Review thread flagged unwrap".to_owned(),
                         severity: DiscussionSeverity::High,
-                        tui_link: TuiViewLink::comment_detail(1_u64.into()),
+                        view_ref: ReviewViewRef::comment_detail(1_u64.into()),
                     }],
                 }],
             }],
@@ -115,7 +115,7 @@ mod tests {
     }
 
     #[rstest]
-    fn view_renders_grouped_summary_rows() {
+    fn view_snapshot_renders_grouped_summary_rows() {
         let state = sample_state();
         let output = PrDiscussionSummaryComponent::view(&PrDiscussionSummaryViewContext {
             state: Some(&state),
@@ -123,10 +123,7 @@ mod tests {
             max_height: 10,
         });
 
-        assert!(output.contains("File: src/main.rs"));
-        assert!(output.contains("Severity: high"));
-        assert!(output.contains("> Handle panic path"));
-        assert!(output.contains("frankie://review-comment/1?view=detail"));
+        insta::assert_snapshot!(output);
     }
 
     #[rstest]

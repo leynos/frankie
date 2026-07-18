@@ -226,7 +226,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   summaries group comments by file and severity, and include links back to TUI
   views; delivery includes reusable library APIs and both TUI and CLI access
   paths.
-- [ ] 3.3.3. Replace shared `TuiViewLink` references with host-neutral review
+- [x] 3.3.3. Replace shared `TuiViewLink` references with host-neutral review
   view references. Requires 2.1.3 and 3.3.2. Acceptance: summary DTOs expose a
   host-neutral `ReviewViewRef` (or equivalent), the TUI renders current
   `frankie://review-comment/<id>?view=detail` links from that reference, and

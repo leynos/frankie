@@ -181,7 +181,7 @@ frankie \
 ```
 
 The CLI output groups discussion threads by file and severity, and prints a
-stable TUI link token for each summary item:
+stable Frankie deep-link token for each host-neutral review-view reference:
 
 ```text
 PR discussion summary for #123
@@ -195,7 +195,7 @@ File: src/main.rs
 
 Summary generation works at the discussion-thread level. Replies are collapsed
 into the root thread, so a reply does not create a second summary item with its
-own link.
+own reference.
 
 If the selected pull request has no review comments, Frankie returns an
 explicit error instead of printing an empty summary.

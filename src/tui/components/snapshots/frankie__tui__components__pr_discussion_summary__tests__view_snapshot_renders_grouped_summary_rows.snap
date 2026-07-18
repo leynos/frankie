@@ -1,0 +1,7 @@
+---
+source: src/tui/components/pr_discussion_summary.rs
+expression: output
+---
+File: src/main.rs
+  Severity: high
+> Handle panic path -- Review thread flagged unwrap [frankie://review-comment/1?view=detail]

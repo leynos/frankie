@@ -7,7 +7,7 @@ use bubbletea_rs::Model;
 use frankie::ai::pr_discussion_summary::test_support::StubPrDiscussionSummaryService;
 use frankie::ai::{
     DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary, PrDiscussionSummary,
-    PrDiscussionSummaryService, SeverityBucket, TuiViewLink,
+    PrDiscussionSummaryService, ReviewViewRef, SeverityBucket,
 };
 use frankie::github::IntakeError;
 use frankie::github::models::ReviewComment;
@@ -61,7 +61,7 @@ fn sample_summary() -> PrDiscussionSummary {
                     headline: "Handle panic path".to_owned(),
                     rationale: "Review thread flagged an unchecked failure".to_owned(),
                     severity: DiscussionSeverity::High,
-                    tui_link: TuiViewLink::comment_detail(1_u64.into()),
+                    view_ref: ReviewViewRef::comment_detail(1_u64.into()),
                 }],
             }],
         }],

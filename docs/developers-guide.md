@@ -40,6 +40,26 @@ Further detail:
 - The architectural rationale and TUI adapter boundary are in
   [docs/frankie-design.md](frankie-design.md#227-extract-time-travel-orchestration-into-a-pure-library-service).
 
+## Host-neutral summary references
+
+Shared summary and navigation data transfer objects (DTOs) must use
+host-neutral value objects. They must not expose CLI, TUI, Bubble Tea, or URI
+rendering concerns in their core model fields or trait implementations.
+
+PR-discussion summaries follow this convention through `ReviewViewRef` and
+`ReviewView`. `DiscussionSummaryItem` stores the reference as structured data,
+while `FrankieDeepLink` renders the current
+`frankie://review-comment/<id>?view=detail` token for adapter surfaces that
+need text output.
+
+When adding a new summary or navigation target:
+
+- put stable identity and logical destination data in the shared DTO;
+- keep `Display` implementations that produce adapter text on presentation
+  wrappers, not on the DTO itself;
+- add serialization tests for the shared wire shape before changing CLI or TUI
+  rendering.
+
 ## Spelling policy
 
 Run `make spelling` to enforce en-GB-oxendict prose spelling. The generated

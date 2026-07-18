@@ -1,6 +1,6 @@
 //! TUI-local state for the PR-discussion summary view.
 
-use crate::ai::{FileDiscussionSummary, PrDiscussionSummary, SeverityBucket, TuiViewLink};
+use crate::ai::{FileDiscussionSummary, PrDiscussionSummary, ReviewViewRef, SeverityBucket};
 
 /// Summary view state used only by the TUI adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,12 +39,12 @@ impl PrDiscussionSummaryViewState {
         self.scroll_offset
     }
 
-    /// Returns the currently selected link, if any.
+    /// Returns the currently selected review-view reference, if any.
     #[must_use]
-    pub fn selected_link(&self) -> Option<&TuiViewLink> {
+    pub fn selected_view_ref(&self) -> Option<&ReviewViewRef> {
         self.summary
             .item_at(self.item_cursor)
-            .map(|item| &item.tui_link)
+            .map(|item| &item.view_ref)
     }
 
     /// Moves the cursor up by one item.
@@ -161,8 +161,8 @@ mod tests {
 
     use super::PrDiscussionSummaryViewState;
     use crate::ai::{
-        DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary, PrDiscussionSummary,
-        SeverityBucket, TuiViewLink,
+        DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary, FrankieDeepLink,
+        PrDiscussionSummary, ReviewViewRef, SeverityBucket,
     };
 
     fn sample_summary() -> PrDiscussionSummary {
@@ -178,7 +178,7 @@ mod tests {
                             headline: "First".to_owned(),
                             rationale: "One".to_owned(),
                             severity: DiscussionSeverity::High,
-                            tui_link: TuiViewLink::comment_detail(1_u64.into()),
+                            view_ref: ReviewViewRef::comment_detail(1_u64.into()),
                         },
                         DiscussionSummaryItem {
                             root_comment_id: 2_u64.into(),
@@ -186,7 +186,7 @@ mod tests {
                             headline: "Second".to_owned(),
                             rationale: "Two".to_owned(),
                             severity: DiscussionSeverity::High,
-                            tui_link: TuiViewLink::comment_detail(2_u64.into()),
+                            view_ref: ReviewViewRef::comment_detail(2_u64.into()),
                         },
                     ],
                 }],
@@ -200,7 +200,9 @@ mod tests {
 
         assert_eq!(state.item_cursor(), 0);
         assert_eq!(
-            state.selected_link().map(ToString::to_string),
+            state
+                .selected_view_ref()
+                .map(|view_ref| FrankieDeepLink::new(view_ref).to_string()),
             Some("frankie://review-comment/1?view=detail".to_owned())
         );
     }

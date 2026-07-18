@@ -22,8 +22,9 @@ pub use comment_rewrite::{
     SideBySideDiffPreview, SideBySideLine, build_side_by_side_diff_preview, rewrite_with_fallback,
 };
 pub use pr_discussion_summary::{
-    DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary,
+    DiscussionSeverity, DiscussionSummaryItem, FileDiscussionSummary, FrankieDeepLink,
     OpenAiPrDiscussionSummaryConfig, OpenAiPrDiscussionSummaryService, PrDiscussionSummary,
-    PrDiscussionSummaryRequest, PrDiscussionSummaryService, SeverityBucket, TuiView, TuiViewLink,
+    PrDiscussionSummaryRequest, PrDiscussionSummaryService, ReviewView, ReviewViewRef,
+    SeverityBucket,
 };
 pub use session::{SessionState, SessionStatus, find_interrupted_session};

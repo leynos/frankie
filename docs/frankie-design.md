@@ -3496,9 +3496,9 @@ governance decisions separately.
 - `TimeTravelService`, `ResolutionVerificationService`, and
   `ReviewReplyService` expose on-demand context, verification, and review
   action capabilities without requiring TUI orchestration types.
-- Shared summary and navigation models use host-neutral review references, with
-  TUI deep links rendered as one adapter-specific projection rather than the
-  canonical contract.
+- Shared summary and navigation models use host-neutral `ReviewViewRef`
+  references, with `FrankieDeepLink` rendering Frankie deep-link tokens as one
+  adapter-specific projection rather than the canonical contract.
 
 **End-to-end ownership walkthrough — new review comment lifecycle**:
 
