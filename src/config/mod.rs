@@ -21,8 +21,8 @@ use crate::github::error::IntakeError;
 mod model;
 mod summarize_mode;
 
-pub use model::{DEFAULT_COMMIT_HISTORY_LIMIT, FrankieConfig};
 pub(crate) use model::DEFAULT_REPLY_MAX_LENGTH;
+pub use model::{DEFAULT_COMMIT_HISTORY_LIMIT, FrankieConfig};
 
 /// Operation mode determined by CLI arguments.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

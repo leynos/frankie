@@ -307,6 +307,11 @@ Follow-up notes:
 - Post-rebase Markdown validation also repaired two malformed Rust example
   fences in `docs/users-guide.md`. `make markdownlint` and `make nixie` then
   passed.
+- A subsequent rebase conflict arose when main extracted `FrankieConfig` into
+  `config::model`. The resolution retained that extraction and applied this
+  plan's public-default requirement inside the model, removing its legacy
+  helper. `make check-fmt`, `make test` (890 passed, 1 skipped), `make
+  typecheck`, and `make lint` passed.
 
 ## Context and orientation
 
