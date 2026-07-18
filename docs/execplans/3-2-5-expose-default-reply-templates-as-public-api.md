@@ -300,6 +300,13 @@ Follow-up notes:
   documented module and crate-root API paths explicit, and added parity checks
   for both public paths. The full gate suite passed, and `coderabbit review
   --agent` reported 0 findings.
+- Rebased cleanly onto `origin/main` on 2026-07-18. Git dropped an earlier
+  Mermaid correction because the identical change was already upstream; no
+  conflicts or lockfile changes occurred. `make check-fmt`, `make test` (890
+  passed, 1 skipped), `make typecheck`, and `make lint` passed.
+- Post-rebase Markdown validation also repaired two malformed Rust example
+  fences in `docs/users-guide.md`. `make markdownlint` and `make nixie` then
+  passed.
 
 ## Context and orientation
 
