@@ -40,7 +40,7 @@ fn intake_state() -> IntakeState {
 )]
 fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, count: u64) {
     let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
-        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
+        .expect("failed to create Tokio runtime");
 
     let comments: Vec<_> = (0..count)
         .map(|index| {
@@ -87,7 +87,7 @@ fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, co
 )]
 fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) {
     let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
-        .unwrap_or_else(|error| panic!("failed to create Tokio runtime: {error}"));
+        .expect("failed to create Tokio runtime");
 
     let pr_path = format!("/api/v3/repos/owner/repo/pulls/{pr}");
     let response =
@@ -130,8 +130,10 @@ fn load_pull_request(intake_state: &IntakeState, pr_url: String) {
     } else {
         cleaned_pr_url.replace("SERVER", &server_url)
     };
-    let locator = PullRequestLocator::parse(&resolved_url)
-        .unwrap_or_else(|error| panic!("{resolved_url}: {error}"));
+    let locator = match PullRequestLocator::parse(&resolved_url) {
+        Ok(locator) => locator,
+        Err(error) => panic!("{resolved_url}: {error}"),
+    };
 
     let locator_clone = locator.clone();
 

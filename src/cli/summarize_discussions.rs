@@ -81,6 +81,8 @@ fn write_summary<W: Write>(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `summarize_discussions` module.
+
     use rstest::rstest;
 
     use super::write_summary;

@@ -66,10 +66,11 @@ fn writeln_stderr(message: &str) -> io::Result<()> {
     writeln!(stderr, "{message}")
 }
 
-/// Test support utilities for telemetry testing.
 #[cfg(feature = "test-support")]
 pub mod test_support {
-    use std::sync::{Arc, Mutex};
+    //! In-memory telemetry sinks used to assert on recorded events in tests.
+
+    use std::sync::{Arc, Mutex, PoisonError};
 
     use super::{TelemetryEvent, TelemetrySink};
 
@@ -85,40 +86,32 @@ pub mod test_support {
         /// Use this when you need to inspect events without clearing them,
         /// such as when multiple Then steps need to check the same events.
         ///
-        /// # Panics
-        ///
-        /// Panics if the events mutex is poisoned, which indicates a prior panic
-        /// during event recording.
-        #[expect(
-            clippy::expect_used,
-            reason = "test fixture; panic is acceptable if mutex is poisoned"
-        )]
+        /// A poisoned mutex is recovered rather than propagated: the sink only
+        /// stores plain event data, which remains valid after a panic in
+        /// another thread.
         #[must_use]
         pub fn events(&self) -> Vec<TelemetryEvent> {
             self.events
                 .lock()
-                .expect("events mutex should be available")
+                .unwrap_or_else(PoisonError::into_inner)
                 .clone()
         }
     }
 
     impl TelemetrySink for RecordingTelemetrySink {
-        #[expect(
-            clippy::expect_used,
-            reason = "test fixture; panic is acceptable if mutex is poisoned"
-        )]
         fn record(&self, event: TelemetryEvent) {
             self.events
                 .lock()
-                .expect("events mutex should be available")
+                .unwrap_or_else(PoisonError::into_inner)
                 .push(event);
         }
     }
 }
 
-/// Unit tests for telemetry module.
 #[cfg(all(test, feature = "test-support"))]
 mod tests {
+    //! Unit tests for the `telemetry` module.
+
     use super::test_support::RecordingTelemetrySink;
     use super::{TelemetryEvent, TelemetrySink};
 

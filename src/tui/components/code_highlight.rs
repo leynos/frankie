@@ -136,6 +136,8 @@ fn highlight_code_block(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `code_highlight` module.
+
     use rstest::rstest;
 
     use super::*;

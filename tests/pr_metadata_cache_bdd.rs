@@ -1,6 +1,8 @@
 //! Behavioural tests for pull request metadata caching.
 
 mod support {
+    //! Test-support plumbing shared with other behavioural test crates.
+
     #[path = "../support/mod.rs"]
     mod common;
 

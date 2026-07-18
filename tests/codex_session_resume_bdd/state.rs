@@ -81,33 +81,35 @@ impl StubResumeCodexService {
             });
         };
 
-        match next_plan {
+        let (expected, timed_updates) = match next_plan {
             StubResumePlan::FreshUpdates(timed_updates) => {
-                if invocation != InvocationKind::FreshStart {
-                    return Err(IntakeError::Api {
-                        message: format!(
-                            "stub plan expected start(), but {}() was called",
-                            invocation.as_label()
-                        ),
-                    });
-                }
-                let receiver = spawn_timed_updates(timed_updates);
-                Ok(CodexExecutionHandle::new(receiver))
+                (InvocationKind::FreshStart, timed_updates)
             }
-            StubResumePlan::ResumeUpdates(timed_updates) => {
-                if invocation != InvocationKind::Resume {
-                    return Err(IntakeError::Api {
-                        message: format!(
-                            "stub plan expected resume(), but {}() was called",
-                            invocation.as_label()
-                        ),
-                    });
-                }
-                let receiver = spawn_timed_updates(timed_updates);
-                Ok(CodexExecutionHandle::new(receiver))
-            }
-        }
+            StubResumePlan::ResumeUpdates(timed_updates) => (InvocationKind::Resume, timed_updates),
+        };
+        ensure_invocation_matches(expected, invocation)?;
+
+        let receiver = spawn_timed_updates(timed_updates);
+        Ok(CodexExecutionHandle::new(receiver))
     }
+}
+
+/// Rejects invocations that do not match the queued stub plan.
+fn ensure_invocation_matches(
+    expected: InvocationKind,
+    actual: InvocationKind,
+) -> Result<(), IntakeError> {
+    if expected == actual {
+        return Ok(());
+    }
+
+    Err(IntakeError::Api {
+        message: format!(
+            "stub plan expected {}(), but {}() was called",
+            expected.as_label(),
+            actual.as_label()
+        ),
+    })
 }
 
 fn sleep_for_delay(delay_ms: u64) {

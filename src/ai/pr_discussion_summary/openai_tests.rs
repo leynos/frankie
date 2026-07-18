@@ -11,7 +11,7 @@ use crate::ai::pr_discussion_summary::{
 use crate::github::IntakeError;
 use crate::github::models::test_support::minimal_review;
 
-use super::{ChatContent, build_prompt, parse_content_value};
+use super::protocol::{ChatContent, build_prompt, parse_content_value};
 
 #[test]
 fn parse_content_value_supports_string_and_array() {

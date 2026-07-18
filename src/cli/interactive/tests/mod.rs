@@ -3,6 +3,8 @@
 mod run_discovered_repository;
 
 mod discovery_error_handling {
+    //! Tests for local discovery error handling.
+
     use frankie::IntakeError;
     use frankie::local::LocalDiscoveryError;
     use rstest::rstest;
@@ -62,6 +64,8 @@ mod discovery_error_handling {
 }
 
 mod interactive_mode {
+    //! Tests for interactive-mode repository resolution.
+
     use frankie::IntakeError;
 
     use super::super::{FrankieConfig, run};
@@ -94,6 +98,8 @@ mod interactive_mode {
 }
 
 mod default_listing_params {
+    //! Tests for default pull-request listing parameters.
+
     use frankie::github::PullRequestState;
 
     use crate::cli::default_listing_params;
@@ -113,6 +119,8 @@ mod default_listing_params {
 }
 
 mod repository_locator_from_github_origin {
+    //! Tests for locator construction from GitHub origins.
+
     use frankie::RepositoryLocator;
     use frankie::local::GitHubOrigin;
     use rstest::rstest;

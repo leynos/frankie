@@ -83,6 +83,8 @@ impl RateLimitInfo {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `rate_limit` module.
+
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::RateLimitInfo;

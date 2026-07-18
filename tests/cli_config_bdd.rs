@@ -110,31 +110,37 @@ fn github_token_env_set(config_state: &ConfigState, token: String) {
 // --- When steps ---
 
 #[when("the CLI receives pr_url {url}")]
-fn cli_receives_pr_url(config_state: &ConfigState, url: String) {
+fn cli_receives_pr_url(
+    config_state: &ConfigState,
+    url: String,
+) -> Result<(), std::sync::Arc<ortho_config::OrthoError>> {
     let url_clean = url.trim_matches('"');
     config_state.cli_layer.set(json!({"pr_url": url_clean}));
     build_config(config_state)
-        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 #[when("the CLI receives token {token}")]
-fn cli_receives_token(config_state: &ConfigState, token: String) {
+fn cli_receives_token(
+    config_state: &ConfigState,
+    token: String,
+) -> Result<(), std::sync::Arc<ortho_config::OrthoError>> {
     let token_clean = token.trim_matches('"');
     config_state.cli_layer.set(json!({"token": token_clean}));
     build_config(config_state)
-        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 #[when("the CLI receives no pr_url")]
-fn cli_receives_no_pr_url(config_state: &ConfigState) {
+fn cli_receives_no_pr_url(
+    config_state: &ConfigState,
+) -> Result<(), std::sync::Arc<ortho_config::OrthoError>> {
     build_config(config_state)
-        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 #[when("the CLI receives no token")]
-fn cli_receives_no_token(config_state: &ConfigState) {
+fn cli_receives_no_token(
+    config_state: &ConfigState,
+) -> Result<(), std::sync::Arc<ortho_config::OrthoError>> {
     build_config(config_state)
-        .unwrap_or_else(|error| panic!("failed to merge configuration: {error}"));
 }
 
 // --- Then steps ---
@@ -168,7 +174,7 @@ fn assert_resolved_token(config_state: &ConfigState, expected: String) {
 
     let resolved = config
         .resolve_token()
-        .unwrap_or_else(|error| panic!("token resolution failed: {error}"));
+        .expect("token resolution should succeed");
 
     assert_eq!(resolved, expected_clean, "resolved token mismatch");
 }

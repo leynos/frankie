@@ -105,12 +105,10 @@ fn read_schema_version(
     Ok(SchemaVersion(row.version))
 }
 
-/// Unit tests for the migration runner.
-///
-/// These tests require the `test-support` feature to be enabled, which provides
-/// [`RecordingTelemetrySink`](crate::telemetry::test_support::RecordingTelemetrySink).
 #[cfg(all(test, feature = "test-support"))]
 mod tests {
+    //! Unit tests for the `migrator` module.
+
     use super::{CURRENT_SCHEMA_VERSION, migrate_database};
     use crate::telemetry::TelemetryEvent;
     use crate::telemetry::test_support::RecordingTelemetrySink;

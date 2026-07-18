@@ -42,6 +42,8 @@ pub fn rewrite_with_fallback(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `service` module.
+
     use crate::ai::comment_rewrite::{CommentRewriteContext, CommentRewriteMode};
     use crate::github::IntakeError;
 

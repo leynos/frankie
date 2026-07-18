@@ -193,6 +193,8 @@ pub enum ReplyDraftError {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `reply_draft` module.
+
     use rstest::rstest;
 
     use super::{ReplyDraftError, ReplyDraftState};

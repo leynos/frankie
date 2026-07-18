@@ -10,22 +10,21 @@ use rstest::rstest;
 use tempfile::TempDir;
 
 /// Returns the path to the built binary.
-fn binary_path() -> std::path::PathBuf {
+fn binary_path() -> std::io::Result<std::path::PathBuf> {
     // cargo test builds binaries in target/debug
-    let mut path = std::env::current_exe()
-        .unwrap_or_else(|error| panic!("failed to get current exe path: {error}"));
+    let mut path = std::env::current_exe()?;
     path.pop(); // remove test binary name
     path.pop(); // remove deps
     path.push("frankie");
-    path
+    Ok(path)
 }
 
 fn run_frankie_in_dir(
     args: &[&str],
     env: &[(&str, Option<&str>)],
     working_dir: &std::path::Path,
-) -> Output {
-    let mut command = Command::new(binary_path());
+) -> std::io::Result<Output> {
+    let mut command = Command::new(binary_path()?);
     command.args(args);
     command.current_dir(working_dir);
 
@@ -50,9 +49,7 @@ fn run_frankie_in_dir(
         }
     }
 
-    command
-        .output()
-        .unwrap_or_else(|error| panic!("failed to execute binary: {error}"))
+    command.output()
 }
 
 /// Creates a temporary Git repository with the given origin URL.
@@ -105,7 +102,8 @@ fn no_local_discovery_short_flag_requires_explicit_arguments() {
 fn interactive_mode_discovers_repository_from_git_directory() {
     let temp_dir = create_temp_repo_with_origin("git@github.com:octo/cat.git");
 
-    let output = run_frankie_in_dir(&["--token", "ghp_test"], &[], temp_dir.path());
+    let output = run_frankie_in_dir(&["--token", "ghp_test"], &[], temp_dir.path())
+        .expect("failed to execute binary");
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -146,6 +144,10 @@ fn create_temp_non_git_dir() -> TempDir {
     clippy::too_many_arguments,
     reason = "test helper with descriptive parameters; clarity outweighs argument count"
 )]
+#[expect(
+    clippy::expect_used,
+    reason = "integration test helper; allow-expect-in-tests does not cover integration tests"
+)]
 fn assert_interactive_mode_error<F>(
     setup: F,
     args: &[&str],
@@ -157,7 +159,7 @@ fn assert_interactive_mode_error<F>(
 {
     let temp_dir = setup();
 
-    let output = run_frankie_in_dir(args, &[], temp_dir.path());
+    let output = run_frankie_in_dir(args, &[], temp_dir.path()).expect("failed to execute binary");
 
     assert!(
         !output.status.success(),

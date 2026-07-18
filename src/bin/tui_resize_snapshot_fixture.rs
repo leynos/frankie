@@ -95,8 +95,7 @@ where
     }
 }
 
-#[tokio::main]
-async fn main() {
+async fn run_fixture() {
     let _ = set_initial_reviews(fixture_comments());
     seed_initial_terminal_size();
 
@@ -116,8 +115,23 @@ async fn main() {
     }
 }
 
+// A hand-rolled runtime bootstrap replaces `#[tokio::main]` because the
+// macro expansion calls `expect` on runtime construction, which the
+// `no_expect_outside_tests` lint rejects in binary code.
+fn main() {
+    let Ok(runtime) = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    else {
+        process::exit(1);
+    };
+    runtime.block_on(run_fixture());
+}
+
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `tui_resize_snapshot_fixture` module.
+
     use std::future::{pending, ready};
 
     use super::{FixtureRunFailure, await_with_optional_timeout};

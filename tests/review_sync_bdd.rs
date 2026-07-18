@@ -233,9 +233,9 @@ fn then_event_shows_comment_count(sync_state: &SyncState, expected: usize) {
 
 #[then("the event shows incremental {expected}")]
 fn then_event_shows_incremental(sync_state: &SyncState, expected: String) {
-    let expected_bool = expected
-        .parse::<bool>()
-        .unwrap_or_else(|_| panic!("invalid boolean in feature file: {expected:?}"));
+    let Ok(expected_bool) = expected.parse::<bool>() else {
+        panic!("invalid boolean in feature file: {expected:?}");
+    };
     assert_sync_event_field(sync_state, "incremental", expected_bool, |e| {
         if let TelemetryEvent::SyncLatencyRecorded { incremental, .. } = e {
             Some(*incremental)

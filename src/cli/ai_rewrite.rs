@@ -4,9 +4,9 @@ use std::io::{self, Write};
 use std::time::Duration;
 
 use frankie::ai::{
-    CommentRewriteContext, CommentRewriteMode, CommentRewriteOutcome, CommentRewriteRequest,
-    CommentRewriteService, OpenAiCommentRewriteConfig, OpenAiCommentRewriteService,
-    build_side_by_side_diff_preview,
+    CommentRewriteContext, CommentRewriteFallback, CommentRewriteGenerated, CommentRewriteMode,
+    CommentRewriteOutcome, CommentRewriteRequest, CommentRewriteService,
+    OpenAiCommentRewriteConfig, OpenAiCommentRewriteService, build_side_by_side_diff_preview,
 };
 use frankie::{FrankieConfig, IntakeError};
 
@@ -106,24 +106,38 @@ fn write_outcome<W: Write>(
 
     match outcome {
         CommentRewriteOutcome::Generated(generated) => {
-            writeln!(writer, "Status: generated").map_err(|error| io_error(&error))?;
-            writeln!(writer, "Origin: {}", generated.origin_label)
-                .map_err(|error| io_error(&error))?;
-            write_preview(writer, original_text, generated.rewritten_text.as_str())?;
-            writeln!(writer, "\nCandidate text:\n{}", generated.rewritten_text)
-                .map_err(|error| io_error(&error))?;
+            write_generated_outcome(writer, original_text, generated)
         }
-        CommentRewriteOutcome::Fallback(fallback) => {
-            writeln!(writer, "Status: fallback").map_err(|error| io_error(&error))?;
-            writeln!(writer, "Reason: {}", fallback.reason).map_err(|error| io_error(&error))?;
-            writeln!(
-                writer,
-                "\nOriginal text preserved:\n{}",
-                fallback.original_text
-            )
-            .map_err(|error| io_error(&error))?;
-        }
+        CommentRewriteOutcome::Fallback(fallback) => write_fallback_outcome(writer, fallback),
     }
+}
+
+fn write_generated_outcome<W: Write>(
+    writer: &mut W,
+    original_text: &str,
+    generated: &CommentRewriteGenerated,
+) -> Result<(), IntakeError> {
+    writeln!(writer, "Status: generated").map_err(|error| io_error(&error))?;
+    writeln!(writer, "Origin: {}", generated.origin_label).map_err(|error| io_error(&error))?;
+    write_preview(writer, original_text, generated.rewritten_text.as_str())?;
+    writeln!(writer, "\nCandidate text:\n{}", generated.rewritten_text)
+        .map_err(|error| io_error(&error))?;
+
+    Ok(())
+}
+
+fn write_fallback_outcome<W: Write>(
+    writer: &mut W,
+    fallback: &CommentRewriteFallback,
+) -> Result<(), IntakeError> {
+    writeln!(writer, "Status: fallback").map_err(|error| io_error(&error))?;
+    writeln!(writer, "Reason: {}", fallback.reason).map_err(|error| io_error(&error))?;
+    writeln!(
+        writer,
+        "\nOriginal text preserved:\n{}",
+        fallback.original_text
+    )
+    .map_err(|error| io_error(&error))?;
 
     Ok(())
 }
@@ -155,6 +169,8 @@ fn write_preview<W: Write>(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `ai_rewrite` module.
+
     use rstest::rstest;
 
     use super::run_with_service;

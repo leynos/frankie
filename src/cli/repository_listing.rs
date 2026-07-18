@@ -52,6 +52,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `repository_listing` module.
+
     use std::sync::{Arc, Mutex};
 
     use frankie::github::PageInfo;

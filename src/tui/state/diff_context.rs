@@ -250,6 +250,8 @@ pub(crate) fn find_hunk_index(
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `diff_context` module.
+
     use rstest::{fixture, rstest};
 
     use super::*;

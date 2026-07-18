@@ -49,6 +49,8 @@ fn split_lines_preserving_empty(text: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `preview` module.
+
     use rstest::rstest;
 
     use super::build_side_by_side_diff_preview;

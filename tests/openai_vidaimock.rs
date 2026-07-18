@@ -15,7 +15,11 @@ use rewrite_request_fixture::rewrite_request;
 use rstest::rstest;
 
 mod ai {
+    //! Namespace mirror exposing `frankie::ai` items to the vidaimock tests.
+
     pub mod comment_rewrite {
+        //! Re-exports of the comment-rewrite API under a crate-like path.
+
         pub use frankie::ai::{CommentRewriteContext, CommentRewriteMode, CommentRewriteRequest};
     }
 }

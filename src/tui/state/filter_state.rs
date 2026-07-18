@@ -191,6 +191,8 @@ fn truncate_sha(sha: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `filter_state` module.
+
     use rstest::{fixture, rstest};
 
     use super::*;

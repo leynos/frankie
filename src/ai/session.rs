@@ -212,29 +212,33 @@ mod tests {
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    fn sample_session(transcript_path: Utf8PathBuf) -> SessionState {
-        SessionState {
+    fn sample_session(
+        transcript_path: Utf8PathBuf,
+    ) -> Result<SessionState, Box<dyn std::error::Error>> {
+        let started_at = Utc
+            .with_ymd_and_hms(2026, 2, 15, 10, 0, 0)
+            .single()
+            .ok_or("start timestamp must be valid")?;
+        let finished_at = Utc
+            .with_ymd_and_hms(2026, 2, 15, 10, 5, 0)
+            .single()
+            .ok_or("finish timestamp must be valid")?;
+        Ok(SessionState {
             status: SessionStatus::Interrupted,
             transcript_path,
             thread_id: Some("thr_abc123".to_owned()),
             owner: "owner".to_owned(),
             repository: "repo".to_owned(),
             pr_number: 42,
-            started_at: Utc
-                .with_ymd_and_hms(2026, 2, 15, 10, 0, 0)
-                .single()
-                .expect("test timestamp must be valid"),
-            finished_at: Some(
-                Utc.with_ymd_and_hms(2026, 2, 15, 10, 5, 0)
-                    .single()
-                    .expect("test timestamp must be valid"),
-            ),
-        }
+            started_at,
+            finished_at: Some(finished_at),
+        })
     }
 
     #[rstest]
     fn session_state_sidecar_path_replaces_extension() {
-        let session = sample_session(Utf8PathBuf::from("/tmp/transcripts/run.jsonl"));
+        let session = sample_session(Utf8PathBuf::from("/tmp/transcripts/run.jsonl"))
+            .expect("sample session should build");
         let expected = Utf8PathBuf::from("/tmp/transcripts/run.session.json");
         assert_eq!(session.sidecar_path(), expected);
     }
@@ -246,7 +250,7 @@ mod tests {
             .map_err(|_| "temp directory path must be UTF-8")?;
 
         let transcript_path = base.join("test-run.jsonl");
-        let session = sample_session(transcript_path);
+        let session = sample_session(transcript_path)?;
 
         session.write_sidecar()?;
 
@@ -283,7 +287,7 @@ mod tests {
             .map_err(|_| "temp directory path must be UTF-8")?;
 
         // Older session
-        let mut older = sample_session(base.join("old-run.jsonl"));
+        let mut older = sample_session(base.join("old-run.jsonl"))?;
         older.started_at = Utc
             .with_ymd_and_hms(2026, 2, 15, 8, 0, 0)
             .single()
@@ -291,7 +295,7 @@ mod tests {
         older.write_sidecar()?;
 
         // Newer session
-        let mut newer = sample_session(base.join("new-run.jsonl"));
+        let mut newer = sample_session(base.join("new-run.jsonl"))?;
         newer.started_at = Utc
             .with_ymd_and_hms(2026, 2, 15, 12, 0, 0)
             .single()
@@ -316,7 +320,7 @@ mod tests {
         let base = Utf8PathBuf::from_path_buf(temp_dir.path().to_path_buf())
             .map_err(|_| "temp directory path must be UTF-8")?;
 
-        let mut session = sample_session(base.join(name));
+        let mut session = sample_session(base.join(name))?;
         modifier(&mut session);
         session.write_sidecar()?;
 

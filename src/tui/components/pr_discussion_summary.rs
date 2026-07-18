@@ -86,6 +86,8 @@ const fn selected_prefix(item_index: usize, selected_item_index: usize) -> &'sta
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `pr_discussion_summary` module.
+
     use rstest::rstest;
 
     use super::{PrDiscussionSummaryComponent, PrDiscussionSummaryViewContext};

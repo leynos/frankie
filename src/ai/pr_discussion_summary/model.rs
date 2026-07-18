@@ -254,6 +254,8 @@ pub struct DiscussionSummaryItem {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `model` module.
+
     use std::collections::HashMap;
 
     use rstest::rstest;

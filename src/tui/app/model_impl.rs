@@ -340,6 +340,8 @@ fn sgr_sequence_resets_styles(escape_sequence: &str) -> Option<bool> {
 
 #[cfg(test)]
 mod tests {
+    //! Unit tests for the `model_impl` module.
+
     use super::{normalise_lines_to_height, pad_or_truncate_line, sgr_sequence_resets_styles};
 
     #[test]

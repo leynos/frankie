@@ -45,22 +45,22 @@ fn blank_database_url(migration_state: &MigrationState) {
 }
 
 #[given("a directory database path")]
-fn directory_database_path(migration_state: &MigrationState) {
-    let temp_dir = create_temp_dir()
-        .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
+fn directory_database_path(migration_state: &MigrationState) -> std::io::Result<()> {
+    let temp_dir = create_temp_dir()?;
     let database_url = path_to_string(temp_dir.path());
     migration_state.temp_dir.set(temp_dir);
     migration_state.database_url.set(database_url);
+    Ok(())
 }
 
 #[given("a temporary database file")]
-fn temporary_database_file(migration_state: &MigrationState) {
-    let temp_dir = create_temp_dir()
-        .unwrap_or_else(|error| panic!("failed to create temporary directory: {error}"));
+fn temporary_database_file(migration_state: &MigrationState) -> std::io::Result<()> {
+    let temp_dir = create_temp_dir()?;
     let db_path = temp_dir.path().join("frankie.sqlite");
     let database_url = path_to_string(&db_path);
     migration_state.temp_dir.set(temp_dir);
     migration_state.database_url.set(database_url);
+    Ok(())
 }
 
 #[given("a telemetry sink")]
