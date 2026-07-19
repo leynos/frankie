@@ -284,24 +284,24 @@ use frankie::time_travel::{TimeTravelParams, load_time_travel_state};
 #         unimplemented!()
 #     }
 
-#     fn get_file_at_commit<'a>(
+#     fn get_file_at_commit(
 #         &self,
-#         _sha: &'a CommitSha,
-#         _file_path: &'a frankie::local::RepoFilePath,
+#         _sha: &CommitSha,
+#         _file_path: &frankie::local::RepoFilePath,
 #     ) -> Result<String, GitOperationError> {
 #         unimplemented!()
 #     }
 
-#     fn verify_line_mapping<'a>(
+#     fn verify_line_mapping(
 #         &self,
-#         _request: &'a frankie::local::LineMappingRequest,
+#         _request: &frankie::local::LineMappingRequest,
 #     ) -> Result<frankie::local::LineMappingVerification, GitOperationError> {
 #         unimplemented!()
 #     }
 
-#     fn get_parent_commits<'a>(
+#     fn get_parent_commits(
 #         &self,
-#         _sha: &'a CommitSha,
+#         _sha: &CommitSha,
 #         _limit: usize,
 #     ) -> Result<Vec<CommitSha>, GitOperationError> {
 #         unimplemented!()

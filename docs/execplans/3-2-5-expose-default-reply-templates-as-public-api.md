@@ -312,6 +312,9 @@ Follow-up notes:
   plan's public-default requirement inside the model, removing its legacy
   helper. `make check-fmt`, `make test` (890 passed, 1 skipped), `make
   typecheck`, and `make lint` passed.
+- Documentation review aligned the `StubGitOps` example with the current
+  `GitOperations` method signatures by removing unnecessary shared lifetime
+  parameters from its file lookup, line mapping, and parent lookup methods.
 
 ## Context and orientation
 
