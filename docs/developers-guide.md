@@ -40,6 +40,17 @@ Further detail:
 - The architectural rationale and TUI adapter boundary are in
   [docs/frankie-design.md](frankie-design.md#227-extract-time-travel-orchestration-into-a-pure-library-service).
 
+## Reply-template defaults
+
+The canonical built-in reply templates live in `src/reply_template/defaults.rs`.
+`DEFAULT_REPLY_TEMPLATES` is the source of truth and
+`default_reply_templates()` derives its owned `Vec<String>` from that constant
+so borrowed and owned callers cannot drift.
+
+Configuration and TUI code consume `crate::reply_template` for these defaults.
+Do not reintroduce copies under `src/config/` or `src/tui/`; those modules are
+adapters that should depend inward on the reply-template domain module.
+
 ## Host-neutral summary references
 
 Shared summary and navigation data transfer objects (DTOs) must use

@@ -8,6 +8,10 @@ use thiserror::Error;
 
 use crate::github::models::ReviewComment;
 
+pub mod defaults;
+
+pub use defaults::{DEFAULT_REPLY_TEMPLATES, default_reply_templates};
+
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]

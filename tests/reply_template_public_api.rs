@@ -1,6 +1,9 @@
 //! Integration tests that prove reply templating is available from `frankie`.
 
-use frankie::{ReplyTemplateContext, ReplyTemplateError, render_reply_template};
+use frankie::{
+    DEFAULT_REPLY_TEMPLATES, FrankieConfig, ReplyTemplateContext, ReplyTemplateError,
+    default_reply_templates, render_reply_template,
+};
 use rstest::rstest;
 
 #[path = "support/reply_template.rs"]
@@ -24,6 +27,45 @@ fn crate_root_re_export_includes_comment_body_fields() {
         .expect("crate-root reply template API should render comment body fields");
 
     assert_eq!(rendered, "Body: LGTM");
+}
+
+#[rstest]
+fn crate_root_exposes_default_reply_templates() {
+    assert!(
+        !DEFAULT_REPLY_TEMPLATES.is_empty(),
+        "the built-in default reply templates must not be empty"
+    );
+
+    let expected: Vec<String> = DEFAULT_REPLY_TEMPLATES
+        .iter()
+        .map(|template| (*template).to_owned())
+        .collect();
+
+    assert_eq!(default_reply_templates(), expected);
+    assert_eq!(
+        frankie::reply_template::DEFAULT_REPLY_TEMPLATES,
+        DEFAULT_REPLY_TEMPLATES
+    );
+    assert_eq!(
+        frankie::reply_template::default_reply_templates(),
+        default_reply_templates()
+    );
+    assert_eq!(
+        DEFAULT_REPLY_TEMPLATES,
+        [
+            "Thanks for the review on {{ file }}:{{ line }}. I will update this.",
+            "Good catch, {{ reviewer }}. I will address this in the next commit.",
+            "I have addressed this feedback and pushed an update.",
+        ]
+    );
+}
+
+#[rstest]
+fn config_default_matches_public_default_reply_templates() {
+    assert_eq!(
+        FrankieConfig::default().reply_templates,
+        default_reply_templates()
+    );
 }
 
 #[rstest]

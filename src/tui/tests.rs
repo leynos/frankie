@@ -11,6 +11,7 @@ use crate::local::{
     CommitSha, CommitSnapshot, GitOperationError, GitOperations, LineMappingRequest,
     LineMappingVerification, RepoFilePath,
 };
+use crate::reply_template::default_reply_templates;
 use crate::telemetry::test_support::RecordingTelemetrySink;
 use crate::telemetry::{NoopTelemetrySink, TelemetryEvent, TelemetrySink};
 use crate::tui::storage::storage_test_guard;
@@ -202,6 +203,14 @@ fn reply_draft_config_falls_back_to_defaults() {
     assert!(
         !config.templates.is_empty(),
         "default reply templates should not be empty"
+    );
+}
+
+#[rstest]
+fn reply_draft_config_default_templates_match_public_defaults() {
+    assert_eq!(
+        ReplyDraftConfig::default().templates,
+        default_reply_templates()
     );
 }
 
