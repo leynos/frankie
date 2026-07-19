@@ -1,5 +1,8 @@
 # Frankie Goes to Code Review 🎸
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](
+https://deepwiki.com/leynos/frankie)
+
 > Making code review easy and fun in an agentic world
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
