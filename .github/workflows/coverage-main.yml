@@ -34,7 +34,7 @@ jobs:
           with-ratchet: 'true'
       - name: Upload coverage data to CodeScene
         if: env.CS_ACCESS_TOKEN != ''
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@9f788dad94c848e3bbddfb90f9e80b6742b7390c
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@4d696e72fff6db49f34302ccf119ba978f1032c9
         with:
           format: lcov
           access-token: ${{ env.CS_ACCESS_TOKEN }}
