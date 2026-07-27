@@ -809,11 +809,10 @@ renderers and embedding hosts can inspect state without depending on the TUI
 adapter. Consumers import these types as
 `frankie::time_travel::{TimeTravelInitParams, TimeTravelState}` and read state
 through documented getters such as `snapshot()`, `file_path()`,
-`line_mapping()`, `current_index()`, and the commit-sha accessors.
-Time-travel orchestration was extracted into shared library code in roadmap
-item 2.2.7. The public contract now includes
-`TimeTravelNavigationDirection` and `navigate_time_travel_state` in
-`src/time_travel/service.rs`, returning
+`line_mapping()`, `current_index()`, and the commit-sha accessors. Time-travel
+orchestration was extracted into shared library code in roadmap item 2.2.7. The
+public contract now includes `TimeTravelNavigationDirection` and
+`navigate_time_travel_state` in `src/time_travel/service.rs`, returning
 `Result<Option<TimeTravelState>, GitOperationError>` so history-boundary
 navigation remains an explicit no-op while git failures still surface
 unchanged. Orchestration ownership and the no-standalone-CLI decision are
@@ -3717,10 +3716,10 @@ boilerplate for database interaction and eliminates runtime errors without
 sacrificing performance. It takes full advantage of Rust's type system to
 create a low overhead query builder that "feels like Rust."
 
-**Technical Implementation**: Uses diesel = { version = "2.2.0", features =
-["sqlite", "returning_clauses_for_sqlite_3_35"] } for enhanced SQL
-capabilities. Includes diesel_migrations = { version = "2.2.0", features =
-["sqlite"] } for automatic migrations.
+**Technical Implementation**: Uses diesel = { version = "2.2.0", features = ["
+sqlite", "returning_clauses_for_sqlite_3_35"] } for enhanced SQL capabilities.
+Includes diesel_migrations = { version = "2.2.0", features = ["sqlite"] } for
+automatic migrations.
 
 **Schema Design**:
 
@@ -4436,8 +4435,8 @@ not yet include `thread_root_github_comment_id`, `commit_sha`,
 `Option<String>` (nullable) to accommodate deleted or redacted comments whose
 body the GitHub API returns as `null`. The future migration that adds the
 missing columns will also relax the `body` column to `TEXT` (nullable).
-Frankie's in-memory `ReviewComment` (`src/github/models/mod.rs`) already
-carries `commit_sha`, `in_reply_to_id`, and `body` as `Option<String>` fields
+Frankie's in-memory `ReviewComment` (`src/github/models/mod.rs`) already carries
+`commit_sha`, `in_reply_to_id`, and `body` as `Option<String>` fields
 populated from the GitHub API response. A future migration will align the
 persisted table with this target projection.
 
@@ -4651,8 +4650,8 @@ that create the Phase 1 tables needed for local persistence and caching:
   and TTL expiry)
 
 The additional entities in the ER diagram (for example `users`, `ai_sessions`,
-and `cache_metadata`) are intentionally deferred until later roadmap slices.
-The `pr_metadata_cache` table is a pragmatic exception: it enables cache-first
+and `cache_metadata`) are intentionally deferred until later roadmap slices. The
+`pr_metadata_cache` table is a pragmatic exception: it enables cache-first
 pull request intake without requiring repository discovery or the full PR data
 model to be populated in SQLite.
 
@@ -5385,12 +5384,12 @@ sequenceDiagram
 
 **Stream Event Types**:
 
-| Event Type       | JSON Schema                                   | Processing Action           | UI Update               |
-| ---------------- | --------------------------------------------- | --------------------------- | ----------------------- |
-| `thread.started` | `{"type":"thread.started","thread_id":"…"}`   | Initialize session tracking | Show progress indicator |
-| `turn.started`   | `{"type":"turn.started"}`                     | Begin processing turn       | Update status message   |
-| `item.completed` | `{"type":"item.completed","item":{…}}`        | Process completed item      | Update progress bar     |
-| `agent_message`  | `{"type":"agent_message","text":"…"}`         | Display agent response      | Show final message      |
+| Event Type       | JSON Schema                                 | Processing Action           | UI Update               |
+| ---------------- | ------------------------------------------- | --------------------------- | ----------------------- |
+| `thread.started` | `{"type":"thread.started","thread_id":"…"}` | Initialize session tracking | Show progress indicator |
+| `turn.started`   | `{"type":"turn.started"}`                   | Begin processing turn       | Update status message   |
+| `item.completed` | `{"type":"item.completed","item":{…}}`      | Process completed item      | Update progress bar     |
+| `agent_message`  | `{"type":"agent_message","text":"…"}`       | Display agent response      | Show final message      |
 
 #### 6.7.2.3 Batch Processing Flows
 
@@ -5613,12 +5612,12 @@ flowchart TD
 
 **OpenAI Codex CLI Service Contract**:
 
-| Contract Element | Specification                                                                                                                                                           | SLA                    | Monitoring                |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- |
-| Availability     | Included with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans                                                                                                    | Plan-dependent         | Process health monitoring |
-| Response Time    | Variable based on task complexity                                                                                                                                       | No specific SLA        | Execution time tracking   |
-| Resource Usage   | Local compute resources                                                                                                                                                 | User machine dependent | Resource monitoring       |
-| Data Privacy     | All file reads, writes, and command executions happen locally. Only your prompt, high‑level context, and optional diff summaries are sent to the model for generation   | Privacy by design      | Data flow auditing        |
+| Contract Element | Specification                                                                                                                                                         | SLA                    | Monitoring                |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- |
+| Availability     | Included with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans                                                                                                  | Plan-dependent         | Process health monitoring |
+| Response Time    | Variable based on task complexity                                                                                                                                     | No specific SLA        | Execution time tracking   |
+| Resource Usage   | Local compute resources                                                                                                                                               | User machine dependent | Resource monitoring       |
+| Data Privacy     | All file reads, writes, and command executions happen locally. Only your prompt, high‑level context, and optional diff summaries are sent to the model for generation | Privacy by design      | Data flow auditing        |
 
 ### 6.7.4 Integration Flow Diagrams
 
@@ -8005,11 +8004,11 @@ targets, and finally falls back to cargo install.
 
 **Semantic Versioning Strategy**:
 
-| Version Component | Increment Trigger                  | Example         | Impact                   |
-| ----------------- | ---------------------------------- | --------------- | ------------------------ |
-| Major (X.0.0)     | Breaking changes to CLI interface  | 1.0.0 → 2.0.0   | Requires user adaptation |
-| Minor (0.X.0)     | New features, non-breaking changes | 1.1.0 → 1.2.0   | Backward compatible      |
-| Patch (0.0.X)     | Bug fixes, security updates        | 1.1.1 → 1.1.2   | Drop-in replacement      |
+| Version Component | Increment Trigger                  | Example       | Impact                   |
+| ----------------- | ---------------------------------- | ------------- | ------------------------ |
+| Major (X.0.0)     | Breaking changes to CLI interface  | 1.0.0 → 2.0.0 | Requires user adaptation |
+| Minor (0.X.0)     | New features, non-breaking changes | 1.1.0 → 1.2.0 | Backward compatible      |
+| Patch (0.0.X)     | Bug fixes, security updates        | 1.1.1 → 1.1.2 | Drop-in replacement      |
 
 **Release Automation Workflow**:
 

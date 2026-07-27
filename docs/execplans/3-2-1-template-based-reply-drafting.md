@@ -1,9 +1,8 @@
 # Implement template-based reply drafting with keyboard insertion
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -128,7 +127,7 @@ Success is observable when:
   critical controls (`q:quit`) when additional shortcuts are appended.
   Evidence: failing test
   `tui::app::tests::tiny_terminal_skips_detail_pane_and_keeps_status_bar_visible`
-   after adding `a:reply`. Impact: status hints now need a width-aware compact
+  after adding `a:reply`. Impact: status hints now need a width-aware compact
   variant for narrow terminals.
 
 ## Decision log

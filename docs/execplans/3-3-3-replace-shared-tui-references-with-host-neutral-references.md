@@ -126,21 +126,20 @@ escalation, not a workaround.
   `FrankieDeepLink` rendering test describing the target API; observe them fail
   to compile / fail for the expected reason. On 2026-06-23,
   `cargo nextest run -p frankie review_view_ref_serialization_is_host_neutral
-  review_view_ref_renders_as_frankie_deep_link` failed with unresolved imports
-  for `ReviewView`, `ReviewViewRef`, `FrankieDeepLink`, and missing field
-  `view_ref`, which is the expected red failure.
+  review_view_ref_renders_as_frankie_deep_link`
+  failed with unresolved imports for `ReviewView`, `ReviewViewRef`,
+  `FrankieDeepLink`, and missing field `view_ref`, which is the expected red
+  failure.
 - [x] (Stage C / Green, milestone M1) Introduce `ReviewView`, `ReviewViewRef`,
   and `FrankieDeepLink`; rename the `tui_link` field to `view_ref`; migrate
   every consumer and re-export; make the workspace compile and all tests pass.
 - [x] (Stage C, milestone M2) Update construction sites in tests and confirm
   behavioural assertions (feature files, component/service/VidaiMock tests)
-  pass unchanged. On 2026-06-23, `make check-fmt`, `make lint`, and
-  `make test` passed; the full test gate ran 882 tests, all passed, with one
-  skipped.
+  pass unchanged. On 2026-06-23, `make check-fmt`, `make lint`, and `make test`
+  passed; the full test gate ran 882 tests, all passed, with one skipped.
 - [x] (Stage D, milestone M3) Update documentation: ADR-008 amendment,
-  `frankie-design.md`, `users-guide.md`, `developers-guide.md`. On
-  2026-06-23, `make markdownlint` and `make nixie` passed after these
-  documentation edits.
+  `frankie-design.md`, `users-guide.md`, `developers-guide.md`. On 2026-06-23,
+  `make markdownlint` and `make nixie` passed after these documentation edits.
 - [x] (Stage D, milestone M4) Mark roadmap 3.3.3 done; run the full gate suite
   and `coderabbit review --agent`; clear all concerns. On 2026-06-23, final
   gates passed (`make check-fmt`, `make lint`, `make test`,
@@ -162,18 +161,17 @@ escalation, not a workaround.
   unrelated pre-existing Markdown line-length violation in
   `docs/execplans/3-1-2-session-resumption-for-interrupted-codex-runs.md:392`.
   The formatter also rewrote unrelated Markdown files before failing; those
-  unrelated edits were restored. Impact: code milestone gates use `cargo fmt`
-  / `make check-fmt` first, and the all-doc Markdown gate must be revisited in
+  unrelated edits were restored. Impact: code milestone gates use `cargo fmt` /
+  `make check-fmt` first, and the all-doc Markdown gate must be revisited in
   the documentation milestone without weakening this plan's scope constraint.
 - Observation: after introducing `ReviewViewRef` and `FrankieDeepLink`, the
-  focused tests
-  `review_view_ref_serialization_is_host_neutral` and
+  focused tests `review_view_ref_serialization_is_host_neutral` and
   `review_view_ref_renders_as_frankie_deep_link` both pass, and
   `rg -n 'TuiViewLink|TuiView|tui_link|selected_link' src tests` returns no
   matches. Impact: the code migration appears complete before wider gates.
 - Observation: Clippy rejected chained indexing into the JSON value in the new
-  serialization test under `clippy::indexing_slicing`. Impact: the test now
-  uses `Value::pointer(...).expect(...)`, keeping the assertion explicit while
+  serialization test under `clippy::indexing_slicing`. Impact: the test now uses
+  `Value::pointer(...).expect(...)`, keeping the assertion explicit while
   respecting the repository lint policy.
 - Observation: CodeRabbit reviewed the code milestone three times. It first
   requested repository-style cleanup for `FrankieDeepLink::new`, then requested
@@ -227,12 +225,12 @@ escalation, not a workaround.
   alias would keep the TUI-coupled name alive in the public surface, defeating
   the purpose. Date/Author: 2026-06-18, user.
 - Decision (D3): the CLI keeps printing
-  `Link: frankie://review-comment/<id>?view=detail`,
-  rendered through the shared, host-neutral `FrankieDeepLink` presentation
-  helper rather than a `Display` on the DTO. Rationale: user selection ("Keep
-  frankie:// via shared helper"); preserves user-visible output, keeps the DTO
-  rendering-free, and avoids a CLI→TUI dependency because the helper is
-  host-neutral. Date/Author: 2026-06-18, user.
+  `Link: frankie://review-comment/<id>?view=detail`, rendered through the
+  shared, host-neutral `FrankieDeepLink` presentation helper rather than a
+  `Display` on the DTO. Rationale: user selection ("Keep frankie:// via shared
+  helper"); preserves user-visible output, keeps the DTO rendering-free, and
+  avoids a CLI→TUI dependency because the helper is host-neutral. Date/Author:
+  2026-06-18, user.
 - Decision (D4): render the deep link via a newtype `Display` wrapper
   `FrankieDeepLink<'a>(&'a ReviewViewRef)` rather than a free function, with a
   private field and a `pub const fn new(&'a ReviewViewRef) -> Self` constructor
@@ -292,10 +290,9 @@ structured comment ID. The new serialization test proves the shared wire shape
 contains `view_ref`, `comment_id`, and `view`, with no TUI-specific field or
 deep-link string.
 
-Documentation was updated in ADR-008, the design guide, users guide,
-developers guide, and roadmap. CodeRabbit raised two code-review concerns
-during M1/M2; both were fixed before proceeding. The final review reported zero
-findings.
+Documentation was updated in ADR-008, the design guide, users guide, developers
+guide, and roadmap. CodeRabbit raised two code-review concerns during M1/M2;
+both were fixed before proceeding. The final review reported zero findings.
 
 ## Context and orientation
 
@@ -337,10 +334,10 @@ Type definition and field — `src/ai/pr_discussion_summary/model.rs`:
   `/// TUI view targeted by a summary link.`, L93
   `/// Structured link pointing back to a TUI view.`, L96/L98 field docs, L103
   `/// Creates a link to the comment-detail view…`, L250
-  `/// Stable TUI link back to the root discussion.`. Replace
-  "TUI"/"link" wording with host-neutral language and add the rustdoc described
-  in M1 (intra-doc link to `FrankieDeepLink`, host-neutrality +
-  `Display`-removal rationale).
+  `/// Stable TUI link back to the root discussion.`. Replace "TUI"/"link"
+  wording with host-neutral language and add the rustdoc described in M1
+  (intra-doc link to `FrankieDeepLink`, host-neutrality + `Display`-removal
+  rationale).
 - L261, L282, L284, L285, L316, L330: in-module tests constructing/asserting
   the old types and the `Display` output. Also rename the test function L281
   `tui_link_formats_as_uri_like_token` → e.g.
@@ -681,8 +678,8 @@ Prescriptive end-state names and paths:
   `pub(crate) const fn label(self) -> &'static str` → `"detail"`.
 - `frankie::ai::ReviewViewRef` — struct
   `{ comment_id: GithubCommentId, view: ReviewView }`,
-  `pub const fn comment_detail(GithubCommentId) -> Self`, serde
-  `Serialize`/`Deserialize`, NO `Display`.
+  `pub const fn comment_detail(GithubCommentId) -> Self`, serde `Serialize`/
+  `Deserialize`, NO `Display`.
 - `frankie::ai::FrankieDeepLink<'a>` — presentation newtype (private field) with
   `pub const fn new(&'a ReviewViewRef) -> Self` and `impl Display` rendering
   the deep link; the single shared renderer used by CLI and TUI. Defined in the

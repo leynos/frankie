@@ -1,9 +1,8 @@
 # Replace the fixed internal commit history limit with configurable options
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DONE
 
@@ -45,8 +44,8 @@ limit, and proves the change with tests.
   (`--commit-history-limit`).
 - The constant `COMMIT_HISTORY_LIMIT` in
   `src/tui/app/time_travel_handlers/mod.rs` must be removed and replaced by the
-  value read from configuration. No second copy of the default may exist
-  outside `src/config/mod.rs`.
+  value read from configuration. No second copy of the default may exist outside
+  `src/config/mod.rs`.
 - The limit must be available as a public library value so that roadmap item
   2.2.7 (orchestration extraction) and external hosts can use it. Per
   `docs/adr-005-cross-surface-library-first-delivery.md`, core behaviour must
@@ -142,8 +141,8 @@ limit, and proves the change with tests.
   bundling the limit into `GIT_OPS_CONTEXT`, keeping the change minimal and
   consistent with the existing per-value storage pattern.
 - Added the `commit_history_limit` field directly to `ReviewApp` via a builder
-  method (`.with_commit_history_limit()`), following the established pattern
-  for `reply_draft_config`, `codex_poll_interval`, etc.
+  method (`.with_commit_history_limit()`), following the established pattern for
+  `reply_draft_config`, `codex_poll_interval`, etc.
 
 ## Outcomes & retrospective
 

@@ -1,9 +1,8 @@
 # Make `TimeTravelState` a stable public type
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -410,8 +409,8 @@ crate-internal pending orchestration extraction in 2.2.7, and that no CLI
 surface is added for this slice because the work is a type visibility promotion
 underpinning an existing interactive feature.
 
-Update `docs/users-guide.md` with a short library-facing note showing the
-stable `frankie::time_travel` import path and a minimal `TimeTravelState`
+Update `docs/users-guide.md` with a short library-facing note showing the stable
+`frankie::time_travel` import path and a minimal `TimeTravelState`
 construction example that reads documented getters such as `file_path`,
 `original_line`, and `commit_count`. The interactive time-travel mode works
 exactly as before, but embedders now have a supported library surface that

@@ -1,9 +1,8 @@
 # Implement comment detail view with inline code context
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DONE
 
@@ -131,8 +130,8 @@ behaviour live in `src/tui/app/tests.rs`, and behavioural tests use
 
 The design expectations for this feature are described in `docs/roadmap.md` and
 `docs/frankie-design.md`. Documentation updates must follow
-`docs/documentation-style-guide.md`, and user-facing changes must be recorded
-in `docs/users-guide.md`.
+`docs/documentation-style-guide.md`, and user-facing changes must be recorded in
+`docs/users-guide.md`.
 
 ## Plan of work
 

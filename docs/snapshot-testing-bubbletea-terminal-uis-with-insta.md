@@ -393,8 +393,8 @@ dependencies, trigger an update that returns a command, `await` it in the test,
 and feed any resulting message back into `update`.
 
 A practical pattern is “ports and adapters”: define tiny traits for side-effect
-boundaries and inject them into the model via a constructor used by tests
-(while `Model::init()` can keep using production defaults).
+boundaries and inject them into the model via a constructor used by tests (while
+`Model::init()` can keep using production defaults).
 
 ```rust
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -548,8 +548,8 @@ fn left_keybinds(mut model: MyAppModel, #[case] key: KeyCode, #[case] snapshot_n
 This example uses `#[case]` to feed in different keys and an identifier to use
 in the snapshot name. `insta::assert_snapshot!` allows specifying a manual name
 for the snapshot – this is useful to avoid name collisions when one test
-function is used for multiple cases. In this example, it will produce files
-like `left_keybinds__left_arrow_output.snap` and
+function is used for multiple cases. In this example, it will produce files like
+`left_keybinds__left_arrow_output.snap` and
 `left_keybinds__left_h_output.snap`, each containing the UI after pressing the
 respective key. This pattern keeps the test code concise while covering
 multiple inputs.

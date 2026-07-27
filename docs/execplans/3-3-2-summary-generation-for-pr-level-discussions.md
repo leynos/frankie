@@ -1,9 +1,8 @@
 # Implement PR-level discussion summary generation
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & discoveries`,
-`Decision log`, and `Outcomes & retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & discoveries`, `Decision log`,
+and `Outcomes & retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE (2026-03-09)
 
@@ -283,9 +282,9 @@ adapter-specific. A workable shape is:
   `root_comment_id, related_comment_ids, headline, rationale,`
   `severity, tui_link` `}`
 
-Use a shared `DiscussionSeverity` enum with explicit, documented values:
-`High`, `Medium`, and `Low`. If the team later wants a fourth value (`Unknown`
-or `Informational`), that change must be reflected in the ADR and tests.
+Use a shared `DiscussionSeverity` enum with explicit, documented values: `High`,
+`Medium`, and `Low`. If the team later wants a fourth value (`Unknown` or
+`Informational`), that change must be reflected in the ADR and tests.
 
 Stable ordering matters. The library should sort:
 

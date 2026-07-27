@@ -133,8 +133,8 @@ produced at each step.
    `octocrab`, normalizes it into a `ReviewCommentRow` persistence record, and
    persists it in the local adapter cache. A `ReviewSyncDelta` with the comment
    in its `added` set and an updated `ReviewSyncCheckpoint` are prepared.
-   Artefacts: `ReviewCommentRow` (persisted), initial `ReviewSyncDelta`
-   (added), `ReviewSyncCheckpoint`.
+   Artefacts: `ReviewCommentRow` (persisted), initial `ReviewSyncDelta` (added),
+   `ReviewSyncCheckpoint`.
 2. **Thread aggregation** (Frankie): Frankie derives thread topology from the
    `in_reply_to_id` chain, groups comments under stable thread roots
    (`thread_root_github_comment_id`), and builds a `ReviewThread` aggregate

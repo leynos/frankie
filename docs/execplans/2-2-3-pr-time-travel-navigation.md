@@ -1,9 +1,8 @@
 # Time-travel navigation across PR history
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -144,8 +143,8 @@ The review TUI lives under `src/tui/`. `ReviewApp` in `src/tui/app/mod.rs`
 contains model-view-update (MVU) state and update logic, while
 `src/tui/app/rendering.rs` builds strings for the terminal. Keyboard inputs are
 mapped in `src/tui/input.rs` to `AppMsg` variants in `src/tui/messages.rs`. The
-current UI renders a review list (`ReviewListComponent`) and comment detail
-pane (`CommentDetailComponent`) with syntax highlighting via `CodeHighlighter`,
+current UI renders a review list (`ReviewListComponent`) and comment detail pane
+(`CommentDetailComponent`) with syntax highlighting via `CodeHighlighter`,
 plus a full-screen diff context view (`DiffContextComponent`).
 
 Review comments carry several relevant fields in `src/github/models/mod.rs`:

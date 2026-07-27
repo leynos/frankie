@@ -1,9 +1,8 @@
 # Wire comment exports into `codex app-server`
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -386,8 +385,8 @@ Files expected to change (primary):
 - `docs/users-guide.md`
 - `docs/roadmap.md`
 
-No additional runtime dependencies are planned beyond aligning
-`rstest-bdd`/macros to v0.5.0 for behavioural tests.
+No additional runtime dependencies are planned beyond aligning `rstest-bdd`
+/macros to v0.5.0 for behavioural tests.
 
 ## Revision note
 

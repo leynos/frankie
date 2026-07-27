@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted (2026-06-23): Adopt thread-root summarization with shared severity
-and host-neutral review-view references across library, CLI, and TUI surfaces.
+Accepted (2026-06-23): Adopt thread-root summarization with shared severity and
+host-neutral review-view references across library, CLI, and TUI surfaces.
 
 ## Date
 
@@ -76,9 +76,9 @@ Adopt **Option A** with the following contract:
   - items sort by root comment ID.
 - References back to review comments are represented structurally as
   `ReviewViewRef { comment_id, view: CommentDetail }`. The compatibility
-  `frankie://review-comment/<id>?view=detail` deep-link token is rendered by
-  the `FrankieDeepLink` presentation wrapper when a CLI or TUI surface needs
-  text output.
+  `frankie://review-comment/<id>?view=detail` deep-link token is rendered by the
+  `FrankieDeepLink` presentation wrapper when a CLI or TUI surface needs text
+  output.
 - AI-provider failures, malformed JSON, invalid severities, unknown thread
   IDs, and missing required fields fail explicitly rather than falling back to
   heuristic prose.

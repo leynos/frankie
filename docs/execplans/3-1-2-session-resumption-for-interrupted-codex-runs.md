@@ -1,9 +1,8 @@
 # Enable session resumption for interrupted Codex runs
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: DRAFT
 
@@ -319,11 +318,11 @@ Create `src/ai/session.rs` (new file, module-level doc comment required):
 3. Derive `Serialize`, `Deserialize` for both types using `serde`.
 4. Implement `SessionState::sidecar_path(&self) -> Utf8PathBuf` — replaces
    the transcript file's `.jsonl` extension with `.session.json`.
-5. Implement `SessionState::write_sidecar(&self) -> Result<(),
-   IntakeError>` — writes the JSON sidecar file using `cap_std
-   ` filesystem primitives.
-6. Implement `SessionState::read_sidecar(path: &Utf8Path) -> Result<Self,
-   IntakeError>` — reads and deserializes a sidecar file.
+5. Implement `SessionState::write_sidecar(&self) -> Result<(), IntakeError>` —
+   writes the JSON sidecar file using `cap_std` filesystem primitives.
+6. Implement
+   `SessionState::read_sidecar(path: &Utf8Path) -> Result<Self, IntakeError>` —
+   reads and deserializes a sidecar file.
 7. Add `serde` and `serde_json` to the import list (both are already in
    `Cargo.toml`).
 
@@ -389,9 +388,15 @@ PR.
 
 In `src/ai/session.rs`:
 
-1. Implement `fn find_interrupted_session(base_dir: &Utf8Path,
-   owner: &str, repository: &str, pr_number: u64) ->
-   Result<Option<SessionState>, IntakeError>`:
+1. Implement:
+
+       fn find_interrupted_session(
+           base_dir: &Utf8Path,
+           owner: &str,
+           repository: &str,
+           pr_number: u64,
+       ) -> Result<Option<SessionState>, IntakeError>
+
    - List all `.session.json` files in `base_dir`.
    - Parse each as `SessionState`; skip unparsable files silently.
    - Filter to those matching the owner, repository, and PR number.

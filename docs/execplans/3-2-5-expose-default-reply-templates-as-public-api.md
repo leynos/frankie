@@ -260,9 +260,9 @@ Validation evidence:
 - Green: `cargo test -p frankie --test reply_template_public_api` passed with
   6 tests, and `cargo test -p frankie reply_template` passed with the new
   default-template unit tests plus existing renderer and adapter coverage.
-- Full gates: `make check-fmt`, `make lint`, `make test`, `make
-  markdownlint`, and `make nixie` passed after both the implementation and
-  documentation milestones.
+- Full gates: `make check-fmt`, `make lint`, `make test`, `make markdownlint`,
+  and `make nixie` passed after both the implementation and documentation
+  milestones.
 - Review: `coderabbit review --agent` reported 0 findings after Stage C and 0
   findings after Stage D.
 
@@ -281,13 +281,12 @@ Follow-up notes:
   is needed.
 - `insta` snapshots and `trybuild` tests were intentionally skipped. The exact
   assertions and out-of-crate integration coverage are more precise here, and
-  this API has no compile-time shape complexity that would justify
-  `trybuild`.
+  this API has no compile-time shape complexity that would justify `trybuild`.
 - A new end-to-end BDD scenario was also skipped: the focused TUI default
-  parity test directly covers the regression and the existing BDD suite
-  already exercises reply drafting. The follow-up deterministic gates passed:
-  `make check-fmt`, `make lint`, `make test` (889 passed, 1 skipped), `make
-  markdownlint`, and `make nixie`.
+  parity test directly covers the regression and the existing BDD suite already
+  exercises reply drafting. The follow-up deterministic gates passed:
+  `make check-fmt`, `make lint`, `make test` (889 passed, 1 skipped),
+  `make markdownlint`, and `make nixie`.
 - A requested scrutineer agent could not be allocated because the agent-thread
   limit was reached. The main session therefore ran the same gates sequentially
   and retained their logs under `/tmp`. `coderabbit review --agent` then
@@ -298,8 +297,8 @@ Follow-up notes:
   was retained after `make markdownlint` confirmed the refreshed policy.
 - Review follow-up corrected this plan's dependency-free test snippet, made the
   documented module and crate-root API paths explicit, and added parity checks
-  for both public paths. The full gate suite passed, and `coderabbit review
-  --agent` reported 0 findings.
+  for both public paths. The full gate suite passed, and
+  `coderabbit review --agent` reported 0 findings.
 - Rebased cleanly onto `origin/main` on 2026-07-18. Git dropped an earlier
   Mermaid correction because the identical change was already upstream; no
   conflicts or lockfile changes occurred. `make check-fmt`, `make test` (890
@@ -310,8 +309,8 @@ Follow-up notes:
 - A subsequent rebase conflict arose when main extracted `FrankieConfig` into
   `config::model`. The resolution retained that extraction and applied this
   plan's public-default requirement inside the model, removing its legacy
-  helper. `make check-fmt`, `make test` (890 passed, 1 skipped), `make
-  typecheck`, and `make lint` passed.
+  helper. `make check-fmt`, `make test` (890 passed, 1 skipped),
+  `make typecheck`, and `make lint` passed.
 - Documentation review aligned the `StubGitOps` example with the current
   `GitOperations` method signatures by removing unnecessary shared lifetime
   parameters from its file lookup, line mapping, and parent lookup methods.

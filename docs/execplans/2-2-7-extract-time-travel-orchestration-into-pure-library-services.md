@@ -1,9 +1,8 @@
 # Extract time-travel orchestration into pure library services
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE (2026-04-24)
 
@@ -358,7 +357,7 @@ for orchestration. A good target is:
 The shared navigation API should accept shared types only. A concrete contract
 such as
 `navigate_time_travel_state(&dyn GitOperations, &TimeTravelState, direction, head_sha)`
- is preferable to leaking a TUI-only context struct. The exact function and
+is preferable to leaking a TUI-only context struct. The exact function and
 enum names can be finalized during implementation, but they must live in
 `frankie::time_travel`, not in `frankie::tui`.
 
@@ -422,8 +421,8 @@ Then add new `rstest` cases covering the extracted navigation path with mocked
   original line number yielding `None` instead of an error.
 
 Keep TUI unit tests focused on adapter behaviour after this move. For example,
-they should still verify loading-state transitions, missing metadata errors,
-and `TimeTravelFailed` message handling.
+they should still verify loading-state transitions, missing metadata errors, and
+`TimeTravelFailed` message handling.
 
 ### Stage D: add public API behavioural tests
 

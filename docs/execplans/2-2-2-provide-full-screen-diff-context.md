@@ -1,9 +1,8 @@
 # Provide full-screen diff context with jump navigation
 
-This execution plan (ExecPlan) is a living document. The sections
-`Constraints`, `Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`,
-`Decision Log`, and `Outcomes & Retrospective` must be kept up to date as work
-proceeds.
+This execution plan (ExecPlan) is a living document. The sections `Constraints`,
+`Tolerances`, `Risks`, `Progress`, `Surprises & Discoveries`, `Decision Log`,
+and `Outcomes & Retrospective` must be kept up to date as work proceeds.
 
 Status: COMPLETE
 
@@ -122,8 +121,8 @@ The review TUI lives under `src/tui/`. `ReviewApp` in `src/tui/app/mod.rs`
 contains model-view-update (MVU) state and update logic, while
 `src/tui/app/rendering.rs` builds strings for the terminal. Keyboard inputs are
 mapped in `src/tui/input.rs` to `AppMsg` variants in `src/tui/messages.rs`. The
-current UI renders a review list (`ReviewListComponent`) and comment detail
-pane (`CommentDetailComponent`) with syntax highlighting via `CodeHighlighter`.
+current UI renders a review list (`ReviewListComponent`) and comment detail pane
+(`CommentDetailComponent`) with syntax highlighting via `CodeHighlighter`.
 Review comments carry a `diff_hunk` string in `src/github/models/mod.rs`, which
 is already used for inline code context. Behavioural tests live under `tests/`
 with Gherkin feature files in `tests/features/`.
@@ -181,8 +180,8 @@ next stage if the current stage validation fails.
    - Exiting back to the list without losing selection.
 
 4. Implement the full-screen diff context component, view mode state, and
-   navigation handlers. Ensure rendering uses cached/pre-wrapped strings to
-   keep `view()` fast.
+   navigation handlers. Ensure rendering uses cached/pre-wrapped strings to keep
+   `view()` fast.
 
 5. Add a local profiling check for rendering time against the reference
    dataset (for example, an ignored test or a small profiling helper binary
