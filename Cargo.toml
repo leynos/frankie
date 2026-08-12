@@ -43,7 +43,7 @@ metrics = "0.24.1"
 [dev-dependencies]
 frankie = { path = ".", features = ["test-support"] }
 env-lock = "1.0.2"
-mockall = "0.12.1"
+mockall = "0.15.0"
 proptest = "1.10.0"
 insta = { version = "1.46.3", features = ["filters"] }
 ratatui-testlib = { version = "0.1.0", features = ["snapshot-insta"] }
