@@ -280,7 +280,9 @@ vocabulary should initially include:
 
 CSS-like selectors should remain structural. Frankie should not fork the
 selector parser merely to add text and property syntax. Those predicates can be
-composed in the structured outer rule.
+composed in the structured outer rule. A selector attached to a named query is
+evaluated within that query's scope. The first schema should not invent
+unsupported top-level relative selectors or pseudo-classes.
 
 Named queries provide capture semantics without pretending that source-pattern
 metavariables work on MDAST. A later query can select from the result of an
@@ -309,7 +311,7 @@ queries:
 
   actionable_check_rows:
     from: failed_checks_table
-    select: "> tableRow:not(:first-child)"
+    select: "tableRow:not(:nth-child(1))"
     where:
       not:
         has:
@@ -325,10 +327,10 @@ emit:
   - foreach: actionable_check_rows
     type: pre_merge_check
     fields:
-      name: { select: "> tableCell:nth-child(1)", text: normalized }
-      status: { select: "> tableCell:nth-child(2)", text: normalized }
-      explanation: { select: "> tableCell:nth-child(3)", text: normalized }
-      resolution: { select: "> tableCell:nth-child(4)", text: normalized }
+      name: { select: "tableCell:nth-child(1)", text: normalized }
+      status: { select: "tableCell:nth-child(2)", text: normalized }
+      explanation: { select: "tableCell:nth-child(3)", text: normalized }
+      resolution: { select: "tableCell:nth-child(4)", text: normalized }
 ```
 
 The exact YAML is proposed for discussion. The architectural boundary is the
@@ -499,7 +501,7 @@ queries:
       all:
         - kind: paragraph
         - text:
-            regex: '^Actionable comments posted:\s+(?<count>[0-9]+)$'
+            regex: '^Actionable comments posted:\s+(?P<count>[0-9]+)$'
     project:
       count: { regex_group: count, parse: u32 }
 
