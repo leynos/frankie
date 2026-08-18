@@ -45,6 +45,12 @@
 - [Complexity antipatterns and refactoring strategies](complexity-antipatterns-and-refactoring-strategies.md)
   records maintainability risks and refactoring guidance.
 
+## Requests for comments
+
+- [RFC 0001: Generic MDAST query and projection rules](rfcs/0001-mdast-query-and-projection-rules.md)
+  proposes adapting normalized MDAST to `ast-grep` for deterministic provider
+  queries, projections, and validation.
+
 ## Decision records
 
 - [ADR 001: Incremental sync for review comments](adr-001-incremental-sync-for-review-comments.md)

@@ -9,7 +9,8 @@ not an exhaustive file listing.
 ├── .codescene/
 ├── .github/
 ├── docs/
-│   └── execplans/
+│   ├── execplans/
+│   └── rfcs/
 ├── migrations/
 ├── src/
 │   ├── ai/
@@ -39,6 +40,7 @@ _Figure 1: Major repository paths and documentation, source, and test areas._
 | `.github/`            | Stores GitHub automation such as Dependabot and workflow configuration.                                                       |
 | `docs/`               | Stores long-lived project documentation, guides, design documents, ADRs, and reference material.                              |
 | `docs/execplans/`     | Stores living execution plans for non-trivial implementation work.                                                            |
+| `docs/rfcs/`          | Stores numbered proposals that require technical review before acceptance.                                                    |
 | `migrations/`         | Stores database migration files. Migration names use timestamped directories and should remain append-only after publication. |
 | `src/`                | Stores the Rust application and library source code. Feature modules are grouped by domain responsibility.                    |
 | `src/ai/`             | Contains AI integration logic, Codex process handling, comment rewriting, and pull request discussion summaries.              |
