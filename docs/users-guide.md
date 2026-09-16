@@ -753,8 +753,11 @@ Consider using a constant here instead of a magic number.
 
 ### JSONL format example
 
-Every line is one comment object. The two objects below are abridged for width;
-the real output also carries `diff_hunk` and `created_at` on each line:
+Every line is one comment object. Only `id` is guaranteed on every line; the
+remaining fields (`author`, `file_path`, `line_number`, `original_line_number`,
+`body`, `diff_hunk`, `commit_sha`, `in_reply_to_id`, `created_at`) are
+conditional and are omitted when absent. The example below is abridged for
+width and omits several of these optional fields:
 
 ```jsonl
 {"id":456,"author":"alice","file_path":"src/auth.rs","line_number":42,"body":"Use a constant here."}
