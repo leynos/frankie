@@ -727,7 +727,7 @@ This ensures consistent output across runs for the same PR state.
 The output includes a header, then each comment with location, reviewer, body,
 and code context (if available):
 
-```markdown
+````markdown
 # Review Comments Export
 
 PR: https://github.com/owner/repo/pull/123
@@ -748,13 +748,17 @@ Consider using a constant here instead of a magic number.
  }
 ```
 
-```---
+---
+````
 
 ### JSONL format example
 
+Every line is one comment object. The two objects below are abridged for width;
+the real output also carries `diff_hunk` and `created_at` on each line:
+
 ```jsonl
-{"id":456,"author":"alice","file_path":"src/auth.rs","line_number":42,"body":"Consider using a constant here.","diff_hunk":"@@ -40,3 +40,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T10:30:00Z"}
-{"id":457,"author":"bob","file_path":"src/auth.rs","line_number":50,"body":"Add error handling.","diff_hunk":"@@ -48,3 +48,5 @@...","commit_sha":"abc123","created_at":"2025-01-15T11:00:00Z"}
+{"id":456,"author":"alice","file_path":"src/auth.rs","line_number":42,"body":"Use a constant here."}
+{"id":457,"author":"bob","file_path":"src/auth.rs","line_number":50,"body":"Add error handling."}
 ```
 
 ### Custom template format
