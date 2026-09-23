@@ -106,7 +106,7 @@ fn commit_history_limit_layer_precedence(
     #[case] layers: Vec<(&str, serde_json::Value)>,
     #[case] expected: usize,
 ) {
-    let config = build_config_from_layers(&layers);
+    let config = build_config_from_layers(&layers).expect("configuration layers should merge");
     assert_eq!(
         config.commit_history_limit, expected,
         "commit_history_limit should follow standard precedence rules"
@@ -116,7 +116,7 @@ fn commit_history_limit_layer_precedence(
 #[rstest]
 fn commit_history_limit_zero_from_config_is_clamped_to_one() {
     let layers = vec![("file", json!({"commit_history_limit": 0}))];
-    let mut config = build_config_from_layers(&layers);
+    let mut config = build_config_from_layers(&layers).expect("configuration layers should merge");
 
     // normalize() should clamp 0 to 1
     config.normalize();
@@ -158,7 +158,8 @@ fn commit_history_limit_large_values_are_accepted() -> Result<(), Box<dyn std::e
 
     // Config layer
     let layers_config = vec![("file", json!({"commit_history_limit": large_limit}))];
-    let mut config_from_config = build_config_from_layers(&layers_config);
+    let mut config_from_config =
+        build_config_from_layers(&layers_config).expect("configuration layers should merge");
     config_from_config.normalize();
     assert_eq!(
         config_from_config.commit_history_limit, large_limit,

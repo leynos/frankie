@@ -135,7 +135,8 @@ fn database_url_cli_overrides_environment() {
     let config = build_config_from_layers(&[
         ("environment", json!({"database_url": "env-only"})),
         ("cli", json!({"database_url": "cli-only"})),
-    ]);
+    ])
+    .expect("configuration layers should merge");
 
     assert_eq!(
         config.database_url.as_deref(),
@@ -151,7 +152,8 @@ fn migrate_db_layer_precedence_defaults_file_environment_cli() {
         ("file", json!({"migrate_db": true})),
         ("environment", json!({"migrate_db": false})),
         ("cli", json!({"migrate_db": true})),
-    ]);
+    ])
+    .expect("configuration layers should merge");
 
     assert!(config.migrate_db, "CLI layer should win for migrate_db");
 }
@@ -168,7 +170,8 @@ fn database_url_and_migrate_db_defaults_when_unset() {
             "database_url": null,
             "migrate_db": false
         }),
-    )]);
+    )])
+    .expect("configuration layers should merge");
 
     assert!(
         config.database_url.is_none(),

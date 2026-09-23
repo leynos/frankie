@@ -1,6 +1,8 @@
 //! Shared test helpers for configuration tests.
 
-use ortho_config::MergeComposer;
+use std::sync::Arc;
+
+use ortho_config::{MergeComposer, OrthoError};
 use serde_json::Value;
 
 use crate::FrankieConfig;
@@ -17,12 +19,19 @@ pub fn apply_layer(composer: &mut MergeComposer, layer_type: &str, value: Value)
 }
 
 /// Helper to compose a [`FrankieConfig`] from a sequence of `(layer_type, value)` pairs.
-pub fn build_config_from_layers(layers: &[(&str, Value)]) -> FrankieConfig {
+///
+/// # Errors
+///
+/// Returns the merge error when the layers do not compose into a valid
+/// configuration; the calling test decides whether that is a failure.
+pub fn build_config_from_layers(
+    layers: &[(&str, Value)],
+) -> Result<FrankieConfig, Arc<OrthoError>> {
     let mut composer = MergeComposer::new();
 
     for (layer_type, value) in layers {
         apply_layer(&mut composer, layer_type, value.clone());
     }
 
-    FrankieConfig::merge_from_layers(composer.layers()).expect("merge should succeed")
+    FrankieConfig::merge_from_layers(composer.layers())
 }

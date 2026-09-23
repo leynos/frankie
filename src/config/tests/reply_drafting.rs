@@ -33,7 +33,8 @@ fn reply_max_length_precedence_defaults_file_environment_cli() {
         ("file", json!({"reply_max_length": 250})),
         ("environment", json!({"reply_max_length": 200})),
         ("cli", json!({"reply_max_length": 150})),
-    ]);
+    ])
+    .expect("configuration layers should merge");
 
     assert_eq!(
         config.reply_max_length, 150,
@@ -51,7 +52,8 @@ fn reply_templates_load_from_file_layer() {
                 "Applied fix for {{ file }}"
             ]
         }),
-    )]);
+    )])
+    .expect("configuration layers should merge");
 
     assert_eq!(
         config.reply_templates,
