@@ -287,3 +287,13 @@ def test_reader_names_the_file_for_invalid_yaml() -> None:
     """A parser error must say which workflow it came from."""
     with pytest.raises(WorkflowError, match=r"^bad\.yml: not valid YAML"):
         load_workflow("bad.yml", "jobs: [\n")
+
+
+@pytest.mark.parametrize("uses", ["./.github/actions/probe", "$/.github/actions/probe"])
+def test_local_actions_are_refused_on_the_surface(
+    documents: Documents, uses: str
+) -> None:
+    """A local composite action could reach CodeScene from a file never read."""
+    job_steps(documents[LANE]).append({"uses": uses})
+    found = pull_request_contacts(documents)
+    assert any("uses local action" in problem for problem in found), found

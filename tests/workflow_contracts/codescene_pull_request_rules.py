@@ -21,6 +21,7 @@ from codescene_workflow_reader import (
     folded,
     jobs,
     scalars,
+    steps,
     triggers,
 )
 
@@ -256,7 +257,9 @@ def pull_request_contacts(documents: dict[str, Document]) -> list[str]:
     Every scalar is read, keys included, at every scope, so a workflow-level
     `defaults.run.shell`, an env value under an unrelated key or a callee's
     secret declaration is seen as readily as a step's script. The parser
-    discards comments, so prose explaining the policy is not a violation.
+    discards comments, so prose explaining the policy is not a violation. A
+    step using a local action is refused outright, because the action's own
+    file is not a workflow and is not read here.
 
     Parameters
     ----------
@@ -272,7 +275,11 @@ def pull_request_contacts(documents: dict[str, Document]) -> list[str]:
     return [
         problem
         for name, document in pull_request_closure(documents).items()
-        for problem in (*_contacts(name, document), *_inherited(name, document))
+        for problem in (
+            *_contacts(name, document),
+            *_inherited(name, document),
+            *_local_actions(name, document),
+        )
     ]
 
 
@@ -292,4 +299,17 @@ def _inherited(name: str, document: Document) -> list[str]:
         f"{name} job {job_name} forwards every secret with `secrets: inherit`"
         for job_name, job in jobs(name, document).items()
         if job.get("secrets") == "inherit"
+    ]
+
+
+def _local_actions(name: str, document: Document) -> list[str]:
+    """Report each step in one workflow that uses a local action.
+
+    A local composite action could call CodeScene or read the token from a
+    file this contract never opens, so it is refused rather than trusted.
+    """
+    return [
+        f"{name} uses local action {step['uses']}, which this contract cannot read"
+        for step in steps(name, document)
+        if str(step.get("uses", "")).startswith(("./", "$/"))
     ]
