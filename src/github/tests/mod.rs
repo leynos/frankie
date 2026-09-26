@@ -10,9 +10,13 @@ use super::{
     PullRequestSummary, RateLimitInfo, RepositoryIntake, RepositoryLocator,
 };
 
-fn sample_locator() -> PullRequestLocator {
+/// Parse the pull request locator the gateway fixtures describe.
+///
+/// # Errors
+///
+/// Returns the intake error if the sample URL no longer parses.
+fn sample_locator() -> Result<PullRequestLocator, IntakeError> {
     PullRequestLocator::parse("https://github.com/octo/repo/pull/4")
-        .expect("sample locator should parse")
 }
 
 #[rstest]
@@ -151,7 +155,7 @@ fn setup_pull_request_gateway() -> MockPullRequestGateway {
 
 #[tokio::test]
 async fn aggregates_metadata_from_gateway() {
-    let locator = sample_locator();
+    let locator = sample_locator().expect("sample pull request URL should parse as a locator");
     let gateway = setup_pull_request_gateway();
 
     let intake = PullRequestIntake::new(&gateway);
@@ -170,7 +174,7 @@ async fn aggregates_metadata_from_gateway() {
 
 #[tokio::test]
 async fn aggregates_comments_list_from_gateway() {
-    let locator = sample_locator();
+    let locator = sample_locator().expect("sample pull request URL should parse as a locator");
     let gateway = setup_pull_request_gateway();
 
     let intake = PullRequestIntake::new(&gateway);

@@ -10,8 +10,17 @@ use crate::FrankieConfig;
 ///
 /// Note: `ortho_config` does not support loading boolean values from environment
 /// variables, so only CLI flag and config file are tested for real loading.
-fn test_no_local_discovery_loading(cli_args: &[&str], expected: bool, description: &str) {
-    let temp_dir = tempfile::TempDir::new().expect("temp dir should be created");
+///
+/// # Errors
+///
+/// Returns an error when the temporary home cannot be created, the
+/// configuration does not load, or the loaded flag differs from `expected`.
+fn test_no_local_discovery_loading(
+    cli_args: &[&str],
+    expected: bool,
+    description: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = tempfile::TempDir::new()?;
     let home = temp_dir.path().to_string_lossy().to_string();
 
     let _guard = env_lock::lock_env([
@@ -22,9 +31,16 @@ fn test_no_local_discovery_loading(cli_args: &[&str], expected: bool, descriptio
     let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
     args.extend(cli_args.iter().map(std::ffi::OsString::from));
 
-    let config = FrankieConfig::load_from_iter(args).expect("config should load");
+    let config = FrankieConfig::load_from_iter(args)?;
 
-    assert_eq!(config.no_local_discovery, expected, "{description}");
+    if config.no_local_discovery != expected {
+        return Err(format!(
+            "{description}: expected no_local_discovery = {expected}, got {}",
+            config.no_local_discovery
+        )
+        .into());
+    }
+    Ok(())
 }
 
 #[rstest]
@@ -62,7 +78,7 @@ fn no_local_discovery_layer_precedence(
     #[case] layers: Vec<(&str, serde_json::Value)>,
     #[case] expected: bool,
 ) {
-    let config = build_config_from_layers(&layers);
+    let config = build_config_from_layers(&layers).expect("configuration layers should merge");
     assert_eq!(
         config.no_local_discovery, expected,
         "no_local_discovery should follow standard precedence rules"
@@ -75,10 +91,12 @@ fn no_local_discovery_loads_from_cli_flag() {
         &["--no-local-discovery"],
         true,
         "expected --no-local-discovery to set flag",
-    );
+    )
+    .expect("loading the configuration under a temporary home should succeed");
 }
 
 #[rstest]
 fn no_local_discovery_absent_flag_defaults_to_false() {
-    test_no_local_discovery_loading(&[], false, "missing --no-local-discovery should be false");
+    test_no_local_discovery_loading(&[], false, "missing --no-local-discovery should be false")
+        .expect("loading the configuration under a temporary home should succeed");
 }
