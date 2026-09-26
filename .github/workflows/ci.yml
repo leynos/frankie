@@ -19,11 +19,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/setup-rust@2a910bfcfd1ea4216419f9290331785f05b33320
       - name: Format
         run: make check-fmt
       - name: Markdown lint
-        uses: DavidAnson/markdownlint-cli2-action@ded1f9488f68a970bc66ea5619e13e9b52e601cd
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff
         with:
           globs: |
             **/*.md
@@ -89,7 +89,7 @@ jobs:
       # the baseline this compares against and owns the CodeScene upload, so
       # the selection below must match that workflow's field for field.
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@2a910bfcfd1ea4216419f9290331785f05b33320
         with:
           output-path: lcov.info
           format: lcov
