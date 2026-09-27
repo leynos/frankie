@@ -4,12 +4,22 @@
     "MD010": { "code_blocks": false },
     "MD013": {
       "line_length": 80,
-      "code_blocks": false,
       "code_block_line_length": 120,
       "tables": false,
       "headings": false
     },
     "MD029": { "style": "ordered" }
   },
-  "ignores": ["**/.venv/**", ".node_modules/**", "**/node_modules/**", "**/target/**"]
+  "ignores": [
+    "**/.venv/**",
+    ".node_modules/**",
+    "**/node_modules/**",
+    "**/target/**",
+    ".vtcode/**",
+    ".terraform/**",
+    ".uv-cache/**",
+    "memories/**",
+    "CRUSH.md",
+    "**/dist/**"
+  ]
 }
