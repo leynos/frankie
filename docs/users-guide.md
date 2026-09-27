@@ -747,8 +747,6 @@ Consider using a constant here instead of a magic number.
 +    token.len() > 8
  }
 ```
-
----
 ````
 
 ### JSONL format example
