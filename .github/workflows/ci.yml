@@ -88,6 +88,14 @@ jobs:
             echo "VidaiMock sanity check failed: --version returned non-zero." >&2
             exit 1
           fi
+      - name: sccache statistics (before coverage)
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          sc="${SCCACHE_PATH:-sccache}"
+          "$sc" --show-stats || true
+          "$sc" --show-stats --stats-format json || true
       # Coverage here serves the local ratchet and nothing else: the report is
       # not archived and CodeScene is never called. coverage-main.yml writes
       # the baseline this compares against and owns the CodeScene upload, so
@@ -99,3 +107,11 @@ jobs:
           format: lcov
           with-ratchet: 'true'
           publish-artefact: 'false'
+      - name: sccache statistics (after coverage)
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          sc="${SCCACHE_PATH:-sccache}"
+          "$sc" --show-stats || true
+          "$sc" --show-stats --stats-format json || true
