@@ -93,6 +93,12 @@ jobs:
       # the baseline this compares against and owns the CodeScene upload, so
       # the selection below must match that workflow's field for field.
       - name: Test and Measure Coverage
+        env:
+          # One of the two exclusions from the build standard: a coverage build is
+          # a measurement, so it takes neither the parallel frontend nor the mold
+          # linker. Assigning RUSTFLAGS displaces every `rustflags` table in
+          # .cargo/config.toml.
+          RUSTFLAGS: -D warnings
         uses: leynos/shared-actions/.github/actions/generate-coverage@2a910bfcfd1ea4216419f9290331785f05b33320
         with:
           output-path: lcov.info
