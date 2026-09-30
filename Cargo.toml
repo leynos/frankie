@@ -47,7 +47,7 @@ mockall = "0.12.1"
 proptest = "1.10.0"
 insta = { version = "1.46.3", features = ["filters"] }
 ratatui-testlib = { version = "0.1.0", features = ["snapshot-insta"] }
-rstest = "0.22.0"
+rstest = "0.27.0"
 rstest-bdd = "0.5.0"
 rstest-bdd-macros = { version = "0.5.0", features = ["compile-time-validation"] }
 tempfile = "3.15.0"
