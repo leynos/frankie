@@ -4,7 +4,10 @@
 
 use std::process::Command;
 
-use super::config::{Flags, LINKER_FLAG, Pin, Problems, THREADS_FLAG};
+use super::{
+    config::{Flags, LINKER_FLAG, Pin, Problems, THREADS_FLAG},
+    shell::{compiles, shell_commands, without_leading_keywords},
+};
 
 /// Makefile targets that build for development. A command in one either assigns
 /// `RUSTFLAGS` with the standard flags or assigns none and so takes the
@@ -32,7 +35,7 @@ impl Host {
     }
 
     /// Returns whether the host takes mold, which ships for Linux alone.
-    const fn takes_linker_flag(self) -> bool {
+    pub const fn takes_linker_flag(self) -> bool {
         matches!(self, Self::Linux)
     }
 }
@@ -40,7 +43,12 @@ impl Host {
 /// What one `make -n` command assigns to `RUSTFLAGS`.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Assignment {
+    /// A command that assigns nothing and takes the configuration's flags, and runs no
+    /// build, test or lint tool (a formatter, a metadata probe, a documentation build).
     Unassigned,
+    /// A build, test or lint command that assigns nothing. Development recipes must
+    /// assign `RUSTFLAGS` there, so the caller's flags and the warning policy reach it.
+    Bare(String),
     /// An assignment, and whether it keeps the caller's own `RUSTFLAGS`.
     Flags(Flags, bool),
 }
@@ -54,11 +62,13 @@ pub enum Assignment {
 /// assigned_rustflags("RUSTFLAGS=\"${RUSTFLAGS:+$RUSTFLAGS }-Zthreads=8\" cargo test") -> inherits: true
 /// assigned_rustflags("cargo test")                           -> Unassigned
 /// assigned_rustflags("RUSTFLAGS=-Zthreads=8 cargo test")     -> Err
+/// assigned_rustflags("RUSTFLAGS=\"${RUSTFLAGS-}-Zthreads=8\" cargo test") -> Err (glued)
 /// ```
 ///
 /// # Errors
 ///
-/// Returns the reason when an assignment is unquoted or unterminated.
+/// Returns the reason when an assignment is unquoted, unterminated, or glues the
+/// caller's flags to the next one.
 pub fn assigned_rustflags(line: &str) -> Result<Assignment, String> {
     let Some((_, rest)) = line.split_once("RUSTFLAGS=\"") else {
         if line.contains("RUSTFLAGS=") {
@@ -70,36 +80,64 @@ pub fn assigned_rustflags(line: &str) -> Result<Assignment, String> {
         .split_once('"')
         .ok_or_else(|| format!("unterminated RUSTFLAGS in `{line}`"))?;
     // The recipes prepend the caller's own flags with these expansions; they are
-    // not standard flags, and glued to the next word they would hide it.
+    // not standard flags. `${RUSTFLAGS-}` adds no separator, so glued to the next
+    // word it makes one token with it (`-Dwarnings-Zthreads=8`) and hides the flag.
+    let glued = assigned
+        .split("${RUSTFLAGS-}")
+        .skip(1)
+        .any(|after| !after.is_empty() && !after.starts_with(' '));
+    if glued {
+        return Err(format!(
+            "inherited RUSTFLAGS glued to the next flag in `{line}`"
+        ));
+    }
     let inherits =
         assigned.contains("${RUSTFLAGS:+$RUSTFLAGS }") || assigned.contains("${RUSTFLAGS-}");
     let own = assigned
         .replace("${RUSTFLAGS:+$RUSTFLAGS }", " ")
-        .replace("${RUSTFLAGS-}", "");
+        .replace("${RUSTFLAGS-}", " ");
     Ok(Assignment::Flags(
         Flags::from_words(own.split_whitespace()),
         inherits,
     ))
 }
 
-/// Reads the assignment of each cargo or whitaker command `make -n` printed.
+/// Reads the assignment of each cargo or whitaker command `make -n` printed. A line that chains
+/// commands is read one command at a time.
 ///
 /// # Errors
 ///
 /// Returns the reason when a command assigns `RUSTFLAGS` in an unreadable form.
 pub fn commands_from(stdout: &str) -> Result<Vec<Assignment>, String> {
-    // A recipe continued with a trailing backslash is one command.
+    // A recipe continued with a trailing backslash is one logical line.
     let joined = stdout.replace("\\\n", " ");
     joined
         .lines()
-        .filter(|line| !line.trim_start().starts_with("echo"))
-        .filter(|line| line.contains("cargo") || line.contains("whitaker"))
-        .map(assigned_rustflags)
+        .flat_map(shell_commands)
+        .map(|command| without_leading_keywords(&command).to_owned())
+        .filter(|command| !command.starts_with("echo"))
+        // A tool-availability probe names Cargo but runs no build.
+        .filter(|command| !command.starts_with("command -v"))
+        .filter(|command| command.contains("cargo") || command.contains("whitaker"))
+        .map(|command| match assigned_rustflags(&command)? {
+            Assignment::Unassigned if compiles(&command) => Ok(Assignment::Bare(command)),
+            other => Ok(other),
+        })
         .collect()
 }
 
-/// Runs `make -n` for a target on a host and reads its commands.
-fn make_commands(target: &str, host: Host) -> Result<Vec<Assignment>, String> {
+/// Runs `make -n` for a target on a host and returns what it printed. The tests
+/// that drive real `make` use [`real_make`]; a test of the parsing path passes a
+/// function that returns canned text instead, so no process runs.
+pub type MakeRunner = fn(&str, Host) -> Result<String, String>;
+
+/// The integration adapter: runs the real `make -n` in the crate's directory and
+/// reports a spawn failure or an undefined target as an error.
+///
+/// # Errors
+///
+/// Returns the reason when `make` cannot run or the target is not defined.
+pub fn real_make(target: &str, host: Host) -> Result<String, String> {
     let output = Command::new("make")
         .args([
             "-n",
@@ -116,20 +154,35 @@ fn make_commands(target: &str, host: Host) -> Result<Vec<Assignment>, String> {
             "`make -n {target}` failed, so it is not defined: {stderr}"
         ));
     }
-    commands_from(&String::from_utf8_lossy(&output.stdout))
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Reads the commands a runner reports for a target on a host.
+fn make_commands(runner: MakeRunner, target: &str, host: Host) -> Result<Vec<Assignment>, String> {
+    commands_from(&runner(target, host)?)
+}
+
+/// Returns the complaint about a development command that assigns no `RUSTFLAGS`.
+fn bare_problem(target: &str, host: Host, command: &str) -> String {
+    format!(
+        "`make {target}` on {} runs `{command}` without assigning RUSTFLAGS",
+        host.make_value()
+    )
 }
 
 /// Returns the complaint about one development command, if any: an assigned
 /// `RUSTFLAGS` keeps the caller's own flags and restates the frontend flag on a
 /// nightly pin, and mold on Linux.
-fn development_problem(
+pub fn development_problem(
     target: &str,
     host: Host,
     pin: Pin,
     assignment: &Assignment,
 ) -> Option<String> {
-    let Assignment::Flags(flags, inherits) = assignment else {
-        return None;
+    let (flags, inherits) = match assignment {
+        Assignment::Flags(flags, inherits) => (flags, inherits),
+        Assignment::Bare(command) => return Some(bare_problem(target, host, command)),
+        Assignment::Unassigned => return None,
     };
     if !inherits {
         return Some(format!(
@@ -141,26 +194,49 @@ fn development_problem(
     Some(format!("`make {target}` on {} {reason}", host.make_value()))
 }
 
+/// Returns the complaint when the `test` target assigns `RUSTFLAGS` in no command, or
+/// keeps `-D warnings` in none of its assigned commands: a recipe may run other commands (a version probe, a
+/// prerequisite build) that never carried the policy, but dropping `$(RUST_FLAGS)`
+/// from the command that runs the tests drops it from all of them.
+pub fn test_policy_problem(target: &str, host: Host, commands: &[Assignment]) -> Option<String> {
+    let assigned = commands.iter().filter_map(|command| match command {
+        Assignment::Flags(flags, _) => Some(flags),
+        Assignment::Unassigned | Assignment::Bare(_) => None,
+    });
+    let keeps_the_policy = assigned.clone().any(Flags::denies_warnings);
+    (target == "test" && !keeps_the_policy).then(|| {
+        format!(
+            "`make {target}` on {} keeps -D warnings in none of its commands",
+            host.make_value()
+        )
+    })
+}
+
 /// Returns every complaint about the development targets on one host, and how
 /// many assignments it read, so a test can refuse to pass over nothing.
 ///
 /// # Errors
 ///
 /// Returns the reason when a listed target is not defined or unreadable.
-pub fn development_problems(host: Host, pin: Pin) -> Result<(Problems, usize), String> {
+pub fn development_problems(
+    runner: MakeRunner,
+    host: Host,
+    pin: Pin,
+) -> Result<(Problems, usize), String> {
     let mut problems = Vec::new();
     let mut read = 0;
     for target in DEVELOPMENT_TARGETS {
-        let commands = make_commands(target, host)?;
+        let commands = make_commands(runner, target, host)?;
         read += commands
             .iter()
-            .filter(|command| **command != Assignment::Unassigned)
+            .filter(|command| matches!(command, Assignment::Flags(..)))
             .count();
         problems.extend(
             commands
                 .iter()
                 .filter_map(|command| development_problem(target, host, pin, command)),
         );
+        problems.extend(test_policy_problem(target, host, &commands));
     }
     Ok((problems, read))
 }
@@ -168,10 +244,14 @@ pub fn development_problems(host: Host, pin: Pin) -> Result<(Problems, usize), S
 /// Returns every complaint about one held-out command: it assigns nothing, so
 /// it takes the configuration's flags, or the assignment names a standard flag.
 fn held_out_command_problems(target: &str, assignment: &Assignment) -> Problems {
-    let Assignment::Flags(flags, _) = assignment else {
-        return vec![format!(
-            "`make {target}` runs a command that takes the configuration's flags"
-        )];
+    let flags = match assignment {
+        Assignment::Flags(flags, _) => flags,
+        Assignment::Bare(command) => {
+            return vec![format!(
+                "`make {target}` runs `{command}`, which takes the configuration's flags"
+            )];
+        }
+        Assignment::Unassigned => return Vec::new(),
     };
     let named = [
         (flags.names_threads(), THREADS_FLAG),
@@ -191,11 +271,24 @@ fn held_out_command_problems(target: &str, assignment: &Assignment) -> Problems 
 /// # Errors
 ///
 /// Returns the reason when a listed target is not defined or unreadable.
-pub fn held_out_problems() -> Result<(Problems, usize), String> {
+pub fn held_out_problems(runner: MakeRunner) -> Result<(Problems, usize), String> {
+    held_out_problems_for(runner, HELD_OUT_TARGETS)
+}
+
+/// Returns the complaints about a given list of held-out targets, so a test can name a
+/// synthetic target and exercise the check in a repository that defines none.
+///
+/// # Errors
+///
+/// Returns the reason when a named target is not defined or unreadable.
+pub fn held_out_problems_for(
+    runner: MakeRunner,
+    targets: &[&str],
+) -> Result<(Problems, usize), String> {
     let mut problems = Vec::new();
     let mut read = 0;
-    for target in HELD_OUT_TARGETS {
-        let commands = make_commands(target, Host::Linux)?;
+    for target in targets {
+        let commands = make_commands(runner, target, Host::Linux)?;
         read += commands.len();
         problems.extend(
             commands
