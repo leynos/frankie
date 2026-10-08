@@ -3,7 +3,7 @@ name: Coverage (main)
 # Main owns both persistent coverage outputs: the ratchet baseline and the
 # CodeScene upload. Pull requests generate coverage only for their own ratchet
 # check, in ci.yml; they neither publish a report nor contact CodeScene, and
-# the CV-005 contract tests under tests/workflow_contracts hold that shape.
+# `make workflow-contracts` holds that shape.
 #
 # The CodeScene call is what moves here, not the archive: the shared uploader
 # pins the cs-coverage archive by digest, but the tool talks to CodeScene's API
@@ -51,8 +51,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@8a83824b29dfe8f861714b544dc85fb925ed010c
+        uses: leynos/shared-actions/.github/actions/setup-rust@7d751eded578e48dacf43ab173d5820e6437c474
         with:
+          expect-cache: any
+          # One sccache lane with ci.yml's build-test: only a push to main saves,
+          # so pull requests warm from the lane main's publisher writes.
+          sccache-cache-discriminator: coverage
           install-mold: 'true'
       # The selection is the baseline every pull request's ratchet is measured
       # against, so ci.yml's must match it field for field.
@@ -63,7 +67,7 @@ jobs:
           # linker. Assigning RUSTFLAGS displaces every `rustflags` table in
           # .cargo/config.toml.
           RUSTFLAGS: -D warnings
-        uses: leynos/shared-actions/.github/actions/generate-coverage@2a910bfcfd1ea4216419f9290331785f05b33320
+        uses: leynos/shared-actions/.github/actions/generate-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           output-path: lcov.info
           format: lcov
@@ -79,7 +83,7 @@ jobs:
       # what stops a dispatch from a branch uploading that branch's coverage.
       - name: Upload coverage data to CodeScene
         if: steps.codescene-token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@2a910bfcfd1ea4216419f9290331785f05b33320
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           path: lcov.info
           format: lcov

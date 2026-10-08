@@ -23,6 +23,15 @@ MDLINT ?= markdownlint-cli2
 NIXIE ?= nixie
 UV ?= uv
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
+
+# The CV-005 CodeScene contracts live in shared-actions and run from a full
+# commit, so a fix is a pin bump. `.github/cv005.toml` holds this repository's
+# only parameters.
+CV005_CONTRACTS_REF ?= a38feb9be25755c30eca5bda96bd3786a5b89c6b
+CV005_CONTRACTS = $(UV_ENV) $(UV) tool run --python 3.13 \
+	--from 'git+https://github.com/leynos/shared-actions@$(CV005_CONTRACTS_REF)\#subdirectory=packages/cv005-contracts' \
+	cv005-contracts
+
 RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
 TYPOS = $(UV) tool run typos@$(TYPOS_VERSION)
@@ -41,7 +50,7 @@ STANDARD_RUSTFLAGS := -Zthreads=8$(if $(filter Linux,$(BUILD_HOST_OS)), -Clink-a
 build: target/debug/$(TARGET) ## Build debug binary
 release: target/release/$(TARGET) ## Build release binary
 
-all: check-fmt lint test spelling ## Perform a comprehensive check of code
+all: check-fmt lint test spelling workflow-contracts ## Perform a comprehensive check of code
 
 clean: ## Remove build artifacts
 	$(CARGO) clean
@@ -94,6 +103,7 @@ spelling-helper-test: ## Validate the shared spelling-policy integration
 		--cov=typos_rollout_cache --cov-fail-under=90
 
 workflow-contracts: ## Check the CV-005 CodeScene workflow contract
+	$(CV005_CONTRACTS) check --repository .
 	$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) format --isolated \
 		--target-version py313 --check $(WORKFLOW_CONTRACTS)
 	$(UV_ENV) $(UV) tool run ruff@$(RUFF_VERSION) check --isolated \

@@ -108,10 +108,19 @@ pending push uploads the same or a newer commit, but the shared action writes
 the baseline only on a push, so the baseline stays one push behind until the
 next one.
 
-`make workflow-contracts`, which pull-request CI runs, holds this shape in
-`tests/workflow_contracts/`. It reads every workflow strictly (a repeated key
-is an error) and follows local reusable-workflow calls transitively, so a
-called workflow cannot reach CodeScene on a pull request's behalf.
+`make workflow-contracts`, which pull-request CI runs, holds this shape by
+running `cv005-contracts check`, the shared contract library in
+`leynos/shared-actions` (`packages/cv005-contracts`), from a full commit named
+by `CV005_CONTRACTS_REF` in the Makefile. A fix to the rules is therefore a pin
+bump. The target needs `uv`, which fetches the Python 3.13 the library runs
+under. The repository's parameters are in `.github/cv005.toml`: its
+`repository` name and the `[selection]` inputs the baseline measures, which the
+publisher's generator must carry and every pull-request lane must match. The
+library's own suite proves each rule refuses the shape it exists to refuse, so
+this repository keeps no copy of the readers or the refusal cases. It reads
+every workflow strictly (a repeated key is an error) and follows local
+reusable-workflow calls transitively, so a called workflow cannot reach
+CodeScene on a pull request's behalf.
 
 ## Markdown formatting
 
