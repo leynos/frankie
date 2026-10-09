@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@7d751eded578e48dacf43ab173d5820e6437c474
+        uses: leynos/shared-actions/.github/actions/setup-rust@0606ca899ce2995a0c4bc78e660e80832e6e8855
         with:
           expect-cache: any
           # One sccache lane with coverage-main.yml's publisher: only a push to main saves,
@@ -42,7 +42,7 @@ jobs:
       - name: Workflow contracts
         run: make workflow-contracts
       - name: Install Whitaker Dylint suite
-        uses: leynos/shared-actions/.github/actions/install-whitaker@b9a3bff63b1e19b3a48d433668184e24e1abd3ba
+        uses: leynos/shared-actions/.github/actions/install-whitaker@0606ca899ce2995a0c4bc78e660e80832e6e8855
       - name: Lint
         run: make lint
       - name: Install VidaiMock
@@ -79,7 +79,7 @@ jobs:
       # the baseline this compares against and owns the CodeScene upload, so
       # the selection below must match that workflow's field for field.
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/generate-coverage@0606ca899ce2995a0c4bc78e660e80832e6e8855
         with:
           output-path: lcov.info
           format: lcov
