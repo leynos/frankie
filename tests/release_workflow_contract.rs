@@ -49,29 +49,22 @@ impl<'a> Workflow<'a> {
 }
 
 impl Step<'_> {
-    /// Returns the step's `name:`, or the empty string.
-    fn name(&self) -> &str {
+    /// Returns the values the step gives a YAML key, whether it follows the list marker or not.
+    fn values<'s>(&'s self, key: &'s str) -> impl Iterator<Item = &'s str> + 's {
         self.lines
             .iter()
-            .find_map(|line| {
-                line.trim_start()
-                    .trim_start_matches("- ")
-                    .strip_prefix("name:")
-            })
-            .map_or("", str::trim)
+            .filter_map(move |line| line.trim_start().trim_start_matches("- ").strip_prefix(key))
+            .map(str::trim)
+    }
+
+    /// Returns the step's `name:`, or the empty string.
+    fn name(&self) -> &str {
+        self.values("name:").next().unwrap_or("")
     }
 
     /// Returns the command lines of the step's `run:` key.
     fn commands(&self) -> Vec<&str> {
-        self.lines
-            .iter()
-            .filter_map(|line| {
-                line.trim_start()
-                    .trim_start_matches("- ")
-                    .strip_prefix("run:")
-            })
-            .map(str::trim)
-            .collect()
+        self.values("run:").collect()
     }
 
     /// Returns whether the step runs Cargo or `cross`.
@@ -83,10 +76,9 @@ impl Step<'_> {
 
     /// Returns the value the step assigns to `RUSTFLAGS` in its `env:`, if it does.
     fn rustflags(&self) -> Option<&str> {
-        self.lines
-            .iter()
-            .find_map(|line| line.trim_start().strip_prefix("RUSTFLAGS:"))
-            .map(|value| value.trim().trim_matches(|c| c == '"' || c == '\''))
+        self.values("RUSTFLAGS:")
+            .next()
+            .map(|value| value.trim_matches(|c| c == '"' || c == '\''))
     }
 }
 
