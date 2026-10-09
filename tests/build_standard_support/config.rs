@@ -232,7 +232,7 @@ struct Source {
 impl Source {
     /// Returns whether the table applies on Linux alone.
     fn is_linux(&self) -> bool {
-        self.table.starts_with("target.") && self.table.contains("linux")
+        names_linux(&self.table)
     }
 
     /// Returns whether the table selects every Linux target, not one triple.
@@ -245,6 +245,19 @@ impl Source {
     fn problem(&self, pin: Pin) -> Option<String> {
         let reason = self.flags.meets(pin, self.is_linux()).err()?;
         Some(format!("[{}] {reason}", self.table))
+    }
+}
+
+/// Returns whether a target table selects Linux: a Linux triple, or a `cfg` that requires the OS. A `cfg`
+/// that negates it selects every other target, however plainly it names Linux.
+fn names_linux(table: &str) -> bool {
+    let Some(target) = table.strip_prefix("target.") else {
+        return false;
+    };
+    if target.contains("cfg(") {
+        target.contains("target_os = \"linux\"") && !target.contains("not(")
+    } else {
+        target.contains("linux")
     }
 }
 
