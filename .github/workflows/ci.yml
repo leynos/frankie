@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@0606ca899ce2995a0c4bc78e660e80832e6e8855
+        uses: leynos/shared-actions/.github/actions/setup-rust@c17d433f99daa94e53ca5eb566088518a312cb71
         with:
           expect-cache: any
           # One sccache lane with coverage-main.yml's publisher: only a push to main saves,
@@ -29,7 +29,7 @@ jobs:
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
         uses: >-
-          leynos/shared-actions/.github/actions/install-mdtablefix@0606ca899ce2995a0c4bc78e660e80832e6e8855
+          leynos/shared-actions/.github/actions/install-mdtablefix@c17d433f99daa94e53ca5eb566088518a312cb71
         with:
           version: '0.6.1'
       - name: Format
@@ -43,7 +43,7 @@ jobs:
       - name: Workflow contracts
         run: make workflow-contracts
       - name: Install Whitaker Dylint suite
-        uses: leynos/shared-actions/.github/actions/install-whitaker@0606ca899ce2995a0c4bc78e660e80832e6e8855
+        uses: leynos/shared-actions/.github/actions/install-whitaker@c17d433f99daa94e53ca5eb566088518a312cb71
       - name: Lint
         run: make lint
       - name: Install VidaiMock
@@ -86,7 +86,7 @@ jobs:
           # linker. Assigning RUSTFLAGS displaces every `rustflags` table in
           # .cargo/config.toml.
           RUSTFLAGS: -D warnings
-        uses: leynos/shared-actions/.github/actions/generate-coverage@0606ca899ce2995a0c4bc78e660e80832e6e8855
+        uses: leynos/shared-actions/.github/actions/generate-coverage@c17d433f99daa94e53ca5eb566088518a312cb71
         with:
           output-path: lcov.info
           format: lcov
