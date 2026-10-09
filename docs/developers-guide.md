@@ -173,9 +173,10 @@ build without it fails at link time. CI installs it through `setup-rust`'s
 `install-mold` input. `tests/build_standard_contract.rs` holds the standard. It
 reads the configuration sources, the commands `make -n` prints for each
 development target on a Linux host and a macOS host (each keeping the caller's
-own `RUSTFLAGS`) and for each coverage and release target on a Linux host, and
-the `setup-rust` steps of the CI workflows (each must pass `install-mold`), so
-a flag lost through a recipe or workflow edit fails there.
+own `RUSTFLAGS`) and for the release target (the coverage exclusion is checked
+in the workflow steps) on a Linux host, and the `setup-rust` steps of the CI
+workflows (each must pass `install-mold`), so a flag lost through a recipe or
+workflow edit fails there.
 
 ### Cranelift
 
