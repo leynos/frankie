@@ -17,6 +17,9 @@
   behaviour, configuration, and operational expectations.
 - [Developers' guide](developers-guide.md) explains maintainer workflows,
   build and test commands, and internal development conventions.
+- [ADR 011: Rust build standard](adr-011-rust-build-standard.md) records why
+  development builds use the fast flags while coverage and release builds stay
+  off them.
 - [Ortho configuration users' guide](ortho-config-users-guide.md) explains the
   Ortho configuration surface used by Frankie.
 

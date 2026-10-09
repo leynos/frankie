@@ -1021,3 +1021,26 @@ Common error scenarios:
 - **Authentication failure** — Token is missing, empty, or rejected by GitHub.
 - **Rate limit exceeded** — API rate limit reached; wait for reset time.
 - **Network errors** — Cannot reach the GitHub API endpoint.
+
+### Build standard
+
+Development builds (`make test`, `make lint`, `make typecheck` and the debug
+build) use the parallel `rustc` frontend (`-Zthreads=8`) and, on Linux, the
+`mold` linker. Install `mold` before building on Linux: the configuration names
+it, so a build without it fails at link time (on Debian or Ubuntu, install the
+`mold` package with `apt-get`). macOS keeps its platform linker, because `mold`
+ships for Linux only.
+
+The flags live in `.cargo/config.toml`, but Cargo applies exactly one
+`rustflags` source and an assigned `RUSTFLAGS` replaces every configuration
+source. The Makefile therefore restates the flags in each recipe and keeps any
+`RUSTFLAGS` already in the environment, appending the standard flags after it.
+Two builds are held out deliberately. The coverage build assigns its own flags,
+because a measurement should not depend on the fast flags. `make release` keeps
+the environment's `RUSTFLAGS` and names neither fast flag, so a shipped
+artefact links with the platform linker. A bare `cargo build --release` takes
+the configuration's flags unless `RUSTFLAGS` is assigned, for example
+`RUSTFLAGS="" cargo build --release`.
+
+Cranelift is not adopted; the developers' guide records the reason. See
+[ADR 011](adr-011-rust-build-standard.md) for the reasoning.
