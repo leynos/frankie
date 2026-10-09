@@ -191,3 +191,6 @@ Exception: Cranelift is not the development-profile backend. The repository pins
 selecting the backend would break that build (recorded 2026-09-29). That build
 assigns `RUSTFLAGS`, so the nightly-only `-Zthreads` flag never reaches it.
 Revisit if that build moves to the pinned nightly.
+`tests/release_workflow_contract.rs` holds that workflow to it: every step that
+runs Cargo or `cross` assigns a `RUSTFLAGS` naming neither `-Zthreads` nor the
+`mold` linker flag.

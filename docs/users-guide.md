@@ -1022,7 +1022,7 @@ Common error scenarios:
 - **Rate limit exceeded** — API rate limit reached; wait for reset time.
 - **Network errors** — Cannot reach the GitHub API endpoint.
 
-### Build standard
+## Build standard
 
 Development builds (`make test`, `make lint`, `make typecheck` and the debug
 build) use the parallel `rustc` frontend (`-Zthreads=8`) and, on Linux, the

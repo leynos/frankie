@@ -68,6 +68,10 @@ jobs:
           path: ~/.cargo/bin/cross
           key: cross-${{ runner.os }}
       - name: Install cross
+        # Installing from the checkout discovers .cargo/config.toml, whose nightly-only
+        # `-Zthreads` flag stable rustc refuses; an assigned RUSTFLAGS displaces it.
+        env:
+          RUSTFLAGS: -D warnings
         run: cargo install cross --git https://github.com/cross-rs/cross
       - name: Cache cargo registry
         uses: actions/cache@v6

@@ -44,8 +44,9 @@ flags into each development recipe, keeping the caller's own `RUSTFLAGS`.
 Coverage assigns its own flags and ignores the caller's. The release recipe
 keeps the caller's flags and names neither fast flag, so it ships from the
 platform linker; a direct `cargo build --release` takes the configuration's
-flags unless `RUSTFLAGS` is assigned. Cranelift is not adopted; the developers'
-guide records the reason.
+flags unless `RUSTFLAGS` is assigned. Cranelift is not adopted, because stable
+Cargo, which the release workflow builds with, refuses the backend key; the
+developers' guide records the reason.
 
 `tests/build_standard_contract.rs` reads the Cargo configuration sources and
 the commands `make -n` prints for each target, and the `setup-rust` steps of
@@ -57,4 +58,6 @@ the workflows, so a flag lost through a recipe or workflow edit fails there.
   must be GCC 12.1 or newer, or clang.
 - A change to a recipe or workflow step that assigns `RUSTFLAGS` must restate
   the flags, and the contract says which clause fails when it does not.
-- Revisit Cranelift when the toolchain or the failing tests change.
+- Revisit Cranelift if the release build (`cross +stable build --release`)
+  moves to the pinned nightly: stable Cargo refuses a
+  `[profile.dev] codegen-backend` key, which is why it is not adopted.
