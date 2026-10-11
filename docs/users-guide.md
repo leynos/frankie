@@ -1024,6 +1024,9 @@ Common error scenarios:
 
 ## Build standard
 
+`make lint` first runs `make interrogate`, which needs `uv` and requires a
+docstring on every Python definition under `scripts` and `tests`.
+
 Development builds (`make test`, `make lint`, `make typecheck` and the debug
 build) use the parallel `rustc` frontend (`-Zthreads=8`) and, on Linux, the
 `mold` linker. Install `mold` before building on Linux: the configuration names

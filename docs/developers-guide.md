@@ -71,6 +71,17 @@ When adding a new summary or navigation target:
 - add serialization tests for the shared wire shape before changing CLI or TUI
   rendering.
 
+## Python docstring coverage
+
+`make lint` first runs `make interrogate`. The target needs `uv` (the `UV`
+variable names the executable) and runs interrogate 1.7.0 through `uv tool run`
+at `--fail-under 100` with `-vv` over `scripts` and `tests`; add a new Python
+directory to `INTERROGATE_TARGETS` in the `Makefile`. It fails on any
+undocumented definition and on any `MISSED` row, because interrogate rounds its
+percentage to one decimal. `tests/workflow_contracts/interrogate_gate_test.py`
+asserts the wiring and runs the target against a stub tool;
+`make workflow-contracts` runs it.
+
 ## Spelling policy
 
 Run `make spelling` to enforce en-GB-oxendict prose spelling. The generated
