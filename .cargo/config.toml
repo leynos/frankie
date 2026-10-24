@@ -12,6 +12,11 @@
 # recipes set. Coverage and the release recipe and workflow assign `RUSTFLAGS`
 # without them on purpose. A direct `cargo build --release` keeps these flags
 # unless `RUSTFLAGS` is assigned.
+
+[profile.dev]
+incremental = false
+debug = 0
+
 [build]
 rustflags = ["-Zthreads=8"]
 
