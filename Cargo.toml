@@ -37,7 +37,7 @@ syntect = "5.2.0"
 unicode-width = "0.2.2"
 
 # Template engine
-minijinja = "2.14.0"
+minijinja = "3.0.0"
 metrics = "0.24.1"
 
 [dev-dependencies]
