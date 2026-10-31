@@ -180,7 +180,7 @@ pub fn find_interrupted_session(
         candidates.push(session);
     }
 
-    candidates.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    candidates.sort_by_key(|session| std::cmp::Reverse(session.started_at));
     Ok(candidates.into_iter().next())
 }
 

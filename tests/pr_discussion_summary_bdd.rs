@@ -31,12 +31,9 @@ fn pr_discussion_summary_state() -> PrDiscussionSummaryState {
     PrDiscussionSummaryState::default()
 }
 
-fn binary_path() -> StepResult<PathBuf> {
-    let mut path = std::env::current_exe()?;
-    path.pop();
-    path.pop();
-    path.push("frankie");
-    Ok(path)
+fn binary_path() -> PathBuf {
+    // Cargo names the built binary for integration tests, wherever its layout puts it.
+    PathBuf::from(env!("CARGO_BIN_EXE_frankie"))
 }
 
 fn fixture_config_dir() -> PathBuf {
@@ -76,7 +73,7 @@ fn configure_comments(
 }
 
 fn run_frankie(args: &[String]) -> StepResult<Output> {
-    let mut command = Command::new(binary_path()?);
+    let mut command = Command::new(binary_path());
     let mut command_args = args.to_vec();
     command_args.extend([
         "--config-path".to_owned(),

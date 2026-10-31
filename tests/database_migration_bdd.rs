@@ -72,7 +72,6 @@ fn telemetry_sink(migration_state: &MigrationState) {
 
 // --- When steps ---
 
-#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[when("database migrations are run")]
 fn run_migrations(migration_state: &MigrationState) {
     let telemetry = migration_state
@@ -104,7 +103,6 @@ fn run_migrations_again(migration_state: &MigrationState) {
 
 // --- Then steps ---
 
-#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("the schema version is {expected}")]
 fn schema_version_is(migration_state: &MigrationState, expected: String) {
     let expected_clean = expected.trim_matches('"');
@@ -117,7 +115,6 @@ fn schema_version_is(migration_state: &MigrationState, expected: String) {
     assert_eq!(actual, expected_clean, "schema version mismatch");
 }
 
-#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("telemetry records the schema version")]
 fn telemetry_records_schema_version(migration_state: &MigrationState) {
     let events = migration_state
@@ -135,7 +132,6 @@ fn telemetry_records_schema_version(migration_state: &MigrationState) {
     );
 }
 
-#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("telemetry records the schema version twice")]
 fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
     let events = migration_state
@@ -172,7 +168,6 @@ fn telemetry_records_schema_version_twice(migration_state: &MigrationState) {
     );
 }
 
-#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("a persistence error {expected} is reported")]
 fn persistence_error_is(migration_state: &MigrationState, expected: String) {
     let expected_clean = expected.trim_matches('"');
@@ -185,7 +180,6 @@ fn persistence_error_is(migration_state: &MigrationState, expected: String) {
     assert_eq!(error.to_string(), expected_clean);
 }
 
-#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("a persistence error starts with {expected_prefix}")]
 fn persistence_error_starts_with(migration_state: &MigrationState, expected_prefix: String) {
     let expected_clean = expected_prefix.trim_matches('"');
@@ -201,7 +195,6 @@ fn persistence_error_starts_with(migration_state: &MigrationState, expected_pref
     );
 }
 
-#[expect(clippy::expect_used, reason = "test code; panics are acceptable")]
 #[then("no telemetry is recorded")]
 fn no_telemetry_is_recorded(migration_state: &MigrationState) {
     let events = migration_state

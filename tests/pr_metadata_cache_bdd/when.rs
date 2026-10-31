@@ -10,10 +10,6 @@ use crate::pr_metadata_cache_bdd_state::CacheState;
 use crate::support::pr_metadata_cache_helpers::{ensure_runtime_and_server, expected_request_path};
 
 #[when("the cached client loads pull request {pr_url} for the first time")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn load_pull_request_first_time(cache_state: &CacheState, pr_url: String) {
     let runtime = ensure_runtime_and_server(&cache_state.runtime, &cache_state.server)
         .expect("failed to create Tokio runtime");

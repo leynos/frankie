@@ -10,13 +10,9 @@ use rstest::rstest;
 use tempfile::TempDir;
 
 /// Returns the path to the built binary.
-fn binary_path() -> std::io::Result<std::path::PathBuf> {
-    // cargo test builds binaries in target/debug
-    let mut path = std::env::current_exe()?;
-    path.pop(); // remove test binary name
-    path.pop(); // remove deps
-    path.push("frankie");
-    Ok(path)
+fn binary_path() -> std::path::PathBuf {
+    // Cargo names the built binary for integration tests, wherever its layout puts it.
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_frankie"))
 }
 
 fn run_frankie_in_dir(
@@ -24,7 +20,7 @@ fn run_frankie_in_dir(
     env: &[(&str, Option<&str>)],
     working_dir: &std::path::Path,
 ) -> std::io::Result<Output> {
-    let mut command = Command::new(binary_path()?);
+    let mut command = Command::new(binary_path());
     command.args(args);
     command.current_dir(working_dir);
 
@@ -53,10 +49,6 @@ fn run_frankie_in_dir(
 }
 
 /// Creates a temporary Git repository with the given origin URL.
-#[expect(
-    clippy::expect_used,
-    reason = "integration test setup; allow-expect-in-tests does not cover integration tests"
-)]
 fn create_temp_repo_with_origin(origin_url: &str) -> TempDir {
     let temp_dir = TempDir::new().expect("should create temp directory");
     let repo = Repository::init(temp_dir.path()).expect("should init repository");
@@ -66,10 +58,6 @@ fn create_temp_repo_with_origin(origin_url: &str) -> TempDir {
 }
 
 /// Creates a temporary Git repository with no remotes.
-#[expect(
-    clippy::expect_used,
-    reason = "integration test setup; allow-expect-in-tests does not cover integration tests"
-)]
 fn create_temp_repo_no_remotes() -> TempDir {
     let temp_dir = TempDir::new().expect("should create temp directory");
     let _repo = Repository::init(temp_dir.path()).expect("should init repository");
@@ -124,10 +112,6 @@ fn interactive_mode_warns_when_no_remotes() {
 }
 
 /// Creates a temporary directory that is NOT a Git repository.
-#[expect(
-    clippy::expect_used,
-    reason = "integration test setup; allow-expect-in-tests does not cover integration tests"
-)]
 fn create_temp_non_git_dir() -> TempDir {
     TempDir::new().expect("should create temp directory")
 }
@@ -143,10 +127,6 @@ fn create_temp_non_git_dir() -> TempDir {
 #[expect(
     clippy::too_many_arguments,
     reason = "test helper with descriptive parameters; clarity outweighs argument count"
-)]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test helper; allow-expect-in-tests does not cover integration tests"
 )]
 fn assert_interactive_mode_error<F>(
     setup: F,

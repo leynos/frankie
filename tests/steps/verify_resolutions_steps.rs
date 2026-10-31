@@ -17,16 +17,13 @@ use super::verify_resolutions_helpers::{
 };
 use super::{StepResult, VerifyResolutionsState};
 
-fn binary_path() -> StepResult<std::path::PathBuf> {
-    let mut path = std::env::current_exe()?;
-    path.pop();
-    path.pop();
-    path.push("frankie");
-    Ok(path)
+fn binary_path() -> std::path::PathBuf {
+    // Cargo names the built binary for integration tests, wherever its layout puts it.
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_frankie"))
 }
 
 fn run_frankie(args: &[String]) -> StepResult<Output> {
-    let mut command = Command::new(binary_path()?);
+    let mut command = Command::new(binary_path());
     command.args(args);
 
     command
