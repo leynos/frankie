@@ -34,10 +34,6 @@ fn intake_state() -> IntakeState {
     "a mock GitHub API server with pull request {pr:u64} titled {title} and \
      {count:u64} comments"
 )]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, count: u64) {
     let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
         .expect("failed to create Tokio runtime");
@@ -81,10 +77,6 @@ fn seed_successful_server(intake_state: &IntakeState, pr: u64, title: String, co
 }
 
 #[given("a mock GitHub API server that rejects token for pull request {pr:u64}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn seed_rejecting_server(intake_state: &IntakeState, pr: u64) {
     let runtime = runtime::ensure_runtime_and_server(&intake_state.runtime, &intake_state.server)
         .expect("failed to create Tokio runtime");
@@ -111,10 +103,6 @@ fn remember_token(intake_state: &IntakeState, token: String) {
 }
 
 #[when("the client loads pull request {pr_url}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn load_pull_request(intake_state: &IntakeState, pr_url: String) {
     let server_url = intake_state
         .server
@@ -173,10 +161,6 @@ fn assert_title(intake_state: &IntakeState, expected: String) {
 }
 
 #[then("the response includes {count:u64} comments")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_comment_count(intake_state: &IntakeState, count: u64) {
     let actual = intake_state
         .details
@@ -187,10 +171,6 @@ fn assert_comment_count(intake_state: &IntakeState, count: u64) {
 }
 
 #[then("the error message mentions authentication failure")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_authentication_error(intake_state: &IntakeState) {
     let error = intake_state
         .error

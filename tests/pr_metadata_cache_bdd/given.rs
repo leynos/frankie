@@ -16,10 +16,6 @@ use crate::support::pr_metadata_cache_helpers::{
 };
 
 #[given("a temporary database file with migrations applied")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn migrated_database(cache_state: &CacheState) {
     let temp_dir = create_temp_dir().expect("failed to create temporary directory");
     let database_url = create_database_path(&temp_dir);
@@ -31,10 +27,6 @@ fn migrated_database(cache_state: &CacheState) {
 }
 
 #[given("a temporary database file without migrations")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn unmigrated_database(cache_state: &CacheState) {
     let temp_dir = create_temp_dir().expect("failed to create temporary directory");
     let database_url = create_database_path(&temp_dir);
@@ -50,10 +42,6 @@ fn cache_ttl(cache_state: &CacheState, ttl: u64) {
 
 #[given(
     "a mock GitHub API server that serves pull request {pr:u64} titled {title} without validators with {count:u64} comments"
-)]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn mock_server_simple(cache_state: &CacheState, pr: u64, title: String, count: u64) {
     let runtime = ensure_runtime_and_server(&cache_state.runtime, &cache_state.server)
@@ -79,10 +67,6 @@ fn mock_server_simple(cache_state: &CacheState, pr: u64, title: String, count: u
 #[given(
     "a mock GitHub API server that serves pull request {pr:u64} titled {title} with ETag {etag} and Last-Modified {last_modified} with {count:u64} comments"
 )]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn mock_server_with_revalidation(
     #[step_args] config: MockRevalidationConfig,
     cache_state: &CacheState,
@@ -101,10 +85,6 @@ fn mock_server_with_revalidation(
 #[given(
     "a mock GitHub API server that updates pull request {pr:u64} from title {old_title} to title {new_title} with ETag {etag1} then {etag2} and {count:u64} comments"
 )]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn mock_server_with_invalidation(
     #[step_args] config: MockInvalidationConfig,
     cache_state: &CacheState,
@@ -122,10 +102,6 @@ fn mock_server_with_invalidation(
 
 #[given(
     "a mock GitHub API server that returns 304 Not Modified for pull request {pr:u64} with {count:u64} comments"
-)]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn mock_server_uncached_not_modified(cache_state: &CacheState, pr: u64, count: u64) {
     let runtime = ensure_runtime_and_server(&cache_state.runtime, &cache_state.server)

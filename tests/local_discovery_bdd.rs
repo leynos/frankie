@@ -22,10 +22,6 @@ fn discovery_state() -> DiscoveryState {
 }
 
 #[given("a Git repository with origin {origin_url}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn create_repo_with_origin(discovery_state: &DiscoveryState, origin_url: String) {
     let origin_url_clean = origin_url.trim_matches('"');
     let temp_dir = TempDir::new().expect("should create temp directory");
@@ -36,10 +32,6 @@ fn create_repo_with_origin(discovery_state: &DiscoveryState, origin_url: String)
 }
 
 #[given("a Git repository with no remotes")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn create_repo_no_remotes(discovery_state: &DiscoveryState) {
     let temp_dir = TempDir::new().expect("should create temp directory");
     let _repo = Repository::init(temp_dir.path()).expect("should init repository");
@@ -47,10 +39,6 @@ fn create_repo_no_remotes(discovery_state: &DiscoveryState) {
 }
 
 #[when("the discovery is performed")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn perform_discovery(discovery_state: &DiscoveryState) {
     let path = discovery_state
         .temp_dir
@@ -68,10 +56,6 @@ fn perform_discovery(discovery_state: &DiscoveryState) {
 }
 
 #[then("the owner is detected as {expected_owner}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_owner(discovery_state: &DiscoveryState, expected_owner: String) {
     let expected_owner_clean = expected_owner.trim_matches('"');
     let actual = discovery_state
@@ -83,10 +67,6 @@ fn assert_owner(discovery_state: &DiscoveryState, expected_owner: String) {
 }
 
 #[then("the repository is detected as {expected_repo}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_repository(discovery_state: &DiscoveryState, expected_repo: String) {
     let expected_repo_clean = expected_repo.trim_matches('"');
     let actual = discovery_state
@@ -98,10 +78,6 @@ fn assert_repository(discovery_state: &DiscoveryState, expected_repo: String) {
 }
 
 #[then("the API base is {expected_api_base}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_api_base(discovery_state: &DiscoveryState, expected_api_base: String) {
     let expected_api_base_clean = expected_api_base.trim_matches('"');
     let origin = discovery_state
@@ -120,10 +96,6 @@ fn assert_api_base(discovery_state: &DiscoveryState, expected_api_base: String) 
 }
 
 /// Generic helper to assert that a discovery error matches an expected variant.
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_discovery_error<F>(
     discovery_state: &DiscoveryState,
     predicate: F,

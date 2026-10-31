@@ -141,8 +141,9 @@ impl ReviewListComponent {
             .body
             .as_deref()
             .map(first_trimmed_line)
-            .map(|line| truncate_to_display_width_with_ellipsis(line, BODY_PREVIEW_WIDTH))
-            .unwrap_or_default();
+            .map_or_else(Default::default, |line| {
+                truncate_to_display_width_with_ellipsis(line, BODY_PREVIEW_WIDTH)
+            });
 
         let line =
             format!("{prefix}{verification_symbol} [{author}] {file}{line_num}: {body_preview}");

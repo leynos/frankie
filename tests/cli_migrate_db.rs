@@ -14,17 +14,13 @@ use frankie::persistence::CURRENT_SCHEMA_VERSION;
 use support::create_temp_dir;
 
 /// Returns the path to the built binary.
-fn binary_path() -> std::io::Result<std::path::PathBuf> {
-    // cargo test builds binaries in target/debug
-    let mut path = std::env::current_exe()?;
-    path.pop(); // remove test binary name
-    path.pop(); // remove deps
-    path.push("frankie");
-    Ok(path)
+fn binary_path() -> std::path::PathBuf {
+    // Cargo names the built binary for integration tests, wherever its layout puts it.
+    std::path::PathBuf::from(env!("CARGO_BIN_EXE_frankie"))
 }
 
 fn run_frankie(args: &[&str], env: &[(&str, Option<&str>)]) -> std::io::Result<Output> {
-    let mut command = Command::new(binary_path()?);
+    let mut command = Command::new(binary_path());
     command.args(args);
 
     // Ensure tests are hermetic even if the developer has Frankie env vars set.

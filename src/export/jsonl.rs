@@ -185,7 +185,7 @@ mod tests {
         let comments: Vec<ExportedComment> = vec![];
 
         let output = write_to_string(&comments).expect("should write JSONL");
-        assert!(output.is_empty());
+        assert_eq!(output, "");
     }
 
     #[rstest]

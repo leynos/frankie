@@ -146,10 +146,6 @@ fn cli_receives_no_token(
 // --- Then steps ---
 
 #[then("the configuration pr_url is {expected}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_pr_url(config_state: &ConfigState, expected: String) {
     let expected_clean = expected.trim_matches('"');
 
@@ -163,10 +159,6 @@ fn assert_pr_url(config_state: &ConfigState, expected: String) {
 }
 
 #[then("the resolved token is {expected}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_resolved_token(config_state: &ConfigState, expected: String) {
     let expected_clean = expected.trim_matches('"');
 
@@ -180,10 +172,6 @@ fn assert_resolved_token(config_state: &ConfigState, expected: String) {
 }
 
 #[then("requiring pr_url returns an error")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_pr_url_error(config_state: &ConfigState) {
     let config = config_state.config.get().expect("configuration not built");
 
@@ -196,10 +184,6 @@ fn assert_pr_url_error(config_state: &ConfigState) {
 }
 
 #[then("resolving token returns an error")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_token_error(config_state: &ConfigState) {
     let config = config_state.config.get().expect("configuration not built");
 

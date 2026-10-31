@@ -41,10 +41,6 @@ impl MockGitOperations {
     }
 
     /// Sets whether the commit should be found.
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "Vec fields prevent const evaluation"
-    )]
     pub(crate) fn with_commit_exists(mut self, exists: bool) -> Self {
         self.commit_exists = exists;
         self
@@ -56,10 +52,6 @@ impl MockGitOperations {
     /// - `exact(line)` for unchanged lines
     /// - `moved(original, new)` for lines that moved positions
     /// - `deleted(line)` for lines that were removed
-    #[expect(
-        clippy::missing_const_for_fn,
-        reason = "Vec fields prevent const evaluation"
-    )]
     pub(crate) fn with_line_mapping(mut self, mapping: LineMappingVerification) -> Self {
         self.line_mapping_response = Some(mapping);
         self

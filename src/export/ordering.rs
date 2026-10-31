@@ -143,7 +143,7 @@ mod tests {
     fn empty_list_is_no_op() {
         let mut comments: Vec<ExportedComment> = vec![];
         sort_comments(&mut comments);
-        assert!(comments.is_empty());
+        assert_eq!(comments.len(), 0);
     }
 
     #[rstest]

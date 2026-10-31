@@ -20,10 +20,6 @@ fn listing_state() -> ListingState {
 }
 
 #[given("a mock GitHub API server with {count:PullRequestCount} open PRs for owner/repo")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn seed_server_with_prs(listing_state: &ListingState, count: PullRequestCount) {
     let runtime = ensure_runtime_and_server(listing_state).expect("failed to create Tokio runtime");
 
@@ -49,10 +45,6 @@ fn seed_server_with_prs(listing_state: &ListingState, count: PullRequestCount) {
     clippy::integer_division,
     clippy::integer_division_remainder_used,
     reason = "test data: exact division is intentional for page setup"
-)]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn seed_server_with_paginated_prs(
     listing_state: &ListingState,
@@ -118,10 +110,6 @@ fn seed_server_with_paginated_prs(
 #[given(
     "a mock GitHub API server with rate limit headers showing {remaining:RateLimitCount} remaining"
 )]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: RateLimitCount) {
     let runtime = ensure_runtime_and_server(listing_state).expect("failed to create Tokio runtime");
 
@@ -154,10 +142,6 @@ fn seed_server_with_rate_limit_headers(listing_state: &ListingState, remaining: 
 }
 
 #[given("a mock GitHub API server returning 403 rate limit exceeded")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn seed_server_with_rate_limit_error(listing_state: &ListingState) {
     let runtime = ensure_runtime_and_server(listing_state).expect("failed to create Tokio runtime");
 
@@ -244,10 +228,6 @@ fn list_pull_requests_with_page(listing_state: &ListingState, repo_url: String, 
 }
 
 #[then("the response includes {count:PullRequestCount} pull requests")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_pr_count(listing_state: &ListingState, count: PullRequestCount) {
     let actual = listing_state
         .result
@@ -258,10 +238,6 @@ fn assert_pr_count(listing_state: &ListingState, count: PullRequestCount) {
 }
 
 #[then("the current page is {page:PageNumber}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_current_page(listing_state: &ListingState, page: PageNumber) {
     let actual = listing_state
         .result
@@ -272,10 +248,6 @@ fn assert_current_page(listing_state: &ListingState, page: PageNumber) {
 }
 
 #[then("the pagination indicates page {page:PageNumber} of {total:PageCount}")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_page_of_total(listing_state: &ListingState, page: PageNumber, total: PageCount) {
     let (actual_page, actual_total) = listing_state
         .result
@@ -292,10 +264,6 @@ fn assert_page_of_total(listing_state: &ListingState, page: PageNumber, total: P
 }
 
 #[then("pagination has next page")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_has_next_page(listing_state: &ListingState) {
     let has_next = listing_state
         .result
@@ -306,10 +274,6 @@ fn assert_has_next_page(listing_state: &ListingState) {
 }
 
 #[then("pagination has previous page")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_has_prev_page(listing_state: &ListingState) {
     let has_prev = listing_state
         .result
@@ -329,10 +293,6 @@ fn assert_no_error(listing_state: &ListingState) {
 }
 
 #[then("the error indicates rate limit exceeded")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_rate_limit_error(listing_state: &ListingState) {
     const EXPECTED_RATE_LIMIT_MESSAGE: &str = "API rate limit exceeded for user";
 
@@ -362,10 +322,6 @@ fn assert_rate_limit_error(listing_state: &ListingState) {
 }
 
 #[then("the error includes rate limit reset information")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_rate_limit_reset_information(listing_state: &ListingState) {
     let error = listing_state
         .error

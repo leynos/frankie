@@ -74,8 +74,7 @@ impl RateLimitInfo {
     pub fn seconds_until_reset(&self) -> u64 {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_secs())
-            .unwrap_or(0);
+            .map_or(0, |duration| duration.as_secs());
 
         self.reset_at.saturating_sub(now)
     }

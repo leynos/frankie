@@ -39,7 +39,6 @@ fn given_tui_with_reviews(sync_state: &SyncState, count: usize) {
 }
 
 #[given("the cursor is on comment {id:u64}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn given_cursor_on_comment(sync_state: &SyncState, id: u64) {
     sync_state
         .app
@@ -52,7 +51,6 @@ fn given_cursor_on_comment(sync_state: &SyncState, id: u64) {
 // When steps
 
 #[when("a sync completes with {count:usize} comments including comment {id:u64}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_sync_completes_with_comments_including(sync_state: &SyncState, count: usize, id: u64) {
     let mut reviews = create_reviews(count);
     // Ensure the specified comment ID is present while maintaining the exact count.
@@ -75,7 +73,6 @@ fn when_sync_completes_with_comments_including(sync_state: &SyncState, count: us
 }
 
 #[when("a sync completes with {count:usize} comments without comment {excluded_id:u64}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_sync_completes_without_comment(sync_state: &SyncState, count: usize, excluded_id: u64) {
     // Generate enough reviews to guarantee `count` remain after excluding `excluded_id`.
     // If `excluded_id` falls within the generated range (1..=count), we need count+1 reviews
@@ -103,7 +100,6 @@ fn when_sync_completes_without_comment(sync_state: &SyncState, count: usize, exc
 }
 
 #[when("a sync completes in {latency_ms:u64}ms with {count:usize} comments")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn when_sync_completes_with_latency(sync_state: &SyncState, latency_ms: u64, count: usize) {
     let reviews = create_reviews(count);
 
@@ -125,7 +121,6 @@ fn when_sync_completes_with_latency(sync_state: &SyncState, latency_ms: u64, cou
 
 #[then("the cursor remains on comment {id:u64}")]
 #[then("the cursor is on comment {id:u64}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_cursor_on_comment(sync_state: &SyncState, id: u64) {
     let actual_id = sync_state
         .app
@@ -136,7 +131,6 @@ fn then_cursor_on_comment(sync_state: &SyncState, id: u64) {
 }
 
 #[then("the filtered count is {count:usize}")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 fn then_filtered_count(sync_state: &SyncState, count: usize) {
     let actual = sync_state
         .app
@@ -147,7 +141,6 @@ fn then_filtered_count(sync_state: &SyncState, count: usize) {
 }
 
 #[then("a SyncLatencyRecorded event is logged")]
-#[expect(clippy::expect_used, reason = "BDD test step; panics are acceptable")]
 #[expect(
     clippy::print_stderr,
     reason = "intentional test-time warning for CI visibility"
@@ -178,7 +171,6 @@ fn then_sync_latency_event_logged(sync_state: &SyncState) {
 }
 
 /// Helper to assert a field value from a `SyncLatencyRecorded` telemetry event.
-#[expect(clippy::expect_used, reason = "BDD test helper; panics are acceptable")]
 #[expect(
     clippy::print_stderr,
     reason = "intentional test-time warning for CI visibility"

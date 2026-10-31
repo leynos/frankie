@@ -28,10 +28,6 @@ fn assert_title(cache_state: &CacheState, expected: String) {
 }
 
 #[then("the GitHub API mocks are satisfied")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn verify_mocks(cache_state: &CacheState) {
     let runtime = cache_state.runtime.get().expect("runtime not initialised");
     cache_state
@@ -42,10 +38,6 @@ fn verify_mocks(cache_state: &CacheState) {
 
 #[then(
     "the revalidation request includes If-None-Match {etag} and If-Modified-Since {last_modified}"
-)]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
 )]
 fn assert_revalidation_request_headers(
     cache_state: &CacheState,
@@ -104,10 +96,6 @@ fn assert_revalidation_request_headers(
 }
 
 #[then("an API error mentions an unexpected 304 response")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_uncached_304_error(cache_state: &CacheState) {
     let error = cache_state
         .error
@@ -117,10 +105,6 @@ fn assert_uncached_304_error(cache_state: &CacheState) {
 }
 
 #[then("a configuration error mentions running migrations")]
-#[expect(
-    clippy::expect_used,
-    reason = "integration test step; allow-expect-in-tests does not cover integration tests"
-)]
 fn assert_schema_error(cache_state: &CacheState) {
     let error = cache_state
         .error
