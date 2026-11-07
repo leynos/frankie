@@ -241,15 +241,12 @@ impl PullRequestMetadataCache {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .ok()
-            .map_or_else(
-                || 0,
-                |duration| {
-                    i64::try_from(duration.as_secs()).unwrap_or_else(|error| {
-                        let _ = error;
-                        i64::MAX
-                    })
-                },
-            )
+            .map_or(0, |duration| {
+                i64::try_from(duration.as_secs()).unwrap_or_else(|error| {
+                    let _ = error;
+                    i64::MAX
+                })
+            })
     }
 
     fn establish_connection(&self) -> Result<SqliteConnection, PersistenceError> {
