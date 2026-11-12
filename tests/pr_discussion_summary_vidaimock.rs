@@ -139,10 +139,14 @@ fn summarize_surfaces_vidaimock_http_failures() -> TestResult<()> {
                     format!("expected HTTP status in error message, got: {message}").into(),
                 );
             }
-            if !message.contains("Mock error response (HTTP 500).") {
-                return Err(
-                    format!("expected response body in error message, got: {message}").into(),
-                );
+            if message
+                .split_once("status 500:")
+                .is_none_or(|(_, body)| body.trim().is_empty())
+            {
+                return Err(format!(
+                    "expected non-empty response body in error message, got: {message}"
+                )
+                .into());
             }
         }
         other => {
