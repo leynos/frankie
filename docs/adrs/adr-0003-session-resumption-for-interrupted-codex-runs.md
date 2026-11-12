@@ -1,4 +1,4 @@
-# Architectural decision record (ADR) 003: session resumption for interrupted Codex runs
+# Architectural decision record (ADR) 0003: Session resumption for interrupted Codex runs
 
 ## Status
 

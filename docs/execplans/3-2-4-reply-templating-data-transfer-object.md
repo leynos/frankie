@@ -40,9 +40,9 @@ Success is observable when:
 
 ## Constraints
 
-- Follow `docs/adr-005-cross-surface-library-first-delivery.md`: the reusable
-  reply-template contract must stay owned by a shared library module, with TUI
-  logic acting as an adapter.
+- Follow `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`: the
+  reusable reply-template contract must stay owned by a shared library module,
+  with TUI logic acting as an adapter.
 - Treat `docs/execplans/3-2-3-extract-reply-templating-into-library-module.md`
   as a completed prerequisite. Do not re-open step 3.2.3 work except where a
   tiny follow-on adjustment is required for the DTO migration.
@@ -83,7 +83,7 @@ Success is observable when:
 - Contract: introducing `ReplyTemplateContext` and changing the renderer to use
   it is in scope; changing template variable names, fallback defaults, or TUI
   error text is not. If any of those behaviours must change, stop and escalate.
-- Surface area: if satisfying ADR-005 for this step appears to require a new
+- Surface area: if satisfying ADR 0005 for this step appears to require a new
   standalone CLI mode, stop and document why. This roadmap item is a library
   DTO migration, not a new CLI feature.
 - Testing: if the existing reply-template BDD harness cannot cover the adapter
@@ -97,7 +97,7 @@ Success is observable when:
 - Risk: the change becomes a breaking public API migration without enough
   documentation or test evidence. Severity: high. Likelihood: medium.
   Mitigation: update Rustdoc examples, crate-root integration tests, and the
-  ADR-005 design note in the same change as the signature migration.
+  ADR 0005 design note in the same change as the signature migration.
 - Risk: DTO design simply mirrors `ReviewComment` too literally, leaving the
   renderer responsible for fallback/default logic again. Severity: medium.
   Likelihood: medium. Mitigation: make the DTO carry the normalized render
@@ -120,7 +120,7 @@ Success is observable when:
 ## Progress
 
 - [x] (2026-03-22 00:00Z) Read `docs/roadmap.md`,
-      `docs/adr-005-cross-surface-library-first-delivery.md`, the completed
+      `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`, the completed
       3.2.3 ExecPlan, the current `src/reply_template/` implementation, the
       TUI reply-draft adapter, and the referenced testing guidance.
 - [x] (2026-03-22 00:00Z) Drafted this ExecPlan for roadmap step 3.2.4.
@@ -166,7 +166,7 @@ Success is observable when:
   independent of GitHub review-comment transport details.
 - Decision (2026-03-22): keep `ReplyTemplateContext` in `src/reply_template/`
   rather than under `src/github/`. Rationale: the DTO belongs to the rendering
-  contract, not to GitHub intake models, and ADR-005 wants the shared library
+  contract, not to GitHub intake models, and ADR 0005 wants the shared library
   behaviour to own its own surface.
 - Decision (2026-03-22): normalize optional `ReviewComment` fields while
   building the DTO, not inside the renderer. Rationale: after step 3.2.4 the
@@ -222,7 +222,7 @@ TUI adapter, but the library boundary still leaks the GitHub transport model:
 4. `tests/template_reply_drafting_bdd.rs` and
    `tests/features/template_reply_drafting.feature` prove the TUI adapter still
    renders inline reply templates and surfaces inline errors.
-5. `docs/frankie-design.md` currently documents ADR-005 by saying the shared
+5. `docs/frankie-design.md` currently documents ADR 0005 by saying the shared
    renderer lives under `frankie::reply_template`, but it does not yet say the
    renderer contract is DTO-based.
 
@@ -319,11 +319,11 @@ remains unchanged.
 
 Finish by aligning repository documentation with the new contract.
 
-1. Update `docs/frankie-design.md` in the ADR-005 section so it states that
+1. Update `docs/frankie-design.md` in the ADR 0005 section so it states that
    reply templating now renders from `ReplyTemplateContext`, with TUI reply
    drafting acting as the `ReviewComment` adapter.
 2. Record the no-new-CLI rationale for this roadmap step in the design notes,
-   because ADR-005 expects either a CLI surface or an explicit rationale when
+   because ADR 0005 expects either a CLI surface or an explicit rationale when
    CLI is not applicable.
 3. Review `docs/users-guide.md`.
    - If no user-visible reply-drafting behaviour, wording, or configuration has
@@ -365,5 +365,5 @@ Evidence to capture in the implementation turn:
 - the integration test importing the DTO from `frankie`;
 - the adapter regression test proving `ReviewComment` still produces the same
   rendered output through TUI;
-- the updated ADR-005 design note; and
+- the updated ADR 0005 design note; and
 - the roadmap entry showing `3.2.4` marked done only after all gates pass.

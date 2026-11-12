@@ -39,7 +39,7 @@ concerns belong to roadmap items 2.2.6 and 2.2.7 respectively.
 - The type must live in `src/time_travel/`, not under `src/tui/`. A public
   re-export of a type still defined under `src/tui/` does not satisfy the
   library-first intent of
-  `docs/adr-005-cross-surface-library-first-delivery.md`.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 - Do not widen the scope to orchestration extraction. This item moves the state
   container and its read accessors; it does not move handler logic, `Cmd`
   wrappers, or `spawn_blocking` calls.

@@ -48,8 +48,8 @@ limit, and proves the change with tests.
   `src/config/mod.rs`.
 - The limit must be available as a public library value so that roadmap item
   2.2.7 (orchestration extraction) and external hosts can use it. Per
-  `docs/adr-005-cross-surface-library-first-delivery.md`, core behaviour must
-  live in shared library modules, not solely in TUI code.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`, core behaviour
+  must live in shared library modules, not solely in TUI code.
 - Every new Rust module must begin with a `//!` module comment.
 - No single source file may exceed 400 lines.
 - Unit tests must use `rstest`.

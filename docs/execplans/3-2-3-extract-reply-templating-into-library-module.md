@@ -37,9 +37,9 @@ Success is observable when:
 
 ## Constraints
 
-- Follow `docs/adr-005-cross-surface-library-first-delivery.md`: the template
-  renderer must live in a shared library module first, with the TUI reduced to
-  an adapter.
+- Follow `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`: the
+  template renderer must live in a shared library module first, with the TUI
+  reduced to an adapter.
 - Keep this step scoped to extraction and publication of the renderer. Do not
   fold step 3.2.4's data transfer object (DTO) migration or step 3.2.5's
   default-template export into the same change unless a small additive seam is
@@ -108,7 +108,7 @@ Success is observable when:
 
 ## Progress
 
-- [x] (2026-03-13 00:00Z) Read the roadmap entry, ADR-005, the existing
+- [x] (2026-03-13 00:00Z) Read the roadmap entry, ADR 0005, the existing
       reply-drafting ExecPlan, the current `src/tui/state/reply_draft.rs`
       implementation, and the referenced testing guidance.
 - [x] (2026-03-13 00:00Z) Drafted this ExecPlan for roadmap step 3.2.3.
@@ -161,14 +161,14 @@ Success is observable when:
   blur acceptance boundaries and make regressions harder to isolate.
 - Decision (2026-03-13): prove the public API through both module-local tests
   and an external integration test. Rationale: unit tests alone do not prove
-  that the symbol is reachable from the library surface intended by ADR-005.
+  that the symbol is reachable from the library surface intended by ADR 0005.
 - Decision (2026-03-13): treat "escaping" as two separate guarantees:
   template authors can emit literal braces intentionally, and comment data that
   contains template syntax is rendered as data rather than recursively
   re-evaluated. Rationale: that is the narrowest interpretation that covers
   real user risk with MiniJinja-based templates.
 - Decision (2026-03-13): keep roadmap step 3.2.3 focused on extraction and
-  parity, not on introducing a new CLI surface. Rationale: ADR-005 allows a
+  parity, not on introducing a new CLI surface. Rationale: ADR 0005 allows a
   library-first step to land before the later adapter-consolidation step 3.2.6,
   and this roadmap item's acceptance only requires a public library API plus
   tests.
@@ -240,8 +240,8 @@ The new reply-template module should follow the same pattern:
 
 The following reference documents should guide implementation choices:
 
-- `docs/adr-005-cross-surface-library-first-delivery.md` for the library-first
-  requirement;
+- `docs/adrs/adr-0005-cross-surface-library-first-delivery.md` for the
+  library-first requirement;
 - `docs/execplans/3-2-1-template-based-reply-drafting.md` for the original TUI
   contract;
 - `docs/rust-testing-with-rstest-fixtures.md` for fixture and parametrization
@@ -363,7 +363,7 @@ Required documentation changes:
    - add or update a short section describing the new
      `reply_template` shared module;
    - record that TUI reply drafting now consumes a library-first renderer per
-     ADR-005;
+     ADR 0005;
    - note the public API path and the fact that step 3.2.4 will later replace
      `ReviewComment` with a DTO.
 2. `docs/users-guide.md`

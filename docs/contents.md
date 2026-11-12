@@ -17,9 +17,6 @@
   behaviour, configuration, and operational expectations.
 - [Developers' guide](developers-guide.md) explains maintainer workflows,
   build and test commands, and internal development conventions.
-- [ADR 011: Rust build standard](adr-011-rust-build-standard.md) records why
-  development builds use the fast flags while coverage and release builds stay
-  off them.
 - [Ortho configuration users' guide](ortho-config-users-guide.md) explains the
   Ortho configuration surface used by Frankie.
 
@@ -50,26 +47,29 @@
 
 ## Decision records
 
-- [ADR 001: Incremental sync for review comments](adr-001-incremental-sync-for-review-comments.md)
+- [ADR 0001: Incremental sync for review comments](adrs/adr-0001-incremental-sync-for-review-comments.md)
   records the accepted review comment synchronization approach.
-- [ADR 002: Codex execution stream and transcript model](adr-002-codex-execution-stream-and-transcript-model.md)
+- [ADR 0002: Codex execution stream and transcript model](adrs/adr-0002-codex-execution-stream-and-transcript-model.md)
   records the execution-stream and transcript architecture.
-- [ADR 003: Session resumption for interrupted Codex runs](adr-003-session-resumption-for-interrupted-codex-runs.md)
+- [ADR 0003: Session resumption for interrupted Codex runs](adrs/adr-0003-session-resumption-for-interrupted-codex-runs.md)
   records session-resumption behaviour.
-- [ADR 004: Inline template-based reply drafting](adr-004-inline-template-based-reply-drafting.md)
+- [ADR 0004: Inline template-based reply drafting](adrs/adr-0004-inline-template-based-reply-drafting.md)
   records reply drafting through inline templates.
-- [ADR 005: Cross-surface library-first delivery](adr-005-cross-surface-library-first-delivery.md)
+- [ADR 0005: Cross-surface library-first delivery](adrs/adr-0005-cross-surface-library-first-delivery.md)
   records the library-first delivery strategy.
-- [ADR 006: AI rewrite preview and fallback contract](adr-006-ai-rewrite-preview-and-fallback-contract.md)
+- [ADR 0006: AI rewrite preview and fallback contract](adrs/adr-0006-ai-rewrite-preview-and-fallback-contract.md)
   records rewrite preview and fallback behaviour.
-- [ADR 007: Automated resolution verification semantics and persistence](adr-007-automated-resolution-verification-semantics-and-persistence.md)
+- [ADR 0007: Automated resolution verification semantics and persistence](adrs/adr-0007-automated-resolution-verification-semantics-and-persistence.md)
   records resolution verification semantics and storage.
-- [ADR 008: PR discussion summary contract](adr-008-pr-discussion-summary-contract.md)
+- [ADR 0008: PR discussion summary contract](adrs/adr-0008-pr-discussion-summary-contract.md)
   records pull request discussion summary contracts.
-- [ADR 009: Review banner translation contract](adr-009-review-banner-translation-contract.md)
+- [ADR 0009: Review banner translation contract](adrs/adr-0009-review-banner-translation-contract.md)
   records review banner translation contracts.
-- [ADR 010: Close review adapter capability gap](adr-010-close-review-adapter-capability-gap.md)
+- [ADR 0010: Close review adapter capability gap](adrs/adr-0010-close-review-adapter-capability-gap.md)
   records the close-review adapter decision.
+- [ADR 0011: Adopt the Rust build standard for development builds](adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md)
+  records why development builds use the fast flags while coverage and release
+  builds stay off them.
 
 ## Plans
 

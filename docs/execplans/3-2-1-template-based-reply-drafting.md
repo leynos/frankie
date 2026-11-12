@@ -194,8 +194,8 @@ Success is observable when:
 - `src/config/mod.rs` defines `FrankieConfig` and ortho-config mapping from
   CLI/env/config-file layers.
 - `docs/users-guide.md` contains keyboard tables and Codex/TUI behaviour docs.
-- `docs/frankie-design.md` tracks architecture decision records (ADR-001-004),
-  including the new reply-drafting decision.
+- `docs/frankie-design.md` tracks architectural decision records (ADRs)
+  0001–0004, including the new reply-drafting decision.
 - `docs/roadmap.md` contains the unchecked item for this step under:
   `Phase 3 -> Step: Template and reply automation`.
 

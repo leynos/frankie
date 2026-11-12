@@ -1,4 +1,4 @@
-# Architectural decision record (ADR) 002: Codex execution stream and transcript model
+# Architectural decision record (ADR) 0002: Codex execution stream and transcript model
 
 ## Status
 

@@ -1,4 +1,4 @@
-# ADR-008: PR discussion summary contract
+# Architectural decision record (ADR) 0008: PR discussion summary contract
 
 ## Status
 
@@ -89,7 +89,7 @@ template overrides under
 
 ### Amendment: host-neutral review-view references (2026-06-23)
 
-Roadmap item 3.3.3 and ADR-010 refined the original navigation contract. The
+Roadmap item 3.3.3 and ADR 0010 refined the original navigation contract. The
 shared summary data transfer object (DTO) no longer exposes TUI-specific type
 names or URI rendering behaviour. `DiscussionSummaryItem` carries a
 `ReviewViewRef`, and URI rendering lives in `FrankieDeepLink` as an

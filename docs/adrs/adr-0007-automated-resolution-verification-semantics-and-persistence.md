@@ -1,4 +1,4 @@
-# ADR-007: Automated resolution verification semantics and persistence
+# Architectural decision record (ADR) 0007: Automated resolution verification semantics and persistence
 
 ## Status
 

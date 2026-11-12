@@ -1,4 +1,4 @@
-# Architectural decision record (ADR) 011: Adopt the Rust build standard for development builds
+# Architectural decision record (ADR) 0011: Adopt the Rust build standard for development builds
 
 ## Status
 

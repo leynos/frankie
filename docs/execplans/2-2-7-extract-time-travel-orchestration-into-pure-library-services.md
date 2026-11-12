@@ -34,14 +34,14 @@ gate passes.
 
 This slice is intentionally about shared orchestration, not new user-facing
 workflow. No new standalone command-line interface (CLI) mode is expected. Per
-ADR-005, that exception must be documented explicitly rather than assumed.
+ADR 0005, that exception must be documented explicitly rather than assumed.
 
 ## Relevant documentation and skills
 
 The implementer should keep these repository documents open while working:
 
 - `docs/roadmap.md` for the acceptance criteria and dependency chain.
-- `docs/adr-005-cross-surface-library-first-delivery.md` for the
+- `docs/adrs/adr-0005-cross-surface-library-first-delivery.md` for the
   library-first delivery contract.
 - `docs/frankie-design.md` for the existing time-travel design notes and the
   ADR index.
@@ -70,7 +70,7 @@ needed once the public API shape is being finalized.
 
 - Keep the shared orchestration in `src/time_travel/`, not under `src/tui/`.
   A public re-export of TUI-defined orchestration does not satisfy
-  `docs/adr-005-cross-surface-library-first-delivery.md`.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 - The shared surface must not expose or depend on `bubbletea_rs::Cmd`,
   `bubbletea_rs::Model`, `tokio::task::spawn_blocking`, or any TUI
   `OnceLock`-backed storage helper. Those concerns remain in the adapter layer.
@@ -148,7 +148,7 @@ needed once the public API shape is being finalized.
 ## Progress
 
 - [x] (2026-04-16 00:00Z) Read `docs/roadmap.md`,
-      `docs/adr-005-cross-surface-library-first-delivery.md`,
+      `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`,
       `docs/frankie-design.md`, `docs/users-guide.md`, the adjacent
       time-travel ExecPlans, and the referenced testing guidance.
 - [x] (2026-04-16 00:00Z) Confirmed the current baseline: initial load already

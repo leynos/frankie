@@ -9,7 +9,9 @@ not an exhaustive file listing.
 ├── .codescene/
 ├── .github/
 ├── docs/
-│   └── execplans/
+│   ├── adrs/
+│   ├── execplans/
+│   └── rfcs/
 ├── migrations/
 ├── src/
 │   ├── ai/
@@ -38,7 +40,9 @@ _Figure 1: Major repository paths and documentation, source, and test areas._
 | `.codescene/`               | Stores CodeScene code-health rules for repository analysis.                                                                                                                                                      |
 | `.github/`                  | Stores GitHub automation such as Dependabot and workflow configuration.                                                                                                                                          |
 | `docs/`                     | Stores long-lived project documentation, guides, design documents, ADRs, and reference material.                                                                                                                 |
+| `docs/adrs/`                | Stores architectural decision records named with four-digit numbers and title slugs.                                                                                                                             |
 | `docs/execplans/`           | Stores living execution plans for non-trivial implementation work.                                                                                                                                               |
+| `docs/rfcs/`                | Is the designated location for future RFCs; the repository currently has no RFC files.                                                                                                                           |
 | `migrations/`               | Stores database migration files. Migration names use timestamped directories and should remain append-only after publication.                                                                                    |
 | `src/`                      | Stores the Rust application and library source code. Feature modules are grouped by domain responsibility.                                                                                                       |
 | `src/ai/`                   | Contains AI integration logic, Codex process handling, comment rewriting, and pull request discussion summaries.                                                                                                 |

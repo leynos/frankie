@@ -1046,4 +1046,5 @@ the configuration's flags unless `RUSTFLAGS` is assigned, for example
 `RUSTFLAGS="" cargo build --release`.
 
 Cranelift is not adopted; the developers' guide records the reason. See
-[ADR 011](adr-011-rust-build-standard.md) for the reasoning.
+[ADR 0011](adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md)
+for the reasoning.
