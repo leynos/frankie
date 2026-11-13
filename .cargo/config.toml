@@ -16,6 +16,10 @@
 [profile.dev]
 incremental = false
 debug = 0
+# Cranelift trades runtime performance for compile speed, so it applies to the
+# dev profile only. Release builds keep LLVM, and coverage selects LLVM
+# explicitly.
+codegen-backend = "cranelift"
 
 [build]
 rustflags = ["-Zthreads=8"]
@@ -28,6 +32,10 @@ rustflags = ["-Zthreads=8", "-Clink-arg=-fuse-ld=mold"]
 
 # Native Cargo metadata setting for dated nightlies from 2026-07-31 (rule
 # `rust-dev-build-footprint`, DF-003): Cargo coordinates metadata output itself.
-# Never use raw rustc metadata flags; they broke build scripts.
+# Never use raw rustc metadata flags; they broke build scripts. The same table
+# enables the codegen-backend key that selects Cranelift for development
+# builds. Stable Cargo refuses both, so only the pinned nightly may read this
+# file.
 [unstable]
 embed-metadata = false
+codegen-backend = true

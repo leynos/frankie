@@ -214,21 +214,27 @@ clearing an inherited `CARGO_ENCODED_RUSTFLAGS`, which Cargo ranks above
 takes none of the development standard (no parallel frontend, no `mold` linker
 flag and no inherited `RUSTFLAGS`). The build-standard contract reads that
 isolated command as exempt from the restatement clauses, and ADR 0011 records
-the exception. `tests/whitaker_isolation_contract.rs` reads the real
-`make -n lint` output and fails unless Whitaker clears the encoded flags and
-assigns the literal `RUSTFLAGS="-D warnings"`.
+the exception. The command also selects the LLVM backend
+(`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`), because the installer-managed
+toolchain does not take the repository's Cranelift default, and puts
+`~/.local/bin` first on `PATH` so the installed `whitaker` is the one that runs.
 
 ### Cranelift
 
-Exception: Cranelift is not the development-profile backend. The repository pins
-`nightly-2026-10-30` (no Cranelift measurement was taken on it, and the
-exception has no deferral date: it holds while the release workflow builds on
-stable), but the release workflow (`cross +stable build --release`) builds on a
-stable toolchain against `.cargo/config.toml`, and stable Cargo refuses a
-`[profile.dev] codegen-backend` key ("config profile `dev` is not valid"), so
-selecting the backend would break that build (recorded 2026-09-29). That build
-assigns `RUSTFLAGS`, so the nightly-only `-Zthreads` flag never reaches it.
-Revisit if that build moves to the pinned nightly.
-`tests/release_workflow_contract.rs` holds that workflow to it: every step that
-runs Cargo or `cross` assigns a `RUSTFLAGS` naming neither `-Zthreads` nor the
-`mold` linker flag.
+Cranelift is the default backend for development builds, set in
+`.cargo/config.toml` (`[profile.dev] codegen-backend = "cranelift"`) on the
+nightly pinned in `rust-toolchain.toml`. The release workflow builds on the
+same pinned nightly with LLVM, because the dev profile does not reach the
+release profile. Coverage selects LLVM too, since Cranelift cannot instrument
+coverage. The full suite (1040 tests under nextest) passes under Cranelift.
+
+### Minimum supported Rust version
+
+`Cargo.toml` declares `rust-version = "1.89.0"`, the lowest stable toolchain on
+which `cargo check --all-targets --locked` passes. The `msrv` job in `ci.yml`
+runs that check from outside the checkout (`cd "$RUNNER_TEMP"` with
+`--manifest-path`). Stable Cargo refuses the nightly-only keys in
+`.cargo/config.toml` (`-Zthreads` and the backend selection), and it discovers
+that file only from the working directory upward, so a check run from elsewhere
+reads none of it. Raise `rust-version` only when a dependency requires it, and
+never run the check from inside the checkout.

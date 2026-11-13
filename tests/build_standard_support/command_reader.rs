@@ -17,7 +17,10 @@ use super::make::{Assignment, commands_from};
 #[case::clippy("cargo clippy --all-targets\n", Assignment::Bare("cargo clippy --all-targets".to_owned()))]
 #[case::typecheck("cargo check --workspace\n", Assignment::Bare("cargo check --workspace".to_owned()))]
 #[case::whitaker("whitaker --all\n", Assignment::Bare("whitaker --all".to_owned()))]
-#[case::isolated_whitaker("RUSTFLAGS=\"-D warnings\" whitaker --all\n", Assignment::Unassigned)]
+#[case::isolated_whitaker(
+    "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" whitaker --all\n",
+    Assignment::Unassigned
+)]
 #[case::llvm_cov("cargo llvm-cov nextest\n", Assignment::Bare("cargo llvm-cov nextest".to_owned()))]
 #[case::version_probe("cargo nextest --version\n", Assignment::Unassigned)]
 #[case::formatter("cargo fmt --all --check\n", Assignment::Unassigned)]
@@ -35,6 +38,22 @@ fn the_command_reader_tells_a_bare_tool_from_an_exempt_command(
         Ok(())
     } else {
         Err(format!("`{stdout}` was read as {read:?}"))
+    }
+}
+
+/// Scenario: a Cargo command that merely names `whitaker` in an argument, under the isolated
+/// Whitaker environment.
+///
+/// Invariant: only the executable decides the exemption, so the command stays held to the
+/// standard and is not read as unassigned.
+#[test]
+fn a_cargo_command_naming_whitaker_is_not_an_isolated_whitaker() -> Result<(), String> {
+    let stdout = "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" cargo test --target-dir whitaker\n";
+    let read = commands_from(stdout)?;
+    if read == [Assignment::Unassigned] {
+        Err(format!("`{stdout}` was exempted as Whitaker"))
+    } else {
+        Ok(())
     }
 }
 
