@@ -36,7 +36,6 @@ RUFF_VERSION ?= 0.15.12
 TYPOS_VERSION ?= 1.48.0
 TYPOS = $(UV) tool run typos@$(TYPOS_VERSION)
 WORKFLOW_CONTRACTS = tests/workflow_contracts
-WHITAKER ?= whitaker
 
 # The development build standard (concordat rule `rust-build-defaults`):
 # the parallel rustc frontend and, on Linux, the mold linker. An assigned
@@ -91,7 +90,7 @@ interrogate: ## Enforce complete Python docstring coverage
 lint: interrogate ## Run Clippy and the Whitaker Dylint suite with warnings denied
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(STANDARD_RUSTFLAGS)" $(CARGO) doc --no-deps
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(STANDARD_RUSTFLAGS)" $(CARGO) clippy $(CLIPPY_FLAGS)
-	unset CARGO_ENCODED_RUSTFLAGS && RUSTFLAGS="-D warnings" $(WHITAKER) --all -- $(CARGO_FLAGS)
+	unset CARGO_ENCODED_RUSTFLAGS && PATH="$${XDG_BIN_HOME:-$(HOME)/.local/bin}:$(PATH)" CARGO_UNSTABLE_CODEGEN_BACKEND=true CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS="-D warnings" whitaker --all -- $(CARGO_FLAGS)
 
 fmt: ## Format Rust and Markdown sources
 	$(CARGO) fmt --all

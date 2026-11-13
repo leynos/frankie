@@ -33,8 +33,8 @@ artefacts also need a baseline that the fast flags would disturb.
   and CI step that assigns `RUSTFLAGS` without them.
 - Restate the flags in each recipe and step, held by a contract test. This is
   the option taken.
-- Adopt Cranelift for development builds. The developers' guide records why
-  this repository does not.
+- Adopt Cranelift for development builds. The consequences below record that
+  this repository now does.
 
 ## Decision outcome
 
@@ -44,9 +44,9 @@ flags into each development recipe, keeping the caller's own `RUSTFLAGS`.
 Coverage assigns its own flags and ignores the caller's. The release recipe
 keeps the caller's flags and names neither fast flag, so it ships from the
 platform linker; a direct `cargo build --release` takes the configuration's
-flags unless `RUSTFLAGS` is assigned. Cranelift is not adopted, because stable
-Cargo, which the release workflow builds with, refuses the backend key; the
-developers' guide records the reason.
+flags unless `RUSTFLAGS` is assigned. Cranelift was not adopted at first,
+because stable Cargo, which the release workflow then built with, refused the
+backend key; the consequences below record the 2026-11-13 change.
 
 `tests/build_standard_contract.rs` reads the Cargo configuration sources and
 the commands `make -n` prints for each target, and the `setup-rust` steps of
@@ -58,9 +58,9 @@ the workflows, so a flag lost through a recipe or workflow edit fails there.
   must be GCC 12.1 or newer, or clang.
 - A change to a recipe or workflow step that assigns `RUSTFLAGS` must restate
   the flags, and the contract says which clause fails when it does not.
-- Revisit Cranelift if the release build (`cross +stable build --release`)
-  moves to the pinned nightly: stable Cargo refuses a
-  `[profile.dev] codegen-backend` key, which is why it is not adopted.
+- Addendum, 2026-11-13: the release build moved from `cross +stable` to the
+  pinned nightly, so Cranelift is now the development default (see the
+  developers' guide, "Cranelift").
 
 ## Addendum, 2026-10-31: Whitaker is isolated from the standard
 

@@ -57,19 +57,20 @@ jobs:
             ext: ""
     steps:
       - uses: actions/checkout@v7
+      # No toolchain input: the action installs the nightly that
+      # rust-toolchain.toml pins, and cross builds with it.
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30
         with:
-          toolchain: stable
           profile: minimal
-          override: true
       - name: Cache cross binary
         uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cross
           key: cross-${{ runner.os }}
       - name: Install cross
-        # Installing from the checkout discovers .cargo/config.toml, whose nightly-only
-        # `-Zthreads` flag stable rustc refuses; an assigned RUSTFLAGS displaces it.
+        # Installing from the checkout discovers .cargo/config.toml; an assigned
+        # RUSTFLAGS displaces its `rustflags` tables, so cross builds without
+        # the development standard's flags.
         env:
           RUSTFLAGS: -D warnings
         run: cargo install cross --git https://github.com/cross-rs/cross
@@ -84,13 +85,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
       - name: Build release binary
-        # A release is built with the platform linker and without the build
-        # standard's nightly-only flags: an assigned RUSTFLAGS displaces every
-        # `rustflags` table in .cargo/config.toml (cross passes it into the
-        # container). The value is what the toolchain action exports anyway.
+        # The release builds on the nightly pinned in rust-toolchain.toml with
+        # the LLVM backend: [profile.dev]'s Cranelift setting does not reach the
+        # release profile. It takes the platform linker and not the build
+        # standard's flags: an assigned RUSTFLAGS displaces every `rustflags`
+        # table in .cargo/config.toml (cross passes it into the container).
         env:
           RUSTFLAGS: -D warnings
-        run: cross +stable build --release --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }}
       - name: Prepare artifact
         run: |
           mkdir -p artifacts/${{ matrix.os }}-${{ matrix.arch }}

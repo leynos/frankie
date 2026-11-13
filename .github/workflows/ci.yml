@@ -44,6 +44,8 @@ jobs:
         run: make workflow-contracts
       - name: Install Whitaker Dylint suite
         uses: leynos/shared-actions/.github/actions/install-whitaker@fc0e10220207b951bf693aba2ce4f9dafc1a0206
+        with:
+          cranelift: true
       - name: Install uv for the docstring-coverage gate
         # `make lint` runs interrogate through `uv tool run`.
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
@@ -98,3 +100,28 @@ jobs:
           format: lcov
           with-ratchet: 'true'
           publish-artefact: 'false'
+
+  msrv:
+    # The declared `rust-version` must still build every target. The check runs
+    # on that stable toolchain from outside the checkout, because stable Cargo
+    # refuses the nightly-only keys in `.cargo/config.toml` and only discovers
+    # that file from the working directory upward.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Install the declared MSRV toolchain
+        run: |
+          msrv="$(sed -n 's/^rust-version *= *"\(.*\)"/\1/p' Cargo.toml | head -n 1)"
+          test -n "$msrv"
+          echo "MSRV=${msrv}" >> "$GITHUB_ENV"
+          rustup toolchain install "$msrv" --profile minimal --no-self-update
+      - name: Check all targets on the MSRV
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/msrv-target
+        run: |
+          cd "$RUNNER_TEMP"
+          cargo "+${MSRV}" check --all-targets --locked --manifest-path "$GITHUB_WORKSPACE/Cargo.toml"

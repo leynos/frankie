@@ -147,12 +147,14 @@ pub fn commands_with_text(stdout: &str) -> Result<Vec<Command>, String> {
         .collect()
 }
 
-/// Returns whether a command is Whitaker under the literal warning-only `RUSTFLAGS` boundary.
+/// Returns whether a command is Whitaker under the literal warning-only `RUSTFLAGS` boundary, with
+/// an explicit LLVM backend so it does not inherit the repository's Cranelift default.
 fn is_isolated_whitaker(command: &str) -> bool {
-    command
-        .strip_prefix("RUSTFLAGS=\"-D warnings\" ")
-        .and_then(|rest| rest.split_whitespace().next())
-        .is_some_and(|binary| binary.rsplit('/').next() == Some("whitaker"))
+    command.contains("RUSTFLAGS=\"-D warnings\"")
+        && command.contains("CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm")
+        && command
+            .split_whitespace()
+            .any(|word| word.rsplit('/').next() == Some("whitaker"))
 }
 
 /// A Makefile target name, typed so a runner takes a target and not just any text.

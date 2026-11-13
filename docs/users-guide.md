@@ -1045,6 +1045,7 @@ artefact links with the platform linker. A bare `cargo build --release` takes
 the configuration's flags unless `RUSTFLAGS` is assigned, for example
 `RUSTFLAGS="" cargo build --release`.
 
-Cranelift is not adopted; the developers' guide records the reason. See
+Cranelift is the default backend for development builds; the developers' guide
+explains how release and coverage builds keep LLVM. See
 [ADR 0011](adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md)
 for the reasoning.
