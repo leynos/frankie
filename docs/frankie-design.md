@@ -461,30 +461,32 @@ classDiagram
 ### 1.2.6 Architecture decision record index
 
 The canonical set of Architectural Decision Records (ADRs) is maintained as
-standalone `adr-NNN-*.md` files in `docs/`, following
+`adrs/adr-NNNN-*.md` files under `docs/`, following
 `docs/documentation-style-guide.md`. Section 5.3.6 provides an ADR index within
 this design document for cross-references.
 
-- [ADR-001](adr-001-incremental-sync-for-review-comments.md): Incremental sync
-  for review comments.
-- [ADR-002](adr-002-codex-execution-stream-and-transcript-model.md): Codex
-  execution stream and transcript model.
-- [ADR-003](adr-003-session-resumption-for-interrupted-codex-runs.md): Session
-  resumption for interrupted Codex runs.
-- [ADR-004](adr-004-inline-template-based-reply-drafting.md): Inline
+- [ADR 0001](adrs/adr-0001-incremental-sync-for-review-comments.md):
+  Incremental sync for review comments.
+- [ADR 0002](adrs/adr-0002-codex-execution-stream-and-transcript-model.md):
+  Codex execution stream and transcript model.
+- [ADR 0003](adrs/adr-0003-session-resumption-for-interrupted-codex-runs.md):
+  Session resumption for interrupted Codex runs.
+- [ADR 0004](adrs/adr-0004-inline-template-based-reply-drafting.md): Inline
   template-based reply drafting.
-- [ADR-005](adr-005-cross-surface-library-first-delivery.md): Cross-surface,
-  library-first delivery contract.
-- [ADR-006](adr-006-ai-rewrite-preview-and-fallback-contract.md): AI rewrite
-  preview and fallback contract.
-- [ADR-007](adr-007-automated-resolution-verification-semantics-and-persistence.md):
+- [ADR 0005](adrs/adr-0005-cross-surface-library-first-delivery.md):
+  Cross-surface, library-first delivery contract.
+- [ADR 0006](adrs/adr-0006-ai-rewrite-preview-and-fallback-contract.md): AI
+  rewrite preview and fallback contract.
+- [ADR 0007](adrs/adr-0007-automated-resolution-verification-semantics-and-persistence.md):
   Automated resolution verification semantics and persistence.
-- [ADR-008](adr-008-pr-discussion-summary-contract.md): PR discussion summary
-  contract.
-- [ADR-009](adr-009-review-banner-translation-contract.md): Review banner
+- [ADR 0008](adrs/adr-0008-pr-discussion-summary-contract.md): PR discussion
+  summary contract.
+- [ADR 0009](adrs/adr-0009-review-banner-translation-contract.md): Review banner
   translation contract.
-- [ADR-010](adr-010-close-review-adapter-capability-gap.md): Close review
+- [ADR 0010](adrs/adr-0010-close-review-adapter-capability-gap.md): Close review
   adapter capability gap.
+- [ADR 0011](adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md):
+  Adopt the Rust build standard for development builds.
 
 ## 1.3 Scope
 
@@ -2941,32 +2943,32 @@ flowchart LR
     N --> W
 ```
 
-#### Architecture decision record (ADR-001): incremental sync for review comments
+#### Architectural decision record (ADR) 0001: Incremental sync for review comments
 
 Canonical record:
-[docs/adr-001-incremental-sync-for-review-comments.md](adr-001-incremental-sync-for-review-comments.md).
+[docs/adrs/adr-0001-incremental-sync-for-review-comments.md](adrs/adr-0001-incremental-sync-for-review-comments.md).
 
-#### Architecture decision record (ADR-002): Codex execution stream and transcript model
-
-Canonical record:
-[docs/adr-002-codex-execution-stream-and-transcript-model.md](adr-002-codex-execution-stream-and-transcript-model.md).
-
-#### Architecture decision record (ADR-003): Session resumption for interrupted Codex runs
+#### Architectural decision record (ADR) 0002: Codex execution stream and transcript model
 
 Canonical record:
-[docs/adr-003-session-resumption-for-interrupted-codex-runs.md](adr-003-session-resumption-for-interrupted-codex-runs.md).
+[docs/adrs/adr-0002-codex-execution-stream-and-transcript-model.md](adrs/adr-0002-codex-execution-stream-and-transcript-model.md).
 
-#### Architecture decision record (ADR-004): inline template-based reply drafting
-
-Canonical record:
-[docs/adr-004-inline-template-based-reply-drafting.md](adr-004-inline-template-based-reply-drafting.md).
-
-#### Architecture decision record (ADR-005): cross-surface, library-first delivery
+#### Architectural decision record (ADR) 0003: Session resumption for interrupted Codex runs
 
 Canonical record:
-[docs/adr-005-cross-surface-library-first-delivery.md](adr-005-cross-surface-library-first-delivery.md).
+[docs/adrs/adr-0003-session-resumption-for-interrupted-codex-runs.md](adrs/adr-0003-session-resumption-for-interrupted-codex-runs.md).
 
-The reply-template contract required by ADR-005 now lives at the canonical
+#### Architectural decision record (ADR) 0004: Inline template-based reply drafting
+
+Canonical record:
+[docs/adrs/adr-0004-inline-template-based-reply-drafting.md](adrs/adr-0004-inline-template-based-reply-drafting.md).
+
+#### Architectural decision record (ADR) 0005: Cross-surface, library-first delivery
+
+Canonical record:
+[docs/adrs/adr-0005-cross-surface-library-first-delivery.md](adrs/adr-0005-cross-surface-library-first-delivery.md).
+
+The reply-template contract required by ADR 0005 now lives at the canonical
 `frankie::reply_template` paths, including `render_reply_template`,
 `ReplyTemplateContext`, `ReplyTemplateError`, `DEFAULT_REPLY_TEMPLATES`, and
 `default_reply_templates()`. These items are also re-exported at the crate root
@@ -2986,36 +2988,41 @@ proves `ReviewComment` to DTO normalization preserves existing defaults, and
 `tests/template_reply_drafting_bdd.rs`, which proves the adapter still produces
 the same rendered output and user-facing error messages.
 
-#### Architecture decision record (ADR-006): AI rewrite preview and fallback contract
+#### Architectural decision record (ADR) 0006: AI rewrite preview and fallback contract
 
 Canonical record:
-[docs/adr-006-ai-rewrite-preview-and-fallback-contract.md](adr-006-ai-rewrite-preview-and-fallback-contract.md).
+[docs/adrs/adr-0006-ai-rewrite-preview-and-fallback-contract.md](adrs/adr-0006-ai-rewrite-preview-and-fallback-contract.md).
 
-#### Architecture decision record (ADR-007): automated resolution verification semantics and persistence
-
-Canonical record:
-[docs/adr-007-automated-resolution-verification-semantics-and-persistence.md](adr-007-automated-resolution-verification-semantics-and-persistence.md).
-
-#### Architecture decision record (ADR-008): PR discussion summary contract
+#### Architectural decision record (ADR) 0007: Automated resolution verification semantics and persistence
 
 Canonical record:
-[docs/adr-008-pr-discussion-summary-contract.md](adr-008-pr-discussion-summary-contract.md).
+[docs/adrs/adr-0007-automated-resolution-verification-semantics-and-persistence.md](adrs/adr-0007-automated-resolution-verification-semantics-and-persistence.md).
 
-#### Architecture decision record (ADR-009): review banner translation contract
-
-Canonical record:
-[docs/adr-009-review-banner-translation-contract.md](adr-009-review-banner-translation-contract.md).
-
-#### Architecture decision record (ADR-010): close review adapter capability gap
+#### Architectural decision record (ADR) 0008: PR discussion summary contract
 
 Canonical record:
-[docs/adr-010-close-review-adapter-capability-gap.md](adr-010-close-review-adapter-capability-gap.md).
+[docs/adrs/adr-0008-pr-discussion-summary-contract.md](adrs/adr-0008-pr-discussion-summary-contract.md).
 
-ADR-010 defines Frankie as an API-driven GitHub review adapter and context
+#### Architectural decision record (ADR) 0009: Review banner translation contract
+
+Canonical record:
+[docs/adrs/adr-0009-review-banner-translation-contract.md](adrs/adr-0009-review-banner-translation-contract.md).
+
+#### Architectural decision record (ADR) 0010: Close review adapter capability gap
+
+Canonical record:
+[docs/adrs/adr-0010-close-review-adapter-capability-gap.md](adrs/adr-0010-close-review-adapter-capability-gap.md).
+
+ADR 0010 defines Frankie as an API-driven GitHub review adapter and context
 engine for larger workflow owners. It closes the gap between the current
 TUI-biased public surface and the host-facing contracts required for
 thread-aware synchronization, time-travel context, verification, summary
 references, and review actions.
+
+#### Architectural decision record (ADR) 0011: Adopt the Rust build standard for development builds
+
+Canonical record:
+[docs/adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md](adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md).
 
 ## 5.4 Cross-cutting Concerns
 

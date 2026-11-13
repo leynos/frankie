@@ -1,4 +1,4 @@
-# Architectural decision record (ADR) 006: AI rewrite preview and fallback contract
+# Architectural decision record (ADR) 0006: AI rewrite preview and fallback contract
 
 ## Status
 

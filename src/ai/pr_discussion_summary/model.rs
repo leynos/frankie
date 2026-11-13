@@ -102,7 +102,7 @@ impl ReviewView {
 /// This type deliberately has no `Display` or URI rendering implementation:
 /// the `frankie://...` deep link is a presentation concern rendered by
 /// [`FrankieDeepLink`](super::FrankieDeepLink). Keeping rendering out of this
-/// DTO preserves the adapter boundary described by ADR-010.
+/// DTO preserves the adapter boundary described by ADR 0010.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReviewViewRef {
     /// Review comment the reference targets.

@@ -16,7 +16,7 @@ from inside the `frankie` crate.
 
 Roadmap item 3.2.5 required these defaults to become part of the **public
 library API** so that embedding hosts and alternative front ends (the
-"library-first" delivery contract from ADR-005) can read the same canonical
+"library-first" delivery contract from ADR 0005) can read the same canonical
 defaults Frankie uses, without copying string literals or depending on the TUI.
 
 After this change, a library consumer can write:
@@ -132,7 +132,7 @@ Thresholds that trigger escalation when breached.
       `coderabbit review --agent` reported 0 findings.
 - [x] (2026-06-22 16:23 Europe/Berlin) Stage D documentation edits: updated
       `docs/users-guide.md`, `docs/developers-guide.md`,
-      `docs/adr-004-inline-template-based-reply-drafting.md`,
+      `docs/adrs/adr-0004-inline-template-based-reply-drafting.md`,
       `docs/frankie-design.md`, and `docs/roadmap.md`.
 - [x] (2026-06-22 16:29 Europe/Berlin) Stage D deterministic gates: `make
       check-fmt`, `make lint`, `make test`, `make markdownlint`, and `make
@@ -184,7 +184,7 @@ Thresholds that trigger escalation when breached.
   Rationale: the defaults are domain policy (they contain the reply-template
   grammar `{{ file }}`, `{{ reviewer }}`, … and are validated by the module's
   own `render_reply_template`). `reply_template` already owns the public
-  reply-template contract (ADR-005) and is re-exported at the crate root.
+  reply-template contract (ADR 0005) and is re-exported at the crate root.
   `config`'s job is layered resolution (CLI/env/file precedence), not
   authorship of fallback content. The relocation also removes a real lateral
   adapter-to-adapter dependency: `src/tui/reply_draft_config.rs` currently
@@ -232,10 +232,10 @@ Thresholds that trigger escalation when breached.
   2026-06-18**: the proportionate test surface (rstest unit tests plus one
   integration parity assertion; no insta/proptest/rstest-bdd) is accepted.
 
-- Decision: Update ADR-004's consequences and the design doc rather than
+- Decision: Update ADR 0004's consequences and the design doc rather than
   writing a new ADR. Rationale: "built-in defaults are part of the public API"
-  is a *consequence* of ADR-004 (templates exist and are configurable) and
-  ADR-005 (library-first delivery), not a new hard-to-reverse architectural
+  is a *consequence* of ADR 0004 (templates exist and are configurable) and ADR
+  0005 (library-first delivery), not a new hard-to-reverse architectural
   choice. A standalone ADR per visibility bump would devalue the record.
   Date/Author: 2026-06-18, planning panel (Dinolump).
 
@@ -472,12 +472,12 @@ default tests still pass.
    it), and `config`/`tui` consume the public API rather than defining their
    own copies.
 
-3. `docs/adr-004-inline-template-based-reply-drafting.md`: add a "Public
+3. `docs/adrs/adr-0004-inline-template-based-reply-drafting.md`: add a "Public
    defaults" line to the Consequences section noting that the built-in defaults
    are now part of the public library API, owned by `frankie::reply_template`,
    and reference the relevant test files.
 
-4. `docs/frankie-design.md`: in the ADR-005 reply-template paragraph (the one
+4. `docs/frankie-design.md`: in the ADR 0005 reply-template paragraph (the one
    describing the shared `frankie::reply_template` module), add a sentence that
    the built-in defaults are now exposed publicly from that module.
 
@@ -703,11 +703,11 @@ Internal callers after the change:
   inward), `rust-router` then `arch-crate-design` (public surface, re-export
   layering) and `rust-types-and-apis` (const vs function contract),
   `rust-unit-testing` (rstest, googletest, pretty_assertions),
-  `arch-decision-records` (the ADR-004 update), `leta` (navigation and `refs`/
+  `arch-decision-records` (the ADR 0004 update), `leta` (navigation and `refs`/
   `rename`), `execplans` (this document).
-- Repository docs: `docs/adr-004-inline-template-based-reply-drafting.md`
+- Repository docs: `docs/adrs/adr-0004-inline-template-based-reply-drafting.md`
   (reply-drafting decision and templates),
-  `docs/adr-005-cross-surface-library-first-delivery.md` (library-first
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md` (library-first
   delivery), `docs/frankie-design.md` (ADR index and the reply-template module
   description), `docs/developers-guide.md`, `docs/users-guide.md`,
   `docs/rust-doctest-dry-guide.md` (keep doctests minimal),

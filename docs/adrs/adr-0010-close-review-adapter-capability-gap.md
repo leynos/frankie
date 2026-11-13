@@ -1,4 +1,4 @@
-# ADR-010: Close review adapter capability gap
+# Architectural decision record (ADR) 0010: Close review adapter capability gap
 
 ## Status
 
@@ -300,10 +300,10 @@ See `docs/frankie-design.md` § 6.6.1.3 for the full field-level invariant table
 
 ## References
 
-- [ADR-001: Incremental sync for review comments][^1]
-- [ADR-004: Inline template-based reply drafting][^2]
-- [ADR-005: Cross-surface library-first delivery][^3]
-- [ADR-008: Pull request discussion summary contract][^4]
+- [ADR 0001: Incremental sync for review comments][^1]
+- [ADR 0004: Inline template-based reply drafting][^2]
+- [ADR 0005: Cross-surface library-first delivery][^3]
+- [ADR 0008: Pull request discussion summary contract][^4]
 - [Roadmap][^5]
 - [Frankie design document][^6]
 - [`src/lib.rs`][^7] — crate root and public re-exports
@@ -313,13 +313,13 @@ See `docs/frankie-design.md` § 6.6.1.3 for the full field-level invariant table
 - [`src/tui/state/time_travel.rs`][^10] — TUI time-travel state (to be
   promoted)
 
-[^1]: <docs/adr-001-incremental-sync-for-review-comments.md>
-[^2]: <docs/adr-004-inline-template-based-reply-drafting.md>
-[^3]: <docs/adr-005-cross-surface-library-first-delivery.md>
-[^4]: <docs/adr-008-pr-discussion-summary-contract.md>
-[^5]: <docs/roadmap.md>
-[^6]: <docs/frankie-design.md>
-[^7]: <src/lib.rs>
-[^8]: <src/github/models/mod.rs>
-[^9]: <src/time_travel/mod.rs>
-[^10]: <src/tui/state/time_travel.rs>
+[^1]: [ADR 0001](adr-0001-incremental-sync-for-review-comments.md)
+[^2]: [ADR 0004](adr-0004-inline-template-based-reply-drafting.md)
+[^3]: [ADR 0005](adr-0005-cross-surface-library-first-delivery.md)
+[^4]: [ADR 0008](adr-0008-pr-discussion-summary-contract.md)
+[^5]: [Roadmap](../roadmap.md)
+[^6]: [Frankie design document](../frankie-design.md)
+[^7]: [`src/lib.rs`](../../src/lib.rs)
+[^8]: [`src/github/models/mod.rs`](../../src/github/models/mod.rs)
+[^9]: [`src/time_travel/mod.rs`](../../src/time_travel/mod.rs)
+[^10]: [`src/tui/state/time_travel.rs`](../../src/tui/state/time_travel.rs)

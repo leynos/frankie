@@ -1,4 +1,4 @@
-# ADR-009: review banner translation contract
+# Architectural decision record (ADR) 0009: Review banner translation contract
 
 ## Status
 
@@ -139,5 +139,5 @@ Adopt **Option A** with the following contract:
 ## References
 
 - `docs/review-banner-translation.md`
-- `docs/adr-005-cross-surface-library-first-delivery.md`
+- `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`
 - `docs/frankie-design.md`

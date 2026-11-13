@@ -47,7 +47,7 @@ Success is observable when:
 - Keep core summary logic in shared library modules under `src/ai/` or
   another non-TUI top-level module. TUI and CLI must remain thin adapters.
 - Follow the cross-surface contract in
-  `docs/adr-005-cross-surface-library-first-delivery.md`.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 - Preserve TUI Model-View-Update separation:
   - key mapping in `src/tui/input.rs`;
   - messages in `src/tui/messages.rs`;
@@ -181,7 +181,7 @@ Success is observable when:
   a clear error instead of fabricating a heuristic prose fallback. Rationale:
   summaries drive prioritization; a misleading fallback is worse than an
   explicit failure.
-- Decision (2026-03-06): record the final contract in a new ADR-008 in
+- Decision (2026-03-06): record the final contract in a new ADR 0008 in
   `docs/` and add it to the ADR index in `docs/frankie-design.md`. Rationale:
   the feature introduces a new public library model, a new severity taxonomy,
   and a new TUI-link contract.
@@ -208,7 +208,7 @@ This feature is implemented.
 - Behaviour is covered by `rstest` unit tests, `rstest-bdd` behavioural tests
   for the CLI and TUI, and `vidaimock` integration coverage for the real
   adapter's success and malformed-response paths.
-- Documentation now includes ADR-008, refreshed user-guide coverage for the
+- Documentation now includes ADR 0008, refreshed user-guide coverage for the
   CLI and TUI summary flows, and the roadmap marks step 3.3.2 done.
 - The `vidaimock` harness discovery was worth recording: disk template
   overrides under `--config-dir` are the effective contract for shaping
@@ -488,8 +488,8 @@ Implementation tasks:
 - add `vidaimock`-backed end-to-end tests for the real summary adapter,
   following the same local-mock pattern already used for AI rewrite;
 - record the final contract in a new
-  `docs/adr-008-pr-discussion-summary-contract.md`;
-- add ADR-008 to the index in `docs/frankie-design.md`;
+  `docs/adrs/adr-0008-pr-discussion-summary-contract.md`;
+- add ADR 0008 to the index in `docs/frankie-design.md`;
 - update `docs/users-guide.md` with:
   - the new CLI mode and example invocation;
   - TUI keybinding and navigation behaviour;

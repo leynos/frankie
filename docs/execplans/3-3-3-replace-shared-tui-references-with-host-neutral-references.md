@@ -13,9 +13,9 @@ Frankie's shared PR-discussion summary contract currently exposes a type named
 named `tui_link`. The name bakes one delivery surface — the Terminal User
 Interface (TUI) — into a data transfer object (DTO) that is meant to be
 host-neutral and consumed by the library, the Command Line Interface (CLI), and
-embedded hosts alike. ADR-010 identifies this as an architectural gap: "summary
-contracts currently expose `TuiViewLink`, which bakes one delivery surface into
-the shared model".
+embedded hosts alike. ADR 0010 identifies this as an architectural gap:
+"summary contracts currently expose `TuiViewLink`, which bakes one delivery
+surface into the shared model".
 
 After this change, a consumer of the `frankie` library will find a host-neutral
 `ReviewViewRef` value object (with an accompanying `ReviewView` enum) on each
@@ -59,7 +59,7 @@ escalation, not a workaround.
   any `tui`, `bubbletea_rs`, or other UI-framework type. Domain purity per the
   hexagonal `hexagonal-architecture` skill: the shared model is a driven-port
   value object; rendering is an adapter/presentation concern.
-- Public-surface change is intentional and sanctioned by ADR-010. This is a
+- Public-surface change is intentional and sanctioned by ADR 0010. This is a
   hard rename with NO deprecated alias (see Decision Log D2). The crate is
   `0.1.0` (pre-1.0) with no `cargo-public-api`/`cargo-semver-checks` gate, so
   no SemVer guard blocks the break.
@@ -101,7 +101,7 @@ escalation, not a workaround.
   helper is a presentation newtype in a clearly named `deep_link` submodule,
   not part of the DTO; the *canonical* shared format is the serde
   representation of `ReviewViewRef`, and the helper renders one projection.
-  This matches ADR-010 ("TUI deep links are rendered from those references as
+  This matches ADR 0010 ("TUI deep links are rendered from those references as
   an adapter concern") and its non-goal ("Making TUI deep links the canonical
   shared navigation format"). The helper is host-neutral (usable by any Frankie
   surface), not TUI-only. Lock the invariant in rustdoc: `ReviewViewRef`'s doc
@@ -115,8 +115,8 @@ escalation, not a workaround.
 - Risk: ADR amendment conflicts with the documentation style guide's ADR
   conventions. Severity: low. Likelihood: low. Mitigation: follow
   `docs/documentation-style-guide.md` §"Architectural decision records": keep
-  ADR-008 `Accepted`, bump its `Date`, and add a dated amendment note pointing
-  to ADR-010 and roadmap 3.3.3.
+  ADR 0008 `Accepted`, bump its `Date`, and add a dated amendment note pointing
+  to ADR 0010 and roadmap 3.3.3.
 
 ## Progress
 
@@ -137,7 +137,7 @@ escalation, not a workaround.
   behavioural assertions (feature files, component/service/VidaiMock tests)
   pass unchanged. On 2026-06-23, `make check-fmt`, `make lint`, and `make test`
   passed; the full test gate ran 882 tests, all passed, with one skipped.
-- [x] (Stage D, milestone M3) Update documentation: ADR-008 amendment,
+- [x] (Stage D, milestone M3) Update documentation: ADR 0008 amendment,
   `frankie-design.md`, `users-guide.md`, `developers-guide.md`. On 2026-06-23,
   `make markdownlint` and `make nixie` passed after these documentation edits.
 - [x] (Stage D, milestone M4) Mark roadmap 3.3.3 done; run the full gate suite
@@ -221,7 +221,7 @@ escalation, not a workaround.
   dereferenceable URI). `Ref` is also idiomatic in Rust for lightweight
   identifying value types. Date/Author: 2026-06-18, planning.
 - Decision (D2): hard rename with no deprecated alias. Rationale: user
-  selection; crate is `0.1.0` and ADR-010 explicitly sanctions the break; an
+  selection; crate is `0.1.0` and ADR 0010 explicitly sanctions the break; an
   alias would keep the TUI-coupled name alive in the public surface, defeating
   the purpose. Date/Author: 2026-06-18, user.
 - Decision (D3): the CLI keeps printing
@@ -256,10 +256,10 @@ escalation, not a workaround.
   code comment on `label()` will flag that `"detail"` is user-visible in the
   deep link so nobody "tidies" it and breaks the `.feature` assertions.
   Date/Author: 2026-06-18, planning + panel.
-- Decision (D7): amend ADR-008 in place (keep `Accepted`, bump `Date`, add a
+- Decision (D7): amend ADR 0008 in place (keep `Accepted`, bump `Date`, add a
   dated amendment note) rather than superseding it. Rationale: only the
-  link-model portion of ADR-008 changes; the thread-root summary contract is
-  unaffected. ADR-010 already records the host-neutral direction. Date/Author:
+  link-model portion of ADR 0008 changes; the thread-root summary contract is
+  unaffected. ADR 0010 already records the host-neutral direction. Date/Author:
   2026-06-18, planning.
 - Decision (D8): keep the shared `FrankieDeepLink` renderer (per the user's
   "shared helper" decision) but house it in a clearly named presentation
@@ -268,13 +268,13 @@ escalation, not a workaround.
   canonical contract — the canonical shared format is the serde representation
   of `ReviewViewRef`. Rationale: Pandalump 🟡 flagged that re-exporting the
   renderer flat beside the DTO on `frankie::ai::` risks readers treating
-  `frankie://…` as canonical (ADR-010's named non-goal) and sits awkwardly with
-  the "keep TUI deep-link renderings out of shared review contracts" boundary
-  (ADR-010 line 83). Trade-off accepted: the renderer remains re-exported
-  through `frankie::ai` for ergonomics (both the CLI and TUI import via
-  `crate::ai::{…}`/`frankie::ai::{…}`), so the boundary is expressed through
-  module placement + rustdoc rather than an unreachable path. Date/Author:
-  2026-06-18, planning + panel.
+  `frankie://…` as canonical (ADR 0010's named non-goal) and sits awkwardly
+  with the "keep TUI deep-link renderings out of shared review contracts"
+  boundary (ADR 0010 line 83). Trade-off accepted: the renderer remains
+  re-exported through `frankie::ai` for ergonomics (both the CLI and TUI import
+  via `crate::ai::{…}`/`frankie::ai::{…}`), so the boundary is expressed
+  through module placement + rustdoc rather than an unreachable path.
+  Date/Author: 2026-06-18, planning + panel.
 
 ## Outcomes & retrospective
 
@@ -290,9 +290,10 @@ structured comment ID. The new serialization test proves the shared wire shape
 contains `view_ref`, `comment_id`, and `view`, with no TUI-specific field or
 deep-link string.
 
-Documentation was updated in ADR-008, the design guide, users guide, developers
-guide, and roadmap. CodeRabbit raised two code-review concerns during M1/M2;
-both were fixed before proceeding. The final review reported zero findings.
+Documentation was updated in ADR 0008, the design guide, users guide,
+developers guide, and roadmap. CodeRabbit raised two code-review concerns
+during M1/M2; both were fixed before proceeding. The final review reported zero
+findings.
 
 ## Context and orientation
 
@@ -409,11 +410,11 @@ type directly; expected to need no change (verify during M2).
 
 Docs:
 
-- `docs/adr-008-pr-discussion-summary-contract.md` (L71, L77–78): amend the
-  model list and rendering description; add a dated amendment note.
-- `docs/adr-010-close-review-adapter-capability-gap.md` (L30): already frames
-  the gap; add nothing beyond a back-reference if helpful (its decision text is
-  already correct).
+- `docs/adrs/adr-0008-pr-discussion-summary-contract.md` (L71, L77–78): amend
+  the model list and rendering description; add a dated amendment note.
+- `docs/adrs/adr-0010-close-review-adapter-capability-gap.md` (L30): already
+  frames the gap; add nothing beyond a back-reference if helpful (its decision
+  text is already correct).
 - `docs/frankie-design.md` (around L3499): already describes "host-neutral
   review references"; verify it names `ReviewViewRef` once the type exists, and
   reconcile any `TuiViewLink` mention.
@@ -479,7 +480,7 @@ change; the compiler enforces completeness):
    all "TUI link"/"TUI view" rustdoc to host-neutral wording. Add
    compiler-checked rustdoc (Dinolump 🔴): on `ReviewViewRef`, state it is a
    host-neutral reference that deliberately has no `Display`/URI rendering —
-   render it with the `FrankieDeepLink` renderer — and cite ADR-010; on
+   render it with the `FrankieDeepLink` renderer — and cite ADR 0010; on
    `ReviewView`, note it is forward-looking with a single `CommentDetail`
    variant today; on `label()`, note `"detail"` is user-visible in the deep
    link (do not "tidy").
@@ -513,7 +514,7 @@ Milestone M2 — migrate test construction sites and confirm behaviour:
 
 ### Stage D — refactor, documentation, cleanup
 
-Milestone M3 — docs (ADR-008 amendment, `frankie-design.md`, `users-guide.md`,
+Milestone M3 — docs (ADR 0008 amendment, `frankie-design.md`, `users-guide.md`,
 `developers-guide.md`). Milestone M4 — roadmap tick, full gate, CodeRabbit.
 
 Each stage ends with the gate suite; do not proceed past a failing gate.
@@ -581,7 +582,7 @@ Quality criteria for "done":
 - Rustdoc (M1 acceptance bullet, Dinolump 🟡): the public types `ReviewView`,
   `ReviewViewRef`, and `FrankieDeepLink` carry rustdoc that (a) states
   host-neutrality, (b) intra-doc-links the DTO to its renderer and back, and
-  (c) records the `Display`-removal rationale (ADR-010). `cargo doc` builds
+  (c) records the `Display`-removal rationale (ADR 0010). `cargo doc` builds
   with no broken intra-doc links.
 - Lint/format: `make check-fmt` and `make lint` clean (warnings denied).
 - Docs: `make markdownlint` and `make nixie` (Mermaid) clean.
@@ -616,7 +617,7 @@ pub enum ReviewView {
 ///
 /// This type is deliberately free of any delivery-surface coupling and has no
 /// `Display`/URI rendering: the `frankie://…` deep link is a presentation
-/// concern, rendered by [`FrankieDeepLink`]. See ADR-010.
+/// concern, rendered by [`FrankieDeepLink`]. See ADR 0010.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReviewViewRef {
     /// Review comment the reference targets.
@@ -631,7 +632,7 @@ impl ReviewViewRef {
         Self { comment_id, view: ReviewView::CommentDetail }
     }
 }
-// No `impl Display` here — rendering lives in `FrankieDeepLink` (see ADR-010).
+// No `impl Display` here — rendering lives in `FrankieDeepLink` (see ADR 0010).
 ```
 
 In `src/ai/pr_discussion_summary/deep_link.rs`:
@@ -640,7 +641,7 @@ In `src/ai/pr_discussion_summary/deep_link.rs`:
 //! Presentation projection of a host-neutral [`ReviewViewRef`] as a Frankie
 //! deep link. This is an adapter/presentation concern, NOT the canonical
 //! contract — the canonical shared format is the serde representation of
-//! `ReviewViewRef`. Shared by the CLI and TUI surfaces (see ADR-010, D8).
+//! `ReviewViewRef`. Shared by the CLI and TUI surfaces (see ADR 0010, D8).
 
 use std::fmt;
 use super::model::ReviewViewRef;
@@ -700,12 +701,14 @@ public API shape), `arch-crate-design` (module boundaries and re-exports),
 `hexagonal-architecture` (keep the DTO a pure driven-port value object;
 rendering is an adapter concern), `rust-unit-testing` and the `rstest` /
 `rstest-bdd` skills (test shape), `leta` (navigation/rename),
-`arch-decision-records` (ADR-008 amendment style), `commit-message` and
+`arch-decision-records` (ADR 0008 amendment style), `commit-message` and
 `pr-creation` (delivery).
 
-Repository docs to consult: `docs/adr-008-pr-discussion-summary-contract.md`,
-`docs/adr-010-close-review-adapter-capability-gap.md`, `docs/frankie-design.md`,
-`docs/developers-guide.md`, `docs/documentation-style-guide.md`,
+Repository docs to consult:
+`docs/adrs/adr-0008-pr-discussion-summary-contract.md`,
+`docs/adrs/adr-0010-close-review-adapter-capability-gap.md`,
+`docs/frankie-design.md`, `docs/developers-guide.md`,
+`docs/documentation-style-guide.md`,
 `docs/rust-testing-with-rstest-fixtures.md`, `docs/rust-doctest-dry-guide.md`,
 `docs/reliable-testing-in-rust-via-dependency-injection.md`,
 `docs/complexity-antipatterns-and-refactoring-strategies.md`,

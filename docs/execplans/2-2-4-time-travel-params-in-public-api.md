@@ -35,7 +35,7 @@ and 2.2.7.
 
 - Keep the extraction target outside `src/tui/`. A public re-export of a type
   still defined under `src/tui/` does not satisfy the library-first intent of
-  `docs/adr-005-cross-surface-library-first-delivery.md`.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 - Do not widen the scope to full time-travel orchestration. This item only
   extracts the parameter object and the metadata-to-parameter conversion path.
 - Preserve current TUI behaviour for successful time-travel entry. The change
@@ -96,7 +96,7 @@ and 2.2.7.
 ## Progress
 
 - [x] (2026-03-13 00:00Z) Read `docs/roadmap.md`,
-      `docs/adr-005-cross-surface-library-first-delivery.md`, the time-travel
+      `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`, the time-travel
       implementation under `src/tui/`, and the referenced testing and user
       documentation.
 - [x] (2026-03-13 00:00Z) Confirmed current baseline: `TimeTravelParams` is

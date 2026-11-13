@@ -1,4 +1,4 @@
-# Architectural decision record (ADR) 001: incremental sync for review comments
+# Architectural decision record (ADR) 0001: Incremental sync for review comments
 
 ## Status
 

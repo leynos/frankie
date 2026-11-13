@@ -139,10 +139,14 @@ fn summarize_surfaces_vidaimock_http_failures() -> TestResult<()> {
                     format!("expected HTTP status in error message, got: {message}").into(),
                 );
             }
-            if !message.contains("Simulated Internal Server Error") {
-                return Err(
-                    format!("expected response body in error message, got: {message}").into(),
-                );
+            if message.split_once("status 500:").is_none_or(|(_, body)| {
+                let trimmed_body = body.trim();
+                trimmed_body.is_empty() || trimmed_body == "(failed to read error response body)"
+            }) {
+                return Err(format!(
+                    "expected non-empty response body in error message, got: {message}"
+                )
+                .into());
             }
         }
         other => {

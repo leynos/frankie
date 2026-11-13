@@ -340,7 +340,7 @@ Add or extend tests in three layers.
 Update docs:
 
 - `docs/frankie-design.md`:
-  - add ADR-006 for AI rewrite architecture/fallback/provenance rules,
+  - add ADR 0006 for AI rewrite architecture/fallback/provenance rules,
   - update AI integration and review processor sections where behaviour changes.
 - `docs/users-guide.md`:
   - document new TUI keys and preview/apply workflow,
@@ -463,7 +463,7 @@ Dependency stance:
 
 - Reuse existing crates wherever possible.
 - If a new runtime crate is necessary for provider transport, keep it singular,
-  document why in ADR-006, and test via `vidaimock`.
+  document why in ADR 0006, and test via `vidaimock`.
 
 ## Revision note
 

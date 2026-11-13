@@ -1,4 +1,4 @@
-# Architectural decision record (ADR) 005: cross-surface, library-first delivery
+# Architectural decision record (ADR) 0005: Cross-surface, library-first delivery
 
 ## Status
 

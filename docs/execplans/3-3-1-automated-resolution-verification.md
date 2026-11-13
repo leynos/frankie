@@ -124,8 +124,8 @@ Success is observable when:
   `verified` means the referenced line is removed or its content changes
   between the comment commit and target commit (`HEAD` by default); otherwise
   `unverified`. Rationale: provides stable, testable behaviour without AI or
-  workflow-specific heuristics. Recorded as Architecture Decision Record
-  (ADR-007) in `docs/frankie-design.md`.
+  workflow-specific heuristics. Recorded as Architecture Decision Record (ADR
+  0007) in `docs/frankie-design.md`.
 - Decision (2026-03-02): persist results with a composite unique key on
   `(github_comment_id, target_sha)` in the SQLite table
   `review_comment_verifications`. Store both verdict and evidence. Rationale:
@@ -147,7 +147,7 @@ Success is observable when:
   - Unit tests (`rstest`) and behavioural tests (`rstest-bdd` v0.5.0) for both
     CLI and TUI paths.
 - Documentation updated:
-  - ADR-007 recorded in `docs/frankie-design.md`.
+  - ADR 0007 recorded in `docs/frankie-design.md`.
   - User-facing behaviour documented in `docs/users-guide.md`.
   - Roadmap entry marked done in `docs/roadmap.md`.
 
@@ -408,7 +408,7 @@ Goal: ensure the feature is documented, decisions are captured, and the repo
 passes all required gates.
 
 1. Update `docs/frankie-design.md`:
-   - Add Architecture Decision Record (`ADR-007`) describing:
+   - Add Architecture Decision Record (`ADR 0007`) describing:
      - the chosen semantics for verified/unverified (and why)
      - persistence schema and rationale
      - adapter responsibilities and DI approach

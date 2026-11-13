@@ -188,9 +188,10 @@ own `RUSTFLAGS`) and for the release target (the coverage exclusion is checked
 in the workflow steps) on a Linux host, and the `setup-rust` steps of the CI
 workflows (each must pass `install-mold`), so a flag lost through a recipe or
 workflow edit fails there. The decision is recorded in
-[ADR 011](adr-011-rust-build-standard.md). The contract runs `make -n`, so a
-direct `cargo test` needs GNU make on the `PATH`. It fails when `make` is
-missing instead of skipping, so a missing tool cannot read as a pass.
+[ADR 0011](adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md).
+The contract runs `make -n`, so a direct `cargo test` needs GNU make on the
+`PATH`. It fails when `make` is missing instead of skipping, so a missing tool
+cannot read as a pass.
 
 ### Development build footprint
 
@@ -212,7 +213,7 @@ clearing an inherited `CARGO_ENCODED_RUSTFLAGS`, which Cargo ranks above
 `RUSTFLAGS`. Whitaker runs under the toolchain its installer manages, so it
 takes none of the development standard (no parallel frontend, no `mold` linker
 flag and no inherited `RUSTFLAGS`). The build-standard contract reads that
-isolated command as exempt from the restatement clauses, and ADR 011 records
+isolated command as exempt from the restatement clauses, and ADR 0011 records
 the exception. `tests/whitaker_isolation_contract.rs` reads the real
 `make -n lint` output and fails unless Whitaker clears the encoded flags and
 assigns the literal `RUSTFLAGS="-D warnings"`.

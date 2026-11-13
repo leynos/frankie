@@ -23,7 +23,7 @@ observable behaviours and tests rather than intent.
 
 ## Cross-surface delivery contract
 
-See `docs/adr-005-cross-surface-library-first-delivery.md`.
+See `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 
 - For every roadmap item that is still unchecked, completion requires a stable
   library API in `frankie` and an interactive TUI integration when the feature
@@ -93,20 +93,21 @@ context.
   thread roots, ordered replies, and thread status without TUI-specific types,
   treats `in_reply_to_id.unwrap_or(id)` as the stable root when native thread
   metadata is unavailable, and tests cover root, reply, and orphaned-reply
-  fixtures. See `docs/adr-010-close-review-adapter-capability-gap.md`.
+  fixtures. See `docs/adrs/adr-0010-close-review-adapter-capability-gap.md`.
 - [ ] 2.1.4. Publish host-safe incremental review sync contracts using
   `ReviewSyncCheckpoint` and
   `ReviewSyncDelta { added, updated, removed, checkpoint }`. Requires 2.1.3.
   Acceptance: repeated sync calls are idempotent, deletions are explicit, and
   tests cover added, updated, and removed comment paths without losing
-  selection state. See `docs/adr-001-incremental-sync-for-review-comments.md`
-  and `docs/adr-010-close-review-adapter-capability-gap.md`.
+  selection state. See
+  `docs/adrs/adr-0001-incremental-sync-for-review-comments.md` and
+  `docs/adrs/adr-0010-close-review-adapter-capability-gap.md`.
 - [ ] 2.1.5. Separate raw review payloads from derived actionable anchors.
   Requires 2.1.3. Acceptance: Frankie preserves raw GitHub comment metadata
   losslessly while exposing an optional `ReviewAnchor` with `commit_sha`,
   `file_path`, `original_line`, and `diff_hunk`; tests cover comments with
   insufficient anchor metadata without dropping raw fields. See
-  `docs/adr-010-close-review-adapter-capability-gap.md`.
+  `docs/adrs/adr-0010-close-review-adapter-capability-gap.md`.
 
 ### 2.2. Contextual comment exploration
 
@@ -123,25 +124,27 @@ context.
   `from_comment` (or equivalent) to derive parameters from comment metadata.
   Acceptance: a public `TimeTravelParams` (or equivalent) is available outwith
   `crate::tui`, and tests cover both successful extraction and missing metadata
-  failures. See `docs/adr-005-cross-surface-library-first-delivery.md`.
+  failures. See `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 - [x] 2.2.5. Make `TimeTravelState` a stable public type (remove
   `#[doc(hidden)]` and publish required getters currently `pub(crate)`).
   Acceptance: `TimeTravelState` is public (not `#[doc(hidden)]`), provides
   stable read accessors required by renderers, and is exercised by tests that
   do not import TUI modules. Requires 2.2.4. See
-  `docs/adr-005-cross-surface-library-first-delivery.md`.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 - [x] 2.2.6. Replace the fixed internal commit history limit with configurable
   options (for example a `commit_history_limit` setting for time travel).
   Acceptance: the history limit is configurable (default remains 50) and tests
   verify both default and overridden limits affect loaded history length.
-  Requires 2.2.4. See `docs/adr-005-cross-surface-library-first-delivery.md`.
+  Requires 2.2.4. See
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 - [x] 2.2.7. Extract time-travel orchestration out of TUI handlers into pure
   library services, keeping `bubbletea_rs::Cmd`, `spawn_blocking`, and any
   global `OnceLock` context in the TUI adapter layer only. Requires 2.2.5 and
   2.2.6. Acceptance: orchestration is implemented as a host-safe library
   service without `bubbletea_rs` types in the shared surface, the TUI depends
   on it as an adapter, and tests cover load and navigation using a mocked
-  `GitOperations`. See `docs/adr-005-cross-surface-library-first-delivery.md`.
+  `GitOperations`. See
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`.
 
 ### 2.3. Comment export pipeline
 
@@ -179,42 +182,42 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   submission, AI rewording, and server-side workflow automation; prerequisites
   or dependencies: approved design mockups, available keyboard shortcut
   service, and a defined length-limit configuration schema. See
-  `docs/adr-004-inline-template-based-reply-drafting.md`.
+  `docs/adrs/adr-0004-inline-template-based-reply-drafting.md`.
 - [x] 3.2.2. Add AI-powered comment expansion and rewording; acceptance:
   generated text is labelled as AI-originated, offers side-by-side diff
   preview, and falls back gracefully when the AI call fails; delivery includes
   reusable library APIs and both TUI and CLI access paths. See
-  `docs/adr-006-ai-rewrite-preview-and-fallback-contract.md`.
+  `docs/adrs/adr-0006-ai-rewrite-preview-and-fallback-contract.md`.
 - [x] 3.2.3. Extract reply templating out of TUI state into a top-level library
   module and re-export it as a public API (currently in `src/tui/state/`). See
-  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: template
-  rendering moves to a non-TUI module with a public API, and tests cover
-  substitution, escaping, and error reporting.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`. Acceptance:
+  template rendering moves to a non-TUI module with a public API, and tests
+  cover substitution, escaping, and error reporting.
 - [x] 3.2.4. Make reply templating input a library data transfer object (DTO)
   (for example `ReplyTemplateContext`) instead of requiring `ReviewComment`
   directly. Requires 3.2.3. See
-  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: a public
-  DTO is used by the renderer, and adapter tests cover mapping from
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`. Acceptance: a
+  public DTO is used by the renderer, and adapter tests cover mapping from
   `ReviewComment` into the DTO without changing rendered output.
 - [x] 3.2.5. Expose default reply templates as a public library API (they are
   currently crate-private). Requires 3.2.3. See
-  `docs/adr-004-inline-template-based-reply-drafting.md`. Acceptance: defaults
-  are publicly available, deterministic, and non-empty, and tests assert the
-  configured defaults remain present.
+  `docs/adrs/adr-0004-inline-template-based-reply-drafting.md`. Acceptance:
+  defaults are publicly available, deterministic, and non-empty, and tests
+  assert the configured defaults remain present.
 - [ ] 3.2.6. Keep TUI-specific pieces as adapters only by updating the TUI and
   CLI surfaces to depend on the library reply templating APIs, not
   `crate::tui::state`. Requires 3.2.4 and 3.2.5. See
-  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: no call
-  sites outwith `src/tui/` depend on `crate::tui::state` templating symbols,
-  and regression tests verify templates render identically.
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`. Acceptance: no
+  call sites outwith `src/tui/` depend on `crate::tui::state` templating
+  symbols, and regression tests verify templates render identically.
 - [ ] 3.2.7. Add a host-facing review reply action API that can submit a
   rendered draft or return a queued write intent for later submission. Requires
   3.2.4, 3.2.5, 3.2.6, 4.1.1, and 4.1.2. Acceptance: the library exposes a
   stable reply submission contract, GitHub adapter tests cover success and
   duplicate-safe retry behaviour, and offline or rate-limited writes return
   queue or backoff metadata instead of forcing each host to invent its own
-  protocol. See `docs/adr-004-inline-template-based-reply-drafting.md` and
-  `docs/adr-010-close-review-adapter-capability-gap.md`.
+  protocol. See `docs/adrs/adr-0004-inline-template-based-reply-drafting.md` and
+  `docs/adrs/adr-0010-close-review-adapter-capability-gap.md`.
 
 ### 3.3. Automated verification
 
@@ -231,8 +234,8 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   host-neutral `ReviewViewRef` (or equivalent), the TUI renders current
   `frankie://review-comment/<id>?view=detail` links from that reference, and
   CLI and library tests prove serialization does not depend on TUI-only types.
-  See `docs/adr-008-pr-discussion-summary-contract.md` and
-  `docs/adr-010-close-review-adapter-capability-gap.md`.
+  See `docs/adrs/adr-0008-pr-discussion-summary-contract.md` and
+  `docs/adrs/adr-0010-close-review-adapter-capability-gap.md`.
 
 ### 3.4. Review banner translation
 
@@ -241,7 +244,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   Acceptance: Frankie can load top-level pull request review bodies as a public
   library type, and tests cover missing-body, missing-author, and multi-review
   intake paths. See `docs/review-banner-translation.md` §4.1 and
-  `docs/adr-009-review-banner-translation-contract.md`.
+  `docs/adrs/adr-0009-review-banner-translation-contract.md`.
 - [ ] 3.4.2. Implement a deterministic message body translation pipeline over a
   normalized Markdown Abstract Syntax Tree (AST), with provider matching,
   ignored-section handling, and a built-in CodeRabbit rule pack. Requires
@@ -278,7 +281,7 @@ Integrate OpenAI Codex CLI workflows to assist and automate comment resolution.
   custom packs with equal or lower versions are ignored with a logged warning,
   and regression tests confirm invalid custom rules are rejected with
   actionable warnings. See `docs/review-banner-translation.md` §4.7 and
-  `docs/adr-009-review-banner-translation-contract.md`.
+  `docs/adrs/adr-0009-review-banner-translation-contract.md`.
 
 ## 4. Resilience, security, and compliance
 
@@ -300,7 +303,7 @@ handling.
   and future review-mutation APIs can return a durable write intent identifier,
   surfaced `Retry-After` or computed backoff hints, and tests cover enqueue,
   replay, and safe deduplication across process restarts. See
-  `docs/adr-010-close-review-adapter-capability-gap.md`.
+  `docs/adrs/adr-0010-close-review-adapter-capability-gap.md`.
 
 ### 4.2. Security and privacy controls
 
@@ -342,12 +345,12 @@ Deliver user-facing refinements, accessibility, documentation, and packaging.
   documents integration expectations for TUI, library, and CLI consumers.
 - [ ] 5.2.3. Re-export extracted core modules from `src/lib.rs` so the crate is
   usable as a library without the TUI runtime. Requires 2.2.7 and 3.2.6. See
-  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance: the
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`. Acceptance: the
   `frankie` crate exports the extracted modules, and a library-only build
   compiles without pulling in TUI runtime dependencies.
 - [ ] 5.2.4. Gate TUI dependencies behind a `tui` feature in `Cargo.toml`,
   ensuring consumers can build and use the library without pulling in the TUI
   runtime. Requires 5.2.3. See
-  `docs/adr-005-cross-surface-library-first-delivery.md`. Acceptance:
+  `docs/adrs/adr-0005-cross-surface-library-first-delivery.md`. Acceptance:
   `cargo build -p frankie --no-default-features` succeeds, and
   `cargo build -p frankie --features tui` builds the TUI surface.
