@@ -41,6 +41,22 @@ fn the_command_reader_tells_a_bare_tool_from_an_exempt_command(
     }
 }
 
+/// Scenario: a Cargo command that merely names `whitaker` in an argument, under the isolated
+/// Whitaker environment.
+///
+/// Invariant: only the executable decides the exemption, so the command stays held to the
+/// standard and is not read as unassigned.
+#[test]
+fn a_cargo_command_naming_whitaker_is_not_an_isolated_whitaker() -> Result<(), String> {
+    let stdout = "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" cargo test --target-dir whitaker\n";
+    let read = commands_from(stdout)?;
+    if read == [Assignment::Unassigned] {
+        Err(format!("`{stdout}` was exempted as Whitaker"))
+    } else {
+        Ok(())
+    }
+}
+
 /// Counts the assigned and the bare commands the reader finds in `make -n` output.
 fn tally(stdout: &str) -> Result<(usize, usize), String> {
     let read = commands_from(stdout)?;
