@@ -248,12 +248,14 @@ _Table 1: Obligations when moving from v0.8.0 to v0.9.0._
 
 ### Before
 
+<!-- tested-example: migration-before-001 -->
 ```rust,no_run
 <old code>
 ```
 
 ### After
 
+<!-- tested-example: migration-after-001 -->
 ```rust,no_run
 <new code>
 ```

@@ -68,8 +68,9 @@
 - [ADR 0010: Close review adapter capability gap](adrs/adr-0010-close-review-adapter-capability-gap.md)
   records the close-review adapter decision.
 - [ADR 0011: Adopt the Rust build standard for development builds](adrs/adr-0011-adopt-the-rust-build-standard-for-development-builds.md)
-  records why development builds use the fast flags while coverage and release
-  builds stay off them.
+  records why development builds use the fast flags while coverage and the
+  release recipe and workflow override them. Direct `cargo build --release`
+  retains the configured flags unless `RUSTFLAGS` is assigned.
 
 ## Plans
 
