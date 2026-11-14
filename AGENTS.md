@@ -213,35 +213,51 @@ project:
 
     ```sh
     cargo fmt --all -- --check
+    mdtablefix --check --git --include-untracked \
+      --wrap --renumber --breaks --ellipsis --fences
     ```
 
-    validating formatting across the entire workspace without modifying files.
-  - `make lint` executes:
+    validating Rust formatting across the workspace and Markdown formatting
+    across the files Git tracks, plus untracked files Git does not ignore,
+    without modifying files. The Markdown check needs mdtablefix 0.6.0 or later
+    on `PATH`. CI pins 0.6.1, so install that version with
+    `cargo binstall --no-confirm mdtablefix@0.6.1` (or
+    `cargo install --locked mdtablefix@0.6.1`).
+  - `make lint` first runs `make interrogate`, which needs `uv` and fails on any
+    Python definition without a docstring under `scripts` and `tests`, or on any
+    `MISSED` row. It then executes:
 
-    ```makefile
-    RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" cargo doc --no-deps
+    ```sh
+    cargo doc --no-deps
     cargo clippy --all-targets --all-features -- -D warnings
-    RUSTFLAGS="-D warnings" whitaker --all -- --all-targets --all-features
+    whitaker --all -- --all-targets --all-features
     ```
 
-    The Clippy and Whitaker lines use the Makefile defaults `RUST_FLAGS ?=
-    -D warnings` and `CARGO_FLAGS ?= --all-targets --all-features`. The
-    Makefile does not set `RUSTDOC_FLAGS`, so `cargo doc` takes its rustdoc
-    flags from the environment, and `cargo doc` and `cargo clippy` inherit any
-    `RUSTFLAGS` from the environment. Clippy warnings and Whitaker findings fail
-    the command. Documentation warnings fail it only when the environment
-    supplies `-D warnings` through `RUSTDOC_FLAGS`.
+    The Clippy and Whitaker flags default to `CARGO_FLAGS ?=
+    --all-targets --all-features` and `RUST_FLAGS ?= -D warnings`. `cargo doc`
+    and `cargo clippy` set `RUSTFLAGS` to any inherited value followed by
+    `STANDARD_RUSTFLAGS`, which is `-Zthreads=8` and, on Linux,
+    `-Clink-arg=-fuse-ld=mold`. `cargo doc` also receives `RUSTDOCFLAGS` from
+    `RUSTDOC_FLAGS`, which the Makefile does not define. Whitaker is the
+    exception: it clears `CARGO_ENCODED_RUSTFLAGS`, sets `RUSTFLAGS` to
+    `-D warnings` alone, puts `~/.local/bin` first on `PATH`, and pins the LLVM
+    codegen backend. Clippy warnings and Whitaker findings fail the command.
+    Documentation warnings fail it only when `RUSTDOC_FLAGS` supplies
+    `-D warnings`.
   - `make test` executes:
 
-    ```makefile
-    RUSTFLAGS="-D warnings" cargo nextest run --all-targets --all-features
+    ```sh
+    cargo nextest run --all-targets --all-features
     ```
 
     running the full test suite with `cargo-nextest` and Rust warnings denied.
-    There is no `cargo test` fallback, so `cargo-nextest` must be installed,
-    and the target does not run doctests.
-    Use `make fmt` (`cargo fmt --all`, followed by `mdformat-all`) to apply
-    formatting fixes reported by the formatter check.
+    `RUSTFLAGS` is set to any inherited value followed by `-D warnings` and
+    `STANDARD_RUSTFLAGS`. `TEST_FLAGS` and `BUILD_JOBS` can override the
+    arguments. There is no `cargo test` fallback, so `cargo-nextest` must be
+    installed, and the target does not run doctests.
+    Use `make fmt` (`cargo fmt --all`, then `mdtablefix --in-place` and
+    `markdownlint-cli2 --fix`) to apply formatting fixes reported by the
+    formatter check.
 - Clippy warnings MUST be disallowed.
 - Fix any warnings emitted during tests in the code itself rather than
   silencing them.
