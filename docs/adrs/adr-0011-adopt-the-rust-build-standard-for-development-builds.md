@@ -33,8 +33,8 @@ artefacts also need a baseline that the fast flags would disturb.
   and CI step that assigns `RUSTFLAGS` without them.
 - Restate the flags in each recipe and step, held by a contract test. This is
   the option taken.
-- Adopt Cranelift for development builds. The consequences below record that
-  this repository now does.
+- Adopt Cranelift for development builds. This repository did from 2026-11-13
+  to 2026-11-14 and no longer does; the consequences below record the change.
 
 ## Decision outcome
 
@@ -59,8 +59,14 @@ the workflows, so a flag lost through a recipe or workflow edit fails there.
 - A change to a recipe or workflow step that assigns `RUSTFLAGS` must restate
   the flags, and the contract says which clause fails when it does not.
 - Addendum, 2026-11-13: the release build moved from `cross +stable` to the
-  pinned nightly, so Cranelift is now the development default (see the
+  pinned nightly, so Cranelift became the development default (see the
   developers' guide, "Cranelift").
+- Addendum, 2026-11-14: LLVM is the development default again and the Cranelift
+  selection is commented out in `.cargo/config.toml`, with review due 14 May
+  2027. The component, the `[unstable] codegen-backend` key and the opt-in
+  stay. A persistent opt-in uncomments the selection and sets `SELECTED` to
+  `true` in `tests/build_standard_support/cranelift.rs`; a one-off `--config`
+  override needs neither.
 
 ## Addendum, 2026-10-31: Whitaker is isolated from the standard
 

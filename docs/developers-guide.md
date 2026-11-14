@@ -216,17 +216,22 @@ flag and no inherited `RUSTFLAGS`). The build-standard contract reads that
 isolated command as exempt from the restatement clauses, and ADR 0011 records
 the exception. The command also selects the LLVM backend
 (`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`), because the installer-managed
-toolchain does not take the repository's Cranelift default, and puts
-`~/.local/bin` first on `PATH` so the installed `whitaker` is the one that runs.
+toolchain does not take a Cranelift opt-in, and puts `~/.local/bin` first on
+`PATH` so the installed `whitaker` is the one that runs.
 
 ### Cranelift
 
-Cranelift is the default backend for development builds, set in
-`.cargo/config.toml` (`[profile.dev] codegen-backend = "cranelift"`) on the
-nightly pinned in `rust-toolchain.toml`. The release workflow builds on the
-same pinned nightly with LLVM, because the dev profile does not reach the
-release profile. Coverage selects LLVM too, since Cranelift cannot instrument
-coverage. The full suite (1040 tests under nextest) passes under Cranelift.
+The estate standard is LLVM, so LLVM is the default backend here. The Cranelift
+selection in `.cargo/config.toml` is commented out; the
+`[unstable] codegen-backend` key and the `rustc-codegen-cranelift-preview`
+component stay for an opt-in; a persistent opt-in also needs `SELECTED` set to
+`true` in `tests/build_standard_support/cranelift.rs`. See the
+[concordat decision record](https://github.com/leynos/concordat/blob/main/docs/adrs/adr-0004-cranelift-is-not-part-of-the-rust-build-standard.md),
+with review due 14 May 2027. An inherited `CARGO_PROFILE_*_CODEGEN_BACKEND`
+variable can still select Cranelift, and Cranelift does not run destructors
+while unwinding, so under an opt-in no test may rely on a caught panic
+releasing a guard. The release workflow builds on the pinned nightly, and the
+coverage action keeps LLVM, since Cranelift cannot instrument coverage.
 
 ### Minimum supported Rust version
 
