@@ -148,7 +148,7 @@ pub fn commands_with_text(stdout: &str) -> Result<Vec<Command>, String> {
 }
 
 /// Returns whether a command is Whitaker under the literal warning-only `RUSTFLAGS` boundary, with
-/// an explicit LLVM backend so it does not inherit the repository's Cranelift default.
+/// an explicit LLVM backend so it does not inherit a Cranelift opt-in.
 ///
 /// Both settings must be leading `NAME=value` assignments, so they are environment settings and
 /// not arguments; `RUSTFLAGS` is assigned exactly once, to the warning policy; and the first word
