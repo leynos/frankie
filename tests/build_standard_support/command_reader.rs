@@ -56,6 +56,12 @@ fn the_command_reader_tells_a_bare_tool_from_an_exempt_command(
 #[case::wrong_leading_value_with_the_right_one_as_an_argument(
     "RUSTFLAGS=\"wrong\" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm whitaker RUSTFLAGS=\"-D warnings\"\n"
 )]
+#[case::a_later_backend_assignment_overrides_llvm(
+    "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift RUSTFLAGS=\"-D warnings\" whitaker --all\n"
+)]
+#[case::the_settings_sit_inside_a_single_quoted_assignment(
+    "NOTE='ignored CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" whitaker extra' cargo clippy\n"
+)]
 #[case::the_flags_assigned_twice(
     "RUSTFLAGS=\"-D warnings\" RUSTFLAGS=\"-Zthreads=8\" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm whitaker --all\n"
 )]
@@ -67,6 +73,21 @@ fn a_command_that_only_resembles_isolated_whitaker_is_not_exempt(
         Err(format!("`{stdout}` was exempted as Whitaker"))
     } else {
         Ok(())
+    }
+}
+
+/// Scenario: a compliant isolated Whitaker command that also carries a single-quoted assignment
+/// holding spaces.
+///
+/// Invariant: the quoted text is one word, so the exemption is kept.
+#[test]
+fn a_single_quoted_assignment_does_not_hide_an_isolated_whitaker() -> Result<(), String> {
+    let stdout = "NOTE='two words' CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" whitaker --all\n";
+    let read = commands_from(stdout)?;
+    if read == [Assignment::Unassigned] {
+        Ok(())
+    } else {
+        Err(format!("`{stdout}` was read as {read:?}"))
     }
 }
 

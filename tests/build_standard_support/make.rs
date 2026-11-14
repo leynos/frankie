@@ -161,28 +161,39 @@ fn is_isolated_whitaker(command: &str) -> bool {
         })
     });
     let (assigned, rest) = words.split_at(leading.count());
-    let rustflags: Vec<&&str> = assigned
-        .iter()
-        .filter(|word| word.starts_with("RUSTFLAGS="))
-        .collect();
+    let assignments_of = |name: &str| -> Vec<&str> {
+        assigned
+            .iter()
+            .copied()
+            .filter(|word| {
+                word.strip_prefix(name)
+                    .is_some_and(|tail| tail.starts_with('='))
+            })
+            .collect()
+    };
     rest.first()
         .is_some_and(|word| word.rsplit('/').next() == Some("whitaker"))
-        && rustflags == [&"RUSTFLAGS=\"-D warnings\""]
-        && assigned.contains(&"CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm")
+        && assignments_of("RUSTFLAGS") == ["RUSTFLAGS=\"-D warnings\""]
+        && assignments_of("CARGO_PROFILE_DEV_CODEGEN_BACKEND")
+            == ["CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm"]
 }
 
-/// A shell command line, read word by word with each double-quoted span kept whole.
+/// A shell command line, read word by word with each single- or double-quoted span kept whole.
 struct ShellLine<'a>(&'a str);
 
 impl<'a> ShellLine<'a> {
-    /// Returns the words of the line, split on whitespace outside double quotes.
+    /// Returns the words of the line, split on whitespace outside quotes.
     fn words(&self) -> Vec<&'a str> {
         let mut words = Vec::new();
         let mut start = None;
-        let mut quoted = false;
+        let mut quote: Option<char> = None;
         for (index, c) in self.0.char_indices() {
-            quoted ^= c == '"';
-            match (c.is_whitespace() && !quoted, start) {
+            match quote {
+                Some(open) if c == open => quote = None,
+                None if c == '"' || c == '\'' => quote = Some(c),
+                _ => {}
+            }
+            match (c.is_whitespace() && quote.is_none(), start) {
                 (true, Some(begin)) => {
                     words.extend(self.0.get(begin..index));
                     start = None;
