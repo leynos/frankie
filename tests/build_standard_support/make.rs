@@ -149,32 +149,51 @@ pub fn commands_with_text(stdout: &str) -> Result<Vec<Command>, String> {
 
 /// Returns whether a command is Whitaker under the literal warning-only `RUSTFLAGS` boundary, with
 /// an explicit LLVM backend so it does not inherit the repository's Cranelift default.
+///
+/// Both settings must be leading `NAME=value` assignments, so they are environment settings and
+/// not arguments; `RUSTFLAGS` is assigned exactly once, to the warning policy; and the first word
+/// after them must be the `whitaker` executable.
 fn is_isolated_whitaker(command: &str) -> bool {
-    command.contains("RUSTFLAGS=\"-D warnings\"")
-        && command.contains("CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm")
-        && executable(command).is_some_and(|word| word.rsplit('/').next() == Some("whitaker"))
+    let words = ShellLine(command).words();
+    let leading = words.iter().take_while(|word| {
+        word.split_once('=').is_some_and(|(name, _)| {
+            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+    });
+    let (assigned, rest) = words.split_at(leading.count());
+    let rustflags: Vec<&&str> = assigned
+        .iter()
+        .filter(|word| word.starts_with("RUSTFLAGS="))
+        .collect();
+    rest.first()
+        .is_some_and(|word| word.rsplit('/').next() == Some("whitaker"))
+        && rustflags == [&"RUSTFLAGS=\"-D warnings\""]
+        && assigned.contains(&"CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm")
 }
 
-/// Returns the executable of a command: the first word that is not a leading `NAME=value`
-/// assignment, after dropping each quoted span (a quoted value may hold spaces).
-fn executable(command: &str) -> Option<String> {
-    let mut unquoted = String::new();
-    let mut quote = false;
-    for c in command.chars() {
-        match (quote, c) {
-            (_, '"') => quote = !quote,
-            (false, _) => unquoted.push(c),
-            (true, _) => {}
+/// A shell command line, read word by word with each double-quoted span kept whole.
+struct ShellLine<'a>(&'a str);
+
+impl<'a> ShellLine<'a> {
+    /// Returns the words of the line, split on whitespace outside double quotes.
+    fn words(&self) -> Vec<&'a str> {
+        let mut words = Vec::new();
+        let mut start = None;
+        let mut quoted = false;
+        for (index, c) in self.0.char_indices() {
+            quoted ^= c == '"';
+            match (c.is_whitespace() && !quoted, start) {
+                (true, Some(begin)) => {
+                    words.extend(self.0.get(begin..index));
+                    start = None;
+                }
+                (false, None) => start = Some(index),
+                _ => {}
+            }
         }
+        words.extend(start.and_then(|begin| self.0.get(begin..)));
+        words
     }
-    unquoted
-        .split_whitespace()
-        .find(|word| {
-            word.split_once('=').is_none_or(|(name, _)| {
-                name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-            })
-        })
-        .map(str::to_owned)
 }
 
 /// A Makefile target name, typed so a runner takes a target and not just any text.

@@ -41,14 +41,27 @@ fn the_command_reader_tells_a_bare_tool_from_an_exempt_command(
     }
 }
 
-/// Scenario: a Cargo command that merely names `whitaker` in an argument, under the isolated
-/// Whitaker environment.
+/// Scenario: commands that carry the isolated Whitaker settings but do not run Whitaker with them
+/// as environment assignments.
 ///
-/// Invariant: only the executable decides the exemption, so the command stays held to the
-/// standard and is not read as unassigned.
-#[test]
-fn a_cargo_command_naming_whitaker_is_not_an_isolated_whitaker() -> Result<(), String> {
-    let stdout = "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" cargo test --target-dir whitaker\n";
+/// Invariant: only a leading assignment counts, `RUSTFLAGS` is assigned once, and only the
+/// executable decides the exemption, so none of these is read as unassigned.
+#[rstest]
+#[case::cargo_names_whitaker(
+    "CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm RUSTFLAGS=\"-D warnings\" cargo test --target-dir whitaker\n"
+)]
+#[case::settings_as_arguments(
+    "whitaker RUSTFLAGS=\"-D warnings\" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm\n"
+)]
+#[case::wrong_leading_value_with_the_right_one_as_an_argument(
+    "RUSTFLAGS=\"wrong\" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm whitaker RUSTFLAGS=\"-D warnings\"\n"
+)]
+#[case::the_flags_assigned_twice(
+    "RUSTFLAGS=\"-D warnings\" RUSTFLAGS=\"-Zthreads=8\" CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm whitaker --all\n"
+)]
+fn a_command_that_only_resembles_isolated_whitaker_is_not_exempt(
+    #[case] stdout: &str,
+) -> Result<(), String> {
     let read = commands_from(stdout)?;
     if read == [Assignment::Unassigned] {
         Err(format!("`{stdout}` was exempted as Whitaker"))
