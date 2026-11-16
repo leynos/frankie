@@ -100,23 +100,35 @@ pub(crate) fn derive_api_base_from_host(
     port: Option<u16>,
 ) -> Result<Url, IntakeError> {
     if host.eq_ignore_ascii_case("github.com") {
-        Url::parse("https://api.github.com")
-            .map_err(|error| IntakeError::InvalidUrl(error.to_string()))
+        parse_api_url("https://api.github.com")
     } else {
-        let authority = if host.contains(':') {
-            format!("[{host}]")
-        } else {
-            host.to_owned()
-        };
-        let mut api_url = Url::parse(&format!("{scheme}://{authority}"))
-            .map_err(|error| IntakeError::InvalidUrl(error.to_string()))?;
-
-        api_url
-            .set_port(port)
-            .map_err(|()| IntakeError::InvalidUrl("invalid port".to_owned()))?;
-        api_url.set_path("api/v3");
-        Ok(api_url)
+        enterprise_api_base(scheme, host, port)
     }
+}
+
+/// Parses `candidate` as a URL, reporting a failure as an invalid URL.
+fn parse_api_url(candidate: &str) -> Result<Url, IntakeError> {
+    Url::parse(candidate).map_err(|error| IntakeError::InvalidUrl(error.to_string()))
+}
+
+/// Brackets `host` when it is an IPv6 literal, so it can sit in a URL authority.
+fn url_authority(host: &str) -> String {
+    if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_owned()
+    }
+}
+
+/// Derives the `api/v3` base URL of a GitHub Enterprise host.
+fn enterprise_api_base(scheme: &str, host: &str, port: Option<u16>) -> Result<Url, IntakeError> {
+    let mut api_url = parse_api_url(&format!("{scheme}://{}", url_authority(host)))?;
+
+    api_url
+        .set_port(port)
+        .map_err(|()| IntakeError::InvalidUrl("invalid port".to_owned()))?;
+    api_url.set_path("api/v3");
+    Ok(api_url)
 }
 
 /// Derives the GitHub API base URL from a parsed URL.
