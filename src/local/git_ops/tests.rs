@@ -44,38 +44,73 @@ fn create_commit(
 ) -> Result<Oid, TestError> {
     let sig = repo.signature()?;
     let mut index = repo.index()?;
-
-    let workdir = repo
-        .workdir()
-        .ok_or("repository has no working directory")?;
-    let workdir_str = workdir.to_str().ok_or("workdir path is not valid UTF-8")?;
-    let dir = fs::Dir::open_ambient_dir(workdir_str, cap_std::ambient_authority())?;
-
-    for (path, content) in files {
-        let utf8_path = Utf8Path::new(path);
-        if let Some(parent) = utf8_path.parent()
-            && !parent.as_str().is_empty()
-        {
-            dir.create_dir_all(parent)?;
-        }
-        dir.write(utf8_path, content)?;
-        index.add_path(utf8_path.as_std_path())?;
-    }
+    stage_files(repo, &mut index, files)?;
 
     let tree_id = index.write_tree()?;
     let tree = repo.find_tree(tree_id)?;
 
-    // Determine the parent commit, treating UnbornBranch as "no parent"
-    // while propagating other errors upward.
-    let parent: Option<git2::Commit<'_>> = match repo.head() {
-        Ok(head_ref) => Some(head_ref.peel_to_commit()?),
-        Err(e) if e.code() == ErrorCode::UnbornBranch => None,
-        Err(e) => return Err(e.into()),
-    };
-
+    let parent = head_commit_if_born(repo)?;
     let parents: Vec<&git2::Commit<'_>> = parent.iter().collect();
 
     Ok(repo.commit(Some("HEAD"), &sig, &sig, message, &tree, &parents)?)
+}
+
+/// Writes each of `files` into the repository's working directory and adds it
+/// to `index`.
+fn stage_files(
+    repo: &Repository,
+    index: &mut git2::Index,
+    files: &[(&str, &str)],
+) -> Result<(), TestError> {
+    let dir = open_workdir(repo)?;
+
+    for (path, content) in files {
+        stage_file(&dir, index, Utf8Path::new(path), content)?;
+    }
+    Ok(())
+}
+
+/// Opens the repository's working directory as a directory capability.
+fn open_workdir(repo: &Repository) -> Result<fs::Dir, TestError> {
+    let workdir = repo
+        .workdir()
+        .ok_or("repository has no working directory")?;
+    let workdir_str = workdir.to_str().ok_or("workdir path is not valid UTF-8")?;
+    Ok(fs::Dir::open_ambient_dir(
+        workdir_str,
+        cap_std::ambient_authority(),
+    )?)
+}
+
+/// Writes `content` to `path` inside `dir` and adds it to `index`.
+fn stage_file(
+    dir: &fs::Dir,
+    index: &mut git2::Index,
+    path: &Utf8Path,
+    content: &str,
+) -> Result<(), TestError> {
+    create_parent_directory(dir, path)?;
+    dir.write(path, content)?;
+    index.add_path(path.as_std_path())?;
+    Ok(())
+}
+
+/// Creates the directories above `path` inside `dir`, when it has any.
+fn create_parent_directory(dir: &fs::Dir, path: &Utf8Path) -> Result<(), TestError> {
+    match path.parent() {
+        Some(parent) if !parent.as_str().is_empty() => Ok(dir.create_dir_all(parent)?),
+        _ => Ok(()),
+    }
+}
+
+/// Returns the commit `HEAD` points at, treating an unborn branch as "no
+/// parent" while propagating other errors upward.
+fn head_commit_if_born(repo: &Repository) -> Result<Option<git2::Commit<'_>>, TestError> {
+    match repo.head() {
+        Ok(head_ref) => Ok(Some(head_ref.peel_to_commit()?)),
+        Err(e) if e.code() == ErrorCode::UnbornBranch => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 /// Helper to test Git operation error handling with custom setup.

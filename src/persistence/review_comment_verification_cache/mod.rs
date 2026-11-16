@@ -106,6 +106,17 @@ impl ReviewCommentVerificationCache {
             .map(|id| Self::try_query_comment_id((*id).into()))
             .collect::<Result<_, _>>()?;
 
+        let rows = self.query_rows(&requested_ids, target_sha)?;
+
+        Ok(rows.into_iter().filter_map(Self::decode_row).collect())
+    }
+
+    /// Loads the cached rows for each of `requested_ids` at `target_sha`.
+    fn query_rows(
+        &self,
+        requested_ids: &HashSet<i64>,
+        target_sha: &str,
+    ) -> Result<Vec<VerificationRow>, PersistenceError> {
         let mut connection = self.establish_connection()?;
 
         let query = format!(
@@ -122,41 +133,32 @@ impl ReviewCommentVerificationCache {
         for github_comment_id in requested_ids {
             let mut comment_rows: Vec<VerificationRow> = sql_query(&query)
                 .bind::<Text, _>(target_sha)
-                .bind::<BigInt, _>(github_comment_id)
+                .bind::<BigInt, _>(*github_comment_id)
                 .load(&mut connection)
                 .map_err(|error| Self::map_query_error(&mut connection, &error))?;
             rows.append(&mut comment_rows);
         }
+        Ok(rows)
+    }
 
-        let mut out = HashMap::with_capacity(rows.len());
-        for row in rows {
-            let Ok(id_u64) = u64::try_from(row.github_comment_id) else {
-                continue;
-            };
+    /// Decodes a stored row, or `None` when its id, status or evidence kind is
+    /// not one this version understands, so the row is skipped.
+    fn decode_row(row: VerificationRow) -> Option<(u64, CachedReviewCommentVerification)> {
+        let id_u64 = u64::try_from(row.github_comment_id).ok()?;
+        let status = CommentVerificationStatus::from_db_value(&row.status)?;
+        let evidence_kind = CommentVerificationEvidenceKind::from_db_value(&row.evidence_kind)?;
 
-            let Some(status) = CommentVerificationStatus::from_db_value(&row.status) else {
-                continue;
-            };
-            let Some(evidence_kind) =
-                CommentVerificationEvidenceKind::from_db_value(&row.evidence_kind)
-            else {
-                continue;
-            };
-
-            out.insert(
-                id_u64,
-                CachedReviewCommentVerification {
-                    github_comment_id: id_u64,
-                    target_sha: row.target_sha,
-                    status,
-                    evidence_kind,
-                    evidence_message: row.evidence_message,
-                    verified_at_unix: row.verified_at_unix,
-                },
-            );
-        }
-
-        Ok(out)
+        Some((
+            id_u64,
+            CachedReviewCommentVerification {
+                github_comment_id: id_u64,
+                target_sha: row.target_sha,
+                status,
+                evidence_kind,
+                evidence_message: row.evidence_message,
+                verified_at_unix: row.verified_at_unix,
+            },
+        ))
     }
 
     /// Inserts or updates a cached verification result.
