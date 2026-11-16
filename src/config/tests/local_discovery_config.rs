@@ -3,7 +3,7 @@
 use rstest::rstest;
 use serde_json::json;
 
-use super::helpers::build_config_from_layers;
+use super::helpers::{build_config_from_layers, load_config_in_isolated_env};
 use crate::FrankieConfig;
 
 /// Helper to test `no_local_discovery` loading from CLI.
@@ -20,18 +20,7 @@ fn test_no_local_discovery_loading(
     expected: bool,
     description: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let temp_dir = tempfile::TempDir::new()?;
-    let home = temp_dir.path().to_string_lossy().to_string();
-
-    let _guard = env_lock::lock_env([
-        ("HOME", Some(home.as_str())),
-        ("XDG_CONFIG_HOME", Some(home.as_str())),
-    ]);
-
-    let mut args: Vec<std::ffi::OsString> = vec![std::ffi::OsString::from("frankie")];
-    args.extend(cli_args.iter().map(std::ffi::OsString::from));
-
-    let config = FrankieConfig::load_from_iter(args)?;
+    let config = load_config_in_isolated_env(&[], cli_args)?;
 
     if config.no_local_discovery != expected {
         return Err(format!(

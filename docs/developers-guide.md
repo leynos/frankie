@@ -243,3 +243,28 @@ runs that check from outside the checkout (`cd "$RUNNER_TEMP"` with
 that file only from the working directory upward, so a check run from elsewhere
 reads none of it. Raise `rust-version` only when a dependency requires it, and
 never run the check from inside the checkout.
+
+## Testing configuration loading
+
+No test changes the process environment or working directory, so the cases run
+concurrently and `clippy.toml` disallows `std::env::set_var`, `remove_var` and
+`set_current_dir`.
+
+- `FrankieConfig::load_from_iter_with_env` takes one injected `ortho_config`
+  environment that backs file discovery, the working directory and the
+  `FRANKIE_*` variable layer; `load_from_iter` passes
+  `ortho_config::ProcessEnv`. Tests use `load_config_in_isolated_env` in
+  `src/config/tests/helpers.rs`, which builds a closed `MapEnv` that pins the
+  working directory to a fresh temporary directory and names `HOME`,
+  `XDG_CONFIG_HOME` and `XDG_CONFIG_DIRS` as that same empty directory, because
+  an unset `HOME` falls back to the host and an empty `XDG_CONFIG_DIRS` selects
+  `/etc/xdg`.
+- `FrankieConfig::resolve_token_with` and `resolve_ai_api_key_with` read the
+  legacy `GITHUB_TOKEN` and `OPENAI_API_KEY` variables through a lookup closure;
+  `resolve_token` and `resolve_ai_api_key` pass the process environment
+  (`src/config/credentials.rs`).
+- A case that must observe the live process environment re-runs the test binary
+  as a child with `Command::env` or `env_remove`, as
+  `propagates_token_error_when_missing` does for an absent `GITHUB_TOKEN`; the
+  child inherits the rest of the parent's environment, which keeps
+  `LLVM_PROFILE_FILE` for coverage runs.

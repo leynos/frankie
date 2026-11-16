@@ -11,13 +11,14 @@
 //! 3. **Environment variables** – `FRANKIE_*` or legacy `GITHUB_TOKEN`
 //! 4. **Command-line arguments** – `--pr-url`/`-u`, `--token`/`-t`, etc.
 
-use std::env;
 use std::ffi::OsString;
+use std::sync::Arc;
 
-use ortho_config::OrthoConfig;
+use ortho_config::{EnvSource, OrthoConfig, ProcessEnv, ScanEnvSource};
 
 use crate::github::error::IntakeError;
 
+mod credentials;
 mod model;
 mod summarize_mode;
 
@@ -79,32 +80,6 @@ impl FrankieConfig {
         "--commit-history-limit",
         "--config-path",
     ];
-
-    /// Resolves the token from configuration or the legacy `GITHUB_TOKEN`
-    /// environment variable.
-    ///
-    /// For backward compatibility, if no token is provided via `FRANKIE_TOKEN`,
-    /// the CLI, or a configuration file, this method falls back to reading
-    /// `GITHUB_TOKEN` from the environment.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`IntakeError::MissingToken`] when no token source provides a
-    /// value.
-    pub fn resolve_token(&self) -> Result<String, IntakeError> {
-        self.token
-            .clone()
-            .or_else(|| env::var("GITHUB_TOKEN").ok())
-            .ok_or(IntakeError::MissingToken)
-    }
-
-    /// Resolves the AI API key from configuration or `OPENAI_API_KEY`.
-    #[must_use]
-    pub fn resolve_ai_api_key(&self) -> Option<String> {
-        self.ai_api_key
-            .clone()
-            .or_else(|| env::var("OPENAI_API_KEY").ok())
-    }
 
     /// Returns the pull request URL or an error if missing.
     ///
@@ -261,7 +236,33 @@ impl FrankieConfig {
     pub fn load_from_iter(
         iter: impl IntoIterator<Item = impl Into<OsString> + Clone>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut config = <Self as OrthoConfig>::load_from_iter(iter)
+        Self::load_from_iter_with_env(iter, Arc::new(ProcessEnv))
+    }
+
+    /// Loads configuration from the given iterator of arguments and one
+    /// injected environment.
+    ///
+    /// The environment answers the lookups that locate configuration files,
+    /// supplies the working directory and backs the `FRANKIE_*` variable layer.
+    /// [`load_from_iter`](Self::load_from_iter) passes
+    /// [`ortho_config::ProcessEnv`]; a test passes a closed
+    /// [`ortho_config::MapEnv`] that pins the working directory and names
+    /// `HOME`, `XDG_CONFIG_HOME` and `XDG_CONFIG_DIRS`, so nothing reads or
+    /// writes the process. Like [`load_from_iter`](Self::load_from_iter), it
+    /// calls `normalize()` on the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when argument parsing fails or configuration files
+    /// cannot be loaded.
+    pub fn load_from_iter_with_env<E>(
+        iter: impl IntoIterator<Item = impl Into<OsString> + Clone>,
+        env: Arc<E>,
+    ) -> Result<Self, Box<dyn std::error::Error>>
+    where
+        E: EnvSource + ScanEnvSource + 'static,
+    {
+        let mut config = <Self as OrthoConfig>::load_from_iter_with_env(iter, env)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         config.normalize();
         Ok(config)

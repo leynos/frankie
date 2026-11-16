@@ -125,10 +125,31 @@ async fn uses_enterprise_api_for_enterprise_origin() {
     .expect("run_discovered_repository should succeed for enterprise");
 }
 
+/// Marks the re-run of this binary that has no `GITHUB_TOKEN`.
+const NO_TOKEN_CHILD_MARKER: &str = "FRANKIE_TEST_NO_TOKEN_CHILD";
+
+/// `resolve_token` falls back to the live `GITHUB_TOKEN` variable, so a case
+/// that needs it absent re-runs this binary as a child without it rather than
+/// removing it from the test process. The child inherits the rest of the
+/// parent's environment, which keeps `LLVM_PROFILE_FILE` for coverage runs.
 #[tokio::test]
 async fn propagates_token_error_when_missing() {
-    // Ensure GITHUB_TOKEN is not set (resolve_token falls back to env var)
-    let _guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
+    if std::env::var_os(NO_TOKEN_CHILD_MARKER).is_none() {
+        let status = std::process::Command::new(
+            std::env::current_exe().expect("the test binary path is known"),
+        )
+        .args([
+            "--exact",
+            "cli::interactive::tests::run_discovered_repository::propagates_token_error_when_missing",
+            "--nocapture",
+        ])
+        .env(NO_TOKEN_CHILD_MARKER, "1")
+        .env_remove("GITHUB_TOKEN")
+        .status()
+        .expect("the child test binary runs");
+        assert!(status.success(), "the child run failed: {status}");
+        return;
+    }
 
     let config = FrankieConfig {
         token: None,

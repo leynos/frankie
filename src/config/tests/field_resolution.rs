@@ -37,11 +37,10 @@ fn require_pr_url_returns_value_when_present() {
 
 #[rstest]
 fn resolve_token_returns_error_when_none() {
-    // Lock and clear GITHUB_TOKEN to ensure test isolation
-    let _guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
+    // A lookup over no variables: GITHUB_TOKEN is unset.
     let config = FrankieConfig::default();
 
-    let result = config.resolve_token();
+    let result = config.resolve_token_with(|_| None);
     assert!(result.is_err(), "should return error when token is None");
 }
 
@@ -93,7 +92,6 @@ fn require_repository_info_returns_values_when_present() {
 
 #[rstest]
 fn resolve_token_ignores_database_fields() {
-    let _guard = env_lock::lock_env([("GITHUB_TOKEN", Some("legacy-token"))]);
     let config = FrankieConfig {
         database_url: Some("frankie.sqlite".to_owned()),
         migrate_db: true,
@@ -101,7 +99,9 @@ fn resolve_token_ignores_database_fields() {
     };
 
     assert_eq!(
-        config.resolve_token().ok(),
+        config
+            .resolve_token_with(|name| (name == "GITHUB_TOKEN").then(|| "legacy-token".to_owned()))
+            .ok(),
         Some("legacy-token".to_owned()),
         "token resolution should not be affected by database fields"
     );
@@ -188,21 +188,30 @@ fn value_flags_include_ai_rewrite_flags(#[case] flag: &str) {
 
 #[rstest]
 fn resolve_ai_api_key_prefers_config_value() {
-    let _guard = env_lock::lock_env([("OPENAI_API_KEY", Some("env-key"))]);
     let config = FrankieConfig {
         ai_api_key: Some("config-key".to_owned()),
         ..Default::default()
     };
 
-    assert_eq!(config.resolve_ai_api_key(), Some("config-key".to_owned()));
+    assert_eq!(
+        config.resolve_ai_api_key_with(openai_key_lookup),
+        Some("config-key".to_owned())
+    );
 }
 
 #[rstest]
 fn resolve_ai_api_key_falls_back_to_environment() {
-    let _guard = env_lock::lock_env([("OPENAI_API_KEY", Some("env-key"))]);
     let config = FrankieConfig::default();
 
-    assert_eq!(config.resolve_ai_api_key(), Some("env-key".to_owned()));
+    assert_eq!(
+        config.resolve_ai_api_key_with(openai_key_lookup),
+        Some("env-key".to_owned())
+    );
+}
+
+/// A lookup over a single variable: `OPENAI_API_KEY` is `env-key`.
+fn openai_key_lookup(name: &str) -> Option<String> {
+    (name == "OPENAI_API_KEY").then(|| "env-key".to_owned())
 }
 
 #[rstest]
