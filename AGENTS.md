@@ -371,11 +371,13 @@ project:
   `mockable::DefaultEnv` supplied at the production composition root and
   `mockable::MockEnv` in tests. A narrow closure seam of the same shape is
   acceptable where a trait object would be disproportionate. Production code
-  must not reach for `std::env::var`/`var_os` outside that composition root.
-  Where injection is not yet in place, tests that must change process
-  environment variables use the shared `env_lock::lock_env` guard, as the
-  existing configuration tests do; this is the accepted local form, and new
-  behaviour should take an injected environment instead.
+  must not reach for `std::env::var`/`var_os` outside that composition root. In
+  this repository `FrankieConfig::load_from_iter_with_env` takes an injected
+  `ortho_config` environment (a closed `MapEnv` in tests), and
+  `resolve_token_with` and `resolve_ai_api_key_with` take a lookup closure;
+  `clippy.toml` disallows `std::env::set_var`, `remove_var` and
+  `set_current_dir`. A case that must observe the live process environment
+  re-runs the test binary as a child with `Command::env` or `env_remove`.
 - **Process-wide locks are not an escape hatch.** Serializing environment
   mutation behind a shared `Mutex`, `OnceLock`, or `serial_test` attribute is
   not an accepted fallback. It serializes the suite, defeats property-based

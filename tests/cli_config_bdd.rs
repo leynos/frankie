@@ -1,6 +1,5 @@
 //! Behavioural tests for CLI configuration loading.
 
-use env_lock::EnvGuard;
 use frankie::{FrankieConfig, IntakeError};
 use ortho_config::MergeComposer;
 use rstest::fixture;
@@ -20,7 +19,25 @@ struct ConfigState {
     config: Slot<FrankieConfig>,
     pr_url_error: Slot<IntakeError>,
     token_error: Slot<IntakeError>,
-    env_guard: Slot<EnvGuard<'static>>,
+    /// The value of the legacy `GITHUB_TOKEN` variable in the scenario's
+    /// closed environment; unset when no step names one.
+    github_token: Slot<String>,
+}
+
+/// Resolves the token for `config`, reading `GITHUB_TOKEN` from the scenario's
+/// closed environment rather than from the process.
+fn resolve_token_in_scenario(
+    state: &ConfigState,
+    config: &FrankieConfig,
+) -> Result<String, IntakeError> {
+    let github_token = state.github_token.get();
+    config.resolve_token_with(|name| {
+        if name == "GITHUB_TOKEN" {
+            github_token.clone()
+        } else {
+            None
+        }
+    })
 }
 
 #[fixture]
@@ -94,17 +111,19 @@ fn env_token_set(config_state: &ConfigState, token: String) {
 
 #[given("no GITHUB_TOKEN environment variable")]
 fn no_github_token_env(config_state: &ConfigState) {
-    // Lock environment and remove GITHUB_TOKEN
-    let guard = env_lock::lock_env([("GITHUB_TOKEN", None::<&str>)]);
-    config_state.env_guard.set(guard);
+    // The scenario's environment is closed: with no value recorded, the
+    // `GITHUB_TOKEN` lookup finds nothing, whatever the host has set.
+    assert!(
+        config_state.github_token.get().is_none(),
+        "no GITHUB_TOKEN value should be recorded"
+    );
 }
 
 #[given("a GITHUB_TOKEN environment variable set to {token}")]
 fn github_token_env_set(config_state: &ConfigState, token: String) {
-    // Lock environment and set GITHUB_TOKEN
+    // Record the value in the scenario's closed environment.
     let token_clean = token.trim_matches('"');
-    let guard = env_lock::lock_env([("GITHUB_TOKEN", Some(token_clean))]);
-    config_state.env_guard.set(guard);
+    config_state.github_token.set(token_clean.to_owned());
 }
 
 // --- When steps ---
@@ -164,9 +183,8 @@ fn assert_resolved_token(config_state: &ConfigState, expected: String) {
 
     let config = config_state.config.get().expect("configuration not built");
 
-    let resolved = config
-        .resolve_token()
-        .expect("token resolution should succeed");
+    let resolved =
+        resolve_token_in_scenario(config_state, &config).expect("token resolution should succeed");
 
     assert_eq!(resolved, expected_clean, "resolved token mismatch");
 }
@@ -187,7 +205,7 @@ fn assert_pr_url_error(config_state: &ConfigState) {
 fn assert_token_error(config_state: &ConfigState) {
     let config = config_state.config.get().expect("configuration not built");
 
-    let result = config.resolve_token();
+    let result = resolve_token_in_scenario(config_state, &config);
 
     assert!(result.is_err(), "expected token resolution to return error");
 
