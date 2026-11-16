@@ -131,19 +131,22 @@ fn cursor_navigation_adjusts_scroll_to_keep_selection_visible() {
         height: 16,
     });
 
-    for _ in 0..5 {
-        app.handle_message(&AppMsg::CursorDown);
-    }
+    move_cursor(&mut app, &AppMsg::CursorDown, 5);
 
     assert_eq!(app.cursor_position(), 5);
     assert_eq!(app.filter_state.scroll_offset, 0);
 
-    for _ in 0..4 {
-        app.handle_message(&AppMsg::CursorUp);
-    }
+    move_cursor(&mut app, &AppMsg::CursorUp, 4);
 
     assert_eq!(app.cursor_position(), 1);
     assert_eq!(app.filter_state.scroll_offset, 0);
+}
+
+/// Sends `message` to `app` `times` times.
+fn move_cursor(app: &mut ReviewApp, message: &AppMsg, times: usize) {
+    for _ in 0..times {
+        app.handle_message(message);
+    }
 }
 
 #[rstest]
