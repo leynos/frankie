@@ -219,6 +219,14 @@ the exception. The command also selects the LLVM backend
 toolchain does not take a Cranelift opt-in, and puts `~/.local/bin` first on
 `PATH` so the installed `whitaker` is the one that runs.
 
+Whitaker also gates cognitive complexity. Clippy's `cognitive_complexity`
+scores code after macro expansion, so it counts branching a macro generated,
+and neither `Cargo.toml` nor `clippy.toml` enables it. Whitaker's experimental
+`macro_aware_cognitive_complexity` gates it at `max_complexity = 9`,
+CodeScene's ceiling. `dylint.toml` opts in with
+`[whitaker] experimental = ["macro_aware_cognitive_complexity"]`. Fix a finding
+by extracting named helpers, never by raising the threshold.
+
 ### Cranelift
 
 The estate standard is LLVM, so LLVM is the default backend here. The Cranelift
