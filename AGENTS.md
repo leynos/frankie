@@ -494,10 +494,9 @@ internally facing conventions or practices in `docs/developers-guide.md`.
 
 ## Spelling
 
-- `make spelling` runs the `spelling-helper-test` target (Ruff and pytest over
-  the spelling scripts), then `scripts/generate_typos_config.py`, which
+- `make spelling` runs the pinned `typos-config-builder gate`, which
   regenerates `typos.toml` from the shared en-GB-oxendict dictionary and
-  `typos.local.toml`, then runs `typos` over the tracked Markdown files.
+  `typos.local.toml`, then checks spelling and the shared phrase corrections.
 - `typos.toml` is generated: never edit it by hand. Put narrow
   repository-specific exceptions in `typos.local.toml`, as exact or full-line
   patterns rather than bare accepted words.
