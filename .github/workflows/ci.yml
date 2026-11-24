@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@fc0e10220207b951bf693aba2ce4f9dafc1a0206
+        uses: leynos/shared-actions/.github/actions/setup-rust@6d29e3a48219305d2b1d7e7416fc81f13a6dbbd8
         with:
           expect-cache: any
           # One sccache lane with coverage-main.yml's publisher: only a push to main saves,
@@ -33,7 +33,7 @@ jobs:
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
         uses: >-
-          leynos/shared-actions/.github/actions/install-mdtablefix@fc0e10220207b951bf693aba2ce4f9dafc1a0206
+          leynos/shared-actions/.github/actions/install-mdtablefix@6d29e3a48219305d2b1d7e7416fc81f13a6dbbd8
         with:
           version: '0.6.1'
       - name: Format
@@ -47,7 +47,7 @@ jobs:
       - name: Workflow contracts
         run: make workflow-contracts
       - name: Install Whitaker Dylint suite
-        uses: leynos/shared-actions/.github/actions/install-whitaker@fc0e10220207b951bf693aba2ce4f9dafc1a0206
+        uses: leynos/shared-actions/.github/actions/install-whitaker@6d29e3a48219305d2b1d7e7416fc81f13a6dbbd8
         with:
           cranelift: true
       - name: Install uv for the docstring-coverage gate
@@ -98,7 +98,7 @@ jobs:
           # linker. Assigning RUSTFLAGS displaces every `rustflags` table in
           # .cargo/config.toml.
           RUSTFLAGS: -D warnings
-        uses: leynos/shared-actions/.github/actions/generate-coverage@fc0e10220207b951bf693aba2ce4f9dafc1a0206
+        uses: leynos/shared-actions/.github/actions/generate-coverage@6d29e3a48219305d2b1d7e7416fc81f13a6dbbd8
         with:
           output-path: lcov.info
           format: lcov
