@@ -224,7 +224,7 @@ project:
     `cargo binstall --no-confirm mdtablefix@0.6.1` (or
     `cargo install --locked mdtablefix@0.6.1`).
   - `make lint` first runs `make interrogate`, which needs `uv` and fails on any
-    Python definition without a docstring under `scripts` and `tests`, or on any
+    Python definition without a docstring under `tests`, or on any
     `MISSED` row. It then executes:
 
     ```sh
