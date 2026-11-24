@@ -178,6 +178,15 @@ fn is_isolated_whitaker(command: &str) -> bool {
             == ["CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm"]
 }
 
+/// Returns the quote state after reading `c`: opened by a quote mark, closed by its match.
+fn advance_quote(quote: Option<char>, c: char) -> Option<char> {
+    match quote {
+        Some(open) if c == open => None,
+        None if c == '"' || c == '\'' => Some(c),
+        other => other,
+    }
+}
+
 /// A shell command line, read word by word with each single- or double-quoted span kept whole.
 struct ShellLine<'a>(&'a str);
 
@@ -188,18 +197,13 @@ impl<'a> ShellLine<'a> {
         let mut start = None;
         let mut quote: Option<char> = None;
         for (index, c) in self.0.char_indices() {
-            match quote {
-                Some(open) if c == open => quote = None,
-                None if c == '"' || c == '\'' => quote = Some(c),
-                _ => {}
-            }
-            match (c.is_whitespace() && quote.is_none(), start) {
-                (true, Some(begin)) => {
+            quote = advance_quote(quote, c);
+            if c.is_whitespace() && quote.is_none() {
+                if let Some(begin) = start.take() {
                     words.extend(self.0.get(begin..index));
-                    start = None;
                 }
-                (false, None) => start = Some(index),
-                _ => {}
+            } else if start.is_none() {
+                start = Some(index);
             }
         }
         words.extend(start.and_then(|begin| self.0.get(begin..)));
