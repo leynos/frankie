@@ -199,9 +199,7 @@ impl<'a> ShellLine<'a> {
         for (index, c) in self.0.char_indices() {
             quote = advance_quote(quote, c);
             if c.is_whitespace() && quote.is_none() {
-                if let Some(begin) = start.take() {
-                    words.extend(self.0.get(begin..index));
-                }
+                words.extend(start.take().and_then(|begin| self.0.get(begin..index)));
             } else if start.is_none() {
                 start = Some(index);
             }
